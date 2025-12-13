@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/MultiMeshVegetation.gd" id="1_script"]
+
+[node name="MultiMeshTrees" type="MultiMeshInstance3D"]
+script = ExtResource("1_script")
+max_instances = 5000
+min_spacing = 3.0
+base_scale = Vector3(1, 1, 1)
+scale_variation = 0.3
+random_rotation = true
+min_humidity = 0.35
+max_slope = 0.6
+min_height = 0.15
+max_height_normalized = 0.65
+lod_distance_end = 200.0
+lod_distance_begin = 150.0

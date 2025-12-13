@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RawMaterial" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/RawMaterial.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Stone"
+density = 2500.0
+melting_point = 1200.0
+hardness = 6.5
+conductivity = 2.5
+color = Color(0.502, 0.502, 0.502, 1)
+category = "Stone"
+is_flammable = false
+ignition_point = 250.0
+base_value = 1.0

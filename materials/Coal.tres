@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RawMaterial" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/RawMaterial.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Coal"
+density = 1400.0
+melting_point = 3550.0
+hardness = 2.0
+conductivity = 0.2
+color = Color(0.129, 0.129, 0.129, 1)
+category = "Stone"
+is_flammable = true
+ignition_point = 450.0
+base_value = 5.0

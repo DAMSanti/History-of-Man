@@ -1,0 +1,39 @@
+# Godot 4.x specific ignores
+.godot/
+
+# Exported files
+*.pck
+*.exe
+*.x86_64
+*.x86_32
+*.apk
+*.aab
+
+# Import files
+.import/
+
+# Export presets (uncomment if needed)
+# export_presets.cfg
+
+# Build output
+builds/
+export/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+*.backup

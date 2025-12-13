@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/CameraController.gd" id="1_camera"]
+
+[node name="OrbitalCamera" type="Camera3D"]
+current = true
+far = 500.0
+script = ExtResource("1_camera")
+target_position = Vector3(64, 0, 64)
+orbit_distance = 80.0
+orbit_angle_h = 0.0
+orbit_angle_v = -35.0
+move_speed = 40.0
+rotate_speed = 0.3
+zoom_speed = 5.0
+min_distance = 10.0
+max_distance = 200.0

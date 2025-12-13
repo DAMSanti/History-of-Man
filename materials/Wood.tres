@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="RawMaterial" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/RawMaterial.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Wood"
+density = 600.0
+melting_point = 0.0
+hardness = 2.5
+conductivity = 0.15
+color = Color(0.545, 0.353, 0.169, 1)
+category = "Organic"
+is_flammable = true
+ignition_point = 300.0
+base_value = 2.0

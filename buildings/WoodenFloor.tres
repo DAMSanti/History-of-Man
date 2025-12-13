@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BlockData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/BlockData.gd" id="1_script"]
+[ext_resource type="Resource" path="res://materials/Wood.tres" id="2_wood"]
+
+[resource]
+script = ExtResource("1_script")
+block_name = "Wooden Floor"
+weight = 50.0
+primary_material = ExtResource("2_wood")
+dimensions = Vector3(1, 0.1, 1)
+is_structural = true
+support_factor = 3.0
+requires_support = true
+category = "Floor"
+fire_resistance = 0.2
+thermal_insulation = 0.5
+crafting_materials = []
+build_time = 3.0

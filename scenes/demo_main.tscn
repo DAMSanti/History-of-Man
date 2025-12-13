@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/DemoMain.gd" id="1_demo"]
+[ext_resource type="PackedScene" path="res://scenes/WorldEnvironment.tscn" id="2_env"]
+
+[node name="DemoMain" type="Node3D"]
+script = ExtResource("1_demo")
+terrain_size = Vector2i(128, 128)
+terrain_resolution = 129
+max_height = 30.0
+seed_value = 12345
+show_debug_ui = true
+spawn_test_buildings = true
+
+[node name="WorldEnvironment" parent="." instance=ExtResource("2_env")]

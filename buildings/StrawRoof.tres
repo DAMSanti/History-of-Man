@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BlockData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/BlockData.gd" id="1_script"]
+[ext_resource type="Resource" path="res://materials/Straw.tres" id="2_straw"]
+
+[resource]
+script = ExtResource("1_script")
+block_name = "Straw Roof"
+weight = 20.0
+primary_material = ExtResource("2_straw")
+dimensions = Vector3(1, 0.3, 1)
+is_structural = false
+support_factor = 0.0
+requires_support = true
+category = "Roof"
+fire_resistance = 0.0
+thermal_insulation = 0.6
+crafting_materials = []
+build_time = 2.0

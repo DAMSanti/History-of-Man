@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="BlockData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/BlockData.gd" id="1_script"]
+[ext_resource type="Resource" path="res://materials/Stone.tres" id="2_stone"]
+
+[resource]
+script = ExtResource("1_script")
+block_name = "Stone Wall"
+weight = 250.0
+primary_material = ExtResource("2_stone")
+dimensions = Vector3(1, 1, 0.3)
+is_structural = true
+support_factor = 8.0
+requires_support = true
+category = "Wall"
+fire_resistance = 1.0
+thermal_insulation = 0.4
+crafting_materials = []
+build_time = 8.0
