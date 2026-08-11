@@ -198,6 +198,13 @@ func get_all_resource_cells() -> Array[Vector2i]:
 	return cells
 
 
+## Obtiene los recursos en una celda específica (por coordenadas de celda)
+func get_resources_at_cell(cell: Vector2i) -> Array:
+	if not is_cell_valid(cell) or not _resources.has(cell):
+		return []
+	return _resources[cell].duplicate()
+
+
 ## Limpia todos los recursos del chunk
 func clear_all_resources() -> void:
 	_resources.clear()

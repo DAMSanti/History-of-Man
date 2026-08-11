@@ -17,29 +17,29 @@ extends Node3D
 
 @export_group("Sky Settings")
 ## Color superior del cielo
-@export var sky_top_color: Color = Color(0.385, 0.454, 0.55)
+@export var sky_top_color: Color = Color(0.3, 0.5, 0.85)
 
 ## Color del horizonte
-@export var sky_horizon_color: Color = Color(0.646, 0.656, 0.67)
+@export var sky_horizon_color: Color = Color(0.65, 0.75, 0.9)
 
 ## Color inferior del cielo (reflejo del suelo)
-@export var sky_bottom_color: Color = Color(0.2, 0.169, 0.133)
+@export var sky_bottom_color: Color = Color(0.25, 0.2, 0.15)
 
 ## Energía del sol
-@export var sun_energy: float = 1.0
+@export var sun_energy: float = 1.2
 
 @export_group("Fog Settings")
 ## Densidad de la niebla
-@export var fog_density: float = 0.01
+@export var fog_density: float = 0.002
 
 ## Color de la niebla
-@export var fog_color: Color = Color(0.8, 0.9, 1.0, 1.0)
+@export var fog_color: Color = Color(0.75, 0.82, 0.92, 1.0)
 
 ## Altura de la niebla
-@export var fog_height: float = 0.0
+@export var fog_height: float = 5.0
 
 ## Densidad de la niebla según altura
-@export var fog_height_density: float = 0.1
+@export var fog_height_density: float = 0.05
 
 ## Nodos del entorno
 var _world_environment: WorldEnvironment
@@ -148,16 +148,17 @@ func _setup_lighting() -> void:
 		_directional_light.name = "Sun"
 		add_child(_directional_light)
 	
-	# Configurar sol
-	_directional_light.rotation_degrees = Vector3(-45, -30, 0)
-	_directional_light.light_color = Color(1.0, 0.95, 0.9)
+	# Configurar sol - ángulo para luz más cálida de atardecer/mañana
+	_directional_light.rotation_degrees = Vector3(-35, -45, 0)
+	_directional_light.light_color = Color(1.0, 0.96, 0.88)  # Ligeramente cálido
 	_directional_light.light_energy = sun_energy
-	_directional_light.light_indirect_energy = 1.0
-	_directional_light.light_volumetric_fog_energy = 1.0
+	_directional_light.light_indirect_energy = 1.2
+	_directional_light.light_volumetric_fog_energy = 1.5
+	_directional_light.light_angular_distance = 0.5  # Sol más suave
 	
-	# Sombras
+	# Sombras de alta calidad
 	_directional_light.shadow_enabled = true
-	_directional_light.shadow_blur = 1.0
+	_directional_light.shadow_blur = 1.5
 	_directional_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	_directional_light.directional_shadow_max_distance = 200.0
 	_directional_light.directional_shadow_split_1 = 0.05

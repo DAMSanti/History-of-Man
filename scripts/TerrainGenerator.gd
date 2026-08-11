@@ -69,7 +69,14 @@ var _geology_map: PackedFloat32Array
 var _terrain_mesh: MeshInstance3D
 var _terrain_collision: StaticBody3D
 
+## Manager del material del terreno (carga diferida)
+var _material_manager: RefCounted
+
+## Variable para regeneración en editor
 var _regenerate_queued: bool = false
+
+## Si usar shader triplanar (true) o colores de vértice (false)
+@export var use_triplanar_shader: bool = true
 
 
 func _ready() -> void:
@@ -182,7 +189,7 @@ func _create_terrain_mesh() -> void:
 			st.set_uv(uv)
 			st.add_vertex(pos)
 	
-	# Generar índices (triángulos)
+	# Generar índices (triángulos) - CCW winding order visto desde arriba
 	for z in range(resolution - 1):
 		for x in range(resolution - 1):
 			var top_left := z * resolution + x
@@ -190,15 +197,15 @@ func _create_terrain_mesh() -> void:
 			var bottom_left := (z + 1) * resolution + x
 			var bottom_right := bottom_left + 1
 			
-			# Primer triángulo
+			# Primer triángulo (CCW: top_left -> top_right -> bottom_left)
 			st.add_index(top_left)
-			st.add_index(bottom_left)
 			st.add_index(top_right)
+			st.add_index(bottom_left)
 			
-			# Segundo triángulo
+			# Segundo triángulo (CCW: top_right -> bottom_right -> bottom_left)
 			st.add_index(top_right)
-			st.add_index(bottom_left)
 			st.add_index(bottom_right)
+			st.add_index(bottom_left)
 	
 	st.generate_normals()
 	st.generate_tangents()
@@ -209,11 +216,26 @@ func _create_terrain_mesh() -> void:
 	_terrain_mesh.mesh = mesh
 	_terrain_mesh.name = "TerrainMesh"
 	
-	# Material básico del terreno
-	var material := StandardMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.roughness = 0.9
-	_terrain_mesh.material_override = material
+	# Aplicar material
+	if use_triplanar_shader and not Engine.is_editor_hint():
+		# Usar shader triplanar con texturas procedurales
+		var manager_script := load("res://scripts/TerrainMaterialManager.gd")
+		if manager_script:
+			_material_manager = manager_script.new()
+			var shader_material: ShaderMaterial = _material_manager.create_terrain_material()
+			if shader_material:
+				_material_manager.set_max_world_height(max_height)
+				_terrain_mesh.material_override = shader_material
+				print("Shader triplanar aplicado al terreno")
+			else:
+				# Fallback a material básico
+				_apply_basic_material()
+		else:
+			push_warning("No se pudo cargar TerrainMaterialManager, usando material básico")
+			_apply_basic_material()
+	else:
+		# Material básico con colores de vértice
+		_apply_basic_material()
 	
 	add_child(_terrain_mesh)
 	
@@ -230,6 +252,13 @@ func _create_collision(mesh: Mesh) -> void:
 	
 	_terrain_collision.add_child(collision_shape)
 	add_child(_terrain_collision)
+
+
+func _apply_basic_material() -> void:
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.9
+	_terrain_mesh.material_override = material
 
 
 func _get_vertex_color(height_normalized: float, humidity: float) -> Color:

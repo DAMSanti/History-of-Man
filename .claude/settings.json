@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/Godot/**)",
+      "Bash(\"/e/Godot/Godot_v4.5.1-stable_win64_console.exe\" --headless --path \".\" --quit-after 2)",
+      "Bash(tee /tmp/godot_headless.log)",
+      "Bash(\"/e/Godot/Godot_v4.5.1-stable_win64.exe\" --path \"/d/Portfolio/History of Man\")"
+    ]
+  }
+}

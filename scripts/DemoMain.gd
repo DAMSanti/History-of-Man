@@ -19,6 +19,7 @@ var vegetation: MultiMeshVegetation
 var architecto: Architecto
 var camera: Camera3D
 var debug_label: Label
+var resource_visualizer: ResourceVisualizer
 
 ## Materiales cargados
 var materials: Dictionary = {}
@@ -37,6 +38,7 @@ func _ready() -> void:
 	_setup_chunk()
 	_setup_vegetation()
 	_setup_architecto()
+	_setup_resource_visualizer()
 	_setup_camera()
 	_setup_ui()
 	_connect_signals()
@@ -48,6 +50,9 @@ func _ready() -> void:
 	
 	# Poblar recursos
 	_populate_resources()
+	
+	# Visualizar recursos
+	_visualize_resources()
 	
 	# Spawn edificios de prueba
 	if spawn_test_buildings:
@@ -99,8 +104,8 @@ func _setup_vegetation() -> void:
 	vegetation = MultiMeshVegetation.new()
 	vegetation.name = "Vegetation"
 	
-	# Crear mesh simple de árbol (cono + cilindro)
-	var tree_mesh := _create_simple_tree_mesh()
+	# Crear mesh de árbol con material
+	var tree_mesh := _create_better_tree_mesh()
 	vegetation.vegetation_mesh = tree_mesh
 	vegetation.max_instances = 3000
 	vegetation.min_spacing = 4.0
@@ -109,82 +114,79 @@ func _setup_vegetation() -> void:
 	vegetation.min_humidity = 0.35
 	vegetation.max_slope = 0.5
 	
+	# Material para la vegetación
+	var veg_material := StandardMaterial3D.new()
+	veg_material.vertex_color_use_as_albedo = true
+	veg_material.roughness = 0.8
+	veg_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Ver hojas desde ambos lados
+	vegetation.vegetation_material = veg_material
+	
 	add_child(vegetation)
 
 
-func _create_simple_tree_mesh() -> ArrayMesh:
-	# Crear un árbol simple con primitivas
+func _setup_resource_visualizer() -> void:
+	resource_visualizer = ResourceVisualizer.new()
+	resource_visualizer.name = "ResourceVisualizer"
+	resource_visualizer.resource_scale = 0.6
+	resource_visualizer.max_instances_per_type = 800
+	add_child(resource_visualizer)
+
+
+func _visualize_resources() -> void:
+	if resource_visualizer and chunk and terrain:
+		resource_visualizer.initialize(chunk, terrain)
+		print("Recursos visualizados")
+
+
+func _create_better_tree_mesh() -> ArrayMesh:
+	# Crear un árbol más detallado
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
-	# Tronco (cilindro simple - cubo estirado por ahora)
-	var trunk_height := 2.0
-	var trunk_radius := 0.15
+	var trunk_height := 1.8
+	var trunk_radius := 0.12
 	
-	# Color del tronco
-	st.set_color(Color(0.4, 0.25, 0.1))
+	# Tronco - color marrón más natural
+	st.set_color(Color(0.35, 0.22, 0.1))
+	_add_cylinder(st, Vector3(0, 0, 0), trunk_radius, trunk_height, 6)
 	
-	# Simplificado: usar un cubo para el tronco
-	_add_box(st, Vector3(0, trunk_height / 2, 0), Vector3(trunk_radius * 2, trunk_height, trunk_radius * 2))
+	# Copa del árbol - múltiples conos para más volumen
+	# Cono inferior (más ancho)
+	st.set_color(Color(0.18, 0.42, 0.15))
+	_add_cone(st, Vector3(0, trunk_height + 1.2, 0), 1.4, 2.4, 8)
 	
-	# Copa del árbol (pirámide/cono simplificado como caja)
-	st.set_color(Color(0.2, 0.5, 0.2))
-	_add_cone(st, Vector3(0, trunk_height + 1.5, 0), 1.5, 3.0, 8)
+	# Cono medio
+	st.set_color(Color(0.22, 0.48, 0.18))
+	_add_cone(st, Vector3(0, trunk_height + 2.2, 0), 1.1, 2.0, 8)
+	
+	# Cono superior (punta)
+	st.set_color(Color(0.25, 0.52, 0.2))
+	_add_cone(st, Vector3(0, trunk_height + 3.0, 0), 0.7, 1.5, 8)
 	
 	st.generate_normals()
 	return st.commit()
 
 
-func _add_box(st: SurfaceTool, center: Vector3, size: Vector3) -> void:
-	var half := size / 2.0
+func _add_cylinder(st: SurfaceTool, base_center: Vector3, radius: float, height: float, segments: int) -> void:
+	var top_center := base_center + Vector3(0, height, 0)
 	
-	# Frente
-	st.add_vertex(center + Vector3(-half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, half.z))
-	
-	# Atrás
-	st.add_vertex(center + Vector3(half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, -half.z))
-	
-	# Arriba
-	st.add_vertex(center + Vector3(-half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, -half.z))
-	
-	# Abajo
-	st.add_vertex(center + Vector3(-half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, half.z))
-	
-	# Izquierda
-	st.add_vertex(center + Vector3(-half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, half.z))
-	st.add_vertex(center + Vector3(-half.x, half.y, -half.z))
-	
-	# Derecha
-	st.add_vertex(center + Vector3(half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, -half.y, half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, -half.z))
-	st.add_vertex(center + Vector3(half.x, half.y, half.z))
+	for i in range(segments):
+		var angle1 := float(i) / float(segments) * TAU
+		var angle2 := float(i + 1) / float(segments) * TAU
+		
+		var bottom1 := base_center + Vector3(cos(angle1) * radius, 0, sin(angle1) * radius)
+		var bottom2 := base_center + Vector3(cos(angle2) * radius, 0, sin(angle2) * radius)
+		var top1 := top_center + Vector3(cos(angle1) * radius * 0.8, 0, sin(angle1) * radius * 0.8)
+		var top2 := top_center + Vector3(cos(angle2) * radius * 0.8, 0, sin(angle2) * radius * 0.8)
+		
+		# Lado del cilindro (2 triángulos por segmento)
+		st.add_vertex(bottom1)
+		st.add_vertex(bottom2)
+		st.add_vertex(top1)
+		
+		st.add_vertex(top1)
+		st.add_vertex(bottom2)
+		st.add_vertex(top2)
 
 
 func _add_cone(st: SurfaceTool, tip: Vector3, base_radius: float, height: float, segments: int) -> void:
@@ -305,7 +307,8 @@ func _populate_resources() -> void:
 		"stone": materials.get("stone")
 	}
 	
-	terrain.populate_chunk_resources(chunk, materials_map, 0.65)
+	# Threshold más bajo para más recursos visibles
+	terrain.populate_chunk_resources(chunk, materials_map, 0.55)
 	
 	var cells := chunk.get_all_resource_cells()
 	print("Recursos colocados en ", cells.size(), " celdas")
