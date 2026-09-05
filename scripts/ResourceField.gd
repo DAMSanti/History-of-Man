@@ -201,9 +201,12 @@ func regrow(activity: Subsistence.Activity, rate: float) -> void:
 		return
 	var grid: PackedFloat32Array = grids[activity]
 	var cap: PackedFloat32Array = capacities[activity]
+	var dead: PackedByteArray = frozen.get(activity, PackedByteArray())
 	for i in range(grid.size()):
 		var capacity := cap[i]
 		if capacity <= 0.001:
+			continue
+		if i < dead.size() and dead[i] != 0:
 			continue
 		var stock := grid[i]
 		grid[i] = clampf(stock + rate * maxf(stock, capacity * 0.04)
@@ -266,6 +269,81 @@ func stock_fraction_around(activity: Subsistence.Activity, centre: Vector3,
 	if room <= 0.001:
 		return 1.0
 	return clampf(stock / room, 0.0, 1.0)
+
+
+## Celdas que no se reponen, por actividad: `activity -> PackedByteArray`.
+##
+## Una mata de avellano rebrota y una manada se recompone; un nodulo de silex
+## no. Sin esto, `regrow` le devolvia a la veta lo mismo que a un pastizal y
+## una cantera se estabilizaba para siempre en tres cuartos de carga: medido
+## con ocho canteros, ciento cuarenta dias y seis mil unidades sacadas, el
+## cantizal seguia al 77% y no se agotaba nunca. Lo llena
+## [SettlementSim._freeze_veins] una vez, al montar el mundo.
+var frozen: Dictionary = {}
+
+
+## Marca una celda como de las que no vuelven a crecer.
+func freeze(activity: Subsistence.Activity, x: int, z: int) -> void:
+	if not grids.has(activity) or x < 0 or z < 0 or x >= width or z >= height:
+		return
+	var dead: PackedByteArray = frozen.get(activity, PackedByteArray())
+	if dead.size() != width * height:
+		dead.resize(width * height)
+	dead[z * width + x] = 1
+	frozen[activity] = dead
+
+
+## Si esta celda es de las que no vuelven a crecer.
+func is_frozen(activity: Subsistence.Activity, x: int, z: int) -> bool:
+	var dead: PackedByteArray = frozen.get(activity, PackedByteArray())
+	var i := z * width + x
+	return i >= 0 and i < dead.size() and dead[i] != 0
+
+
+## Las celdas que caen dentro de un radio alrededor de un punto.
+func cells_within(centre: Vector3, radius: float) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if width <= 0 or height <= 0:
+		return out
+	var cell_w := world_size.x / float(width)
+	var cell_h := world_size.y / float(height)
+	var reach_x := maxi(int(ceil(radius / maxf(cell_w, 0.001))), 0)
+	var reach_z := maxi(int(ceil(radius / maxf(cell_h, 0.001))), 0)
+	var cx := clampi(int(centre.x / world_size.x * float(width)), 0, width - 1)
+	var cz := clampi(int(centre.z / world_size.y * float(height)), 0, height - 1)
+	for dz in range(-reach_z, reach_z + 1):
+		var z := cz + dz
+		if z < 0 or z >= height:
+			continue
+		for dx in range(-reach_x, reach_x + 1):
+			var x := cx + dx
+			if x < 0 or x >= width:
+				continue
+			out.append(Vector2i(x, z))
+	return out
+
+
+## Seca una celda para siempre: cero existencias y cero CAPACIDAD.
+##
+## Es lo que separa esquilmar de AGOTAR. Una mancha esquilmada vuelve -para
+## eso esta `regrow`, que se apoya en la capacidad-; una celda seca no,
+## porque se le quita la capacidad y ya no hay a que volver. El silex de un
+## nodulo se saca una vez.
+func dry_cell(activity: Subsistence.Activity, x: int, z: int) -> bool:
+	if not grids.has(activity) or not capacities.has(activity):
+		return false
+	if x < 0 or z < 0 or x >= width or z >= height:
+		return false
+	var i := z * width + x
+	var cap: PackedFloat32Array = capacities[activity]
+	if cap[i] <= 0.001:
+		return false
+	var grid: PackedFloat32Array = grids[activity]
+	cap[i] = 0.0
+	grid[i] = 0.0
+	capacities[activity] = cap
+	grids[activity] = grid
+	return true
 
 
 ## Centro del mundo de una celda

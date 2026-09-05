@@ -660,16 +660,32 @@ func set_job_count(job: Profession.Job, count: int) -> int:
 ## sirva, salir es andar por andar. Sin esto, alguien con recolección de
 ## primera y taller de segunda salía igual a un valle que no daba nada en
 ## vez de bajar a su segunda opción.
+## Si esta TAREA tiene adonde ir. Por la especialidad y no por el oficio.
+##
+## La diferencia no es un detalle: la cantera es una especialidad de
+## recoleccion cuya actividad es MATERIA_PRIMA, no RECOLECCION. Mirando el
+## oficio, un cantero con su cantizal a la vista se quedaba sin trabajo
+## porque no hubiera avellanas en el valle, y al reves, un forrajeador
+## entraba a recolectar sin nada que recolectar porque hubiera un cantizal.
+func _task_has_somewhere(job: Profession.Job, task: int) -> bool:
+	var speciality := Profession.task_speciality(task)
+	return _activity_has_somewhere(job, int(Profession.activity_of(job, speciality)))
+
+
 func _job_has_somewhere(job: Profession.Job) -> bool:
-	var activity := Profession.CATALOGUE[job]["activity"] as int
+	return _activity_has_somewhere(job, Profession.CATALOGUE[job]["activity"] as int)
+
+
+func _activity_has_somewhere(job: Profession.Job, activity: int) -> bool:
 	if activity < 0:
 		return true
 	if job == Profession.Job.EXPLORACION:
 		return true
 	# El taller figura en la tabla con actividad MATERIA_PRIMA -es de donde
 	# saca lo que talla-, pero no sale al monte a por ella: trabaja en el
-	# abrigo sobre lo que ya está guardado. Sin esta línea, un tallador se
-	# quedaba sin oficio porque no había cantera conocida.
+	# abrigo sobre lo que ya está guardado, así que no necesita paraje. Que
+	# tenga o no con qué trabajar lo decide `_speciality_can_work`, que es
+	# quien sabe de recetas y de lo que hay en el almacén.
 	if job == Profession.Job.MANUFACTURA:
 		return true
 	# Sin mundo montado no hay nada que comprobar, y desde luego no hay que
@@ -717,16 +733,27 @@ func apply_priorities() -> void:
 			# traer. Lo que se para es abrir tajo nuevo.
 			if larder_full and _feeds_the_band(job_key as Profession.Job):
 				continue
-			# Y si ese oficio no tiene ADONDE ir, tampoco cuenta: se pasa al
-			# siguiente de la lista del jugador en vez de mandar a alguien a
-			# recolectar donde no hay nada que recoger. La prioridad dice en
-			# qué orden se prefieren las cosas, no que haya que salir a hacer
-			# la primera aunque no exista: quien tiene recolección arriba y
-			# taller debajo se queda tallando cuando el monte no da, que es
-			# lo que haría cualquiera.
-			if not _job_has_somewhere(job_key as Profession.Job):
-				continue
 			for task: int in Profession.tasks_of(job_key as Profession.Job):
+				# Si esa TAREA no tiene ADONDE ir, no cuenta: se pasa a la
+				# siguiente de la lista del jugador en vez de mandar a
+				# alguien a recolectar donde no hay nada que recoger. La
+				# prioridad dice en qué orden se prefieren las cosas, no que
+				# haya que salir a hacer la primera aunque no exista: quien
+				# tiene recolección arriba y taller debajo se queda tallando
+				# cuando el monte no da, que es lo que haría cualquiera.
+				#
+				# Por TAREA y no por oficio: la cantera es recolección para el
+				# jugador y materia prima para el terreno, y mirando el oficio
+				# un cantero se quedaba parado por no haber avellanas.
+				if not _task_has_somewhere(job_key as Profession.Job, task):
+					continue
+				# Y el taller, ademas, solo cuenta si tiene con que trabajar. La
+				# materia prima la traen los recolectores: si no la han traido,
+				# mala suerte, el artesano se va a su siguiente oficio en vez de
+				# quedarse el dia entero delante de un banco vacio.
+				if not _speciality_can_work(
+						Profession.task_speciality(task) as Profession.Speciality):
+					continue
 				var level := person.priority_for(task)
 				if level <= 0 or level > best_level:
 					continue
@@ -1216,6 +1243,17 @@ func _tick_person(person: Inhabitant, body: Node3D, hours: float, delta: float) 
 					# campamento, levantando lo que este en cola y, si ya hay
 					# secadero, ahumando lo que haya llegado fresco.
 					_tend_camp(person, hours)
+				elif person.job == Profession.Job.MANUFACTURA \
+						and hour >= HORA_SALIDA and hour < HORA_REGRESO:
+					# El taller tampoco sale. En la tabla de oficios figura con
+					# actividad MATERIA_PRIMA -es de donde saca lo que talla- y eso
+					# lo mandaba cada manana a un cotarro de piedra al otro lado del
+					# valle: medido, un tallador se pasaba el 79% del dia andando y
+					# no entraba NUNCA en TRABAJANDO, o sea que no salia una sola
+					# pieza. La materia prima la traen los recolectores; el artesano
+					# trabaja sobre lo que hay en el abrigo, y si no hay, se va a su
+					# siguiente oficio -ver `_speciality_can_work`.
+					_craft(person, hours)
 				elif person.has_task and hour >= HORA_SALIDA and hour < HORA_REGRESO:
 					_send_to_work(person)
 			Inhabitant.State.COMIENDO:
@@ -3110,14 +3148,54 @@ func _next_piece(speciality: Profession.Speciality) -> int:
 	var options: Array = SPECIALITY_MAKES.get(speciality, [])
 	if options.is_empty():
 		return -1
-	var chosen: int = options[0]
+	var chosen := -1
 	var worst := INF
 	for kind: int in options:
-		var coverage := tool_coverage(kind as Tool.Kind)
+		var kind_value := kind as Tool.Kind
+		# Lo que ya esta cubierto de sobra no se hace: nadie talla ciento
+		# veinte lascas que no va a usar
+		var coverage := tool_coverage(kind_value)
+		if coverage >= RESERVA_UTILLAJE:
+			continue
+		# Sin la herramienta previa no es que se tarde mas: es que no se hace
+		var prerequisite := Tool.needs_tool(kind_value)
+		if prerequisite >= 0 and toolkit.count(prerequisite as Tool.Kind) <= 0:
+			continue
+		# Y sin materia prima en el abrigo, tampoco. Antes esto no se miraba
+		# aqui: se elegia la pieza MENOS cubierta aunque no hubiera con que
+		# hacerla, y el artesano se plantaba delante de ella sin probar con
+		# otra que si podia sacar.
+		if not _can_pay_for(kind_value):
+			continue
 		if coverage < worst:
 			worst = coverage
 			chosen = kind
 	return chosen
+
+
+## Si el abrigo tiene la materia prima que pide una pieza.
+##
+## Mismo criterio que usa `_craft` al cobrarla, incluida la sustitucion de
+## cuarcita por silex cuando lo hay: si aqui dijera que si y alli que no, el
+## artesano se plantaria en el banco sin sacar nada.
+func _can_pay_for(kind: Tool.Kind) -> bool:
+	var recipe := Tool.recipe(kind)
+	for material: int in recipe:
+		var wanted: float = float(recipe[material])
+		if material == Materia.Kind.PIEDRA \
+				and store.amount(Materia.Kind.SILEX) >= wanted:
+			continue
+		if store.amount(material as Materia.Kind) < wanted:
+			return false
+	return true
+
+
+## Si esta especialidad de taller tiene algo que hacer hoy. Lo que no es
+## taller no le afecta: devuelve que si y sigue su camino.
+func _speciality_can_work(speciality: Profession.Speciality) -> bool:
+	if not SPECIALITY_MAKES.has(speciality):
+		return true
+	return _next_piece(speciality) >= 0
 
 
 ## Trabajo de taller. Se llama en lugar de la cosecha para quien esta en
@@ -3604,8 +3682,9 @@ func _end_of_day() -> void:
 	toolkit.broken_today.clear()
 
 	# Los parajes se reponen. Sin esto lo esquilmado no volvia nunca y el valle
-	# se vaciaba en unas semanas.
+	# se vaciaba en unas semanas. Las vetas quedan fuera: ver `_freeze_veins`.
 	if field:
+		_freeze_veins()
 		for activity: int in [Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 				Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 				Subsistence.Activity.MATERIA_PRIMA]:
@@ -3809,6 +3888,38 @@ func hungry_count(threshold: float = 60.0) -> int:
 	return total
 
 
+## Ya se ha marcado que celdas de materia prima no vuelven a crecer.
+var _veins_frozen := false
+
+
+## Marca de una vez las celdas de materia prima que NO se reponen.
+##
+## La materia prima no es una sola cosa: un desmogadero da cuerna caida, que
+## vuelve cada invierno, y una veta de silex da nodulos, que no vuelven nunca.
+## Cual es cual lo decide [Parajes._kind_for], determinista por posicion, y
+## si vuelve o no lo dice [Materia.renews].
+##
+## Sin esto, `regrow` le devolvia a la veta lo mismo que a un pastizal:
+## medido, ocho canteros sacando seis mil unidades en ciento cuarenta dias
+## dejaban el cantizal al 77% y ahi se quedaba. No se podia agotar, y sin
+## poder agotarse un paraje no se puede perder.
+##
+## Se hace una sola vez -mil celdas- y no cada jornada.
+func _freeze_veins() -> void:
+	if _veins_frozen or field == null:
+		return
+	_veins_frozen = true
+	var act := Subsistence.Activity.MATERIA_PRIMA
+	for z in range(field.height):
+		for x in range(field.width):
+			if field.abundance_cell(act, x, z) <= 0.001:
+				continue
+			var kind := Parajes._kind_for(act, field.cell_center(x, z),
+				GameState.season as Subsistence.Season)
+			if not Materia.renews(kind):
+				field.freeze(act, x, z)
+
+
 ## Si hay un paraje en barbecho cubriendo ese punto.
 func _is_resting(activity: Subsistence.Activity, point: Vector3) -> bool:
 	for paraje: Paraje in parajes.list:
@@ -3827,6 +3938,22 @@ func _name_new_parajes() -> void:
 		return
 
 	parajes.just_found.clear()
+
+	# Primero las bajas y luego las altas. Una veta agotada deja de nombrar
+	# su paraje ANTES de que se repase el mapa, para que el punto quede
+	# libre y `refresh` pueda bautizarlo esa misma jornada por otra cosa.
+	for loss: Dictionary in parajes.prune_exhausted(field):
+		var lost: Paraje = loss["paraje"]
+		var spent := Materia.material_name(loss["kind"] as Materia.Kind).to_lower()
+		if bool(loss["gone"]):
+			_note(Chronicle.Kind.PENURIA,
+				"Se acabo %s: no queda %s que sacar y el sitio deja de tener nombre."
+					% [lost.name_text, spent], 2)
+		else:
+			_note(Chronicle.Kind.PENURIA,
+				"Se acabo el %s de aquel sitio; lo que queda alli ya es otra cosa: %s."
+					% [spent, lost.name_text], 1)
+
 	# "Mismo trozo de monte" es "misma zona de la rejilla de navegacion":
 	# no hace falta un rio de por medio para que dos celdas cercanas sean
 	# sitios distintos, basta con que no se pueda ir de una a otra sin

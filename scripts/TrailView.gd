@@ -78,8 +78,6 @@ func _repaint() -> void:
 	_lines.clear()
 
 	for person: Inhabitant in _people:
-		if person.job != _job:
-			continue
 		_draw_person(person)
 
 
@@ -91,13 +89,21 @@ func _repaint() -> void:
 func _draw_person(person: Inhabitant) -> void:
 	var tint := colour_for(person.id)
 
-	# Las de antes, apagadas: son historia y no deben tapar lo de hoy
+	# Las de antes, apagadas: son historia y no deben tapar lo de hoy.
+	#
+	# Se filtra por el oficio CON EL QUE SE SALIO, no por el que tenga la
+	# persona ahora. Con lo segundo, el dia que la despensa llega al tope el
+	# reparto saca a todo el mundo de la recoleccion a la vez y los rastros
+	# de recoleccion desaparecian de golpe, como si nadie hubiera pisado el
+	# monte en toda la partida.
 	for trip: Dictionary in person.journeys:
+		if int(trip.get("job", person.job)) != _job:
+			continue
 		_draw_path(trip.get("path", PackedVector3Array()) as PackedVector3Array,
 			person, tint * Color(1.0, 1.0, 1.0, 0.45), false)
 
 	# Y la de ahora, viva y con los hitos marcados
-	if not person.journey.is_empty():
+	if not person.journey.is_empty() 			and int(person.journey.get("job", person.job)) == _job:
 		_draw_path(person.journey["path"] as PackedVector3Array,
 			person, tint, true)
 

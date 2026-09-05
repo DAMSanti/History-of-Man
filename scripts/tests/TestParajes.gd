@@ -839,3 +839,182 @@ func test_la_lena_no_bautiza_medio_valle() -> void:
 	}
 	assert_eq(Parajes._richest_named(paraje), int(Materia.Kind.BAYA),
 		"gana la baya aunque la lena tenga un pelo mas")
+
+
+# --- la veta que se acaba se lleva el paraje por delante ------------------
+
+## Deja una actividad a cero SIN tocar la capacidad: eso es esquilmar, que no
+## es lo mismo que agotar -lo esquilmado vuelve a crecer.
+func _esquilmar(field: ResourceField, activity: Subsistence.Activity) -> void:
+	for z in range(field.height):
+		for x in range(field.width):
+			field.deplete_at(activity, field.cell_center(x, z), 999.0)
+
+
+## Un campo con una mancha de materia prima en una celda que de verdad da una
+## VETA -de las que no vuelven a crecer- y no cuerna caída.
+##
+## La celda no se elige a dedo: cuál es cuál lo decide `Parajes._kind_for`,
+## determinista por posición, así que hay que buscarla. Fijar una celda a mano
+## y suponer que da sílex es como se escribe una prueba que pasa por
+## casualidad y deja de pasar al cambiar una constante.
+func _campo_con_veta() -> Dictionary:
+	var field := ResourceField.new()
+	field.setup(8, 8, Vector2(512.0, 512.0))
+	for z in range(8):
+		for x in range(8):
+			var kind := Parajes._kind_for(Subsistence.Activity.MATERIA_PRIMA,
+				field.cell_center(x, z), GameState.season as Subsistence.Season)
+			if Materia.renews(kind):
+				continue
+			field.set_abundance(Subsistence.Activity.MATERIA_PRIMA, x, z, 1.0)
+			field.spread(Subsistence.Activity.MATERIA_PRIMA, 2)
+			return {"field": field, "x": x, "z": z, "kind": kind}
+	return {}
+
+
+## El paraje de esa veta, ya colocado en su celda.
+func _paraje_de_veta(veta: Dictionary) -> Paraje:
+	var field: ResourceField = veta["field"]
+	var paraje := Paraje.create(int(veta["x"]), int(veta["z"]),
+		Subsistence.Activity.MATERIA_PRIMA, veta["kind"] as Materia.Kind,
+		field.cell_center(int(veta["x"]), int(veta["z"])), 1)
+	paraje.contents = {int(veta["kind"]): {"abundancia": 0.9, "sabido": true}}
+	return paraje
+
+
+func test_la_veta_agotada_borra_el_paraje() -> void:
+	# Petición literal: «si un producto no sostenible se agota y es el que
+	# nombra un paraje, el paraje desaparece».
+	var veta := _campo_con_veta()
+	assert_false(veta.is_empty(), "en un campo de 8x8 hay alguna veta")
+	var field: ResourceField = veta["field"]
+	var parajes := Parajes.new()
+	var paraje := _paraje_de_veta(veta)
+	parajes.add(paraje)
+
+	# Con la veta entera no pasa nada: agotar no es lo mismo que estar usada
+	assert_true(parajes.prune_exhausted(field).is_empty(),
+		"una veta llena no se pierde")
+	assert_eq(parajes.list.size(), 1, "y el paraje sigue ahi")
+
+	# Se saca hasta el fondo
+	_esquilmar(field, Subsistence.Activity.MATERIA_PRIMA)
+	var news := parajes.prune_exhausted(field)
+	assert_eq(news.size(), 1, "la veta agotada es noticia")
+	assert_true(bool(news[0]["gone"]), "y la noticia es que el sitio se pierde")
+	assert_eq(parajes.list.size(), 0, "el paraje ha desaparecido")
+
+
+func test_la_veta_agotada_no_vuelve_a_crecer() -> void:
+	# Que desaparezca y reaparezca al día siguiente no sería agotarse: es la
+	# CAPACIDAD la que se va, no sólo las existencias
+	var veta := _campo_con_veta()
+	var field: ResourceField = veta["field"]
+	var parajes := Parajes.new()
+	parajes.add(_paraje_de_veta(veta))
+
+	_esquilmar(field, Subsistence.Activity.MATERIA_PRIMA)
+	parajes.prune_exhausted(field)
+
+	for _day in range(200):
+		field.regrow(Subsistence.Activity.MATERIA_PRIMA, 0.045)
+	assert_eq(field.abundance_cell(Subsistence.Activity.MATERIA_PRIMA,
+		int(veta["x"]), int(veta["z"])), 0.0,
+		"doscientos dias despues sigue sin haber nada")
+
+
+func test_la_veta_no_se_repone_ni_estando_a_medias() -> void:
+	# El fallo de fondo: `regrow` le devolvía a una veta lo mismo que a un
+	# pastizal. Medido en la sonda, ocho canteros sacando seis mil unidades
+	# en ciento cuarenta días dejaban el cantizal al 77% y ahí se quedaba
+	# para siempre: no se podía agotar, o sea que no se podía perder.
+	var veta := _campo_con_veta()
+	var field: ResourceField = veta["field"]
+	var x := int(veta["x"])
+	var z := int(veta["z"])
+	field.freeze(Subsistence.Activity.MATERIA_PRIMA, x, z)
+	field.deplete_at(Subsistence.Activity.MATERIA_PRIMA,
+		field.cell_center(x, z), 0.5)
+	var medio := field.abundance_cell(Subsistence.Activity.MATERIA_PRIMA, x, z)
+
+	for _day in range(100):
+		field.regrow(Subsistence.Activity.MATERIA_PRIMA, 0.045)
+	assert_eq(field.abundance_cell(Subsistence.Activity.MATERIA_PRIMA, x, z),
+		medio, "cien dias despues sigue habiendo lo mismo: no rebrota")
+
+
+func test_el_avellanar_esquilmado_no_desaparece() -> void:
+	# Lo que vuelve a crecer no se pierde nunca: un avellanar esquilmado es
+	# un avellanar flojo, no un sitio menos en el mapa
+	var field := ResourceField.new()
+	field.setup(8, 8, Vector2(512.0, 512.0))
+	field.set_abundance(Subsistence.Activity.RECOLECCION, 4, 4, 1.0)
+	field.spread(Subsistence.Activity.RECOLECCION, 2)
+
+	var parajes := Parajes.new()
+	var paraje := _paraje(4, 4, Materia.Kind.FRUTO_SECO,
+		Subsistence.Activity.RECOLECCION)
+	paraje.position = field.cell_center(4, 4)
+	parajes.add(paraje)
+
+	_esquilmar(field, Subsistence.Activity.RECOLECCION)
+	assert_true(parajes.prune_exhausted(field).is_empty(),
+		"la avellana vuelve el año que viene")
+	assert_eq(parajes.list.size(), 1, "y el sitio sigue siendo el sitio")
+
+
+func test_el_sitio_con_otro_oficio_sobrevive_a_la_veta() -> void:
+	# Un cantizal que además era pasto no desaparece: deja de ser cantizal
+	var veta := _campo_con_veta()
+	var field: ResourceField = veta["field"]
+	var paraje := _paraje_de_veta(veta)
+	field.set_abundance(Subsistence.Activity.CAZA, int(veta["x"]),
+		int(veta["z"]), 1.0)
+	field.spread(Subsistence.Activity.CAZA, 2)
+
+	var parajes := Parajes.new()
+	paraje.add_activity(Subsistence.Activity.CAZA)
+	paraje.contents[int(Materia.Kind.CARNE)] = {"abundancia": 0.6, "sabido": true}
+	parajes.add(paraje)
+
+	_esquilmar(field, Subsistence.Activity.MATERIA_PRIMA)
+	var news := parajes.prune_exhausted(field)
+	assert_eq(news.size(), 1, "la veta se ha acabado igual")
+	assert_false(bool(news[0]["gone"]), "pero el sitio no se pierde")
+	assert_eq(parajes.list.size(), 1, "sigue en la lista")
+	assert_eq(paraje.kind, Materia.Kind.CARNE, "y ahora lo nombra la caza")
+	assert_true(paraje.name_text.begins_with("El pasto"),
+		"con el nombre cambiado: %s" % paraje.name_text)
+	assert_false(paraje.serves(Subsistence.Activity.MATERIA_PRIMA),
+		"ya no se viene aqui a por piedra")
+
+
+func test_el_punto_puede_volver_a_bautizarse_con_otro_material() -> void:
+	# «Podrá volver a salir un paraje en ese punto con otro material»: al
+	# secar sólo la materia prima, la recolección de ese mismo punto sigue
+	# entera y `refresh` puede bautizarlo de nuevo
+	var veta := _campo_con_veta()
+	var field: ResourceField = veta["field"]
+	var x := int(veta["x"])
+	var z := int(veta["z"])
+	field.set_abundance(Subsistence.Activity.RECOLECCION, x, z, 1.0)
+	field.spread(Subsistence.Activity.RECOLECCION, 2)
+
+	var parajes := Parajes.new()
+	parajes.add(_paraje_de_veta(veta))
+
+	_esquilmar(field, Subsistence.Activity.MATERIA_PRIMA)
+	parajes.prune_exhausted(field)
+	assert_eq(parajes.list.size(), 0, "el cantizal se ha perdido")
+
+	var knowledge := BandKnowledge.new()
+	knowledge.setup(8, 8, Vector2(512.0, 512.0))
+	knowledge.see_from(field.cell_center(x, z), 200.0)
+	knowledge.reveal(Subsistence.Activity.RECOLECCION, field.cell_center(x, z), 1.0)
+	parajes.refresh(field, knowledge, 30, [Subsistence.Activity.RECOLECCION])
+
+	assert_true(parajes.list.size() >= 1,
+		"en ese punto vuelve a salir un sitio, ahora de recoleccion")
+	assert_false(parajes.list[0].serves(Subsistence.Activity.MATERIA_PRIMA),
+		"pero ya no de piedra")

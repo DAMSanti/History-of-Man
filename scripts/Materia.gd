@@ -259,6 +259,21 @@ static func is_food(kind: Kind) -> bool:
 	return float(CATALOGUE[kind]["alimenta"]) > 0.0
 
 
+## Los materiales que NO se reponen. Una mata de avellano vuelve a dar el año
+## que viene y una manada se recompone; un nódulo de sílex no. Lo que se saca
+## de una veta se saca una vez.
+##
+## Es lo que hace que un cantizal se pueda perder de verdad: cuando se acaba,
+## se acaba, el paraje deja de existir y en ese punto podrá salir con el
+## tiempo otro sitio de otra cosa -ver `Parajes.prune_exhausted`.
+const VETAS := [Kind.PIEDRA, Kind.SILEX, Kind.OCRE]
+
+
+## Si este material vuelve a crecer solo.
+static func renews(kind: Kind) -> bool:
+	return not VETAS.has(kind)
+
+
 ## Raciones-persona que da una unidad.
 static func nutrition(kind: Kind) -> float:
 	return float(CATALOGUE[kind]["alimenta"])

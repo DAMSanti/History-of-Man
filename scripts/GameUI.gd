@@ -2348,10 +2348,28 @@ func show_trails() -> void:
 
 	var job := trails.showing() as Profession.Job
 	_heading(body, Profession.job_name(job).to_upper())
+	# Por el oficio CON EL QUE SE SALIO, no por el que se tenga hoy. Cuando la
+	# despensa llega al tope que puso el jugador, el reparto saca de golpe a
+	# toda la recoleccion, y filtrando por el oficio de ahora esta pantalla se
+	# quedaba vacia el mismo dia: parecia que se hubieran borrado los rastros.
+	var told_someone := false
 	for person: Inhabitant in sim.people:
-		if person.job != job:
+		if not _walked_as(person, job):
 			continue
-		_trail_summary(body, person)
+		told_someone = true
+		_trail_summary(body, person, job)
+	if not told_someone:
+		_text(body, "Nadie ha salido a esto todavía.", true)
+
+
+## Si esta persona ha andado alguna vez con este oficio, lo tenga ahora o no.
+func _walked_as(person: Inhabitant, job: Profession.Job) -> bool:
+	if not person.journey.is_empty() 			and int(person.journey.get("job", person.job)) == int(job):
+		return true
+	for trip: Dictionary in person.journeys:
+		if int(trip.get("job", person.job)) == int(job):
+			return true
+	return false
 
 
 ## El resumen de una persona: sus salidas, una por una.
@@ -2360,7 +2378,8 @@ func show_trails() -> void:
 ## distingue haber coronado dos picos de haberse dado la vuelta dos veces a
 ## media pared, y son partidas distintas: en una la banda tiene el valle
 ## cartografiado y en la otra ha perdido dos días.
-func _trail_summary(body: VBoxContainer, person: Inhabitant) -> void:
+func _trail_summary(body: VBoxContainer, person: Inhabitant,
+		job: Profession.Job) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	body.add_child(head)
@@ -2385,16 +2404,23 @@ func _trail_summary(body: VBoxContainer, person: Inhabitant) -> void:
 	# expedición larga podía acabar contando cero.
 	var total := 0.0
 	var farthest := 0.0
+	var outings := 0
+	var mine: Array[Dictionary] = []
 	for trip: Dictionary in person.journeys:
+		if int(trip.get("job", person.job)) != int(job):
+			continue
+		mine.append(trip)
+		outings += 1
 		total += float(trip["metres"])
 		farthest = maxf(farthest, float(trip["farthest"]))
-	if not person.journey.is_empty():
+	var live := not person.journey.is_empty() 		and int(person.journey.get("job", person.job)) == int(job)
+	if live:
 		total += float(person.journey["metres"])
 		farthest = maxf(farthest, float(person.journey["farthest"]))
 
 	var stats := Label.new()
 	stats.text = "%d salidas · %.1f km · lo más lejos %d m" % [
-		person.journeys.size(), total / 1000.0, int(farthest)]
+		outings, total / 1000.0, int(farthest)]
 	stats.add_theme_font_size_override("font_size", 10)
 	stats.add_theme_color_override("font_color", UISkin.INK_SOFT)
 	head.add_child(stats)
@@ -2404,16 +2430,16 @@ func _trail_summary(body: VBoxContainer, person: Inhabitant) -> void:
 		_work_line(body, entry)
 
 	# Y las salidas, de la última a la primera: lo de hoy interesa más
-	if not person.journey.is_empty():
+	if live:
 		_journey_line(body, person.journey, true)
 	var told := 0
-	for i in range(person.journeys.size() - 1, -1, -1):
+	for i in range(mine.size() - 1, -1, -1):
 		if told >= 8:
 			break
 		told += 1
-		_journey_line(body, person.journeys[i], false)
+		_journey_line(body, mine[i], false)
 
-	if told == 0 and person.journey.is_empty():
+	if told == 0 and not live:
 		_text(body, "   No ha salido todavía.", true)
 
 

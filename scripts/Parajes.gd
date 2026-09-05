@@ -273,12 +273,120 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				# actividad: un sitio con cuatro veces mas raiz que avellana
 				# es un raizal aunque se bautizara mirando la recoleccion en
 				# otoño. Se hace antes de `add`, que es quien fija el rotulo.
-				var richest := _richest_named(paraje)
-				if richest >= 0:
-					paraje.kind = richest as Materia.Kind
+				# Sin contar la leña y la fibra, que se meten en TODOS los
+				# parajes con una pizca fija de nada: un sitio cuyo unico
+				# nombre posible es «el leñero» no es un sitio, es una celda
+				# que ha pasado el umbral de otra cosa que ahora mismo no
+				# esta -cuerna caida en verano, por ejemplo. Se deja sin
+				# bautizar y ya se bautizara cuando de verdad tenga algo.
+				var richest := _richest_named(paraje, true)
+				if richest < 0:
+					continue
+				paraje.kind = richest as Materia.Kind
 				if add(paraje):
 					added += 1
 	return added
+
+
+## Por debajo de esto una veta se da por agotada. No es cero: el ultimo 4%
+## de un cantizal es polvo y lascas rotas, no piedra de tallar.
+const EXHAUSTED := 0.04
+
+
+## Quita un paraje de la lista. Devuelve si de verdad estaba.
+func remove(paraje: Paraje) -> bool:
+	var index := list.find(paraje)
+	if index < 0:
+		return false
+	list.remove_at(index)
+	_by_id.erase(paraje.id())
+	just_found.erase(paraje)
+	return true
+
+
+## Pasa cuenta de las vetas agotadas.
+##
+## Peticion literal: «si un producto no sostenible se agota y es el que
+## nombra un paraje, el paraje desaparece; podra volver a salir un paraje en
+## ese punto con otro material».
+##
+## Lo que se hace es lo unico honrado: si lo que da nombre al sitio es de lo
+## que no vuelve a crecer -[Materia.VETAS]- y de verdad ya no queda,
+## se seca la mancha en el campo de recursos -[ResourceField.exhaust], que
+## le quita la CAPACIDAD y no solo las existencias, para que `regrow` no lo
+## resucite- y se le quita el oficio al paraje. Si no le quedaba otro, el
+## paraje desaparece; el punto sigue ahi y `refresh` podra volver a
+## bautizarlo mas adelante por otra cosa -un avellanar donde estuvo el
+## cantizal-, porque ya no hay nada que lo reclame.
+##
+## Devuelve una lista de `{paraje, kind, gone}` para que la cronica lo
+## cuente: perder un sitio con nombre es noticia.
+func prune_exhausted(field: ResourceField) -> Array[Dictionary]:
+	var news: Array[Dictionary] = []
+	if field == null:
+		return news
+
+	for paraje: Paraje in list.duplicate():
+		if Materia.renews(paraje.kind):
+			continue
+		var activity := activity_for_kind(paraje.kind)
+		if activity < 0:
+			continue
+		# Se mira la celda NUCLEO y no la mancha entera. Una veta de silex no
+		# ocupa el redondel completo: al lado puede haber un desmogadero, que
+		# se repone cada invierno, y promediando los dos el silex nunca daba
+		# por agotado -medido: ochocientos dias, nueve mil unidades sacadas y
+		# la mancha estancada en el 5%, subiendo y bajando con la cuerna.
+		var act := activity as Subsistence.Activity
+		var left := field.stock_fraction(act, paraje.cell_x, paraje.cell_z)
+		if left > EXHAUSTED:
+			continue
+
+		# Y se seca solo lo que era de ESTE material, no el redondel entero:
+		# la cuerna caida del vecino no tiene la culpa de que se acabara el
+		# silex.
+		var spent := paraje.kind
+		for cell: Vector2i in field.cells_within(paraje.position, paraje.extent):
+			if _kind_for(act, field.cell_center(cell.x, cell.y),
+					GameState.season as Subsistence.Season) != spent:
+				continue
+			field.dry_cell(act, cell.x, cell.y)
+
+		# El sitio puede seguir vivo por otra cosa: un cantizal que ademas era
+		# pasto no desaparece, deja de ser cantizal.
+		_by_id.erase(paraje.id())
+		paraje.activities.erase(int(activity))
+		paraje.contents.erase(int(spent))
+		if paraje.activities.is_empty():
+			var index := list.find(paraje)
+			if index >= 0:
+				list.remove_at(index)
+			news.append({"paraje": paraje, "kind": spent, "gone": true})
+			continue
+
+		# Y si lo que queda no tiene ni palabra de sitio, tampoco hay sitio:
+		# un paraje sin nada que lo nombre no es un paraje.
+		#
+		# La leña y la fibra no valen para esto. Se meten en TODOS los parajes
+		# con una pizca fija, asi que siempre queda algo, y el cantizal
+		# agotado sobrevivia como «el leñero del alto»: un sitio nuevo con
+		# nombre nuevo que no le importa a nadie, justo donde el jugador
+		# tenia que notar una perdida.
+		var richest := _richest_named(paraje, true)
+		if richest < 0:
+			var orphan := list.find(paraje)
+			if orphan >= 0:
+				list.remove_at(orphan)
+			news.append({"paraje": paraje, "kind": spent, "gone": true})
+			continue
+
+		paraje.activity = paraje.activities[0] as Subsistence.Activity
+		paraje.kind = richest as Materia.Kind
+		paraje.name_text = _free_name(paraje)
+		_by_id[paraje.id()] = paraje
+		news.append({"paraje": paraje, "kind": spent, "gone": false})
+
+	return news
 
 
 ## Umbral de abundancia por debajo del cual una actividad NO cuenta en un
@@ -300,14 +408,20 @@ static func threshold_for(activity: Subsistence.Activity) -> float:
 ## no por el oficio con el que se dio con él. La leña y la fibra, que se
 ## meten en todos los parajes con una pizca fija de nada, quedan fuera de la
 ## puja salvo que no haya otra cosa: si no, medio valle sería «el leñero».
-static func _richest_named(paraje: Paraje) -> int:
+## `sin_relleno` las deja fuera del todo, y no solo con menos peso: sirve
+## para decidir si al paraje le queda ALGO que lo nombre, donde «un poco de
+## leña» no es respuesta.
+static func _richest_named(paraje: Paraje, sin_relleno: bool = false) -> int:
 	var best := -1
 	var best_amount := -1.0
 	for kind_key: int in paraje.contents:
 		if not Paraje.APODOS.has(kind_key):
 			continue
+		var relleno := kind_key == Materia.Kind.LENA or kind_key == Materia.Kind.FIBRA
+		if relleno and sin_relleno:
+			continue
 		var amount := float((paraje.contents[kind_key] as Dictionary)["abundancia"])
-		if kind_key == Materia.Kind.LENA or kind_key == Materia.Kind.FIBRA:
+		if relleno:
 			amount *= 0.1
 		if amount > best_amount:
 			best_amount = amount

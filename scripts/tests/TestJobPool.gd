@@ -384,6 +384,10 @@ func test_si_no_hay_donde_recolectar_se_baja_a_la_segunda_opcion() -> void:
 	# parajes, ni cotarros conocidos
 	people[1].set_priority(Profession.task_id(Profession.Job.HOGAR), 1)
 
+	# Con piedra en el abrigo el taller SI es una opcion: lo que se mide aqui
+	# es que no se salga al monte a por nada, no que el taller sea gratis
+	sim.store.add(Materia.Kind.PIEDRA, 20.0)
+
 	var person := people[0]
 	person.set_priority(Profession.task_id(Profession.Job.RECOLECCION,
 		Profession.Speciality.FORRAJEO), 1)
@@ -393,6 +397,46 @@ func test_si_no_hay_donde_recolectar_se_baja_a_la_segunda_opcion() -> void:
 
 	assert_eq(person.job, Profession.Job.MANUFACTURA,
 		"sin monte que recolectar, baja al taller en vez de salir por salir")
+
+
+func test_el_taller_sin_materia_prima_baja_a_la_siguiente_opcion() -> void:
+	# Peticion literal: «los encargados de manufactura no salen a buscar los
+	# materiales; si no los traen los recolectores, bad luck, ellos haran su
+	# siguiente profesion con mas prioridad».
+	var people := _banda(2)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	people[1].set_priority(Profession.task_id(Profession.Job.HOGAR), 1)
+	# Abrigo vacio: ni una piedra que tallar
+	assert_eq(sim.store.amount(Materia.Kind.PIEDRA), 0.0, "el abrigo empieza vacio")
+
+	var person := people[0]
+	person.set_priority(Profession.task_id(Profession.Job.MANUFACTURA,
+		Profession.Speciality.TALLA), 1)
+	person.set_priority(Profession.task_id(Profession.Job.HOGAR), 2)
+	sim.apply_priorities()
+
+	assert_eq(person.job, Profession.Job.HOGAR,
+		"sin materia prima el tallador no se queda mirando el banco")
+
+
+func test_con_materia_prima_el_taller_manda() -> void:
+	var people := _banda(2)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	people[1].set_priority(Profession.task_id(Profession.Job.HOGAR), 1)
+	sim.store.add(Materia.Kind.PIEDRA, 20.0)
+
+	var person := people[0]
+	person.set_priority(Profession.task_id(Profession.Job.MANUFACTURA,
+		Profession.Speciality.TALLA), 1)
+	person.set_priority(Profession.task_id(Profession.Job.HOGAR), 2)
+	sim.apply_priorities()
+
+	assert_eq(person.job, Profession.Job.MANUFACTURA,
+		"con piedra guardada el tallador si talla")
 
 
 func test_con_sitio_de_reserva_si_se_recolecta() -> void:

@@ -290,6 +290,13 @@ func begin_journey(what: String, day_value: int, hour_value: float,
 		home: Vector3) -> void:
 	journey = {
 		"kind": what, "day": day_value, "hour": hour_value,
+		# El oficio con el que se salio, apuntado AQUI y no leido del que se
+		# tenga luego. Sin esto, el dia que la despensa llega al tope que puso
+		# el jugador toda la recoleccion cambia de oficio a la vez y el visor
+		# de rastros -que filtraba por el oficio de AHORA- se quedaba en
+		# blanco de golpe: los caminos del monte desaparecian todos el mismo
+		# dia sin que nadie hubiera dejado de andarlos.
+		"job": int(job),
 		"ended": day_value, "metres": 0.0, "farthest": 0.0,
 		"place": "", "outcome": "", "home": home,
 		# El punto mas lejano al que se llego. Es el que da nombre a la salida

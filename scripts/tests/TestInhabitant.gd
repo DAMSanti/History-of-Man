@@ -261,3 +261,31 @@ func test_entrenar_un_rasgo_personal_sube_desde_donde_este() -> void:
 	p.train_trait(Inhabitant.Trait.NATACION, 0.05)
 	assert_near(p.trait_in(Inhabitant.Trait.NATACION), 0.05, 0.001,
 		"nadar se aprende nadando, un poco cada vez")
+
+
+# --- la salida se acuerda del oficio con el que se hizo -------------------
+
+func test_la_salida_guarda_el_oficio_con_el_que_se_salio() -> void:
+	# Peticion literal: «hay un punto, en este caso en el dia 7, no se si
+	# coincide con el punto en el que llega al limite de comida impuesto por
+	# el jugador, todos los rastros de recoleccion desaparecen».
+	#
+	# Y desaparecian: con la despensa al tope el reparto saca de golpe a
+	# todos los recolectores, y el visor de rastros filtraba por el oficio
+	# que se tuviera EN ESE MOMENTO. Los caminos seguian guardados; solo que
+	# ya no habia nadie que los reclamara.
+	var person := _adult()
+	person.job = Profession.Job.RECOLECCION
+	person.begin_journey("Forrajeo", 1, 7.0, Vector3.ZERO)
+	assert_eq(int(person.journey["job"]), int(Profession.Job.RECOLECCION),
+		"la salida sabe con que oficio se hizo")
+
+	person.position = Vector3(300.0, 0.0, 0.0)
+	person.note_step(300.0, Vector3.ZERO)
+	person.end_journey(1, "el avellanar", "trajo dos raciones")
+
+	# Y ahora la despensa se llena y el reparto lo manda al taller
+	person.job = Profession.Job.MANUFACTURA
+	assert_eq(person.journeys.size(), 1, "la salida sigue guardada")
+	assert_eq(int(person.journeys[0]["job"]), int(Profession.Job.RECOLECCION),
+		"y sigue siendo una salida de recoleccion aunque el ya talle")
