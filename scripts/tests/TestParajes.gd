@@ -1018,3 +1018,99 @@ func test_el_punto_puede_volver_a_bautizarse_con_otro_material() -> void:
 		"en ese punto vuelve a salir un sitio, ahora de recoleccion")
 	assert_false(parajes.list[0].serves(Subsistence.Activity.MATERIA_PRIMA),
 		"pero ya no de piedra")
+
+
+# --- la ficha dice lo que de verdad se saca de allí -----------------------
+
+func test_el_paraje_enseña_toda_la_cesta_de_la_actividad() -> void:
+	# Petición literal: «no sé de dónde están sacando frutos secos, bayas,
+	# bellotas, setas... cuando ningún paraje muestra que lo tiene; deberían
+	# aparecer en los parajes».
+	#
+	# Y no aparecían: la cosecha da la cesta ENTERA de la especialidad en
+	# cualquier sitio, y la ficha enseñaba el material que bautiza el paraje
+	# y dos extras. Ocho cosas en el zurrón y tres en la ficha.
+	var field := _field_rico()
+	var paraje := _paraje(4, 4, Materia.Kind.RAIZ, Subsistence.Activity.RECOLECCION)
+	paraje.position = field.cell_center(4, 4)
+	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
+
+	for kind: Materia.Kind in [Materia.Kind.FRUTO_SECO, Materia.Kind.BAYA,
+			Materia.Kind.CARACOL, Materia.Kind.HUEVO, Materia.Kind.CORTEZA,
+			Materia.Kind.RAIZ]:
+		assert_true(paraje.contents.has(int(kind)),
+			"%s se saca de aquí, así que tiene que salir en la ficha"
+				% Materia.material_name(kind))
+
+
+func test_la_rebusca_no_le_quita_el_nombre_al_paraje() -> void:
+	# Todo lo de la cesta sale, pero de rebusca: si pujara de tú a tú, el
+	# material que menos abunda podría acabar bautizando el sitio y todos los
+	# prados del valle se llamarían igual.
+	# Solo recoleccion: en un sitio que ademas tenga materia prima manda la
+	# veta, y con razon -eso es otra prueba
+	var field := ResourceField.new()
+	field.setup(8, 8, Vector2(512.0, 512.0))
+	field.set_abundance(Subsistence.Activity.RECOLECCION, 4, 4, 1.0)
+	field.spread(Subsistence.Activity.RECOLECCION, 3)
+
+	var paraje := _paraje(4, 4, Materia.Kind.RAIZ, Subsistence.Activity.RECOLECCION)
+	paraje.position = field.cell_center(4, 4)
+	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
+
+	var principal := float((paraje.contents[int(Materia.Kind.RAIZ)]
+		as Dictionary)["abundancia"])
+	var rebusca := float((paraje.contents[int(Materia.Kind.CORTEZA)]
+		as Dictionary)["abundancia"])
+	assert_true(rebusca < principal * 0.5,
+		"la rebusca es una pizca (%.3f) al lado de lo que da el sitio (%.3f)"
+			% [rebusca, principal])
+	assert_eq(Parajes._richest_named(paraje), int(Materia.Kind.RAIZ),
+		"y el nombre sigue saliendo de lo que de verdad abunda")
+
+
+func test_lo_de_otra_temporada_no_sale_ni_en_la_ficha() -> void:
+	# La bellota es de otoño y la miel de verano. En primavera no están, ni
+	# de rebusca: si no, la ficha volvería a decir una cosa y el monte otra.
+	var field := _field_rico()
+	var paraje := _paraje(4, 4, Materia.Kind.RAIZ, Subsistence.Activity.RECOLECCION)
+	paraje.position = field.cell_center(4, 4)
+	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
+	assert_false(paraje.contents.has(int(Materia.Kind.BELLOTA)),
+		"en marzo no hay bellota")
+	assert_false(paraje.contents.has(int(Materia.Kind.MIEL)),
+		"ni miel")
+
+	paraje.fill_contents(field, Subsistence.Season.OTONO)
+	assert_true(paraje.contents.has(int(Materia.Kind.BELLOTA)),
+		"y en otoño sí la hay")
+
+
+# --- el reparto de nombres de materia prima -------------------------------
+
+func test_hay_menos_cantizales_que_de_lo_demas() -> void:
+	# Petición literal: «hay demasiado cantizal, reduce ligeramente su
+	# proporción». Con los cuatro nombres a la misma papeleta salía uno de
+	# cada cuatro; ahora la cuarcita saca menos que las otras tres.
+	var field := ResourceField.new()
+	field.setup(32, 32, Vector2(2048.0, 2048.0))
+	var tally := {}
+	for z in range(32):
+		for x in range(32):
+			var kind := Parajes._kind_for(Subsistence.Activity.MATERIA_PRIMA,
+				field.cell_center(x, z), Subsistence.Season.PRIMAVERA)
+			tally[int(kind)] = int(tally.get(int(kind), 0)) + 1
+
+	var cuarcita := int(tally.get(int(Materia.Kind.PIEDRA), 0))
+	var total := 32 * 32
+	assert_true(cuarcita > 0, "cantizales sigue habiendo")
+	var share := float(cuarcita) / float(total)
+	assert_true(share < 0.23,
+		"la cuarcita baja del cuarto que sacaba antes: %.1f%%" % (share * 100.0))
+	assert_true(share > 0.15,
+		"pero sin pasarse, que la cuarcita es la piedra de todos los dias: %.1f%%"
+			% (share * 100.0))
+	for kind: Materia.Kind in [Materia.Kind.SILEX, Materia.Kind.OCRE,
+			Materia.Kind.ASTA]:
+		assert_true(int(tally.get(int(kind), 0)) > cuarcita,
+			"%s sale mas que la cuarcita" % Materia.material_name(kind))

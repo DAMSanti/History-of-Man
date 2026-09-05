@@ -519,6 +519,24 @@ const RECOLECCION_NAMING_BY_SEASON := {
 const MATERIA_PRIMA_NAMES := [Materia.Kind.PIEDRA, Materia.Kind.SILEX,
 	Materia.Kind.OCRE, Materia.Kind.ASTA]
 
+## La bolsa de la que se saca cuál de los cuatro es cada sitio.
+##
+## No es la lista de arriba tal cual porque el sorteo no es a partes iguales:
+## a cuatro nombres con la misma papeleta salía un cantizal de cada cuatro
+## sitios de materia prima, y el valle se llenaba de cantizales. Petición
+## literal: «hay demasiado cantizal, reduce ligeramente su proporción». La
+## cuarcita baja de uno de cada cuatro a uno de cada cinco; los otros tres se
+## reparten lo que suelta.
+const MATERIA_PRIMA_POOL := [
+	Materia.Kind.PIEDRA, Materia.Kind.PIEDRA, Materia.Kind.PIEDRA,
+	Materia.Kind.SILEX, Materia.Kind.SILEX, Materia.Kind.SILEX,
+	Materia.Kind.SILEX,
+	Materia.Kind.OCRE, Materia.Kind.OCRE, Materia.Kind.OCRE,
+	Materia.Kind.OCRE,
+	Materia.Kind.ASTA, Materia.Kind.ASTA, Materia.Kind.ASTA,
+	Materia.Kind.ASTA,
+]
+
 ## Lo que ADEMÁS puede haber en un paraje de esta actividad, aparte de lo que
 ## le da nombre. No decide el nombre: solo dice qué más se encontraría
 ## pasando por ahí, para que un paraje no sea un único material repetido
@@ -527,7 +545,12 @@ const EXTRAS_BY_ACTIVITY := {
 	Subsistence.Activity.RECOLECCION: [Materia.Kind.SETA, Materia.Kind.MIEL,
 		Materia.Kind.CARACOL, Materia.Kind.HUEVO, Materia.Kind.CORTEZA,
 		Materia.Kind.BELLOTA, Materia.Kind.FRUTO_SECO, Materia.Kind.BAYA,
-		Materia.Kind.RAIZ],
+		Materia.Kind.RAIZ,
+		# La yesca y la resina las trae el de leña y fibra, que es
+		# recolección aunque suenen a materia prima. Estaban solo en la
+		# lista de materia prima, así que las traía a casa y no salían en
+		# la ficha de ningún prado.
+		Materia.Kind.YESCA, Materia.Kind.RESINA],
 	Subsistence.Activity.CAZA: [Materia.Kind.PIEL, Materia.Kind.HUESO,
 		Materia.Kind.TENDON, Materia.Kind.GRASA],
 	Subsistence.Activity.PESCA: [],
@@ -536,7 +559,26 @@ const EXTRAS_BY_ACTIVITY := {
 }
 
 ## Cuántos extras como mucho, aparte del que da nombre.
+##
+## No es cuántos materiales hay: es cuántos hay EN CANTIDAD. Lo demás del
+## surtido de la actividad también está —y también se lo trae quien pasa por
+## allí— pero de rebusca, en la proporción de [DE_PASO].
 const MAX_EXTRAS := 2
+
+## Lo que se saca de rebusca, respecto a lo que da el material principal.
+##
+## Petición literal: «no sé de dónde están sacando frutos secos, bayas,
+## bellotas, setas... cuando ningún paraje muestra que lo tiene; deberían
+## aparecer en los parajes».
+##
+## Y tenía razón: la cosecha da la cesta ENTERA de la especialidad en
+## cualquier sitio —`SettlementSim.SPECIALITY_YIELDS`— mientras la ficha del
+## paraje enseñaba el material que lo bautiza y dos extras. Ocho cosas en el
+## zurrón y tres en la ficha. Ahora sale todo lo que de verdad se puede sacar
+## allí; lo que no es principal ni extra sale con esta pizca, que es poca a
+## propósito: sirve para que la ficha no mienta, no para que todos los prados
+## del valle parezcan el mismo.
+const DE_PASO := 0.15
 
 
 ## A qué actividad pertenece un material, para poder preguntar cuánto queda
@@ -570,7 +612,7 @@ static func _kind_for(activity: Subsistence.Activity, position: Vector3,
 		Subsistence.Activity.PESCA: return Materia.Kind.PESCADO
 		Subsistence.Activity.MARISQUEO: return Materia.Kind.MARISCO
 		Subsistence.Activity.MATERIA_PRIMA:
-			return _pick_deterministic(MATERIA_PRIMA_NAMES, position, 0)
+			return _pick_deterministic(MATERIA_PRIMA_POOL, position, 0)
 		_:
 			return RECOLECCION_NAMING_BY_SEASON.get(season, Materia.Kind.FRUTO_SECO)
 

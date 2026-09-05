@@ -3084,6 +3084,16 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 		if LOCAL_ONLY.has(kind) and not _spot_has(kind as Materia.Kind, person.position):
 			continue
 
+		# Y lo que no es de esta epoca del año no se coge, aqui ni en ningun
+		# sitio. La tabla de temporadas -[Parajes.SEASONAL_EXTRAS]- decidia
+		# que salia en la ficha de un paraje, pero no que se podia recoger:
+		# la miel y la bellota figuraban como de verano y otoño y aun asi
+		# entraban en el zurron en marzo, asi que el jugador las veia en el
+		# almacen sin verlas en ningun paraje. Una de las dos cosas sobraba,
+		# y la que sobra es coger en marzo lo que no hay en marzo.
+		if not Parajes.in_season(kind as Materia.Kind, GameState.season):
+			continue
+
 		# Tope puesto por el jugador: si ya hay bastante de esto, se deja en el
 		# monte. Cuenta lo guardado mas lo que ya lleva encima, para que no se
 		# pase de largo en una sola jornada.

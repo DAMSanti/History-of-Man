@@ -225,8 +225,8 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 				"sabido": primary == kind or previously_known.has(int(primary)),
 			}
 
-		for extra_kind: Materia.Kind in Parajes.extra_materials_at(
-				activity_value, position, primary):
+		var picked := Parajes.extra_materials_at(activity_value, position, primary)
+		for extra_kind: Materia.Kind in picked:
 			if fresh.has(int(extra_kind)) or not Parajes.in_season(extra_kind, season):
 				continue
 			# La mitad de lo medido: es lo que se lleva de paso, no lo que se
@@ -234,6 +234,22 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 			fresh[int(extra_kind)] = {
 				"abundancia": amount * 0.5,
 				"sabido": extra_kind == kind or previously_known.has(int(extra_kind)),
+			}
+
+		# Y el resto del surtido de la actividad, de rebusca. No es adorno:
+		# es lo que la banda YA se estaba trayendo de aquí y no salía en
+		# ninguna ficha. Un recolector vuelve con avellana, baya, bellota y
+		# seta del mismo prado —lo da `SettlementSim.SPECIALITY_YIELDS`— y el
+		# paraje enseñaba tres cosas de ocho. Con esto la ficha dice lo que
+		# de verdad se puede sacar allí, y la pizca es pequeña para que
+		# siga habiendo prados buenos y prados flojos.
+		for rest: Materia.Kind in (Parajes.EXTRAS_BY_ACTIVITY.get(
+				activity_value, []) as Array):
+			if fresh.has(int(rest)) or not Parajes.in_season(rest, season):
+				continue
+			fresh[int(rest)] = {
+				"abundancia": amount * Parajes.DE_PASO,
+				"sabido": rest == kind or previously_known.has(int(rest)),
 			}
 
 	# Siempre hay algo que se lleva quien pasa por allí, aunque el sitio no sea
