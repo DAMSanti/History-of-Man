@@ -13,7 +13,12 @@ extends Resource
 ## `_load_generation_cache` y `_save_generation_cache`.
 
 ## Version del algoritmo de generacion. Subirla invalida las caches en disco.
-const CACHE_VERSION := 1
+##
+## v2: se anade `detail_hash`. Hasta v1 los parametros del relieve inventado no
+## entraban en la comprobacion, asi que cambiarlos cargaba la malla vieja sin
+## avisar. Las caches de v1 no dicen con que detalle se hicieron, y por eso no
+## sirven.
+const CACHE_VERSION := 2
 @export var version: int = CACHE_VERSION
 
 ## Version del heightmap fuente (HeightmapData.pipeline_version) con el que se
@@ -35,6 +40,17 @@ const CACHE_VERSION := 1
 ## Hash de las entalladuras (bocas de cueva) con las que se genero. Cambia si
 ## cambian los emplazamientos excavados en la malla para esta epoca.
 @export var carvings_hash: int = 0
+
+## Hash del relieve INVENTADO: amplitud, frecuencia y octavas del detalle, su
+## ganancia por pendiente, y el relieve de plataforma. Van juntos porque son
+## un solo concepto -cuanto se anade a mano por debajo del dato- y porque
+## ninguno de los seis se toca sin querer volver a mirar el terreno.
+##
+## Antes no estaban en la comprobacion, y esa era la trampa: la amplitud del
+## detalle es justo el parametro que uno quiere probar a ojo, y probarlo
+## cargaba la malla anterior. Cuatro valores distintos daban cuatro capturas
+## identicas.
+@export var detail_hash: int = 0
 
 ## Mapas derivados, tal como los deja TerrainGenerator._generate_maps(). Hacen
 ## falta enteros: get_height_at, get_slope_at y el resto de consultas de

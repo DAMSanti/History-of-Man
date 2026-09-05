@@ -272,6 +272,15 @@ var _height_range: Vector2 = Vector2.ZERO
 ## valida y hay que calcular desde cero. Ver [TerrainGenerationCache].
 var _gen_cache: TerrainGenerationCache = null
 
+## Usar la cache de generacion en disco. Apagarlo obliga a calcular el terreno
+## desde cero y NO escribe nada.
+##
+## Existe para las pruebas que comparan un mismo sitio con parametros
+## distintos: la cache se nombra solo por resolucion, asi que dos variantes se
+## pisarian el fichero, y la ultima en correr dejaria su malla como si fuese la
+## buena. En juego siempre va encendido.
+@export var use_generation_cache: bool = true
+
 ## Manager del material del terreno (carga diferida)
 var _material_manager: RefCounted
 
@@ -538,7 +547,8 @@ func _compose_from_heightmap(base_map: PackedFloat32Array) -> void:
 
 			var detail := _detail_noise.get_noise_2d(
 				heightmap_region_offset.x + float(x) * meters_x,
-				heightmap_region_offset.y + float(z) * meters_z) * detail_amplitude
+				heightmap_region_offset.y + float(z) * meters_z) \
+				* _effective_detail_amplitude()
 
 			# Y el relieve de la plataforma, que solo entra por DEBAJO de la
 			# cota cero: ahi el dato es batimetria basta y sale una mesa de
@@ -641,6 +651,39 @@ func _update_height_range() -> void:
 		mn = minf(mn, h)
 		mx = maxf(mx, h)
 	_height_range = Vector2(mn, mx)
+
+
+## Amplitud del detalle segun CUANTO IGNORA EL DATO.
+##
+## El detalle se escribio contra el terrarium, que trae una muestra cada 13,9 m
+## sobre una malla de 4,97 m: alli 3 de cada 4 vertices eran interpolacion, la
+## interpolacion siempre da rampa lisa, y el ruido rompia esa lisura. Era un
+## defecto real y esto lo tapaba.
+##
+## Pero el mapa local se carga hoy del MDT05 del IGN -5,00 m por muestra, o sea
+## practicamente un dato por vertice- y ahi no queda lisura que romper: el ruido
+## solo puede ondular relieve medido. Comparado a ojo sobre el sitio 56, con
+## amplitud 3 el monte se cubre de bultos redondos y se comen las crestas y las
+## vaguadas del LiDAR (ver scripts/tests/DetalleProbe.gd).
+##
+## Asi que la amplitud sale de la razon entre el paso del DATO y el de la MALLA:
+##
+##   IGN        5,00 / 4,97 = 1,01  ->  ~0, el dato ya lo sabe
+##   terrarium 13,91 / 4,97 = 2,80  ->  entero, hace falta
+##
+## `detail_amplitude` sigue siendo el techo, no el valor: se ajusta a mano lo
+## que se anade COMO MUCHO, y el dato decide cuanto de eso hace falta. Con
+## terreno procedural no hay muestreo que valga y entra entero.
+func _effective_detail_amplitude() -> float:
+	if height_source != HeightSource.HEIGHTMAP or heightmap == null:
+		return detail_amplitude
+	if heightmap.meters_per_sample <= 0.0:
+		return detail_amplitude
+	var spacing := float(terrain_size.x) / float(maxi(resolution - 1, 1)) * meters_per_unit
+	if spacing <= 0.0:
+		return detail_amplitude
+	var ratio := heightmap.meters_per_sample / spacing
+	return detail_amplitude * clampf(ratio - 1.0, 0.0, 1.0)
 
 
 ## Frecuencia de detalle recortada para que no alias contra la malla.
@@ -959,6 +1002,15 @@ func _carvings_hash() -> int:
 	return hash(str(carvings))
 
 
+## Huella del relieve inventado: lo que se anade por debajo de lo que mide el
+## MDT. Ver [TerrainGenerationCache.detail_hash] para por que va todo junto.
+func _detail_hash() -> int:
+	# La amplitud EFECTIVA, no la del inspector: depende del paso del dato, asi
+	# que el mismo sitio con MDT del IGN y con terrarium no comparten malla.
+	return hash([_effective_detail_amplitude(), detail_frequency, detail_octaves,
+		detail_slope_gain, detail_slope_max, shelf_relief_m])
+
+
 ## Si una cache ya cargada sigue describiendo lo que este generador pide ahora.
 func _cache_matches(cache: TerrainGenerationCache) -> bool:
 	return cache.version == TerrainGenerationCache.CACHE_VERSION \
@@ -971,6 +1023,7 @@ func _cache_matches(cache: TerrainGenerationCache) -> bool:
 		and is_equal_approx(cache.sea_level, sea_level) \
 		and cache.terrain_chunks == terrain_chunks \
 		and cache.carvings_hash == _carvings_hash() \
+		and cache.detail_hash == _detail_hash() \
 		and cache.height_map.size() == resolution * resolution \
 		and (terrain_chunks > 1 or cache.single_mesh != null) \
 		and (terrain_chunks <= 1 or cache.chunk_meshes.size() > 0)
@@ -978,6 +1031,8 @@ func _cache_matches(cache: TerrainGenerationCache) -> bool:
 
 ## Carga la cache de disco si hay una y sigue describiendo este terreno.
 func _load_generation_cache() -> TerrainGenerationCache:
+	if not use_generation_cache:
+		return null
 	var path := _cache_base_path()
 	if path.is_empty() or not ResourceLoader.exists(path):
 		return null
@@ -991,7 +1046,7 @@ func _load_generation_cache() -> TerrainGenerationCache:
 ## vez que se cargue este mismo sitio. No hace nada si ya se cargo de cache
 ## -nada ha cambiado- ni si el terreno no tiene heightmap con ruta propia.
 func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMesh]) -> void:
-	if _gen_cache != null:
+	if _gen_cache != null or not use_generation_cache:
 		return
 	var path := _cache_base_path()
 	if path.is_empty():
@@ -1008,6 +1063,7 @@ func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMes
 	cache.sea_level = sea_level
 	cache.terrain_chunks = terrain_chunks
 	cache.carvings_hash = _carvings_hash()
+	cache.detail_hash = _detail_hash()
 	cache.height_map = _height_map
 	cache.humidity_map = _humidity_map
 	cache.geology_map = _geology_map
