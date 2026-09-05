@@ -4,7 +4,7 @@
 
 [node name="WorldEnvironmentSetup" type="Node3D"]
 script = ExtResource("1_setup")
-enable_sdfgi = true
+enable_sdfgi = false
 enable_volumetric_fog = true
 enable_ssr = false
 enable_ssao = true
@@ -12,6 +12,8 @@ sky_top_color = Color(0.385, 0.454, 0.55, 1)
 sky_horizon_color = Color(0.646, 0.656, 0.67, 1)
 sky_bottom_color = Color(0.2, 0.169, 0.133, 1)
 sun_energy = 1.0
+follow_time_of_day = false
+fixed_hour = 12.0
 fog_density = 0.01
 fog_color = Color(0.8, 0.9, 1, 1)
 fog_height = 0.0

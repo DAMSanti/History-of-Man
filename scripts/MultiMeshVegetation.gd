@@ -39,11 +39,15 @@ extends MultiMeshInstance3D
 @export_range(0.0, 1.0) var max_height_normalized: float = 0.65
 
 @export_group("LOD Settings")
-## Distancia de visibilidad (usa la propiedad heredada visibility_range_end)
+## Distancia a la que la vegetacion deja de dibujarse (0 = sin limite)
 @export var lod_distance_end: float = 200.0
 
-## Distancia de inicio de fade (usa la propiedad heredada visibility_range_begin)
-@export var lod_distance_begin: float = 150.0
+## Margen de desvanecimiento justo antes de lod_distance_end
+@export var lod_fade_margin: float = 40.0
+
+## Distancia MINIMA a la que se dibuja (0 = sin limite cercano).
+## Solo tiene sentido si otro nodo cubre el detalle de cerca.
+@export var lod_distance_begin: float = 0.0
 
 ## Referencia al generador de terreno
 var _terrain: TerrainGenerator
@@ -56,10 +60,18 @@ func _ready() -> void:
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = hash(name)
 	
-	# Configurar LOD usando las propiedades heredadas
-	visibility_range_end = lod_distance_end
+	# CUIDADO con la semantica de Godot: visibility_range_begin es el limite
+	# CERCANO, no el inicio del desvanecimiento. Estaba a 150 con end a 200, o
+	# sea que solo se dibujaba una cascara esferica entre 150 y 200 unidades de
+	# la camara y TODO lo cercano quedaba oculto. El fade va aparte, en
+	# visibility_range_end_margin.
 	visibility_range_begin = lod_distance_begin
-	visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	visibility_range_end = lod_distance_end
+	visibility_range_end_margin = lod_fade_margin
+	if lod_distance_end > 0.0:
+		visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	else:
+		visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
 
 
 ## Inicializa el MultiMesh con el terreno dado
@@ -77,12 +89,28 @@ func _populate() -> void:
 	# Obtener posiciones válidas del terreno
 	var valid_positions := _terrain.get_vegetation_positions(min_humidity, max_slope, min_spacing)
 	
+	# Filtrar por altura ANTES de reservar instancias. Antes se reservaban
+	# instancias que luego se "ocultaban" con escala 0: seguían contando para el
+	# límite y dejaban una base degenerada en el origen del MultiMesh.
+	var placeable: Array[Vector3] = []
+	for pos in valid_positions:
+		# Normalizado contra el rango REAL del terreno: dividir por max_height
+		# solo valia en modo procedural, con elevacion real da valores absurdos.
+		var normalized_h := _terrain.get_normalized_height_at(pos)
+		if normalized_h >= min_height and normalized_h <= max_height_normalized:
+			placeable.append(pos)
+	
 	# Limitar al máximo de instancias
-	var instance_count := mini(valid_positions.size(), max_instances)
+	var total := placeable.size()
+	var instance_count := mini(total, max_instances)
 	
 	if instance_count == 0:
 		push_warning("MultiMeshVegetation: No se encontraron posiciones válidas")
 		return
+	
+	# Muestreo repartido por todo el terreno: quedarse con las primeras N
+	# posiciones concentraba la vegetación en una franja del mapa.
+	var stride := float(total) / float(instance_count)
 	
 	# Crear el MultiMesh
 	var mm := MultiMesh.new()
@@ -93,14 +121,7 @@ func _populate() -> void:
 	
 	# Posicionar cada instancia
 	for i in range(instance_count):
-		var pos := valid_positions[i]
-		
-		# Verificar altura normalizada
-		var normalized_h := pos.y / _terrain.max_height
-		if normalized_h < min_height or normalized_h > max_height_normalized:
-			# Ocultar instancia (escala 0)
-			mm.set_instance_transform(i, Transform3D().scaled(Vector3.ZERO))
-			continue
+		var pos := placeable[mini(int(float(i) * stride), total - 1)]
 		
 		# Calcular transformación
 		var xform := Transform3D()

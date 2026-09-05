@@ -138,10 +138,12 @@ func initialize(_chunk: Chunk, _terrain: TerrainGenerator) -> void:
 	chunk = _chunk
 	terrain = _terrain
 	
-	# Conectar señales del chunk
+	# Conectar señales del chunk (evitando duplicados si se re-inicializa)
 	if chunk:
-		chunk.resource_added.connect(_on_resource_added)
-		chunk.resource_removed.connect(_on_resource_removed)
+		if not chunk.resource_added.is_connected(_on_resource_added):
+			chunk.resource_added.connect(_on_resource_added)
+		if not chunk.resource_removed.is_connected(_on_resource_removed):
+			chunk.resource_removed.connect(_on_resource_removed)
 	
 	# Crear visualización inicial
 	refresh_all()
@@ -152,6 +154,10 @@ func refresh_all() -> void:
 	if not chunk:
 		print("ResourceVisualizer: No hay chunk asignado")
 		return
+	
+	# initialize() puede llegar antes de _ready(); asegurar que hay mallas
+	if _rock_mesh == null or _ore_mesh == null:
+		_create_meshes()
 	
 	# Limpiar visualizaciones anteriores
 	_clear_all_visuals()
@@ -205,7 +211,13 @@ func _create_multimesh_for_material(mat_name: String, resources: Array) -> void:
 	else:
 		multimesh.mesh = _ore_mesh
 	
-	var count := mini(resources.size(), max_instances_per_type)
+	# Al superar el máximo hay que repartir el muestreo por TODO el array.
+	# Coger los primeros N dejaba todos los recursos visibles amontonados en
+	# una esquina del mapa, porque los depósitos se insertan en orden de barrido
+	# (fila z=0 completa, luego z=1...).
+	var total := resources.size()
+	var count := mini(total, max_instances_per_type)
+	var stride := float(total) / float(count)
 	multimesh.instance_count = count
 	
 	# Color del material
@@ -216,7 +228,8 @@ func _create_multimesh_for_material(mat_name: String, resources: Array) -> void:
 	rng.seed = mat_name.hash()
 	
 	for i in range(count):
-		var res: Dictionary = resources[i]
+		var src_index := mini(int(float(i) * stride), total - 1)
+		var res: Dictionary = resources[src_index]
 		var pos: Vector3 = res["position"]
 		var amount: float = res["amount"]
 		var quality: float = res["quality"]
@@ -256,9 +269,7 @@ func _create_multimesh_for_material(mat_name: String, resources: Array) -> void:
 	var material := StandardMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
 	material.roughness = 0.85
-	material.metallic = 0.1 if mat_name in ["iron", "copper"] else 0.0
-	if mat_name in ["iron", "copper"]:
-		material.metallic = 0.3
+	material.metallic = 0.3 if mat_name in ["iron", "copper"] else 0.0
 	instance.material_override = material
 	
 	add_child(instance)
@@ -266,7 +277,11 @@ func _create_multimesh_for_material(mat_name: String, resources: Array) -> void:
 
 
 func _clear_all_visuals() -> void:
+	# queue_free() es diferido: sin remove_child() los nodos viejos siguen
+	# siendo hijos al recrear y Godot renombra los nuevos (Resources_iron2...),
+	# dejando el diccionario y la escena desincronizados.
 	for child in get_children():
+		remove_child(child)
 		child.queue_free()
 	_multimesh_instances.clear()
 

@@ -1,177 +1,228 @@
-# Roadmap detallado para CityBuilder (Godot 4.5.1)
+# Roadmap — CityBuilder cántabro (Godot 4.5.1)
 
-Resumen rápido: roadmap por fases con tareas concretas, criterios de aceptación y riesgos. Ejecutar con Godot 4.5.1. Ver [SPECS.md](SPECS.md) para el contrato técnico de cada módulo.
+City builder del Paleolítico a la Edad Moderna sobre el relieve real de Cantabria.
 
-Este documento se revisó el 2026-08-10 tras una auditoría de código: varias tareas marcadas como completadas en la versión anterior no lo estaban (scripts vacíos referenciados por recursos `.tres`). Las correcciones están reflejadas abajo y detalladas en **FASE 3.5**, que debe resolverse antes de seguir avanzando en construcción/gameplay.
+Este documento se reescribió el **2026-09-02**, tras adoptar la arquitectura de
+dos escalas. La versión anterior planificaba un mundo único con streaming de
+chunks; esa decisión quedó anulada y con ella varias fases enteras. Lo que
+sigue refleja el estado real del código, no el deseado.
 
----
-
-## FASE 0 — Setup y Repositorio ✅ COMPLETADA
-- ✅ Godot 4.5.1, `project.godot`, `.gitignore`, `TimeManager` como Autoload, `README.md`.
-- Criterio de aceptación: ✅ repositorio clonado y abierto en Godot sin errores de proyecto.
-
----
-
-## FASE 1 — Arquitectura de Datos ✅ COMPLETADA
-- ✅ `RawMaterial.gd` con `@export` para propiedades físicas.
-- ✅ Recursos: `materials/{Iron,Stone,Straw,Coal,Wood,Copper,Clay}.tres`.
-- ✅ `Chunk.gd` para gestionar recursos en celdas del terreno (incluye `serialize()/deserialize()`).
-- ⬚ Persistencia real a disco (JSON o `ResourceSaver`) — el método existe pero nada lo invoca.
-- Criterio de aceptación: ✅ se puede colocar un recurso en el mapa y leerlo desde `Chunk.get_resources_at()`.
+Ver [SPECS.md](SPECS.md) para el contrato técnico de cada módulo.
 
 ---
 
-## FASE 2 — Mundo Procedural ✅ COMPLETADA
-- ✅ `TerrainGenerator.gd` con `FastNoiseLite` (Height, Humidity, Geology) y parámetros en el Inspector (`@tool`).
-- ✅ `populate_chunk_resources()` para poblar vetas basadas en geología.
-- ✅ `MultiMeshVegetation.gd` para vegetación eficiente vía `MultiMeshInstance3D` con LOD (`visibility_range_begin/end`).
-- ⬚ Visualización debug de las capas de ruido (gizmos/`ImmediateMesh`) — `debug_layer`/`show_debug_gizmos` existen como export pero no están implementados.
-- Criterio de aceptación: ✅ el demo muestra terreno, recursos y vegetación con `MultiMesh` sin nodos individuales.
+## La decisión que ordena todo lo demás
+
+**Dos escalas sobre un solo conjunto de datos.**
+
+| | Capa regional | Capa local |
+|---|---|---|
+| Qué es | Cantabria entera, tablero de gestión | El city builder |
+| Extensión | 199 × 171 km | 4 × 4 km |
+| Escala | 1 unidad = 100 m | 1 unidad = 1 m |
+| Resolución del dato | 111 m/muestra (zoom 10) | 13,9 m/muestra (zoom 13) |
+| Malla | 1993 × 1708 unidades, 1025² | 4096 unidades, 1025² (4 m/vértice) |
+| Escena | `scenes/region_map.tscn` | `scenes/demo_main.tscn` |
+
+Las une `Site`: un emplazamiento del mapa regional que, al fundarlo, descarga
+su relieve fino y genera el mapa local. El traspaso va por `Expedition`.
+
+**Consecuencia: no hay streaming de chunks.** Un mapa local de 4 km cabe en una
+malla única a 28 FPS medidos, y el regional es una malla basta. La antigua
+FASE 6 queda cancelada, no aplazada.
 
 ---
 
-## FASE 3 — Construcción, GridMap y Física Simplificada 🔶 EN PROGRESO
-- ⬚ Integrar `GridMap` y `mesh_library` para bloques y muros (no implementado; los edificios de prueba son `MeshInstance3D` sueltos).
-- ✅ `Architecto.gd`: `can_place_at_world()` comprueba dureza del suelo vs. peso.
-- ✅ Colapso en cascada simplificado (`_check_cascade_collapse` + `_trigger_collapse`), documentado como heurística de distancia, no un grafo estructural real.
-- ⚠️ **`BlockData.gd` está vacío** (0 líneas) pero `buildings/{StoneWall,WoodenFloor,StrawRoof}.tres` declaran `script_class="BlockData"` con propiedades que no existen en ningún script. Corregir en FASE 3.5 antes de dar esta fase por buena.
-- ⬚ Los edificios colocados no tienen `CollisionShape3D` → se pueden solapar sin detectarlo por raycast.
-- Entregables: ✅ `Architecto.gd`, ⬚ `BlockData.gd` real, ⬚ GridMap demo, ⬚ colisión de edificios.
-- Criterio de aceptación: ✅ el jugador no puede colocar bloques en terrenos débiles; ⬚ `BlockData` funcional; ⬚ no se pueden solapar edificios.
+## Estado actual
+
+### Completado
+
+- **Importación de relieve real.** `DEMImporter` sobre teselas Terrarium de AWS
+  (SRTM + NASADEM + EU-DEM + batimetría GEBCO). Sin clave de API y con licencia
+  que permite uso derivado, al contrario que Google Maps.
+- **Corrección de datos.** `despike()` sustituye artefactos por la mediana de
+  sus vecinos: en Cantabria había una franja con +4416 m junto a −1783 m, cotas
+  imposibles en la península. Tras corregir, el máximo queda en 2601,8 m, que es
+  la cota real de los Picos de Europa.
+- **Hidrografía deducida.** Relleno de depresiones (Planchon-Darboux) y
+  acumulación de flujo D8. El umbral es área drenada real en km².
+- **Frontera por época.** La región es Cantabria más la plataforma continental
+  que esté emergida a esa cota del mar. Con el mar actual son 5304 km² —la
+  frontera administrativa exacta, contrastada contra los 5321 km² reales—; con
+  el mar a −120 m, 7316 km².
+- **2067 emplazamientos** derivados del relieve, agrupados a 2 km en **862**
+  con **2495 elementos reales adjuntos**. 173 atestiguados contra el registro
+  arqueológico de OpenStreetMap.
+- **Salto entre escalas.** Seleccionar, fundar, descargar el relieve fino
+  (9 teselas, ~7 s) y entrar. `ESC` vuelve.
+- **`BlockData`** implementado; los `.tres` de `buildings/` cargan tipados.
+- **Colisión de edificios** en la capa `buildings`.
+- **Caché de texturas de terreno** (antigua FASE 5.1). Se generaban 8 texturas
+  píxel a píxel en cada `generate()`: 4 s que se pagaban una y otra vez.
+- **Rendimiento.** De 4,2 a ~28 FPS con un mapa 12 veces mayor. Las causas eran
+  texturas sin mipmaps y 24 muestreos por fragmento en el shader triplanar.
+
+### Deuda pendiente
+
+| | Estado |
+|---|---|
+| `scripts/Inventory.gd` | **0 bytes** |
+| `scripts/GameUtils.gd` | **0 bytes** |
+| Señales duplicadas en `TimeManager` (`cambio_de_estacion` / `season_changed`) | sin unificar |
+| Entrada duplicada en `CameraController` (teclas físicas + acciones) | sin unificar |
+| Descarga de teselas bloqueante | congela la ventana unos segundos |
+| Ríos y lagos | deducidos del relieve, no de datos reales |
 
 ---
 
-## FASE 3.5 — Deuda técnica crítica 🔴 PRIORITARIA (bloquea el resto)
+## FASE A — Cerrar el circuito de juego
 
-Encontrada en auditoría de 2026-08-10. Resolver antes de continuar FASE 3/6, porque construir gameplay sobre estos huecos multiplica el coste de arreglarlos después.
+Lo que falta para que esto deje de ser dos visores y pase a ser un juego.
 
-1. **Implementar `BlockData.gd`** con `class_name BlockData extends Resource` y las propiedades que ya usan los `.tres` existentes: `block_name: String`, `weight: float`, `primary_material: RawMaterial`, `dimensions: Vector3`, `is_structural: bool`, `support_factor: float`, `requires_support: bool`, `category: String`, `fire_resistance: float`, `thermal_insulation: float`, `crafting_materials: Array`, `build_time: float`. Verificar que `buildings/*.tres` cargan sin warnings tras el fix.
-2. **Implementar `Inventory.gd`** (stacks de `RawMaterial`/items) o eliminar la referencia si se decide posponerlo — no dejarlo como script vacío referenciado como "hecho".
-3. **Implementar o eliminar `GameUtils.gd`** — decidir su propósito real o quitarlo del repo si no aporta nada todavía.
-4. **Dar colisión a los edificios colocados** (`StaticBody3D` + `CollisionShape3D` por bloque) para que el raycast de `_try_place_building_at_mouse` los detecte y no se solapen.
-5. **Unificar señales duplicadas de `TimeManager`**: `cambio_de_estacion` y `season_changed` hacen lo mismo — quedarse con una y actualizar los listeners (`DemoMain`, `WorldEnvironmentSetup`).
-6. **Arreglar `CameraController`**: elimina la lectura duplicada de teclas físicas (`Input.is_key_pressed(KEY_W)`, etc.) y deja solo las acciones del `InputMap` (`move_forward`, …) para que el remapeo de controles funcione.
-7. Actualizar el ROADMAP/README a medida que se resuelva cada punto (evitar que vuelva a haber checkmarks falsos).
+### A1. Enclave inicial y exploración
+- Empezar con **un solo emplazamiento conocido**; el resto del mapa, oculto.
+- Revelar por proximidad y por expediciones.
+- Criterio: el jugador no ve los 862 de golpe; los descubre.
 
-Criterio de aceptación: cero scripts vacíos referenciados por un `.tres` o por otro script; `Inventory`/`GameUtils` implementados o retirados explícitamente.
+### A2. El asentamiento existe
+- Un `Settlement` con población, y que el mapa local muestre lo que hay
+  construido en vez del demo de cabañas de prueba.
+- Capacidad de carga del emplazamiento según la técnica disponible.
+- Criterio: fundar, salir al mapa regional y volver conserva el estado.
 
----
-
-## FASE 4 — Tiempo, Estaciones y Sistemas Reactivos ✅ COMPLETADA
-- ✅ `TimeManager.gd` autoload con ticks, días, estaciones, años y señales.
-- ⬚ Listeners de gameplay (ej. cultivos que mueren en invierno) — no hay sistema de cultivos todavía.
-- ⬚ Tests que se suscriban a `TimeManager` y verifiquen transiciones.
-- Criterio de aceptación: ✅ eventos de estación se emiten y los consumidores (`WorldEnvironmentSetup`, `DemoMain`) reaccionan.
+### A3. Persistencia
+- Guardar y cargar. `Chunk.serialize()` y `TimeManager.get_time_state()` ya
+  existen y no los llama nadie.
+- Criterio: cerrar el juego y recuperar la partida.
 
 ---
 
-## FASE 5 — Gráficos y Shaders ✅ COMPLETADA (con nota de rendimiento)
-- ✅ `WorldEnvironmentSetup.gd`: SDFGI, niebla volumétrica, ACES, SSAO/SSIL, glow, sol dinámico por hora/estación.
-- ✅ `shaders/triplanar.gdshader`: blending por altura y pendiente, sin estiramiento de textura.
-- ✅ `TerrainMaterialManager.gd` + `ProceduralTextureGenerator.gd`: material PBR completo con texturas y normal maps procedurales.
-- ⬚ **FASE 5.1 (nueva) — Optimizar generación de texturas**: `ProceduralTextureGenerator` genera 8 texturas de 512×512 pixel-a-pixel en GDScript (`Image.set_pixel`) cada vez que se crea el material del terreno, incluyendo cada regeneración en editor (`auto_generate`). Causa un hitch perceptible en el arranque. Opciones: (a) generar una vez y cachear en disco como `.tres`/`.png` reutilizable entre ejecuciones, (b) mover la generación a un compute/fragment shader, (c) al menos sustituir `set_pixel` por escritura directa a `PackedByteArray` + `Image.create_from_data`.
-- Criterio de aceptación: ✅ terreno natural con SDFGI; ⬚ generación de texturas sin hitch de arranque.
+## FASE B — El juego de verdad: procesos
+
+Aquí está lo que distingue este proyecto de un city builder cualquiera.
+
+### B1. `ProcessRecipe`
+Entradas, herramientas, conocimiento, energía, jornadas, salidas y
+**subproductos**. Los subproductos no son adorno: la escoria se acumula, la
+ceniza abona y las conchas forman el conchero, que en Cantabria es el
+yacimiento en sí.
+
+### B2. La escalera térmica
+`RawMaterial` ya guarda punto de fusión e ignición, o sea que **el árbol
+tecnológico ya está escrito**: no hay que inventarlo, hay que leerlo.
+
+| Instalación | Máx. | Habilita |
+|---|---|---|
+| Hogar abierto | ~700 °C | Cocinar, calcinar conchas |
+| Horno de fosa | ~900 °C | Cerámica |
+| Cubeta con fuelle | ~1100 °C | Cobre (1085 °C) |
+| Horno mejorado | ~1200 °C | Bronce |
+| Cuba baja | ~1250 °C | Hierro **en estado sólido**: esponja, no colada |
+| Ferrería hidráulica | ~1350 °C | Barras en cantidad |
+| Alto horno | ~1550 °C | Fundir hierro (1538 °C) |
+
+El salto de la esponja a la colada es una frontera tecnológica real, y cae sola
+con los datos que ya están en `Iron.tres`.
+
+### B3. Primera cadena completa
+Cuarcita de río → pico → marisqueo → conchero. Corta y cerrada. **Si esa cadena
+no es satisfactoria, el resto es contenido sobre un juego que no funciona.**
 
 ---
 
-## FASE 6 — Escalado de Mundo: Chunking Real ⬚ PENDIENTE (nueva, antes opcional)
+## FASE C — El arte como motor
 
-Elevada desde "extensión opcional" porque el diseño de `Chunk` ya asume streaming por fragmentos y actualmente se usa como un único chunk del tamaño de todo el terreno — hay que decidir esto antes de construir gameplay que dependa de tamaño de mundo.
+El saber tácito muere con quien lo tiene. Fijarlo en un soporte material lo
+convierte en patrimonio del grupo: por eso el arte funciona como motor
+tecnológico sin dejar de ser arte.
 
-- ⬚ Definir tamaño de chunk fijo (ej. 32×32) y generar `TerrainGenerator`/`Chunk` por rejilla en vez de uno monolítico.
-- ⬚ Carga/descarga de chunks según distancia a cámara/jugador.
-- ⬚ LOD de terreno (no solo de vegetación) para chunks lejanos.
-- Criterio de aceptación: mundo de al menos 512×512 sin caída de FPS por debajo del objetivo (ver SPECS §5), con chunks fuera de rango descargados de memoria.
+### C1. Estados de técnica
+`DESCONOCIDA` → `TÁCITA` (decae con el relevo generacional) → `EXTERNALIZADA`
+(permanente, pero atada al sitio donde está el soporte).
 
----
+### C2. Externalización
+No se puede pintar una caza que no se ha hecho: la obra tiene que ser **sobre**
+algo ocurrido. Cuesta ocre, luz y jornadas.
 
-## FASE 7 — Gameplay Base: Recolección, Inventario y Economía ⬚ PENDIENTE
-- ⬚ `Inventory.gd` real (ver FASE 3.5, punto 2), `ItemResource` (Resource), stacks.
-- ⬚ Storage/silos en `Chunk` que reducen peso de recursos en el suelo al recolectarlos.
-- ⬚ Workers / UI de recolección y crafting que usan `Chunk.extract_resource()` e `Inventory`.
-- Criterio de aceptación: el jugador puede recoger recursos físicamente del suelo y depositarlos en storages.
+### C3. Escalera de soportes
+Parietal (inmóvil) → mobiliar (portátil) → cerámica (replicable) →
+**escritura** → imprenta. El salto está en la escritura: antes hay que enseñar
+mostrando, después basta con contar.
 
----
-
-## FASE 8 — Polishing, QA y Tests ⬚ PENDIENTE
-- ⬚ Tests con GUT (o similar) para `Chunk`, `TerrainGenerator`, `Architecto`, y ahora también `BlockData`/`Inventory` una vez existan.
-- ⬚ Migrar la composición por código de `DemoMain.gd` a escenas `.tscn` reales con nodos y `@export` de referencias — mejora la editabilidad y permite tests de escena.
-- ⬚ Profiling con el profiler de Godot; resolver memory leaks y el hitch de FASE 5.1.
-- ⬚ Persistencia real: conectar `Chunk.serialize/deserialize` y `TimeManager.get_time_state/set_time_state` a un `SaveManager` con guardado/carga en disco.
-- Criterio de aceptación: tests cubren la lógica crítica; demo de rendimiento estable; se puede guardar y cargar una partida.
+**Guardarraíl: no debe existir una puntuación de arte.** El recurso escaso
+obliga a elegir *cuál* saber se hace permanente. Es una mecánica de
+priorización sobre el árbol tecnológico, no una vía paralela que le compita.
 
 ---
 
-## Extensiones — Opcionales (a futuro)
-- ⬚ Multijugador host-authoritative.
-- ⬚ IA avanzada para trabajadores y NPCs.
-- ⬚ Herramientas de editor: placement wizards, paneles de debug in-editor.
-- ⬚ Exportación a build distribuible (`export_presets.cfg`).
+## FASE D — Épocas
+
+Diez épocas con cultura material documentada en Cantabria, del Achelense a la
+Edad Moderna. Cada una es **datos**: materiales, procesos y edificios
+disponibles, más las técnicas que hay que externalizar para cerrarla.
+
+**El tiempo avanza por hitos, no por calendario.** El Paleolítico es el 99,4 %
+del intervalo real; si el tiempo de juego fuese proporcional, la partida entera
+sería tallar cuarcita. El calendario sigue corriendo dentro de una época para
+estaciones y cosechas.
+
+Hoy el filtro por época existe pero usa **abrigo y relieve**, no periodo
+arqueológico: 86 emplazamientos ocupables en el Paleolítico porque tienen cueva,
+que es la única vivienda de esa época.
 
 ---
 
-## Riesgos y mitigaciones
-- SDFGI y efectos avanzados: riesgo de hardware pobre — mitigación: fallback a baked lighting y LOD.
-- MultiMesh instancing mal usado: riesgo de desbordamiento — mitigación: usar pool y limitar `instance_count` por batch.
-- Deuda técnica silenciosa (scripts vacíos referenciados por recursos): mitigación — no marcar una tarea ✅ sin verificar que el archivo tiene contenido y que carga sin warnings en el editor.
-- Chunk único monolítico: mitigación — resolver FASE 6 antes de invertir en contenido que asuma mundos grandes.
+## FASE E — Fidelidad y datos
+
+### E1. Agua real
+Ríos y lagos desde polígonos de OpenStreetMap. Lo actual los deduce del
+relieve, que acierta el trazado del valle pero no la geometría. Arreglaría de
+paso que `water_km` no se recalcule por época.
+
+### E2. Periodos arqueológicos reales
+Cruzar con el inventario del Gobierno de Cantabria. OSM solo trae periodo en
+unas decenas de registros.
+
+### E3. Geología
+IGME MAGNA 1:50.000 para que los recursos líticos y minerales salgan del
+sustrato real y no del ruido celular.
+
+### E4. Trazabilidad visible
+Cada material, proceso y edificio con su nivel de evidencia
+(`ATESTIGUADO` / `INFERIDO` / `PLAUSIBLE`) y su fuente, expuestos en una
+enciclopedia dentro del juego.
+
+**«100 % históricamente fiable» no es alcanzable** —hay siglos de los que no
+sabemos qué comía la gente— y perseguirlo es el mayor riesgo de que el proyecto
+no termine nunca. Lo que sí se puede garantizar y defender es que ninguna
+afirmación del juego esté sin etiqueta, y que la proporción de `PLAUSIBLE` esté
+acotada.
 
 ---
 
-## Aceptación general del proyecto (MVP)
-- ✅ Terreno procedural con 3 capas
-- ✅ Vegetación con `MultiMesh`
-- ✅ `Chunk` con recursos físicos (como chunk único; falta chunking real, FASE 6)
-- ✅ `Architecto` para colocar bloques (falta `BlockData` real, FASE 3.5)
-- ✅ `TimeManager` funcionando
-- ⬚ Demostración jugable completa: recorrer el mapa, ver vetas de minerales, colocar estructura y observar si el material soporte lo permite (bloqueado por FASE 3.5, punto 4: colisión de edificios).
+## FASE F — Deuda e infraestructura
+
+Sin orden fijo; se atiende cuando estorbe.
+
+- Descarga de teselas en un hilo, con barra de progreso.
+- `Inventory.gd` y `GameUtils.gd`: implementar o retirar del repo.
+- Unificar las señales duplicadas de `TimeManager`.
+- Dejar solo el `InputMap` en `CameraController`, para que el remapeo funcione.
+- Reactivar el ciclo día/noche (`follow_time_of_day`), hoy desactivado a
+  propósito para trabajar con luz.
+- Orientar las bocas de cueva contra la normal de la ladera. Hoy son medias
+  esferas mirando arriba; una boca real se abre lateralmente.
+- Suite de pruebas. No hay ninguna.
 
 ---
 
-## Archivos Implementados
+## Riesgos
 
-### Scripts
-- ✅ `scripts/RawMaterial.gd` — Propiedades físicas de materiales
-- ✅ `scripts/Chunk.gd` — Gestión de recursos por celda
-- ✅ `scripts/TerrainGenerator.gd` — Generación procedural con 3 capas de ruido
-- ✅ `scripts/MultiMeshVegetation.gd` — Vegetación eficiente con MultiMesh
-- ✅ `scripts/Architecto.gd` — Sistema de construcción y colapso estructural
-- ✅ `scripts/TimeManager.gd` — Gestión de tiempo, días y estaciones
-- ✅ `scripts/WorldEnvironmentSetup.gd` — Configuración de SDFGI, fog, iluminación
-- ✅ `scripts/CameraController.gd` — Cámara orbital (input duplicado a limpiar, FASE 3.5)
-- ⚠️ `scripts/Inventory.gd` — **vacío**, no implementado (corregido respecto a versión anterior de este documento)
-- ⚠️ `scripts/BlockData.gd` — **vacío**, no implementado; recursos `.tres` dependientes de él
-- ⚠️ `scripts/GameUtils.gd` — **vacío**, propósito sin definir
-- ✅ `scripts/DemoMain.gd` — Integración de todos los sistemas (por código, no por escena)
-- ✅ `scripts/ProceduralTextureGenerator.gd` — Texturas procedurales (rendimiento a optimizar, FASE 5.1)
-- ✅ `scripts/TerrainMaterialManager.gd` — Gestión de material triplanar
-- ✅ `scripts/ResourceVisualizer.gd` — Visualización de recursos del `Chunk` vía MultiMesh
+**El alcance.** Cuarenta mil años, diez épocas, procesos físicos, comercio y
+fidelidad histórica es más de lo que cabe en un proyecto personal. La FASE B3
+—una sola cadena completa y corta— existe justamente para comprobar pronto si
+el núcleo divierte, antes de construir contenido encima.
 
-### Shaders
-- ✅ `shaders/triplanar.gdshader` — Shader triplanar con blend por altura/pendiente
-
-### Escenas
-- ✅ `scenes/demo_main.tscn` — Escena principal (nodo raíz + WorldEnvironment; el resto se crea por código)
-- ✅ `scenes/WorldEnvironment.tscn` — Entorno gráfico
-- ✅ `scenes/OrbitalCamera.tscn` — Cámara del jugador
-- ✅ `scenes/MultiMeshTrees.tscn` — Vegetación instanciada
-
-### Materiales (RawMaterial)
-- ✅ `materials/{Iron,Stone,Straw,Coal,Wood,Copper,Clay}.tres`
-
-### Edificios (BlockData)
-- ⚠️ `buildings/{StoneWall,WoodenFloor,StrawRoof}.tres` — datos definidos en el `.tres`, pero sin script `BlockData` funcional que los tipe (ver FASE 3.5)
-
----
-
-## Leyenda
-- ✅ Completado
-- 🔶 En progreso
-- 🔴 Prioritario / bloqueante
-- ⚠️ Marcado como completo antes, corregido tras auditoría
-- ⬚ Pendiente
-
----
-
-Fecha de creación: 2025-12-13
-Última actualización: 2026-08-10 (auditoría de código + corrección de estado real)
+**El dato manda hasta donde llega.** El DEM tiene una muestra cada 14 m; por
+debajo de esa escala todo lo que se ve es invención. Conviene recordarlo cada
+vez que algo parezca poco detallado: la respuesta no es añadir ruido.

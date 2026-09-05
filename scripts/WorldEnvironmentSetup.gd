@@ -3,8 +3,13 @@ extends Node3D
 ## Activa SDFGI, Volumetric Fog, ACES Tone Mapping y otros efectos.
 
 @export_group("Environment Settings")
-## Activar SDFGI (iluminación global)
-@export var enable_sdfgi: bool = true
+## Activar SDFGI (iluminación global en tiempo real).
+## Medido en un mundo de 2 km: SDFGI + SSIL cuestan ~13 FPS de 43. En una
+## vista cenital aportan muy poco para ese precio, asi que van apagados.
+@export var enable_sdfgi: bool = false
+
+## Activar SSIL (iluminación indirecta en espacio de pantalla)
+@export var enable_ssil: bool = false
 
 ## Activar niebla volumétrica
 @export var enable_volumetric_fog: bool = true
@@ -27,6 +32,17 @@ extends Node3D
 
 ## Energía del sol
 @export var sun_energy: float = 1.2
+
+## Seguir la hora del TimeManager. Con false el sol se queda fijo a la hora
+## de `fixed_hour` y no hay ciclo dia/noche.
+##
+## De momento va desactivado: el ciclo esta implementado y funciona, pero para
+## trabajar en el terreno y los emplazamientos estorba tener medio mapa a
+## oscuras. El codigo se conserva entero, solo se puentea la conexion.
+@export var follow_time_of_day: bool = false
+
+## Hora fija cuando follow_time_of_day es false
+@export_range(0.0, 24.0, 0.5) var fixed_hour: float = 12.0
 
 @export_group("Fog Settings")
 ## Densidad de la niebla
@@ -94,7 +110,7 @@ func _setup_environment() -> void:
 	_environment.ssr_enabled = enable_ssr
 	
 	# SSIL (iluminación indirecta)
-	_environment.ssil_enabled = true
+	_environment.ssil_enabled = enable_ssil
 	_environment.ssil_radius = 5.0
 	_environment.ssil_intensity = 1.0
 	
@@ -110,8 +126,11 @@ func _setup_environment() -> void:
 	
 	# Glow
 	_environment.glow_enabled = true
-	_environment.glow_intensity = 0.5
-	_environment.glow_bloom = 0.1
+	# Un bloom de 0.1 hace que TODO el encuadre sangre luz, no solo lo que pasa
+	# el umbral, y en combinacion con el especular del terreno remataba el
+	# aspecto barnizado. El glow se queda solo para el cielo y el agua.
+	_environment.glow_intensity = 0.25
+	_environment.glow_bloom = 0.0
 	_environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	
 	# Adjustments
@@ -167,6 +186,10 @@ func _setup_lighting() -> void:
 
 
 func _connect_time_manager() -> void:
+	if not follow_time_of_day:
+		_apply_fixed_sun()
+		return
+
 	# Conectar al TimeManager para cambios de luz según hora
 	if Engine.has_singleton("TimeManager") or has_node("/root/TimeManager"):
 		var tm = get_node_or_null("/root/TimeManager")
@@ -177,7 +200,27 @@ func _connect_time_manager() -> void:
 				tm.season_changed.connect(_on_season_changed)
 
 
+## Deja el sol clavado a mediodia, con el cielo de dia.
+func _apply_fixed_sun() -> void:
+	if not _directional_light:
+		return
+
+	# Mismo calculo que usa el ciclo, evaluado a una hora fija
+	_directional_light.rotation_degrees.x = -30.0 - sin(fixed_hour / 24.0 * PI) * 60.0
+	_directional_light.rotation_degrees.y = -45.0
+	_directional_light.light_energy = sun_energy
+	_directional_light.light_color = Color(1.0, 0.97, 0.92)
+
+	if _sky_material:
+		_sky_material.sky_top_color = sky_top_color
+		_sky_material.sky_horizon_color = sky_horizon_color
+
+	print("WorldEnvironmentSetup: sol fijo a las %.1f h (ciclo desactivado)" % fixed_hour)
+
+
 func _on_time_tick(_tick: int, _day: int, _season: int, _year: int) -> void:
+	if not follow_time_of_day:
+		return
 	if not _directional_light:
 		return
 	

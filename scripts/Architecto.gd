@@ -8,9 +8,14 @@ signal building_placed(world_pos: Vector3, building: Node3D)
 signal building_collapsed(world_pos: Vector3, building: Node3D)
 signal placement_denied(world_pos: Vector3, reason: String)
 
-## Factor de peso para cálculos de soporte
-## weight / WEIGHT_FACTOR debe ser menor que hardness del material
-@export var weight_factor: float = 100.0
+## Factor de peso para cálculos de soporte: kg que aguanta cada punto de dureza.
+## weight / weight_factor debe ser menor que la hardness del material del suelo.
+## Recalibrado de 100 a 2500 al pasar los edificios a BlockData con pesos
+## reales: una cabaña de piedra pesa ~7 t, que con el factor antiguo exigía
+## dureza 72 cuando el material más duro del juego (piedra) tiene 6.5, así que
+## no se podía construir en ninguna parte. Con 2500 una cabaña se sostiene en
+## tierra normal y una estructura de 20 t ya necesita suelo rocoso.
+@export var weight_factor: float = 2500.0
 
 ## Factor de seguridad para colapsos (margen de error)
 @export var safety_factor: float = 0.8
@@ -121,7 +126,7 @@ func place_building(world_pos: Vector3, building_weight: float, building_scene: 
 	if _terrain:
 		final_pos.y = _terrain.get_height_at(world_pos)
 	
-	building.global_position = final_pos
+	_set_building_position(building, final_pos)
 	
 	# Registrar el edificio
 	var data := BuildingData.new(building, building_weight)
@@ -146,7 +151,7 @@ func place_building_node(world_pos: Vector3, building: Node3D, building_weight: 
 	if _terrain:
 		final_pos.y = _terrain.get_height_at(world_pos)
 	
-	building.global_position = final_pos
+	_set_building_position(building, final_pos)
 	
 	# Registrar el edificio
 	var data := BuildingData.new(building, building_weight)
@@ -154,6 +159,16 @@ func place_building_node(world_pos: Vector3, building: Node3D, building_weight: 
 	
 	building_placed.emit(final_pos, building)
 	return true
+
+
+## Coloca el edificio respetando que puede no estar aún en el árbol de escena.
+## global_position sobre un nodo fuera del árbol falla y descarta la posición
+## (el llamador añade el nodo después de que place_*() devuelva true).
+func _set_building_position(building: Node3D, world_pos: Vector3) -> void:
+	if building.is_inside_tree():
+		building.global_position = world_pos
+	else:
+		building.position = world_pos
 
 
 ## Elimina un edificio y comprueba colapsos en cadena

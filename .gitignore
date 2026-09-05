@@ -37,3 +37,11 @@ desktop.ini
 # Backup files
 *.bak
 *.backup
+
+# Cachés de terreno: las regenera el propio juego al abrir un emplazamiento
+# -TerrainGenerator las escribe, y son 558 MB-. Lo que NO se regenera es el
+# MDT de origen, que va aparte.
+data/dem/**/*_mesh_r*.res
+data/dem/**/*_surround*.res
+# Teselas descargadas del servicio de mapas
+data/dem/tiles/

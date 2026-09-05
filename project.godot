@@ -12,7 +12,7 @@ config_version=5
 
 config/name="CityBuilder"
 config/description="City building game with procedural terrain, physical resources, and structural physics"
-run/main_scene="res://scenes/demo_main.tscn"
+run/main_scene="res://scenes/region_map.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -75,7 +75,7 @@ rotate_camera={
 
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 textures/default_filters/anisotropic_filtering_level=4
-anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/msaa_3d=0
 global_illumination/sdfgi/probe_ray_count=2
 environment/defaults/default_clear_color=Color(0.301961, 0.301961, 0.301961, 1)
 anti_aliasing/quality/use_taa=true

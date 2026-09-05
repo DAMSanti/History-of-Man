@@ -1,3 +1,4 @@
+class_name OrbitalCamera
 extends Camera3D
 ## Controlador de cámara orbital para el demo.
 ## Permite movimiento WASD, rotación con click derecho y zoom con scroll.
@@ -8,9 +9,46 @@ extends Camera3D
 @export var orbit_angle_v: float = -30.0
 @export var move_speed: float = 30.0
 @export var rotate_speed: float = 0.3
-@export var zoom_speed: float = 5.0
+## Factor de zoom por muesca de rueda. Es MULTIPLICATIVO a proposito: el paso
+## crece con la distancia, que es lo unico que funciona cuando el rango va de
+## 70 a 14000 unidades. Con el paso fijo anterior (5 unidades) hacian falta
+## unas 2800 muescas para recorrer el rango entero.
+@export_range(1.01, 2.0, 0.01) var zoom_factor: float = 1.18
 @export var min_distance: float = 10.0
 @export var max_distance: float = 200.0
+
+## Recorte del recorrido de zoom. El recorrido completo se reparte en
+## ZOOM_STEPS muescas de rueda y solo se conserva la banda entre `zoom_near_step`
+## y `zoom_far_step`.
+##
+## Existe porque los extremos no sirven de nada: por abajo la camara se mete
+## entre las piedras y por arriba el mapa entero es una mancha en la que ni los
+## arboles se dibujan. Recortando queda un rango en el que todas las muescas
+## ensenan algo util.
+##
+## El recorte es en escala LOGARITMICA porque el zoom es multiplicativo: media
+## muesca cerca vale metros y lejos vale kilometros, asi que repartir en lineal
+## no daria pasos iguales.
+const ZOOM_STEPS := 16
+@export_range(0, 16) var zoom_near_step: int = 6
+@export_range(0, 16) var zoom_far_step: int = 13
+
+## Consulta de altura del terreno. La pone la escena; si no hay, la camara se
+## comporta como antes. Sirve para no meter la camara debajo del suelo al hacer
+## zoom: el limite util no es una distancia fija sino la propia superficie.
+var height_probe: Callable = Callable()
+
+## Metros por encima del terreno a los que se frena el acercamiento
+@export var ground_clearance: float = 12.0
+
+## Limites del recuadro jugable. La camara no sale de aqui aunque el terreno
+## siga: las casillas de alrededor estan para que el mapa no se corte a
+## cuchillo, no para ir a ellas.
+@export var bounds_min: Vector2 = Vector2.ZERO
+@export var bounds_max: Vector2 = Vector2.ZERO
+
+## Cuanto acelera el desplazamiento mientras se mantiene SHIFT
+@export_range(1.0, 12.0, 0.5) var sprint_multiplier: float = 5.0
 
 var _is_rotating: bool = false
 
@@ -31,12 +69,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			orbit_distance = clampf(orbit_distance - zoom_speed, min_distance, max_distance)
-			_update_camera()
+			_apply_zoom(1.0 / zoom_factor)
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			orbit_distance = clampf(orbit_distance + zoom_speed, min_distance, max_distance)
-			_update_camera()
+			_apply_zoom(zoom_factor)
 			get_viewport().set_input_as_handled()
 	
 	if event is InputEventMouseMotion and _is_rotating:
@@ -69,20 +105,56 @@ func _process(delta: float) -> void:
 	if Input.is_action_pressed("move_right"):
 		input_dir.x += 1
 	
-	# Zoom con Q/E
+	# Zoom con Q/E, tambien proporcional a la distancia actual
 	if Input.is_key_pressed(KEY_Q):
-		orbit_distance = clampf(orbit_distance + zoom_speed * delta * 10, min_distance, max_distance)
-		_update_camera()
+		_apply_zoom(pow(zoom_factor, delta * 6.0))
 	if Input.is_key_pressed(KEY_E):
-		orbit_distance = clampf(orbit_distance - zoom_speed * delta * 10, min_distance, max_distance)
-		_update_camera()
+		_apply_zoom(pow(1.0 / zoom_factor, delta * 6.0))
 	
 	if input_dir != Vector3.ZERO:
 		input_dir = input_dir.normalized()
 		# Rotar input según ángulo de cámara
 		var rotated := input_dir.rotated(Vector3.UP, deg_to_rad(orbit_angle_h))
-		target_position += rotated * move_speed * delta
+		# El desplazamiento escala con el zoom: de cerca se avanza despacio,
+		# de lejos se cruza el mapa sin desesperar
+		var speed := move_speed * clampf(orbit_distance / 500.0, 0.15, 4.0)
+		# Con SHIFT se cruza el mapa; sin el, se recorre
+		if Input.is_key_pressed(KEY_SHIFT):
+			speed *= sprint_multiplier
+		target_position += rotated * speed * delta
+
+		# El objetivo no sale del recuadro. Se recorta la POSICION y no la
+		# velocidad, asi que la camara se para en seco contra el borde en vez
+		# de frenar poco a poco, que es lo que deja claro que ahi se acaba.
+		if bounds_max.x > bounds_min.x:
+			target_position.x = clampf(target_position.x, bounds_min.x, bounds_max.x)
+			target_position.z = clampf(target_position.z, bounds_min.y, bounds_max.y)
 		_update_camera()
+
+
+## Fija el recorrido de zoom a partir del rango COMPLETO que pediria la escena,
+## quedandose solo con la banda util.
+##
+## Las escenas siguen razonando en terminos del mundo entero -"de un centesimo
+## del mapa a dos veces el mapa"- y el recorte se decide en un solo sitio.
+func set_distance_limits(full_near: float, full_far: float) -> void:
+	var near := maxf(full_near, 0.01)
+	var far := maxf(full_far, near * 1.01)
+	var ratio := far / near
+	var near_fraction := float(clampi(zoom_near_step, 0, ZOOM_STEPS)) / float(ZOOM_STEPS)
+	var far_fraction := float(clampi(zoom_far_step, 0, ZOOM_STEPS)) / float(ZOOM_STEPS)
+	if far_fraction <= near_fraction:
+		far_fraction = minf(near_fraction + 1.0 / float(ZOOM_STEPS), 1.0)
+
+	min_distance = near * pow(ratio, near_fraction)
+	max_distance = near * pow(ratio, far_fraction)
+	orbit_distance = clampf(orbit_distance, min_distance, max_distance)
+
+
+## Aplica un zoom multiplicativo respetando los limites
+func _apply_zoom(factor: float) -> void:
+	orbit_distance = clampf(orbit_distance * factor, min_distance, max_distance)
+	_update_camera()
 
 
 func _update_camera() -> void:
@@ -90,8 +162,18 @@ func _update_camera() -> void:
 	offset.x = orbit_distance * cos(deg_to_rad(orbit_angle_v)) * sin(deg_to_rad(orbit_angle_h))
 	offset.y = orbit_distance * -sin(deg_to_rad(orbit_angle_v))
 	offset.z = orbit_distance * cos(deg_to_rad(orbit_angle_v)) * cos(deg_to_rad(orbit_angle_h))
-	
-	global_position = target_position + offset
+
+	var eye := target_position + offset
+
+	# Tope de acercamiento por la SUPERFICIE, no por una distancia fija: en un
+	# valle puedes bajar mucho y en una ladera no, y con un limite unico o te
+	# quedas corto en el llano o te metes dentro del monte.
+	if height_probe.is_valid():
+		var ground: float = height_probe.call(eye)
+		if eye.y < ground + ground_clearance:
+			eye.y = ground + ground_clearance
+
+	global_position = eye
 	look_at(target_position, Vector3.UP)
 
 

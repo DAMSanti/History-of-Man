@@ -37,6 +37,11 @@ const SEASON_NAMES_EN := ["Spring", "Summer", "Autumn", "Winter"]
 ## Velocidad del tiempo (multiplicador)
 @export_range(0.0, 10.0) var time_speed: float = 1.0
 
+## Hora del dia a la que arranca la partida (0-24).
+## Antes empezaba en el tick 0, es decir a medianoche, y el mundo salia a
+## oscuras durante los primeros minutos de juego.
+@export_range(0.0, 24.0, 0.5) var start_hour: float = 9.0
+
 ## Tiempo actual
 var current_tick: int = 0
 var current_day: int = 1
@@ -52,7 +57,8 @@ var _time_accumulator: float = 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	print("TimeManager inicializado")
+	current_tick = int((start_hour / 24.0) * float(ticks_per_day)) % ticks_per_day
+	print("TimeManager inicializado (%s)" % format_time())
 
 
 func _process(delta: float) -> void:
@@ -212,6 +218,27 @@ func set_time_state(state: Dictionary) -> void:
 		time_speed = state["speed"]
 	if state.has("paused"):
 		is_paused = state["paused"]
+
+
+## Sincroniza el reloj de luz con el que de verdad manda: la simulación local.
+##
+## TimeManager nació como reloj propio, con su calendario y su velocidad
+## propia, sin saber que SettlementSim lleva OTRO reloj para las jornadas de
+## la banda. Los dos avanzaban a ritmos distintos —24 segundos reales por día
+## aquí, 120 allá por defecto— así que el sol daba varias vueltas por cada
+## jornada de trabajo, y la estación de aquí no era la que vivía la banda.
+##
+## Mientras haya una simulación local activa, el sol y las estaciones siguen
+## a la banda y no al revés: quien llama a esto ya ha puesto `time_speed` a
+## cero para apagar el avance autónomo.
+func sync_from(hour_value: float, day_value: int, season_value: int, year_value: int) -> void:
+	current_tick = int(hour_value / 24.0 * float(ticks_per_day)) % ticks_per_day
+	current_day = day_value
+	current_year = year_value
+	if season_value != current_season:
+		current_season = season_value
+		cambio_de_estacion.emit(current_season)
+		season_changed.emit(current_season, get_season_name())
 
 
 ## Avanza el tiempo manualmente (útil para testing)
