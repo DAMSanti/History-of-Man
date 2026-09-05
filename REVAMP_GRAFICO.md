@@ -371,14 +371,69 @@ base con las de al lado en 23—. `scripts/tests/CorteProbe.gd` alterna los
 valores dentro de una misma ejecución, da varias vueltas e informa del mínimo;
 así la repetibilidad es de ±0,1 ms.
 
-**G2 · Ingesta PBR.** Script de descarga y empaquetado (ORM + altura); las ocho
-capas dentro, y el sembrado de cantos y bloques en `MultiMesh` sobre roquedo y
-barras de río. *Criterio: a 100 m se distingue roquedo de pedrera de cantos de
-río, y el roquedo tiene silueta propia, no sólo dibujo.*
+**G2 · Ingesta PBR — HECHO a medias (5-sep-2026).** Las ocho capas están dentro,
+con ORM y altura, y a 100 m se distingue roquedo de pedrera de cantos de río.
+Pero el criterio decía también «y el roquedo tiene silueta propia, no sólo
+dibujo», y **el sembrado de bloques no se hizo**: se dio la fase por cerrada con
+las texturas. Esa deuda es la parte D de G3.5.
 
-**G3 · Calibrado.** Bandas de altura y pendiente para ocho capas, y paleta de
-estepa fría. *Criterio: el valle no parece un prado cántabro de hoy.*
-~~El A/B de `detail_amplitude`~~ — hecho el 5-sep-2026, ver §8.
+**G3 · Calibrado — HECHO (5-sep-2026).** Paleta de estepa fría por graduación de
+capa, y anti-teselado. *Criterio cumplido: el valle no parece un prado cántabro
+de hoy.* El A/B de `detail_amplitude` y la medida de SDFGI, en §8.
+
+---
+
+**G3.5 · Lo que hay en el suelo.**
+
+Va **antes que la gente**, y no por gusto:
+
+- El sistema ya existe. `ResourceProps` siembra las ocho materias de
+  `Materia.Kind` en `MultiMesh` con densidad por celda, rareza y balanceo de
+  viento, cableado al campo de recursos; `MultiMeshVegetation` hace lo propio con
+  los árboles. Falta la MALLA, no el sistema: hoy son `SphereMesh`,
+  `CylinderMesh` y `PrismMesh` pintadas de un color. Es el mismo perfil de
+  trabajo que las texturas, y por tanto barato.
+- Cierra la deuda de G2 y tapa el hueco de escala de 1 a 5 m del §8, que sólo se
+  tapa con geometría: silueta y sombra reales, que el shader no puede fingir.
+- El desajuste es ahora lo más visible del juego. El terreno es fotogrametría y
+  los recursos son esferas de colores; eso canta más después del revamp del
+  terreno, no menos.
+- La escala humana de G4 se calibra contra props de tamaño real. Decidir 1,70 m
+  sobre un mapa vacío es decidir a ciegas.
+- Y es gestión de riesgo: G6 es la fase cara y donde esto puede morir a medias.
+  Conviene bancar antes una victoria barata y muy visible.
+
+No es un trabajo, son cuatro, con técnicas y riesgos distintos:
+
+| | Qué | Riesgo |
+|---|---|---|
+| **A · Relleno** | hierba alta, matas, helecho: miles de instancias con LOD y billboard lejano | **Rendimiento.** Es donde el número es grande |
+| **B · Paraje** | especies ligadas al recurso —avellano, sauce, abedul—, pocas instancias y mucho significado | Fidelidad de época |
+| **C · Recurso** | los ocho `Materia.Kind` que ya se siembran | Bajo: cambio de malla |
+| **D · Escenario** | bloques y cantos sobre roquedo y barras de río | Bajo. Es la deuda de G2 |
+
+**Origen.** [Poly Haven](https://polyhaven.com/models) tiene modelos CC0 de
+fotogrametría y son los que hacen falta: `boulder_01`, `rock_07`, `rock_09`,
+`coast_rocks_01`…`05`, `dead_tree_trunk`, `dry_branches_medium_01`,
+`root_cluster_01`, `pine_roots`, más helechos, hierbas y arbustos. ambientCG no
+sirve aquí: su filtro de modelos devuelve materiales.
+
+Lo que **no** hay en CC0 y habrá que modelar: setas, huesos, astas y conchas. Son
+formas sencillas, y el asta además es icono del Magdaleniense —azagayas y
+arpones—, así que merece la pena hacerla a mano.
+
+**El riesgo que hay que medir ANTES de comprometerse.** Los modelos de Poly Haven
+son fotogrametría de decenas de miles de triángulos, y `ResourceProps` siembra
+hasta 2600 por tipo: un canto de 20.000 triángulos son 52 millones. G0 midió que
+3,4 millones cuestan 0,3 ms, pero eso era una malla, no cincuenta millones. Hay
+que decimar —un canto de LOD0 debería andar por 300-500 triángulos— y comprobar
+con números que el importador de glTF lo hace, en vez de suponerlo. Es la primera
+prueba de la fase, y va antes que cualquier arte.
+
+*Criterio: se sabe qué hay en un paraje sin abrir un panel, y las casillas de
+vegetación y props del presupuesto siguen cabiendo en 3 ms.*
+
+---
 
 **G4 · Cuerpo y escala.** Seis bases MPFB2, rig, import, fuera las cápsulas.
 *Criterio: la banda son personas de 1,70 m y la cámara sigue siendo usable.*
@@ -398,9 +453,14 @@ criterio que justifica el revamp entero.*
 
 ### Fuera de este plan
 
-Vegetación nueva, edificios y cabañas, agua avanzada, clima visible y ciclo
-día/noche. Cada uno es su propio trabajo, y meterlos aquí es exactamente cómo un
-revamp se convierte en un proyecto que no termina.
+Edificios y cabañas, agua avanzada, clima visible y ciclo día/noche. Cada uno es
+su propio trabajo, y meterlos aquí es exactamente cómo un revamp se convierte en
+un proyecto que no termina.
+
+La vegetación estaba en esta lista y **sale de ella**: es G3.5. El motivo del
+cambio es que resultó no ser trabajo nuevo —el sembrado ya está construido y
+cableado al campo de recursos— sino un cambio de malla, y además cierra una
+deuda de G2.
 
 ---
 
