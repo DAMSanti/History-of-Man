@@ -3507,8 +3507,26 @@ func _deliver(person: Inhabitant) -> void:
 ## El orden importa: comerse primero la carne fresca y dejar el fruto seco para
 ## el final es lo que de verdad hacia una banda, y ademas es lo optimo.
 func _eat_from_store(rations: float) -> float:
-	var order := [Materia.Kind.PESCADO, Materia.Kind.MARISCO, Materia.Kind.CARNE,
-		Materia.Kind.GRASA, Materia.Kind.CARNE_SECA, Materia.Kind.FRUTO_SECO]
+	# TODO lo que alimenta, y no una lista escrita a mano.
+	#
+	# Era una lista de seis -pescado, marisco, carne, grasa, carne seca y
+	# fruto seco- mientras `Storehouse.food_rations` contaba las doce cosas
+	# que alimentan. O sea que la raiz, la baya, la bellota, la seta, el
+	# huevo, la miel y el caracol entraban en la cuenta de la despensa y no
+	# se comian NUNCA. Medido en el sitio 56: dia 23, cuarenta y siete
+	# raciones en el abrigo, los quince con el hambre a 100 y la cifra
+	# clavada quince dias seguidos. En primavera lo que se recoge es raiz, y
+	# la banda se moria de hambre al lado de ella.
+	#
+	# El orden es por lo que antes se pudre: se come primero lo que no
+	# aguanta, que es lo que haria cualquiera y ademas evita tirarlo.
+	var order: Array[int] = []
+	for kind: int in Materia.Kind.values():
+		if Materia.is_food(kind as Materia.Kind):
+			order.append(kind)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		return Materia.shelf_life(a as Materia.Kind) 			< Materia.shelf_life(b as Materia.Kind))
+
 	var eaten := 0.0
 	for kind: int in order:
 		if eaten >= rations:
@@ -4855,9 +4873,43 @@ func _lament(person: Inhabitant, where: Vector3) -> void:
 var food_cap: float = 0.0
 
 
+## Hasta donde tiene que bajar la despensa para volver a salir a por comida,
+## en tanto por uno del tope.
+##
+## Es una banda de histeresis, y hace falta porque el tope a secas producia
+## esto -medido, sitio 56, tope de diez dias-:
+##
+##     dia  9  raciones 130,8 / 127  LLENO   a por comida  0 de 15
+##     dia 10  raciones 111,2 / 127          a por comida  7 de 15
+##     dia 11  raciones 134,9 / 127  LLENO   a por comida  0 de 15
+##     dia 12  raciones 113,5 / 127          a por comida  7 de 15
+##
+## Siete personas fuera, cero al dia siguiente, siete otra vez. Palabras del
+## jugador: «llegan al tope y no cogen mas, llega la noche, comen, baja del
+## maximo y entonces vuelven a salir; es un circulo vicioso».
+##
+## Con la banda, al llegar al tope se deja de salir y no se vuelve hasta
+## haberse comido un tercio de la despensa. Salen por tandas, que es como se
+## hace: no se sube al monte a por la racion de hoy teniendo la despensa
+## llena, se sube cuando se ve el fondo.
+const REANUDAR_COMIDA := 0.65
+
+## Si la despensa esta llena. Con memoria: ver [REANUDAR_COMIDA].
+var _larder_full := false
+
+
 ## Si la despensa ha llegado al tope que puso el jugador.
 func food_is_capped() -> bool:
-	return food_cap > 0.0 and store.food_rations() >= food_cap
+	if food_cap <= 0.0:
+		_larder_full = false
+		return false
+	var have := store.food_rations()
+	if _larder_full:
+		if have < food_cap * REANUDAR_COMIDA:
+			_larder_full = false
+	elif have >= food_cap:
+		_larder_full = true
+	return _larder_full
 
 
 ## Si este oficio existe para traer comida.
