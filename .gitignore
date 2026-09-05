@@ -45,3 +45,8 @@ data/dem/**/*_mesh_r*.res
 data/dem/**/*_surround*.res
 # Teselas descargadas del servicio de mapas
 data/dem/tiles/
+
+# Texturas PBR del terreno: las trae y las empaqueta
+# scripts/tools/TerrainTextureIngest.gd desde ambientCG (CC0). Son 34 MB que
+# se reconstruyen solos, asi que se versiona el script y no el resultado.
+textures/terrain/

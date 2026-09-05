@@ -318,8 +318,40 @@ ya medía todo lo que hacía falta y sólo había que ejecutarlo. Resultados y
 conclusiones en §1. *Criterio cumplido: 18,6 ms de los 28,7 de GPU son el
 shader del terreno, y la geometría cuesta 0,3.*
 
-**G1 · Reforma del shader.** Arrays, biplanar, salto por peso, ORM, compresión.
-*Criterio: el terreno se ve **igual que hoy** y cuesta ≤10 ms.*
+**G1 · Reforma del shader — en curso.** Se está haciendo palanca a palanca,
+midiendo cada una. Coste del shader del terreno:
+
+| Palanca | ms | Estado |
+|---|---|---|
+| — (original) | 18,6 | |
+| **A ·** texturas a BC7 | 15,5 | aplicada (`862eaa7`) |
+| **C ·** descarte de planos con reparto de peso | **13,0** | aplicada (`5a634fd`) |
+| **B ·** sin anisotropía | *8,5* | **no** aplicada, ver abajo |
+
+*Criterio: el terreno se ve igual que hoy y cuesta ≤10 ms.*
+
+Dos correcciones a lo que este documento decía antes:
+
+- **El §2.4 proponía algo que ya existía.** El salto por material y por plano
+  estaban implementados; se escribió habiendo leído los uniforms y no el cuerpo
+  del fragmento. Lo que faltaba no era saltar, sino **poder saltar
+  agresivamente sin oscurecer**, y eso lo resuelve repartir el peso del plano
+  descartado entre los que quedan.
+- **El corte tiene que ser suave.** Con `step` salían manchas planas de borde
+  duro por toda la ladera: el umbral se dibujaba en el monte como una curva de
+  nivel. Con `smoothstep` desaparece y casi no cuesta.
+
+Y una advertencia sobre la palanca B: **está medida contra un espantapájaros.**
+La anisotropía vale 4,5 ms y hoy no compra nada porque las texturas son ruido
+procedural de baja frecuencia a 512²; no hay detalle fino que conservar. Con
+fotogrametría sí lo habrá. Se decide después de G2, y su sitio es el panel de
+tiers.
+
+**Sobre medir.** Comparar entre ejecuciones no vale para deltas de 1 a 3 ms: hay
+más de dos milisegundos de deriva entre tandas —una llegó a dar 48 ms de línea
+base con las de al lado en 23—. `scripts/tests/CorteProbe.gd` alterna los
+valores dentro de una misma ejecución, da varias vueltas e informa del mínimo;
+así la repetibilidad es de ±0,1 ms.
 
 **G2 · Ingesta PBR.** Script de descarga y empaquetado (ORM + altura); las ocho
 capas dentro, y el sembrado de cantos y bloques en `MultiMesh` sobre roquedo y
