@@ -20,7 +20,11 @@ var broken_today: Array[String] = []
 ## carroñeo, y sin cesto se recolecta a brazadas. Pero el asta SÍ es cero,
 ## porque ranurar un asta sin buril no es que sea lento, es que no se hace.
 const NO_TOOL_FLOOR := {
-	Tool.Kind.AZAGAYA: 0.25,
+	# Sin azagaya no se deja de cazar: se caza con estaca endurecida al fuego,
+	# con trampa y con ojeo. Cunde poco -y por eso el astero importa- pero
+	# 0,25 castigaba dos veces, porque encima la pieza mayor no aparece en
+	# cualquier ladera.
+	Tool.Kind.AZAGAYA: 0.35,
 	Tool.Kind.ARPON: 0.30,
 	Tool.Kind.LASCA: 0.35,
 	Tool.Kind.CESTO: 0.55,

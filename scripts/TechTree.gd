@@ -16,6 +16,11 @@ enum Tech {
 	FUEGO,          ## Dominio del fuego: cocinar, calor, protección
 	NUCLEO,         ## Núcleo preparado (Levallois): lascas predecibles
 	HOJA,           ## Talla laminar: mucho más filo por kilo de sílex
+	LAZO,           ## Corredera de fibra en el paso: la primera trampa
+	CEPO,           ## Losa calzada sobre un disparador cebado
+	RED_AVES,       ## Malla tendida en el bebedero: plumas a espuertas
+	FOSO,           ## Hoyo tapado en la vereda: la trampa de pieza mayor
+	OJEO,           ## Batida organizada: varias manos y un plan
 	AZAGAYA,        ## Azagaya de asta: caza a distancia
 	PROPULSOR,      ## Propulsor: dobla el alcance de la azagaya
 	PESQUERA,       ## Cierre de piedra en el cauce: la pesca deja de ser suerte
@@ -62,17 +67,54 @@ const CATALOGUE := {
 			+ "bueno es la diferencia entre tener herramientas o no.",
 		"needs": [Tech.NUCLEO], "practice": Subsistence.Activity.MATERIA_PRIMA, "days": 110,
 	},
+	Tech.LAZO: {
+		"name": "Lazo de fibra",
+		"desc": "Una corredera atada a una vara doblada, puesta en el paso que "
+			+ "el animal ya usa. No hace falta saber tallar ni tener asta: "
+			+ "hace falta leer una vereda, que es lo primero que se aprende "
+			+ "del monte. Es la trampa que da de comer mientras se duerme.",
+		"needs": [], "practice": Subsistence.Activity.CAZA, "days": 35,
+	},
+	Tech.CEPO: {
+		"name": "Cepo de losa",
+		"desc": "Una losa calzada sobre un disparador cebado. Cae con el peso "
+			+ "y mata en el sitio, así que no hay que llegar antes que el "
+			+ "zorro. Dura mucho más que un lazo y pide piedra.",
+		"needs": [Tech.LAZO], "practice": Subsistence.Activity.CAZA, "days": 110,
+	},
+	Tech.RED_AVES: {
+		"name": "Red de aves",
+		"desc": "Malla fina entre dos varas en el bebedero o en el paso de la "
+			+ "nube. Es la misma cordelería que la red del río, y da plumas a "
+			+ "espuertas: un ave no da piel, da pluma.",
+		"needs": [Tech.LAZO], "practice": Subsistence.Activity.CAZA, "days": 190,
+	},
+	Tech.FOSO: {
+		"name": "Foso",
+		"desc": "Hoyo en la vereda, tapado con ramaje y tierra. Es la única "
+			+ "trampa que coge pieza mayor, y cuesta lo que parece: días de "
+			+ "cavar por una pieza cada tanto, pero esa pieza es un ciervo.",
+		"needs": [Tech.CEPO], "practice": Subsistence.Activity.CAZA, "days": 330,
+	},
+	Tech.OJEO: {
+		"name": "Ojeo",
+		"desc": "Batida con un plan: unos levantan la pieza y la conducen, "
+			+ "otros esperan en el paso. No es una herramienta, es saber "
+			+ "repartirse, y multiplica lo que trae una cuadrilla de caza "
+			+ "mayor sin gastar una azagaya de más.",
+		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 260,
+	},
 	Tech.AZAGAYA: {
 		"name": "Azagaya de asta",
 		"desc": "Punta de asta de ciervo enmangada. Permite matar a distancia en "
 			+ "vez de al acecho, y con ello cazar presa mayor sin perder gente.",
-		"needs": [Tech.HOJA], "practice": Subsistence.Activity.CAZA, "days": 90,
+		"needs": [Tech.HOJA], "practice": Subsistence.Activity.CAZA, "days": 140,
 	},
 	Tech.PROPULSOR: {
 		"name": "Propulsor",
 		"desc": "Una palanca que alarga el brazo. Dobla el alcance útil de la "
 			+ "azagaya y deja cazar sin acercarse a la distancia de carga.",
-		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 160,
+		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 420,
 	},
 	Tech.PESQUERA: {
 		"name": "Pesquera de piedra",
@@ -118,7 +160,7 @@ const CATALOGUE := {
 		"name": "Arco",
 		"desc": "Precisión a distancia y tiro repetido. Cambia la caza de "
 			+ "batida a acecho individual.",
-		"needs": [Tech.PROPULSOR], "practice": Subsistence.Activity.CAZA, "days": 280,
+		"needs": [Tech.PROPULSOR], "practice": Subsistence.Activity.CAZA, "days": 700,
 	},
 	Tech.PIRAGUA: {
 		"name": "Piragua monóxila",

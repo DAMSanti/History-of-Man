@@ -1,0 +1,217 @@
+class_name TestHunting
+extends TestCase
+## La caza: el despiece por especie, las trampas y la mejora por técnica.
+
+
+func suite_name() -> String:
+	return "Caza"
+
+
+func _techs(learned: Array) -> TechTree:
+	var techs := TechTree.new()
+	for t: int in learned:
+		techs.known[t as TechTree.Tech] = true
+	return techs
+
+
+# --- el despiece sale de la PIEZA ----------------------------------------
+
+func test_las_aves_dan_pluma_y_no_piel() -> void:
+	# Petición literal: «en caso por ejemplo de caza de pájaros no darán piel,
+	# sino que darán plumas».
+	for ave: String in ["urogallo", "perdiz", "anade"]:
+		var spoils := Fauna.spoils_of(ave)
+		assert_true(spoils.has(Materia.Kind.PLUMA),
+			"%s da pluma" % Fauna.species_name(ave))
+		assert_false(spoils.has(Materia.Kind.PIEL),
+			"%s NO da piel: se despluma, no se despelleja"
+				% Fauna.species_name(ave))
+
+
+func test_la_pieza_mayor_da_tendon_y_la_menuda_casi_no() -> void:
+	# El tendón sale del tren posterior de una res grande. De un conejo no se
+	# saca un tendón para atar una azagaya.
+	assert_true(float(Fauna.spoils_of("ciervo").get(Materia.Kind.TENDON, 0.0))
+		> float(Fauna.spoils_of("liebre").get(Materia.Kind.TENDON, 0.0)) * 5.0,
+		"un ciervo da muchísimo más tendón que una liebre")
+	assert_false(Fauna.spoils_of("conejo").has(Materia.Kind.TENDON),
+		"de un conejo no se saca tendón que valga")
+
+
+func test_el_jabali_no_da_asta_y_el_ciervo_si() -> void:
+	assert_false(Fauna.spoils_of("jabali").has(Materia.Kind.ASTA),
+		"un jabalí no tiene cuerna")
+	assert_true(Fauna.spoils_of("ciervo").has(Materia.Kind.ASTA),
+		"un ciervo sí")
+
+
+func test_toda_especie_tiene_carne_despiece_y_porte() -> void:
+	for species: String in Fauna.SPECIES:
+		assert_true(Fauna.rations_of(species) > 0.0,
+			"%s da carne" % species)
+		assert_false(Fauna.spoils_of(species).is_empty(),
+			"%s se despieza en algo" % species)
+		assert_true(Fauna.porte_of(species) >= Fauna.Porte.MENUDA
+			and Fauna.porte_of(species) <= Fauna.Porte.MAYOR,
+			"%s tiene porte" % species)
+
+
+func test_todas_las_estaciones_traen_pieza_mayor() -> void:
+	# Sin esto, una cuadrilla de caza mayor se pasaba tres estaciones de cada
+	# cuatro topándose conejos. La estacionalidad de la caza mayor está en el
+	# RENDIMIENTO, no en que el animal desaparezca del monte: un ciervo en
+	# marzo está flaco, no ausente.
+	for season: int in Fauna.BY_SEASON:
+		var mayores := 0
+		for species: String in (Fauna.BY_SEASON[season] as Array):
+			if Fauna.porte_of(species) == Fauna.Porte.MAYOR:
+				mayores += 1
+		assert_true(mayores >= 2,
+			"en %s hay pieza mayor que cazar (%d)" % [
+				Subsistence.season_name(season as Subsistence.Season), mayores])
+
+
+# --- se caza lo que hay, hasta el porte de uno ---------------------------
+
+func test_el_batidor_coge_lo_pequeno_pero_el_menor_no_coge_un_uro() -> void:
+	# Hacia ABAJO sí, hacia arriba no: un batidor que se topa un corzo lo
+	# mata; uno de caza menor que se topa un uro lo deja pasar, porque con
+	# azagaya de mano no se mata un uro, se muere uno.
+	var techs := _techs([])
+	var punto := _punto_con("uro")
+	assert_false(punto == Vector3.INF, "hay algún sitio con uro en otoño")
+
+	var mayor := Hunting.yields_at(Profession.Speciality.CAZA_MAYOR, punto,
+		Subsistence.Season.OTONO, techs)
+	var menor := Hunting.yields_at(Profession.Speciality.CAZA_MENOR, punto,
+		Subsistence.Season.OTONO, techs)
+	assert_true(float(mayor.get(Materia.Kind.CARNE, 0.0))
+		> float(menor.get(Materia.Kind.CARNE, 0.0)),
+		"el batidor saca más de un sitio con uro que el de pieza menor")
+
+
+func _punto_con(species: String) -> Vector3:
+	for i in range(400):
+		var point := Vector3(float(i) * 37.0, 0.0, float(i) * 61.0)
+		if Fauna.species_at(point, Subsistence.Season.OTONO).has(species):
+			return point
+	return Vector3.INF
+
+
+# --- la técnica se nota ---------------------------------------------------
+
+func test_cada_tecnica_de_caza_sube_lo_que_se_cobra() -> void:
+	# Petición literal: «deben ir mejorando la técnica a medida que cazan más».
+	var pelado := _techs([])
+	var previous := Hunting.pieces_per_day(Profession.Speciality.CAZA_MAYOR, pelado)
+	var learned: Array = []
+	for entry: Dictionary in (Hunting.MEJORAS[
+			Profession.Speciality.CAZA_MAYOR] as Array):
+		learned.append(entry["tech"])
+		var now := Hunting.pieces_per_day(Profession.Speciality.CAZA_MAYOR,
+			_techs(learned))
+		assert_true(now > previous,
+			"%s sube lo que cobra una cuadrilla (%.2f sobre %.2f)" % [
+				TechTree.tech_name(entry["tech"] as TechTree.Tech), now, previous])
+		previous = now
+
+
+func test_sin_arbol_de_tecnicas_se_caza_igual_pero_a_secas() -> void:
+	assert_true(Hunting.pieces_per_day(Profession.Speciality.CAZA_MENOR, null)
+		> 0.0, "sin saber nada se caza, mal pero se caza")
+
+
+func test_las_tecnicas_de_caza_salen_de_cazar() -> void:
+	for tech_key: int in [TechTree.Tech.LAZO, TechTree.Tech.CEPO,
+			TechTree.Tech.RED_AVES, TechTree.Tech.FOSO, TechTree.Tech.OJEO,
+			TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR, TechTree.Tech.ARCO]:
+		assert_eq(int(TechTree.CATALOGUE[tech_key as TechTree.Tech]["practice"]),
+			int(Subsistence.Activity.CAZA),
+			"%s se aprende cazando" % TechTree.tech_name(tech_key as TechTree.Tech))
+
+
+# --- las trampas ----------------------------------------------------------
+
+func test_cada_trampa_coge_lo_suyo_y_cuesta_lo_suyo() -> void:
+	# Petición literal: «puede haber trampas de varios tipos para diferentes
+	# animales».
+	for kind: int in Trap.INFO:
+		var trap_kind := kind as Trap.Kind
+		assert_false(Trap.catches(trap_kind).is_empty(),
+			"%s coge algo" % Trap.trap_name(trap_kind))
+		assert_false(Trap.materials(trap_kind).is_empty(),
+			"%s se construye con algo" % Trap.trap_name(trap_kind))
+		assert_true(Trap.labor_days(trap_kind) > 0.0,
+			"%s cuesta jornadas de armar" % Trap.trap_name(trap_kind))
+		assert_true(Trap.lifespan(trap_kind) > 0.0,
+			"%s se acaba echando a perder" % Trap.trap_name(trap_kind))
+		for species: String in Trap.catches(trap_kind):
+			assert_true(Fauna.SPECIES.has(species),
+				"«%s» existe en el catálogo" % species)
+
+
+func test_solo_el_foso_coge_pieza_mayor() -> void:
+	# Un lazo de fibra no sujeta a un jabalí y una losa no cae sobre un
+	# ciervo. Es lo que hace que el foso valga las tres jornadas que cuesta.
+	for kind: int in Trap.INFO:
+		if kind == Trap.Kind.FOSO:
+			continue
+		for species: String in Trap.catches(kind as Trap.Kind):
+			assert_true(Fauna.porte_of(species) < Fauna.Porte.MAYOR,
+				"%s no coge %s" % [Trap.trap_name(kind as Trap.Kind), species])
+
+
+func test_la_trampa_cobra_con_el_tiempo_calada() -> void:
+	# Es lo que la hace distinta de todo lo demás: no es una jornada por
+	# pieza, es una inversión que trabaja mientras la banda hace otra cosa.
+	var trap := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "prueba")
+	assert_eq(trap.collect(), 0, "recién puesta no tiene nada")
+
+	trap.soaking = Trap.days_per_catch(Trap.Kind.LAZO) * 3.0
+	var pieces := trap.collect()
+	assert_true(pieces >= 2, "tres veces el tiempo dan varias piezas: %d" % pieces)
+	assert_eq(trap.taken, pieces, "y se apunta lo que ha dado")
+	assert_true(trap.soaking < Trap.days_per_catch(Trap.Kind.LAZO),
+		"levantarla descuenta el tiempo cobrado")
+
+
+func test_la_trampa_vieja_coge_menos() -> void:
+	var nueva := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1)
+	var vieja := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1)
+	vieja.worn = Trap.lifespan(Trap.Kind.LAZO) * 0.9
+	nueva.soaking = 20.0
+	vieja.soaking = 20.0
+	assert_true(nueva.collect() > vieja.collect(),
+		"la fibra floja y el sitio revuelto cogen menos")
+
+
+func test_la_trampa_se_acaba_echando_a_perder() -> void:
+	var sim := SettlementSim.new()
+	var trap := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "prueba")
+	trap.worn = Trap.lifespan(Trap.Kind.LAZO) - 0.5
+	sim.traps.append(trap)
+	sim.parajes = Parajes.new()
+	sim._age_traps()
+	assert_true(sim.traps.is_empty(), "la que se pasa de vida se retira")
+	assert_eq(sim.traps_lost_today.size(), 1, "y se cuenta como pérdida")
+
+
+func test_las_trampas_cobran_mientras_la_banda_duerme() -> void:
+	var sim := SettlementSim.new()
+	sim.parajes = Parajes.new()
+	var trap := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "prueba")
+	sim.traps.append(trap)
+	sim._age_traps()
+	assert_eq(trap.soaking, 1.0, "una jornada calada por cada jornada que pasa")
+	assert_eq(trap.worn, 1.0, "y una jornada de vida gastada")
+
+
+func test_no_se_amontonan_las_trampas_en_el_mismo_claro() -> void:
+	# Una línea de trampas es una LÍNEA: amontonarlas no coge más, coge lo
+	# mismo repartido.
+	var sim := SettlementSim.new()
+	sim.traps.append(Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1))
+	assert_false(sim._room_for_trap(Vector3(10.0, 0.0, 10.0)),
+		"pegada a otra, no")
+	assert_true(sim._room_for_trap(Vector3(400.0, 0.0, 400.0)),
+		"a cuatrocientos metros, sí")

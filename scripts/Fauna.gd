@@ -115,15 +115,24 @@ const SPECIES := {
 ## Qué se puede topar cada estación, de lo típico del monte cantábrico.
 ## El invierno es corto de piezas a propósito: es la estación mala, cuando
 ## menos se mueve el bosque y menos hay que encontrar.
+## Cada estación tiene que traer PIEZA MAYOR, aunque sea poca.
+##
+## Antes el verano solo tenía uro de pieza grande, de siete especies, y la
+## primavera dos. Con eso, una cuadrilla de caza mayor pasaba tres estaciones
+## de cada cuatro topándose conejos: medido, 0,3 raciones de jornada perfecta
+## contra las 14,2 de un recolector. La estacionalidad de la caza mayor está
+## en el RENDIMIENTO -otoño 1,70 y primavera 0,65, ver
+## `ResourceField.seasonal_factor`-, no en que el animal desaparezca del
+## monte. Un ciervo en marzo está flaco, no ausente.
 const BY_SEASON := {
-	Subsistence.Season.PRIMAVERA: ["corzo", "jabali", "liebre", "urogallo",
-		"conejo", "anade", "caballo"],
-	Subsistence.Season.VERANO: ["corzo", "rebeco", "liebre", "urogallo",
-		"conejo", "perdiz", "uro"],
-	Subsistence.Season.OTONO: ["ciervo", "corzo", "jabali", "urogallo",
-		"perdiz", "caballo", "uro"],
-	Subsistence.Season.INVIERNO: ["jabali", "rebeco", "lobo", "liebre",
-		"anade"],
+	Subsistence.Season.PRIMAVERA: ["ciervo", "jabali", "caballo",
+		"corzo", "liebre", "urogallo", "conejo", "anade"],
+	Subsistence.Season.VERANO: ["uro", "caballo", "jabali",
+		"corzo", "rebeco", "liebre", "urogallo", "conejo", "perdiz"],
+	Subsistence.Season.OTONO: ["ciervo", "jabali", "caballo", "uro",
+		"corzo", "urogallo", "perdiz"],
+	Subsistence.Season.INVIERNO: ["jabali", "ciervo",
+		"rebeco", "lobo", "liebre", "anade"],
 }
 
 ## Cuántas especies distintas se pueden ver de golpe en un mismo paraje.

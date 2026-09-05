@@ -1519,6 +1519,12 @@ func _tick_person(person: Inhabitant, body: Node3D, hours: float, delta: float) 
 				_forage_drift(person)
 				if person.job == Profession.Job.MANUFACTURA:
 					_craft(person, hours)
+				elif person.current_speciality == Profession.Speciality.TRAMPAS:
+					# El trampero no cosecha: arma trampas y luego las levanta.
+					# Es el unico trabajo que rinde MIENTRAS la banda hace otra
+					# cosa, y por eso no puede ser una tabla de rendimiento
+					# como las demas.
+					_trapline(person, hours)
 				else:
 					_harvest(person, hours)
 				# La practica mejora la destreza: es el saber tacito
@@ -2867,6 +2873,32 @@ func _rank_known_spots() -> void:
 ## El mejor paraje que la banda CONOCE para esa actividad y que este a tiro.
 ## Devuelve ZERO si no conoce ninguno: entonces toca prospectar.
 func _best_known_spot(person: Inhabitant) -> Vector3:
+	# El trampero va primero a lo que ya tiene puesto y esta cebado. Levantar
+	# una trampa cargada rinde mas por hora que cualquier otra cosa de la
+	# caza, y ademas es lo que se hace: la linea se recorre.
+	if person.current_speciality == Profession.Speciality.TRAMPAS:
+		var cebada := _fullest_trap()
+		if cebada != null:
+			return cebada.position
+		# Y si no hay nada que levantar, se ALARGA la linea: a un sitio de
+		# caza donde todavia no haya trampa. Sin esto el trampero volvia cada
+		# dia a la misma estaca vacia -el mejor sitio conocido es siempre el
+		# mismo- y la linea entera se quedaba en dos trampas amontonadas en el
+		# mismo claro.
+		if traps.size() < trap_allowance():
+			for spot: Dictionary in (_known_spots.get(
+					Subsistence.Activity.CAZA, []) as Array):
+				var point: Vector3 = spot["pos"]
+				if _room_for_trap(point) and not _is_resting(
+						Subsistence.Activity.CAZA, point):
+					return point
+			# Y si todo lo conocido ya tiene trampa, se sale a monte nuevo. Una
+			# linea de trampas se ALARGA: quedarse dando vueltas a las mismas
+			# dos estacas es lo contrario de tener una linea.
+			var fresh := _search_target(person)
+			if fresh != Vector3.ZERO:
+				return fresh
+
 	# Si el jugador ha señalado un paraje para este oficio, se va ahi y no se
 	# discute. Es todo el sentido de poder pinchar un sitio: la banda deja de
 	# elegir por su cuenta cuando tu eliges por ella.
@@ -2915,6 +2947,18 @@ func _best_known_spot(person: Inhabitant) -> Vector3:
 			continue
 
 		var score: float = float(spot["score"]) / (1.0 + crowd * 1.8)
+
+		# Y el cazador va donde esta SU pieza.
+		#
+		# El sitio se elegia solo por abundancia de caza, que es un numero que
+		# no distingue un uro de una liebre. Medido en el sitio 56: un batidor
+		# de caza mayor trabajando un cotarro de «liebre, urogallo y corzo»
+		# cobraba 2,6 raciones de jornada perfecta contra las 14,2 de un
+		# recolector, o sea que salir a por ciervo era el peor oficio de la
+		# banda. No era que la caza rindiera poco: era que se cazaba en el
+		# sitio equivocado.
+		score *= _quarry_bonus(person, centre)
+
 		if score > best_score:
 			best_score = score
 			best = centre
@@ -4032,6 +4076,9 @@ func _end_of_day() -> void:
 	# dia pueda contarlas antes de que desaparezcan.
 	toolkit.discard_spent()
 	toolkit.broken_today.clear()
+
+	# Las trampas cobran mientras la banda duerme, y se van gastando.
+	_age_traps()
 
 	# Los parajes se reponen. Sin esto lo esquilmado no volvia nunca y el valle
 	# se vaciaba en unas semanas. Las vetas quedan fuera: ver `_freeze_veins`.
@@ -5710,6 +5757,16 @@ func _yields_for(person: Inhabitant) -> Dictionary:
 	# gente este en el agua a la vez.
 	if speciality == Profession.Speciality.ORILLA:
 		return Fishing.yields_of(fishing_method() as Fishing.Method)
+
+	# La caza tampoco tiene UNA tabla: tiene la PIEZA. Lo que se cobra sale de
+	# que animales de su porte andan por ese sitio en esta estacion y de como
+	# se despieza cada uno, no de una lista escrita a mano. Por eso un cotarro
+	# de aves da plumas y no piel, y por eso la tecnica se nota: un cazador
+	# con propulsor no encuentra ciervos donde no los hay, cobra mas de los
+	# que encuentra.
+	if speciality == Profession.Speciality.CAZA_MENOR 			or speciality == Profession.Speciality.CAZA_MAYOR:
+		return Hunting.yields_at(speciality, person.work_centre,
+			GameState.season as Subsistence.Season, techs)
 	if SPECIALITY_YIELDS.has(speciality):
 		return SPECIALITY_YIELDS[speciality]
 	return _yield_materials(person.activity)
@@ -5820,3 +5877,277 @@ func _firm_ground(point: Vector3) -> Vector3:
 	if _terrain:
 		firm.y = _terrain.get_height_at(firm)
 	return firm
+
+
+# ------------------------------------------------------------- trampas ---
+#
+# La trampa es el único trabajo de la banda que rinde MIENTRAS SE HACE OTRA
+# COSA. Se arma una vez —cuesta materiales y jornadas de brazo— y a partir de
+# ahí cobra sola: el trampero solo tiene que ir a levantarla. Eso la hace
+# distinta de todo lo demás: no es una jornada por pieza, es una inversión.
+
+## Las trampas puestas en el monte, con su sitio y su estado.
+var traps: Array[Trap] = []
+
+## Las armadas hoy, para que la crónica pueda contarlas y luego se limpia.
+var traps_set_today: Array[Trap] = []
+
+## Las que hoy han quedado inservibles.
+var traps_lost_today: Array[Trap] = []
+
+## Cuántas trampas mantiene puestas cada trampero. Más no es mejor: hay que
+## ir a levantarlas todas, y una línea demasiado larga se recorre a medias.
+const TRAMPAS_POR_TRAMPERO := 5
+
+## A qué distancia se levanta una trampa sin desviarse: si está más lejos, se
+## va a por ella; si está a mano, se recoge de paso.
+## A que distancia se levanta una trampa. Amplio a proposito: el trampero
+## llega al paraje, no a la estaca, y `_forage_drift` lo mueve por la mancha
+## mientras trabaja. Con setenta metros medidos, dos tramperos con la linea
+## puesta levantaron DOS piezas en sesenta dias: iban y volvian sin llegar a
+## tocarla.
+const ALCANCE_TRAMPA := 160.0
+
+## Lo cerca que pueden estar dos trampas. Una línea de trampas es una LÍNEA:
+## amontonarlas en el mismo claro no coge más, coge lo mismo repartido.
+## Medido: con noventa metros, dos tramperos con sitio para ocho trampas
+## mantenian DOS, amontonadas en el mismo claro. La deriva de trabajo mueve a
+## la gente unos cincuenta metros, asi que noventa era una separacion que
+## nadie alcanzaba andando por su tajo.
+const SEPARACION_TRAMPAS := 60.0
+
+
+## Cuántas trampas caben, por la gente que hay puesta a ello.
+func trap_allowance() -> int:
+	var trappers := 0
+	for person: Inhabitant in people:
+		if person.current_speciality == Profession.Speciality.TRAMPAS:
+			trappers += 1
+	return maxi(trappers, 1) * TRAMPAS_POR_TRAMPERO
+
+
+## Los tipos de trampa que la banda sabe armar hoy, de la mejor a la peor.
+func known_traps() -> Array[int]:
+	var out: Array[int] = []
+	for kind: int in Trap.INFO:
+		var tech := Trap.tech_of(kind as Trap.Kind)
+		if tech >= 0 and (techs == null or not techs.has(tech as TechTree.Tech)):
+			continue
+		out.append(kind)
+	# La que más raciones da por pieza, primero: es la que interesa poner
+	# cuando hay materiales para elegir.
+	out.sort_custom(func(a: int, b: int) -> bool:
+		return Trap.typical_rations(a as Trap.Kind) \
+			> Trap.typical_rations(b as Trap.Kind))
+	return out
+
+
+## La trampa que toca armar aquí: la mejor que se sepa y se pueda pagar. -1 si
+## ninguna.
+##
+## Se mira que de verdad coja algo de lo que anda por este punto: poner un
+## foso donde solo hay perdices es tirar seis de leña.
+func _trap_to_set(point: Vector3) -> int:
+	var here := Fauna.species_at(point, GameState.season as Subsistence.Season)
+	var fallback := -1
+	for kind: int in known_traps():
+		if not _can_afford(Trap.materials(kind as Trap.Kind)):
+			continue
+		if fallback < 0:
+			fallback = kind
+		for species: String in Trap.catches(kind as Trap.Kind):
+			if here.has(species):
+				return kind
+	return fallback
+
+
+func _can_afford(recipe: Dictionary) -> bool:
+	for material: int in recipe:
+		if store.amount(material as Materia.Kind) < float(recipe[material]):
+			return false
+	return true
+
+
+## Si en este punto cabe una trampa más: ni encima de otra, ni pasándose del
+## número que la banda puede recorrer.
+func _room_for_trap(point: Vector3) -> bool:
+	if traps.size() >= trap_allowance():
+		return false
+	for trap: Trap in traps:
+		var flat := Vector2(point.x - trap.position.x, point.z - trap.position.z)
+		if flat.length() < SEPARACION_TRAMPAS:
+			return false
+	return true
+
+
+## Cuanto vale un sitio para ESTA rama de la caza. Uno para lo que no es
+## caza, que no distingue especies.
+##
+## No es un ajuste fino: es la diferencia entre encontrar la pieza y no
+## encontrarla. Un cotarro sin nada de su porte se descuenta fuerte, y uno
+## que la tiene sube, para que la cuadrilla de caza mayor se vaya de verdad
+## adonde estan los ciervos aunque haya mas roce de animales en otra ladera.
+## Con cuanto se compara: un sitio que diera estas raciones por jornada
+## perfecta ni sube ni baja la puntuacion. Por encima suma, por debajo resta.
+const CAZA_DE_REFERENCIA := 14.0
+
+
+func _quarry_bonus(person: Inhabitant, centre: Vector3) -> float:
+	var speciality := person.current_speciality as Profession.Speciality
+	if not Hunting.PIEZAS_POR_JORNADA.has(speciality):
+		return 1.0
+	# La cifra de verdad y no un premio a ojo: lo que ESTA rama sacaria de
+	# ESTE sitio, en raciones. Un cotarro de conejos no es «malo para la caza
+	# mayor», es exactamente 1,4 raciones por pieza, y con eso la lista se
+	# ordena sola sin inventarse ningun factor.
+	var here := Hunting.rations_at(speciality, centre,
+		GameState.season as Subsistence.Season, techs)
+	return clampf(here / CAZA_DE_REFERENCIA, 0.15, 4.0)
+
+
+## La trampa que más lleva cebada, o null si ninguna tiene nada. Es a la que
+## hay que ir hoy.
+func _fullest_trap() -> Trap:
+	var best: Trap = null
+	var best_ready := 0.0
+	for trap: Trap in traps:
+		var ready := trap.soaking / maxf(Trap.days_per_catch(trap.kind), 0.01)
+		if ready < 1.0 or ready <= best_ready:
+			continue
+		best_ready = ready
+		best = trap
+	return best
+
+
+## La trampa más cercana con algo dentro, o null.
+func trap_with_catch_near(point: Vector3, radius: float) -> Trap:
+	var best: Trap = null
+	var best_distance := radius
+	for trap: Trap in traps:
+		if trap.soaking < Trap.days_per_catch(trap.kind) * 0.5:
+			continue
+		var flat := Vector2(point.x - trap.position.x, point.z - trap.position.z)
+		if flat.length() < best_distance:
+			best_distance = flat.length()
+			best = trap
+	return best
+
+
+## La jornada del trampero: levantar lo que haya caído, y si no, armar más.
+func _trapline(person: Inhabitant, hours: float) -> void:
+	var fraction := hours / HORAS_UTILES
+	if fraction <= 0.0:
+		return
+
+	# Primero, lo que ya está puesto. Levantar una trampa cebada es lo que
+	# más rinde por hora de toda la caza, y por eso va antes que armar otra.
+	# Se mira desde donde esta Y desde el centro del tajo: quien se ha
+	# desplazado un poco buscando sigue teniendo su trampa a la espalda.
+	var trap := trap_with_catch_near(person.position, ALCANCE_TRAMPA)
+	if trap == null:
+		trap = trap_with_catch_near(person.work_centre, ALCANCE_TRAMPA)
+	if trap != null:
+		var pieces := trap.collect()
+		if pieces > 0:
+			var brought: Array[String] = []
+			for _i in range(pieces):
+				var species := trap.quarry_here(
+					GameState.season as Subsistence.Season, _rng)
+				brought.append(Fauna.species_name(species).to_lower())
+				_butcher(person, species, 1.0)
+			person.log_deed(person.current_task(),
+				"levantó %s: %s" % [Trap.trap_name(trap.kind).to_lower(),
+					", ".join(brought)])
+			_note(Chronicle.Kind.TIERRA, "%s levantó %s en %s: %s."
+				% [person.given_name, Trap.trap_name(trap.kind).to_lower(),
+					parajes.place_name(trap.position, home_position),
+					", ".join(brought)], 0)
+		else:
+			# Sin nada dentro, se repasa: se recompone el ramaje y se vuelve a
+			# cebar. Una trampa atendida dura bastante más que una olvidada.
+			trap.worn = maxf(trap.worn - fraction * 1.5, 0.0)
+			person.log_deed(person.current_task(),
+				"repasó %s" % Trap.trap_name(trap.kind).to_lower(), false)
+		return
+
+	# Y si no hay nada que levantar, se arma más línea.
+	if not _room_for_trap(person.position):
+		person.log_deed(person.current_task(), "recorrió la línea de trampas", false)
+		return
+
+	var kind := _trap_to_set(person.position)
+	if kind < 0:
+		person.log_deed(person.current_task(),
+			"sin material para armar más trampas", false)
+		return
+
+	var trap_kind := kind as Trap.Kind
+	person.craft_progress += fraction / maxf(Trap.labor_days(trap_kind), 0.01)
+	if person.craft_progress < 1.0:
+		person.log_deed(person.current_task(),
+			"armando %s" % Trap.trap_name(trap_kind).to_lower(), false)
+		return
+
+	person.craft_progress = 0.0
+	# Se paga al terminar, no al empezar: una obra a medias no se ha comido
+	# la fibra todavía.
+	if not _can_afford(Trap.materials(trap_kind)):
+		return
+	for material: int in Trap.materials(trap_kind):
+		store.take(material as Materia.Kind,
+			float(Trap.materials(trap_kind)[material]))
+
+	var placed := Trap.create(trap_kind, person.position, day, person.given_name)
+	traps.append(placed)
+	traps_set_today.append(placed)
+	person.log_deed(person.current_task(),
+		"armó %s" % Trap.trap_name(trap_kind).to_lower())
+	_note(Chronicle.Kind.TIERRA, "%s armó %s en %s. Cobra sola: solo hay que ir a levantarla."
+		% [person.given_name, Trap.trap_name(trap_kind).to_lower(),
+			parajes.place_name(placed.position, home_position)], 1)
+
+
+## Despieza una pieza y se la carga a quien la ha cobrado.
+##
+## Todo sale de [Fauna]: la carne por sus raciones y lo demás por el despiece
+## de ESA especie. De un ave salen plumas y no piel, de un jabalí no sale
+## asta, y el tendón solo de lo grande. Es la diferencia entre cazar y sumar
+## un número.
+func _butcher(person: Inhabitant, species: String, share: float) -> void:
+	var meat := Fauna.rations_of(species) * share
+	if meat > 0.0:
+		person.add_load(Materia.Kind.CARNE, meat)
+		person.carrying += meat
+		person.log_gain(person.current_task(), Materia.Kind.CARNE, meat)
+	for kind: int in Fauna.spoils_of(species):
+		var units := float(Fauna.spoils_of(species)[kind]) * share
+		if units > 0.0:
+			person.add_load(kind as Materia.Kind, units)
+			person.log_gain(person.current_task(), kind, units)
+
+
+## Pasa un día por todas las trampas: cobran solas y se van gastando.
+##
+## Va en el cierre de jornada porque eso es lo que las hace distintas: una
+## trampa trabaja mientras la banda duerme. Las que se han pasado de vida se
+## retiran, y se cuenta —perder una línea de trampas en marzo es noticia.
+func _age_traps() -> void:
+	traps_set_today.clear()
+	traps_lost_today.clear()
+	if traps.is_empty():
+		return
+
+	var alive: Array[Trap] = []
+	for trap: Trap in traps:
+		trap.soaking += 1.0
+		trap.worn += 1.0
+		if trap.is_spent():
+			traps_lost_today.append(trap)
+			_note(Chronicle.Kind.PENURIA,
+				"%s de %s se ha echado a perder en %s. Dio %d piezas."
+					% [Trap.trap_name(trap.kind), trap.maker,
+						parajes.place_name(trap.position, home_position),
+						trap.taken], 0)
+			continue
+		alive.append(trap)
+	traps = alive

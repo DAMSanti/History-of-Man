@@ -109,7 +109,7 @@ func test_sin_herramienta_se_rinde_poco_pero_no_cero() -> void:
 	# Sin azagaya se sigue comiendo: hay trampa, hay carrona y hay caza menor.
 	# Poner cero aqui seria matar a la banda por un detalle de utillaje.
 	var kit := Toolkit.new()
-	assert_near(kit.efficiency(Tool.Kind.AZAGAYA, 3), 0.25, 0.001,
+	assert_near(kit.efficiency(Tool.Kind.AZAGAYA, 3), 0.35, 0.001,
 		"se caza mal, no se deja de cazar")
 	assert_near(kit.efficiency(Tool.Kind.CESTO, 3), 0.55, 0.001,
 		"y a brazadas se recolecta la mitad")

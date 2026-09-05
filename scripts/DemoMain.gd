@@ -80,6 +80,7 @@ var resource_visualizer: ResourceVisualizer
 ## Marcadores de los sitios con nombre. Ver [ParajeMarkers].
 var paraje_markers: ParajeMarkers
 var trail_view: TrailView
+var trap_markers: TrapMarkers
 var weather_view: WeatherView
 var nav_overlay: NavOverlay
 
@@ -334,6 +335,12 @@ func _start_settlement() -> void:
 	# Y el visor de rastros: por donde ha andado la banda y que ha hecho en
 	# cada sitio. No es una capa de la partida sino la herramienta para mirar
 	# el juego por dentro, que es lo unico que distingue afinar de adivinar.
+	# Las trampas puestas se ven en el monte: son lo unico que la banda deja
+	# PLANTADO en el mapa, y sin verlas la linea de trampas es un numero.
+	trap_markers = TrapMarkers.new()
+	trap_markers.name = "Trampas"
+	add_child(trap_markers)
+
 	trail_view = TrailView.new()
 	trail_view.name = "Rastros"
 	add_child(trail_view)
@@ -648,6 +655,8 @@ func _on_day_passed(_day: int) -> void:
 		paraje_markers.refresh(sim.parajes, terrain,
 			func(a: Vector3, b: Vector3) -> bool: return grid.connected(a, b))
 		paraje_markers.refresh_peaks(sim.peaks(), terrain)
+	if trap_markers and sim:
+		trap_markers.refresh(sim.traps, terrain)
 		paraje_markers.set_scout_beacon(sim.scout_order, sim.has_scout_order, terrain)
 
 	# Una temporada no se sabe hasta haberla trabajado. Se anota por la

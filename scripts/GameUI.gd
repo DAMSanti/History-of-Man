@@ -3213,6 +3213,7 @@ func show_tech() -> void:
 	body.add_child(HSeparator.new())
 
 	_fishing_block(body)
+	_hunting_block(body)
 
 	_heading(body, "DOMINADAS")
 	var any := false
@@ -3251,6 +3252,78 @@ func show_tech() -> void:
 				missing.append(TechTree.tech_name(need as TechTree.Tech))
 		_text(body, "· %s — falta: %s" % [
 			TechTree.tech_name(far), ", ".join(missing)], true)
+
+
+## Cómo caza la banda hoy: las tres ramas, lo que rinde cada una y la línea
+## de trampas que hay puesta.
+##
+## Va aquí, al lado de la pesca, porque es la misma pregunta: qué se sabe
+## hacer y qué cambia cuando se aprenda lo siguiente. Sin esto, aprender el
+## propulsor es una línea en una lista y no un cambio en la jornada.
+func _hunting_block(body: VBoxContainer) -> void:
+	if sim == null:
+		return
+	_heading(body, "CAZA")
+
+	for speciality_key: int in [Profession.Speciality.TRAMPAS,
+			Profession.Speciality.CAZA_MENOR, Profession.Speciality.CAZA_MAYOR]:
+		var speciality := speciality_key as Profession.Speciality
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		body.add_child(row)
+
+		var name_label := Label.new()
+		name_label.text = Profession.speciality_name(speciality)
+		name_label.custom_minimum_size = Vector2(150, 0)
+		name_label.add_theme_font_size_override("font_size", 11)
+		name_label.add_theme_color_override("font_color", UISkin.INK)
+		name_label.tooltip_text = Profession.speciality_desc(speciality)
+		row.add_child(name_label)
+
+		var note := Label.new()
+		note.add_theme_font_size_override("font_size", 10)
+		note.add_theme_color_override("font_color", UISkin.INK_SOFT)
+		if speciality == Profession.Speciality.TRAMPAS:
+			note.text = "%d trampas puestas de %d que se pueden atender" % [
+				sim.traps.size(), sim.trap_allowance()]
+		else:
+			var known := Hunting.known_improvements(speciality, sim.techs)
+			note.text = "%.1f piezas por jornada%s" % [
+				Hunting.pieces_per_day(speciality, sim.techs),
+				"" if known.is_empty() else "  ·  con " + ", ".join(known).to_lower()]
+		row.add_child(note)
+
+		var pending := Hunting.next_improvement(speciality, sim.techs)
+		if pending >= 0:
+			_text(body, "   falta %s: ×%.2f"
+				% [TechTree.tech_name(pending as TechTree.Tech).to_lower(),
+					_improvement_factor(speciality, pending)], true)
+
+	# Y la línea de trampas, una por una. Es lo único que la banda deja
+	# PLANTADO en el mapa, así que merece una lista y no un número.
+	if sim.traps.is_empty():
+		_text(body, "Sin una sola trampa puesta. Pon a alguien en trampas: "
+			+ "es el único trabajo que rinde mientras la banda hace otra cosa.",
+			true)
+	else:
+		for trap: Trap in sim.traps:
+			var ready := trap.soaking >= Trap.days_per_catch(trap.kind)
+			_text(body, "   %s %s en %s — %.0f%% de vida, %d piezas%s" % [
+				"◆" if ready else "·",
+				Trap.trap_name(trap.kind),
+				sim.parajes.place_name(trap.position, sim.home_position),
+				trap.condition() * 100.0, trap.taken,
+				"  ·  CEBADA" if ready else ""], not ready)
+
+	body.add_child(HSeparator.new())
+
+
+## Cuánto multiplica una técnica de caza en su rama.
+func _improvement_factor(speciality: Profession.Speciality, tech_key: int) -> float:
+	for entry: Dictionary in (Hunting.MEJORAS.get(speciality, []) as Array):
+		if int(entry["tech"]) == tech_key:
+			return float(entry["factor"])
+	return 1.0
 
 
 ## Con qué se pesca hoy y qué falta para el siguiente escalón.
