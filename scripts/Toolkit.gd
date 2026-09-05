@@ -31,6 +31,13 @@ const NO_TOOL_FLOOR := {
 	Tool.Kind.ODRE: 0.60,
 	Tool.Kind.CUERDA: 0.45,
 	Tool.Kind.PUNTA: 0.30,
+	# Los aparejos de pesca no tienen suelo de verdad: sin ellos no se pesca
+	# de esa manera, se pesca de la anterior -ver `Fishing.best_for`. El
+	# numero solo cubre el hueco de un tick entre que se rompe la ultima
+	# pieza y el reparto se entera.
+	Tool.Kind.NASA: 0.35,
+	Tool.Kind.ANZUELO: 0.35,
+	Tool.Kind.RED: 0.35,
 }
 
 

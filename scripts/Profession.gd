@@ -439,7 +439,17 @@ static func assign(job: Job, person: Inhabitant,
 		person.current_speciality = Speciality.NINGUNA
 	else:
 		person.current_speciality = person.speciality
-	var activity := job_activity(job)
+	# La actividad sale de la ESPECIALIDAD que se va a ejercer, no del oficio.
+	#
+	# No es un matiz: la cantera es recoleccion para el jugador y materia
+	# prima para el terreno, y la orilla es ribera para el jugador y pesca
+	# para el terreno. Poniendo la del oficio, un cantero esquilmaba el monte
+	# de recoger y cobraba la temporada de la avellana, y un pescador de
+	# orilla no contaba como pesca en ningun sitio: ni para pedir aparejo, ni
+	# para el remonte del salmon, ni para las jornadas que dan las tecnicas
+	# de pesca. Medido: 260 dias con cinco personas en la orilla y el arbol
+	# de tecnicas marcaba CERO jornadas de pesca.
+	var activity := activity_of(job, person.current_speciality)
 	if activity < 0:
 		person.has_task = false
 		return true

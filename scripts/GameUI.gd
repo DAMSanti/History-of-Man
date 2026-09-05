@@ -3143,6 +3143,8 @@ func show_tech() -> void:
 		+ "técnica sale de acumular jornadas en la actividad que la produce.", true)
 	body.add_child(HSeparator.new())
 
+	_fishing_block(body)
+
 	_heading(body, "DOMINADAS")
 	var any := false
 	for t: int in TechTree.CATALOGUE.keys():
@@ -3180,6 +3182,60 @@ func show_tech() -> void:
 				missing.append(TechTree.tech_name(need as TechTree.Tech))
 		_text(body, "· %s — falta: %s" % [
 			TechTree.tech_name(far), ", ".join(missing)], true)
+
+
+## Con qué se pesca hoy y qué falta para el siguiente escalón.
+##
+## Va aquí y no en una ventana propia porque la pesca es la actividad donde
+## la técnica se nota de verdad en la jornada: la misma persona en el mismo
+## río trae doce o ciento cinco según el aparejo que lleve. Sin esto, el
+## jugador ve subir el pescado y no sabe por qué.
+func _fishing_block(body: VBoxContainer) -> void:
+	if sim == null:
+		return
+	_heading(body, "PESCA DE ORILLA")
+
+	var actual := sim.fishing_method() as Fishing.Method
+	for method_key: int in Fishing.ORDER:
+		var method := method_key as Fishing.Method
+		var why := Fishing.blocked_by(method, sim.techs, sim.toolkit, sim.store,
+			sim.workers_in(Subsistence.Activity.PESCA))
+		var pescado: float = float((Fishing.yields_of(method) as Dictionary).get(
+			Materia.Kind.PESCADO, 0.0))
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		body.add_child(row)
+
+		var mark := Label.new()
+		mark.text = "◆" if method == actual else ("·" if why == "" else " ")
+		mark.custom_minimum_size = Vector2(12, 0)
+		mark.add_theme_font_size_override("font_size", 11)
+		mark.add_theme_color_override("font_color",
+			UISkin.OCHRE if method == actual else UISkin.INK_FAINT)
+		row.add_child(mark)
+
+		var name_label := Label.new()
+		name_label.text = Fishing.method_name(method)
+		name_label.custom_minimum_size = Vector2(150, 0)
+		name_label.add_theme_font_size_override("font_size", 11)
+		name_label.add_theme_color_override("font_color",
+			UISkin.OCHRE if method == actual else
+			(UISkin.INK if why == "" else UISkin.INK_FAINT))
+		name_label.tooltip_text = Fishing.method_desc(method)
+		row.add_child(name_label)
+
+		var note := Label.new()
+		note.text = "%.0f de pescado al día" % pescado if why == "" else why
+		note.add_theme_font_size_override("font_size", 10)
+		note.add_theme_color_override("font_color",
+			UISkin.INK_SOFT if why == "" else UISkin.INK_FAINT)
+		row.add_child(note)
+
+	_text(body, "Se pesca siempre con lo mejor que se pueda HOY. Si se rompe "
+		+ "el último arpón o se acaba el cebo, se baja un escalón hasta que "
+		+ "el taller reponga.", true)
+	body.add_child(HSeparator.new())
 
 
 # ------------------------------------------------------------ territorio --

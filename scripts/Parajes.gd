@@ -553,7 +553,10 @@ const EXTRAS_BY_ACTIVITY := {
 		Materia.Kind.YESCA, Materia.Kind.RESINA],
 	Subsistence.Activity.CAZA: [Materia.Kind.PIEL, Materia.Kind.HUESO,
 		Materia.Kind.TENDON, Materia.Kind.GRASA],
-	Subsistence.Activity.PESCA: [],
+	# La grasa del salmon grande. Sale solo con arpon y con red -ver
+	# `Fishing`-, pero tiene que estar en la lista igual: lo que se puede
+	# traer de un sitio tiene que salir en la ficha del sitio.
+	Subsistence.Activity.PESCA: [Materia.Kind.GRASA],
 	Subsistence.Activity.MARISQUEO: [Materia.Kind.CONCHA, Materia.Kind.CARACOL],
 	Subsistence.Activity.MATERIA_PRIMA: [Materia.Kind.YESCA, Materia.Kind.RESINA],
 }

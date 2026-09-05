@@ -876,9 +876,17 @@ func apply_priorities() -> void:
 						best = task
 
 		var job := Profession.task_job(best)
-		Profession.assign(job, person)
-		person.speciality = Profession.task_speciality(best)
-		person.current_speciality = person.speciality
+		# La especialidad va DENTRO de `assign` y no despues.
+		#
+		# Antes se asignaba el oficio primero y se ponia la especialidad
+		# despues, asi que `assign` calculaba la actividad -de que parte del
+		# monte se tira- con la especialidad de AYER y ya no se volvia a
+		# tocar. Un pescador de orilla se quedaba con la actividad del dia
+		# anterior: no contaba como pesca ni para pedir aparejo, ni para el
+		# remonte del salmon, ni para las jornadas que dan las tecnicas.
+		# Medido: 260 dias con cuatro personas en la orilla y CERO jornadas
+		# de pesca en el arbol de tecnicas.
+		Profession.assign(job, person, Profession.task_speciality(best))
 		var chosen := int(person.speciality)
 		taken[chosen] = int(taken.get(chosen, 0)) + 1
 
@@ -2870,19 +2878,7 @@ func set_tool_order(kind: Tool.Kind, value: int) -> void:
 ## pone a cinco a pescar, la demanda de arpones sube sola y el taller lo nota
 ## sin que nadie tenga que pedirlo.
 func tool_demand() -> Dictionary:
-	var demand := {
-		Tool.Kind.LASCA: maxi(people.size() / 2, 2),
-		Tool.Kind.AZAGAYA: workers_in(Subsistence.Activity.CAZA),
-		Tool.Kind.ARPON: workers_in(Subsistence.Activity.PESCA),
-		Tool.Kind.CESTO: workers_in(Subsistence.Activity.RECOLECCION),
-		Tool.Kind.RAEDERA: 2,
-		Tool.Kind.BURIL: 2,
-		Tool.Kind.AGUJA: 2,
-		Tool.Kind.PUNZON: 1,
-		Tool.Kind.CUERDA: 3,
-		Tool.Kind.ODRE: 2,
-		Tool.Kind.PUNTA: 2,
-	}
+	var demand := tool_natural_demand()
 	# El pedido permanente del jugador manda por encima de lo calculado
 	for kind: int in tool_orders:
 		demand[kind] = int(tool_orders[kind])
@@ -2896,10 +2892,9 @@ func tool_demand() -> Dictionary:
 ## abrigo no hace que la banda gaste mas huesos. Lo que se gasta sale del uso
 ## -cuanta gente trabaja y cuanto aguanta cada pieza- y punto.
 func tool_natural_demand() -> Dictionary:
-	return {
+	var demand := {
 		Tool.Kind.LASCA: maxi(people.size() / 2, 2),
 		Tool.Kind.AZAGAYA: workers_in(Subsistence.Activity.CAZA),
-		Tool.Kind.ARPON: workers_in(Subsistence.Activity.PESCA),
 		Tool.Kind.CESTO: workers_in(Subsistence.Activity.RECOLECCION),
 		Tool.Kind.RAEDERA: 2,
 		Tool.Kind.BURIL: 2,
@@ -2908,7 +2903,52 @@ func tool_natural_demand() -> Dictionary:
 		Tool.Kind.CUERDA: 3,
 		Tool.Kind.ODRE: 2,
 		Tool.Kind.PUNTA: 2,
+		# El aparejo de pesca NO va con una cifra fija: va con la forma de
+		# pescar que la banda sepa. Pedir arpones desde el primer dia era
+		# pedirle al taller que gastara asta en algo que nadie sabe usar
+		# todavia, y pedir de todo a la vez seria peor: una red se lleva la
+		# fibra de una estacion entera.
+		Tool.Kind.ARPON: 0,
+		Tool.Kind.NASA: 0,
+		Tool.Kind.ANZUELO: 0,
+		Tool.Kind.RED: 0,
 	}
+	var fishers := workers_in(Subsistence.Activity.PESCA)
+	if fishers > 0:
+		var wanted := _fishing_tool_to_stock()
+		if wanted >= 0:
+			demand[wanted] = maxi(fishers, 1)
+	return demand
+
+
+## Que aparejo hay que tener hecho: el de la mejor manera de pescar que la
+## banda SEPA, tenga hoy la pieza o no.
+##
+## Va aparte de `fishing_method` a proposito. Aquella dice con que se pesca
+## HOY -y si se ha roto el ultimo arpon dice "a mano"-; esta dice que hay que
+## reponer, que es el arpon precisamente porque se ha roto.
+func _fishing_tool_to_stock() -> int:
+	var top := -1
+	for i in range(Fishing.ORDER.size() - 1, -1, -1):
+		var method: Fishing.Method = Fishing.ORDER[i]
+		var tech := Fishing.tech_of(method)
+		if tech >= 0 and (techs == null or not techs.has(tech as TechTree.Tech)):
+			continue
+		var tool := Fishing.tool_of(method)
+		if tool < 0:
+			# La pesquera no es una pieza: es una obra. A partir de aqui hacia
+			# abajo no hay nada que encargarle al taller.
+			break
+		if top < 0:
+			top = tool
+		# Se encarga lo mejor que se pueda HACER, no solo lo mejor que se
+		# sepa. Sin esto, el dia que la banda aprende el arpon dejaba de
+		# trenzar redes -solo se pedia el escalon de arriba- y si no habia
+		# asta en el abrigo se quedaba sin lo uno y sin lo otro, pescando a
+		# mano con dos tecnicas de pesca dominadas.
+		if toolkit.count(tool as Tool.Kind) > 0 or _can_pay_for(tool as Tool.Kind):
+			return tool
+	return top
 
 
 ## Cuantas piezas de un tipo se rompen al mes con el trabajo que hay puesto.
@@ -3068,6 +3108,17 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 		return
 
 	var yields := _yields_for(person)
+
+	# El cebo del sedal se gasta. Es lo que hace que el anzuelo no sea una
+	# mejora gratis: hay que traer caracol, y el dia que no queda `Fishing`
+	# baja el aparejo un escalon por su cuenta.
+	if person.current_speciality == Profession.Speciality.ORILLA:
+		var method := fishing_method() as Fishing.Method
+		var bait := Fishing.bait_at_hand(method, store)
+		if bait >= 0:
+			store.take(bait as Materia.Kind,
+				fraction * Fishing.bait_per_day(method))
+
 	var food := 0.0
 	for kind: int in yields:
 		var per_day: float = yields[kind]
@@ -3143,9 +3194,10 @@ const SPECIALITY_MAKES := {
 	Profession.Speciality.TALLA: [Tool.Kind.LASCA, Tool.Kind.RAEDERA,
 		Tool.Kind.BURIL, Tool.Kind.PUNTA],
 	Profession.Speciality.ASTA: [Tool.Kind.AZAGAYA, Tool.Kind.ARPON,
-		Tool.Kind.AGUJA, Tool.Kind.PUNZON],
+		Tool.Kind.AGUJA, Tool.Kind.PUNZON, Tool.Kind.ANZUELO],
 	Profession.Speciality.PELETERIA: [Tool.Kind.ODRE],
-	Profession.Speciality.CORDELERIA: [Tool.Kind.CUERDA, Tool.Kind.CESTO],
+	Profession.Speciality.CORDELERIA: [Tool.Kind.CUERDA, Tool.Kind.CESTO,
+		Tool.Kind.NASA, Tool.Kind.RED],
 }
 
 
@@ -3235,6 +3287,12 @@ func _next_piece(speciality: Profession.Speciality) -> int:
 		var kind_value := kind as Tool.Kind
 		# Lo que ya esta cubierto de sobra no se hace: nadie talla ciento
 		# veinte lascas que no va a usar
+		# Lo que nadie pide no se hace. `tool_coverage` devuelve 1.0 cuando la
+		# demanda es cero -no hay con que dividir- y 1.0 esta por debajo de la
+		# reserva, asi que sin esta linea el taller se ponia a trenzar redes
+		# que la banda ni sabe calar todavia.
+		if float(tool_demand().get(kind_value, 0)) <= 0.0:
+			continue
 		var coverage := tool_coverage(kind_value)
 		if coverage >= RESERVA_UTILLAJE:
 			continue
@@ -5427,8 +5485,31 @@ const SPECIALITY_TOOL := {
 
 ## Lo que rinde esta persona hoy: por especialidad si la tiene, y si no por la
 ## actividad de su oficio.
+## Lo que la banda sabe hacer. Lo pone DemoMain al montar la partida.
+##
+## La simulacion lo consulta de verdad y no solo la ficha: es lo que decide
+## con que se pesca hoy -ver [Fishing]-, y sin el solo se pesca a mano.
+var techs: TechTree = null
+
+
+## Con que se esta pescando ahora mismo.
+##
+## No es la mejor manera que la banda sepa: es la mejor que puede hacer HOY.
+## Se sabe la red y se han roto todas, se pesca con arpon; se sabe el sedal y
+## no hay caracol de cebo, se pesca con nasa. Bajar un escalon es lo que se
+## hace de verdad cuando falta el aparejo bueno.
+func fishing_method() -> int:
+	return Fishing.best_for(techs, toolkit, store,
+		workers_in(Subsistence.Activity.PESCA))
+
+
 func _yields_for(person: Inhabitant) -> Dictionary:
 	var speciality := person.current_speciality as Profession.Speciality
+	# La pesca no tiene UNA tabla: tiene una por cada forma de pescar, y cual
+	# toca depende de lo que se sepa, de lo que haya en el abrigo y de cuanta
+	# gente este en el agua a la vez.
+	if speciality == Profession.Speciality.ORILLA:
+		return Fishing.yields_of(fishing_method() as Fishing.Method)
 	if SPECIALITY_YIELDS.has(speciality):
 		return SPECIALITY_YIELDS[speciality]
 	return _yield_materials(person.activity)
@@ -5437,6 +5518,10 @@ func _yields_for(person: Inhabitant) -> Dictionary:
 ## Y el utillaje que pide, por el mismo criterio.
 func _tool_for(person: Inhabitant) -> int:
 	var speciality := person.current_speciality as Profession.Speciality
+	if speciality == Profession.Speciality.ORILLA:
+		# El aparejo lo pone la forma de pescar, no la especialidad: a mano y
+		# con pesquera no se gasta ninguna pieza.
+		return Fishing.tool_of(fishing_method() as Fishing.Method)
 	if SPECIALITY_TOOL.has(speciality):
 		return int(SPECIALITY_TOOL[speciality])
 	return activity_tool(person.activity)

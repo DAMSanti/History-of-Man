@@ -383,6 +383,10 @@ func _start_settlement() -> void:
 	herds.setup(terrain, field)
 
 	tech = TechTree.new()
+	# La simulacion consulta el arbol de verdad, no solo la ficha: con que se
+	# pesca hoy sale de ahi -ver `Fishing`-, y sin el solo se pesca a mano.
+	if sim:
+		sim.techs = tech
 
 	ui = GameUI.new()
 	ui.name = "GameUI"

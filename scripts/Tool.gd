@@ -23,6 +23,9 @@ enum Kind {
 	CESTO,      ## Fibra: duplica lo que se trae de una jornada
 	ODRE,       ## Piel: transportar agua
 	CUERDA,     ## Fibra trenzada: ligaduras, lazos
+	NASA,       ## Mimbre en embudo: pesca sola mientras se hace otra cosa
+	ANZUELO,    ## Bastoncillo de hueso apuntado por los dos cabos. Con cebo
+	RED,        ## Fibra trenzada entre dos orillas: lo que mas pescado da
 }
 
 ## De qué está hecha. Decide cuánto aguanta.
@@ -45,7 +48,8 @@ const KIND_NAMES := {
 	Kind.BURIL: "Buril", Kind.RAEDERA: "Raedera", Kind.LASCA: "Lasca",
 	Kind.PUNTA: "Punta", Kind.AZAGAYA: "Azagaya", Kind.ARPON: "Arpón",
 	Kind.AGUJA: "Aguja", Kind.PUNZON: "Punzón", Kind.CESTO: "Cesto",
-	Kind.ODRE: "Odre", Kind.CUERDA: "Cuerda",
+	Kind.ODRE: "Odre", Kind.CUERDA: "Cuerda", Kind.NASA: "Nasa",
+	Kind.ANZUELO: "Anzuelo", Kind.RED: "Red",
 }
 
 const STUFF_NAMES := {
@@ -81,6 +85,13 @@ const WEAR_PER_DAY := {
 	Kind.CUERDA: 1.2,
 	Kind.ODRE: 0.6,
 	Kind.CESTO: 0.8,
+	# La nasa se cala en el agua y se pudre; la red se engancha y se rompe
+	# por donde menos conviene. El anzuelo de hueso es lo que mas aguanta de
+	# los tres: no roza contra nada, solo se pierde con el pez que se lo
+	# lleva.
+	Kind.NASA: 1.1,
+	Kind.ANZUELO: 0.9,
+	Kind.RED: 1.4,
 }
 
 
@@ -105,6 +116,8 @@ static func default_stuff(kind_value: Kind) -> Stuff:
 			return Stuff.HUESO
 		Kind.ODRE:
 			return Stuff.PIEL
+		Kind.ANZUELO:
+			return Stuff.HUESO
 		_:
 			return Stuff.FIBRA
 
@@ -171,6 +184,15 @@ static func recipe(kind_value: Kind) -> Dictionary:
 			return {Materia.Kind.ASTA: 0.8, Materia.Kind.FIBRA: 0.4}
 		Kind.AGUJA, Kind.PUNZON:
 			return {Materia.Kind.HUESO: 0.4}
+		Kind.ANZUELO:
+			# El bastoncillo de hueso y el cordel que lo ata por el medio
+			return {Materia.Kind.HUESO: 0.3, Materia.Kind.FIBRA: 0.4}
+		Kind.NASA:
+			# Cesteria, la misma que el cesto, trenzada en embudo
+			return {Materia.Kind.FIBRA: 3.5}
+		Kind.RED:
+			# Una red es cordel y mas cordel: es la pieza mas cara de la banda
+			return {Materia.Kind.FIBRA: 9.0}
 		Kind.CESTO:
 			return {Materia.Kind.FIBRA: 3.0}
 		Kind.ODRE:
@@ -187,6 +209,12 @@ static func needs_tool(kind_value: Kind) -> int:
 	match kind_value:
 		Kind.AZAGAYA, Kind.ARPON, Kind.AGUJA, Kind.PUNZON:
 			return Kind.BURIL
+		Kind.ANZUELO:
+			# El hueso se ranura y se apunta con buril, igual que el asta
+			return Kind.BURIL
+		Kind.RED:
+			# Una red no se trenza sin cordel hecho antes
+			return Kind.CUERDA
 		Kind.ODRE:
 			return Kind.RAEDERA
 		_:

@@ -18,7 +18,11 @@ enum Tech {
 	HOJA,           ## Talla laminar: mucho más filo por kilo de sílex
 	AZAGAYA,        ## Azagaya de asta: caza a distancia
 	PROPULSOR,      ## Propulsor: dobla el alcance de la azagaya
-	ARPON,          ## Arpón de asta: pesca de salmón en el remonte
+	PESQUERA,       ## Cierre de piedra en el cauce: la pesca deja de ser suerte
+	NASA,           ## Nasa de mimbre: una trampa que pesca sola
+	ANZUELO,        ## Anzuelo recto de hueso: sedal y cebo
+	RED,            ## Red de fibra: mucha mano y mucha cordelería
+	ARPON,          ## Arpón de asta: el remonte del salmón, y la cumbre
 	ARCO,           ## Arco: caza de precisión
 	PIRAGUA,        ## Piragua monóxila: cruzar ríos y costear
 	PASARELA,       ## Pasarela de troncos: cruzar un cauce a pie seco
@@ -70,12 +74,45 @@ const CATALOGUE := {
 			+ "azagaya y deja cazar sin acercarse a la distancia de carga.",
 		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 160,
 	},
+	Tech.PESQUERA: {
+		"name": "Pesquera de piedra",
+		"desc": "Un cierre de cantos y ramaje que estrecha el cauce y lleva al "
+			+ "pez a un embudo. No hace falta ninguna técnica nueva, solo "
+			+ "jornadas de brazo, y es lo que convierte la pesca de suerte en "
+			+ "pesca con cuenta.",
+		"needs": [], "practice": Subsistence.Activity.PESCA, "days": 60,
+	},
+	Tech.NASA: {
+		"name": "Nasa de mimbre",
+		"desc": "La cestería de la banda trenzada en embudo. Se cala por la "
+			+ "tarde y se levanta por la mañana: pesca mientras la banda "
+			+ "está en otra cosa.",
+		"needs": [Tech.PESQUERA], "practice": Subsistence.Activity.PESCA, "days": 180,
+	},
+	Tech.ANZUELO: {
+		"name": "Anzuelo de hueso",
+		"desc": "No es de gancho —eso es ya mesolítico—: es un bastoncillo "
+			+ "apuntado por los dos cabos y atado por el medio, que el pez se "
+			+ "traga y se le cruza dentro. Pide hueso ranurado con buril, "
+			+ "cordel y cebo.",
+		"needs": [Tech.NASA, Tech.NUCLEO],
+		"practice": Subsistence.Activity.PESCA, "days": 320,
+	},
 	Tech.ARPON: {
 		"name": "Arpón de asta",
-		"desc": "Con hileras de dientes, para que la presa no se suelte. Es lo "
-			+ "que convierte el remonte del salmón de una suerte estacional en "
-			+ "una cosecha previsible.",
-		"needs": [Tech.HOJA], "practice": Subsistence.Activity.PESCA, "days": 120,
+		"desc": "Asta de ciervo con hileras de dientes, para que el salmón no se "
+			+ "suelte al revolverse. Es lo último que llega —Magdaleniense, "
+			+ "hace unos quince mil años— y lo que convierte el remonte de una "
+			+ "suerte estacional en una cosecha previsible.",
+		"needs": [Tech.RED, Tech.HOJA],
+		"practice": Subsistence.Activity.PESCA, "days": 850,
+	},
+	Tech.RED: {
+		"name": "Red de fibra",
+		"desc": "Hay impronta de red trenzada en Pavlov de hace veintinueve mil "
+			+ "años: es más vieja que el arpón, no un adelanto. Se hace cuando "
+			+ "sobra cordel y hay manos para calarla, y pide las dos cosas.",
+		"needs": [Tech.ANZUELO], "practice": Subsistence.Activity.PESCA, "days": 560,
 	},
 	Tech.ARCO: {
 		"name": "Arco",

@@ -29,6 +29,7 @@ func _init() -> void:
 		TestAscent.new(),
 		TestTeaching.new(),
 		TestFauna.new(),
+		TestFishing.new(),
 	]
 
 	var passed := 0
