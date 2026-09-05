@@ -67,6 +67,13 @@ func _init() -> void:
 		await _shoot(demo, "user://tesela_%d.png" % view, from_point, home)
 	material.set_shader_parameter("debug_view", 0)
 
+	# Prueba de la oclusión del material sobre las sombras
+	for strength: float in [0.0, 0.25, 0.8]:
+		material.set_shader_parameter("ao_strength", strength)
+		await _shoot(demo, "user://ao_%02d.png" % int(strength * 100.0),
+			from_point, home)
+	material.set_shader_parameter("ao_strength", 0.8)
+
 	print("0 terreno · 1 capa dominante · 2 albedo sin normales")
 	print("en %s" % ProjectSettings.globalize_path("user://"))
 	quit()

@@ -301,11 +301,29 @@ panel en la UI y persistencia.
 
 Dos avisos honestos:
 
-- **SDFGI sobre un mapa de 4 km con luz de día abierta es caro y se nota poco.**
-  El `project.godot` ya lo tiene con `probe_ray_count = 2` y el
-  `WorldEnvironment` lo trae **apagado**: por algo será. Entra en Ultra, pero hay
-  que medirlo contra SSAO y sombras a secas y quedarse con lo que de verdad se
-  vea.
+- **SDFGI: medido, y fuera de todos los tiers (5-sep-2026).** Con
+  `scripts/tests/ReboteProbe.gd`, sitio 56, misma vista y luz de mediodía:
+
+  | | GPU | VRAM |
+  |---|---|---|
+  | apagado | 27,4 ms | 876 MB |
+  | celda 0,2 m (lo que había) | +2,9 | |
+  | celda 1,5 m | +4,2 | |
+  | celda 4,0 m | +5,9 | **1369 MB** |
+
+  Y lo que compra, medido con `scripts/tools/LuzProbe.gd`, que da la razón entre
+  una zona en sombra y otra al sol: **17,1 % apagado y 16,8 % encendido**. O sea
+  nada, o un pelo peor. No entra ni en Ultra.
+
+  El camino hasta ahí fue un error mío que conviene dejar escrito: di por hecho
+  que las laderas en sombra salían «casi negras» y monté cinco hipótesis
+  —`ssao_intensity`, `ambient_light_energy`, `tonemap_white`, WeatherView pisando
+  el entorno, y falta de luz de rebote—. Las cinco falsas. Cuando por fin medí
+  los píxeles en vez de mirarlos, la razón sombra/sol daba **18,5 %**, que es
+  justo el rango de una foto de campo a pleno sol (15-20 %). **Las sombras
+  estaban bien.** Lo que engañaba es el valor absoluto: 0,043 es muy oscuro, y
+  contra un 0,23 al lado el ojo se adapta a lo claro y lee lo oscuro como negro.
+  Una fotografía real se comporta igual.
 - El escalado con FSR2 en Bajo es lo que hará que esto corra en una integrada.
   Sin él no hay tier bajo que valga.
 
