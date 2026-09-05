@@ -339,12 +339,47 @@ shader del terreno, y la geometría cuesta 0,3.*
 **G1 · Reforma del shader — en curso.** Se está haciendo palanca a palanca,
 midiendo cada una. Coste del shader del terreno:
 
-| Palanca | ms | Estado |
+| Palanca | ahorro | Estado |
 |---|---|---|
-| — (original) | 18,6 | |
-| **A ·** texturas a BC7 | 15,5 | aplicada (`862eaa7`) |
-| **C ·** descarte de planos con reparto de peso | **13,0** | aplicada (`5a634fd`) |
-| **B ·** sin anisotropía | *8,5* | **no** aplicada, ver abajo |
+| **A ·** texturas a BC7 | **−1,4 ms** | aplicada (`862eaa7`) |
+| **C ·** descarte de planos con reparto de peso | **−2,6 ms** | aplicada (`5a634fd`) |
+| **B ·** sin anisotropía | −4,5 ms | **no** aplicada, ver abajo |
+
+### Corrección: dos cifras estaban contaminadas
+
+Durante buena parte de la sesión hubo **otra instancia de Godot con el juego
+abierto**, así que la carga de fondo variaba entre ejecuciones. Eso invalida
+cualquier medida tomada comparando tandas distintas —y explica de paso aquella
+que dio 48 ms de línea base con las de al lado en 23, que se achacó al reloj de
+la GPU—.
+
+Lo que se salva es todo lo medido **alternando dentro de una misma ejecución**,
+que es inmune a una carga de fondo constante: el desglose de §1, el descarte de
+planos, el anti-teselado, SDFGI, el coste de los props y la razón sombra/sol.
+
+Lo que no se salvaba eran dos cifras, y se han vuelto a medir con
+`scripts/tests/MapasProbe.gd`, que construye los arrays comprimidos y sin
+comprimir desde las mismas imágenes y los intercambia en caliente:
+
+| | GPU | |
+|---|---|---|
+| todo, BC7 | 30,2 ms | referencia |
+| todo, sin comprimir | 31,6 | **+1,4** |
+| BC7 sin ORM | 28,7 | −1,5 |
+| BC7 sin mapas de normales | 27,5 | −2,7 |
+
+**La compresión ahorra 1,4 ms, no los 3,1 que decía este documento.** Estaba
+inflado más del doble. Sigue mereciendo la pena —también ahorra unos 8 MB de
+VRAM— pero el número era falso.
+
+Y ahora se sabe lo que cuesta cada mapa: el ORM completo —oclusión, rugosidad y
+altura por capa— vale **1,5 ms**, y los mapas de normales **2,7 ms**.
+
+La otra cifra, «ocho capas con ORM cuestan lo mismo que cuatro sin él», **no se
+puede volver a medir**: el shader viejo de ocho samplers se borró. Lo que sí es
+cierto y está medido es que el ORM entero cuesta 1,5 ms, así que el argumento
+—que la arquitectura de arrays paga el tercer mapa— se sostiene por poco, no de
+sobra como se dijo.
 
 *Criterio: el terreno se ve igual que hoy y cuesta ≤10 ms.*
 
