@@ -543,14 +543,33 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 			worst = minf(worst, tool_coverage(kind as Tool.Kind))
 		return worst
 
+	# El forrajeo no produce UN material: produce comida, y la comida se mide
+	# en raciones y contra los dias de reserva que se quieran tener. Sin esto
+	# el forrajeo devolvia 1.0 fijo -"satisfecho"- igual que la leña y la
+	# cantera, los tres empataban y el desempate se lo llevaba siempre el
+	# primero de la lista.
+	if speciality == Profession.Speciality.FORRAJEO:
+		var mouths := 0.0
+		for person: Inhabitant in people:
+			mouths += person.daily_food()
+		var larder: float = food_cap if food_cap > 0.0 else mouths * DIAS_DE_RESERVA
+		return store.food_rations() / maxf(larder, 0.001)
+
 	# Exploracion y demas: se sigue mirando el material que producen
-	var material := speciality_output(speciality)
-	if material < 0:
+	var materials := speciality_outputs(speciality)
+	if materials.is_empty():
 		return 1.0
-	var target: float = float(limits.get(material, 0.0))
-	if target <= 0.0:
-		target = float(people.size())
-	return store.amount(material as Materia.Kind) / maxf(target, 0.001)
+	# La PEOR de las que trae, por el mismo motivo que en el taller: quien
+	# trae leña y fibra tiene un problema si falta la fibra, aunque la leña
+	# sobre.
+	var worst_ratio := INF
+	for material: int in materials:
+		var target: float = float(limits.get(material, 0.0))
+		if target <= 0.0:
+			target = float(people.size())
+		worst_ratio = minf(worst_ratio,
+			store.amount(material as Materia.Kind) / maxf(target, 0.001))
+	return worst_ratio
 
 
 ## Qué material produce cada especialidad. -1 si no produce ninguno todavía.
@@ -558,12 +577,37 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 ## De momento apunta a los materiales que ya existen; cuando estén las
 ## herramientas con su desgaste, esto pasará a devolverlas a ellas.
 func speciality_output(speciality: Profession.Speciality) -> int:
+	var out := speciality_outputs(speciality)
+	return out[0] if not out.is_empty() else -1
+
+
+## Cuantos dias de comida se quieren tener guardados cuando el jugador no ha
+## puesto tope. Es el listón contra el que se mide si hace falta salir a
+## recolectar o si ya vale con lo que hay.
+const DIAS_DE_RESERVA := 12.0
+
+
+## Que materiales trae o gasta cada especialidad, para saber si hace falta.
+##
+## Las de RECOLECCION estaban fuera de esta tabla, y eso las dejaba a todas
+## con la misma presion -1.0, "satisfecha"-: puestas las tres al mismo nivel
+## de prioridad, el desempate se lo llevaba siempre el forrajeo por ser el
+## primero de `Profession.SPECIALITIES`, y luego el habito lo fijaba para
+## siempre. Medido en el sitio 56: doce personas con forrajeo, leña y cantera
+## las tres a nivel 1, y a los trece dias el almacen seguia con 0,0 de
+## cuarcita, 0,0 de fibra y 0,0 de leña. Sin fibra ni piedra el taller no
+## puede tallar nada, asi que la manufactura no arrancaba nunca por mucho que
+## el jugador la pusiera la primera.
+func speciality_outputs(speciality: Profession.Speciality) -> Array[int]:
 	match speciality:
-		Profession.Speciality.TALLA: return Materia.Kind.PIEDRA
-		Profession.Speciality.ASTA: return Materia.Kind.HUESO
-		Profession.Speciality.PELETERIA: return Materia.Kind.PIEL
-		Profession.Speciality.CORDELERIA: return Materia.Kind.FIBRA
-		_: return -1
+		Profession.Speciality.TALLA: return [Materia.Kind.PIEDRA]
+		Profession.Speciality.ASTA: return [Materia.Kind.HUESO]
+		Profession.Speciality.PELETERIA: return [Materia.Kind.PIEL]
+		Profession.Speciality.CORDELERIA: return [Materia.Kind.FIBRA]
+		Profession.Speciality.LENA_FIBRA:
+			return [Materia.Kind.FIBRA, Materia.Kind.LENA]
+		Profession.Speciality.CANTERA: return [Materia.Kind.PIEDRA]
+		_: return []
 
 
 ## Cuanta gente hay en cada oficio
@@ -706,7 +750,19 @@ func _activity_has_somewhere(job: Profession.Job, activity: int) -> bool:
 	return false
 
 
+## Cuanto se encarece una especialidad por cada persona que ya va a ella en
+## este mismo reparto. Es lo que hace que una banda con tres cosas empatadas
+## se reparta entre las tres en vez de irse entera a la primera.
+const APINAMIENTO := 0.35
+
+## La ventaja que tiene seguir en lo de ayer. Poca a proposito: sirve para no
+## cambiar de tajo por un pelo, no para congelar el reparto del primer dia.
+const HABITO := 0.08
+
+
 func apply_priorities() -> void:
+	# Cuanta gente lleva ya asignada cada especialidad en este reparto.
+	var taken: Dictionary = {}
 	for person: Inhabitant in people:
 		var best_level := 99
 		# TODAS las tareas empatadas al mejor nivel, no solo la primera que
@@ -790,26 +846,41 @@ func apply_priorities() -> void:
 			if explore_candidate >= 0:
 				best = explore_candidate
 			else:
-				# Si no hay exploracion de por medio, gana lo que ya se
-				# estaba haciendo si sigue empatado -no se cambia de tajo
-				# cada jornada por deportividad- y si no, lo que mas falte.
+				# Si no hay exploracion de por medio, gana lo que mas falte,
+				# con dos correcciones.
+				#
+				# Una: lo que ya se estaba haciendo sale con ventaja -no se
+				# cambia de tajo cada jornada por deportividad-. Antes era
+				# mas que ventaja, era ley: si la tarea de ayer seguia
+				# empatada se quedaba y no se miraba nada mas, asi que el
+				# reparto del primer dia se congelaba para el resto de la
+				# partida.
+				#
+				# Dos: cada persona que ya va a esa especialidad HOY se la
+				# encarece un poco. Sin eso, doce personas con las mismas
+				# prioridades toman la misma decision doce veces y salen las
+				# doce a lo mismo; con eso, la banda se REPARTE entre lo que
+				# tiene empatado, que es lo que el jugador quiere decir
+				# cuando pone tres cosas al mismo nivel.
 				var current_task := Profession.task_id(person.job as Profession.Job,
 					person.current_speciality as Profession.Speciality)
-				if candidates.has(current_task):
-					best = current_task
-				else:
-					var worst_ratio := INF
-					for task: int in candidates:
-						var ratio := _speciality_pressure(
-							Profession.task_speciality(task) as Profession.Speciality)
-						if ratio < worst_ratio:
-							worst_ratio = ratio
-							best = task
+				var worst_ratio := INF
+				for task: int in candidates:
+					var speciality := Profession.task_speciality(task)
+					var ratio := _speciality_pressure(speciality)
+					ratio += float(taken.get(int(speciality), 0)) * APINAMIENTO
+					if task == current_task:
+						ratio -= HABITO
+					if ratio < worst_ratio:
+						worst_ratio = ratio
+						best = task
 
 		var job := Profession.task_job(best)
 		Profession.assign(job, person)
 		person.speciality = Profession.task_speciality(best)
 		person.current_speciality = person.speciality
+		var chosen := int(person.speciality)
+		taken[chosen] = int(taken.get(chosen, 0)) + 1
 
 	_ensure_hearth()
 

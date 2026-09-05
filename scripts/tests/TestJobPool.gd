@@ -456,3 +456,143 @@ func test_con_sitio_de_reserva_si_se_recolecta() -> void:
 
 	assert_eq(person.job, Profession.Job.RECOLECCION,
 		"con un sitio adonde ir, se respeta la primera opcion")
+
+
+# --- lo empatado se reparte, no se va todo al primero de la lista ---------
+
+func test_tres_especialidades_empatadas_reparten_la_banda() -> void:
+	# Petición del jugador, por la vía de Gala: puso el taller en prioridad 1
+	# y la banda seguía sin tallar. La cadena era ésta — nadie traía piedra ni
+	# fibra, así que el taller nunca tenía con qué; y nadie las traía porque
+	# forrajeo, leña y cantera puestas las tres a nivel 1 empataban en
+	# presión, el desempate se lo llevaba siempre el forrajeo por ser el
+	# primero de la lista, y el hábito lo dejaba fijado para siempre.
+	var people := _banda(9)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	for activity: int in [Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		sim.set_work_site(activity as Subsistence.Activity, Vector3(100.0, 0.0, 100.0))
+
+	for person: Inhabitant in people:
+		for speciality: int in [Profession.Speciality.FORRAJEO,
+				Profession.Speciality.LENA_FIBRA, Profession.Speciality.CANTERA]:
+			person.set_priority(Profession.task_id(Profession.Job.RECOLECCION,
+				speciality as Profession.Speciality), 1)
+	sim.apply_priorities()
+
+	var reparto := {}
+	for person: Inhabitant in people:
+		var key := int(person.current_speciality)
+		reparto[key] = int(reparto.get(key, 0)) + 1
+
+	assert_true(reparto.size() >= 3,
+		"con tres cosas al mismo nivel salen las tres, no sale %s" % [reparto])
+	for speciality: int in [Profession.Speciality.FORRAJEO,
+			Profession.Speciality.LENA_FIBRA, Profession.Speciality.CANTERA]:
+		assert_true(int(reparto.get(speciality, 0)) > 0,
+			"alguien va a %s" % Profession.speciality_name(
+				speciality as Profession.Speciality))
+
+
+func test_lo_que_sobra_deja_de_reclutar() -> void:
+	# El reparto no es a partes iguales: es por lo que FALTA. Con el almacén
+	# reventando de piedra, la cantera no se lleva a nadie.
+	var people := _banda(6)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	for activity: int in [Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		sim.set_work_site(activity as Subsistence.Activity, Vector3(100.0, 0.0, 100.0))
+	sim.store.add(Materia.Kind.PIEDRA, 900.0)
+
+	for person: Inhabitant in people:
+		for speciality: int in [Profession.Speciality.FORRAJEO,
+				Profession.Speciality.CANTERA]:
+			person.set_priority(Profession.task_id(Profession.Job.RECOLECCION,
+				speciality as Profession.Speciality), 1)
+	sim.apply_priorities()
+
+	var canteros := 0
+	for person: Inhabitant in people:
+		if person.current_speciality == Profession.Speciality.CANTERA:
+			canteros += 1
+	assert_eq(canteros, 0, "con novecientas de piedra no hace falta mas cantera")
+
+
+func test_el_forrajeo_mide_la_comida_y_no_devuelve_uno_fijo() -> void:
+	# Antes las tres de recolección devolvían 1.0 —"satisfecha"— pasara lo
+	# que pasara, y por eso empataban siempre entre sí.
+	var people := _banda(4)
+	var sim := _sim(people)
+	var vacio := sim._speciality_pressure(Profession.Speciality.FORRAJEO)
+	sim.store.add(Materia.Kind.FRUTO_SECO, 400.0)
+	var lleno := sim._speciality_pressure(Profession.Speciality.FORRAJEO)
+	assert_true(lleno > vacio,
+		"con la despensa llena aprieta menos: %.2f frente a %.2f" % [lleno, vacio])
+
+
+func test_la_cantera_mide_la_piedra() -> void:
+	var people := _banda(4)
+	var sim := _sim(people)
+	var vacio := sim._speciality_pressure(Profession.Speciality.CANTERA)
+	sim.store.add(Materia.Kind.PIEDRA, 400.0)
+	var lleno := sim._speciality_pressure(Profession.Speciality.CANTERA)
+	assert_true(lleno > vacio,
+		"con piedra de sobra aprieta menos: %.2f frente a %.2f" % [lleno, vacio])
+
+
+func test_la_lena_y_fibra_mira_la_peor_de_las_dos() -> void:
+	# Trae dos cosas: si sobra la leña pero falta la fibra, sigue haciendo
+	# falta. La media diría que no.
+	var people := _banda(4)
+	var sim := _sim(people)
+	sim.store.add(Materia.Kind.LENA, 400.0)
+	var solo_lena := sim._speciality_pressure(Profession.Speciality.LENA_FIBRA)
+	sim.store.add(Materia.Kind.FIBRA, 400.0)
+	var las_dos := sim._speciality_pressure(Profession.Speciality.LENA_FIBRA)
+	assert_true(las_dos > solo_lena,
+		"con leña de sobra y sin fibra sigue apretando: %.2f frente a %.2f"
+			% [solo_lena, las_dos])
+
+
+func test_el_habito_no_congela_el_reparto() -> void:
+	# Seguir en lo de ayer da ventaja, pero poca: si lo de ayer ya sobra y
+	# otra cosa falta, se cambia. Con la ley de antes -"si sigue empatado, se
+	# queda"- el reparto del primer día no se movía nunca más.
+	var people := _banda(6)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	for activity: int in [Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		sim.set_work_site(activity as Subsistence.Activity, Vector3(100.0, 0.0, 100.0))
+
+	for person: Inhabitant in people:
+		for speciality: int in [Profession.Speciality.FORRAJEO,
+				Profession.Speciality.CANTERA]:
+			person.set_priority(Profession.task_id(Profession.Job.RECOLECCION,
+				speciality as Profession.Speciality), 1)
+		person.job = Profession.Job.RECOLECCION
+		person.current_speciality = Profession.Speciality.CANTERA
+
+	# Piedra hasta arriba y despensa a cero: aunque todos vengan de la
+	# cantera, hoy toca comer
+	sim.store.add(Materia.Kind.PIEDRA, 900.0)
+	sim.apply_priorities()
+
+	# Uno se queda en el hogar -`_ensure_hearth` no deja el fuego sin nadie-,
+	# pero de la cantera no queda ni uno y al forrajeo va todo lo demas.
+	var canteros := 0
+	var forrajeadores := 0
+	for person: Inhabitant in people:
+		if person.current_speciality == Profession.Speciality.CANTERA:
+			canteros += 1
+		elif person.current_speciality == Profession.Speciality.FORRAJEO:
+			forrajeadores += 1
+	assert_eq(canteros, 0, "con piedra de sobra y sin comida se deja la cantera")
+	assert_true(forrajeadores >= 4,
+		"y se pasan al forrajeo, no se quedan de brazos cruzados: %d"
+			% forrajeadores)
