@@ -144,6 +144,7 @@ func _build_layer(entry: Dictionary) -> void:
 	# la transformacion de la instancia, que sale gratis.
 	var mesh: Mesh = entry.get("mesh")
 	var model_scale := 1.0
+	var mesh_height := 1.0
 	if entry.has("model"):
 		var key: String = entry["model"]
 		if _library == null or not _library.has(key):
@@ -152,6 +153,7 @@ func _build_layer(entry: Dictionary) -> void:
 		model_scale = _library.scale_for(key)
 	if mesh == null:
 		return
+	mesh_height = maxf(mesh.get_aabb().size.y, 0.01)
 
 	# Fraccion de celdas donde asoma. Uno significa "en todas las que tengan
 	# el recurso"; lo escaso lleva un numero pequeno.
@@ -186,7 +188,8 @@ func _build_layer(entry: Dictionary) -> void:
 					continue
 
 				spot.y = _terrain.get_height_at(spot)
-				var scale := _rng.randf_range(0.75, 1.35) * model_scale
+				var jitter := _rng.randf_range(0.75, 1.35)
+				var scale := jitter * model_scale
 				var basis := Basis().rotated(Vector3.UP, _rng.randf() * TAU)
 				# Lo vegetal se inclina un poco; la piedra y el hueso no
 				if sway > 0.0:
@@ -197,9 +200,17 @@ func _build_layer(entry: Dictionary) -> void:
 				placements.append(Transform3D(basis, spot))
 				_picks.append({
 					"pos": spot, "kind": kind, "from": activity,
-					# El radio para pinchar va en METROS de mundo, asi que se
-					# mide sobre la talla ya aplicada y no sobre el azar suelto.
-					"radius": maxf(scale * 1.6, 1.2),
+					# El radio de acierto es el TAMAÑO REAL de la pieza en
+					# metros, sacado de su caja por la talla que se le acaba de
+					# poner.
+					#
+					# Antes se calculaba sobre `scale` a secas, y `scale` lleva
+					# dentro el factor del modelo, que NO es una talla: es
+					# cuánto hay que multiplicar la malla de origen. La mata
+					# tiene factor 12,2, así que su esfera de acierto medía
+					# hasta VEINTISÉIS METROS y se tragaba todo lo que hubiera
+					# cerca: pinchar una rama seleccionaba fruto seco.
+					"radius": maxf(mesh_height * scale * 0.9, 0.8),
 				})
 
 	if placements.is_empty():
@@ -234,7 +245,11 @@ func _build_layer(entry: Dictionary) -> void:
 	add_child(node)
 
 	_layers[kind] = node
-	print("ResourceProps: %d de %s" % [placements.size(), Materia.material_name(kind)])
+	# La talla va en el informe a proposito: es el numero con el que se pilla que
+	# algo esta sembrado a escala equivocada, y es lo que fallo con el radio de
+	# acierto de la mata.
+	print("ResourceProps: %d de %s · %.2f m" % [placements.size(),
+		Materia.material_name(kind), mesh_height * model_scale])
 
 
 # --- las siluetas ---------------------------------------------------------
