@@ -422,13 +422,36 @@ Lo que **no** hay en CC0 y habrá que modelar: setas, huesos, astas y conchas. S
 formas sencillas, y el asta además es icono del Magdaleniense —azagayas y
 arpones—, así que merece la pena hacerla a mano.
 
-**El riesgo que hay que medir ANTES de comprometerse.** Los modelos de Poly Haven
-son fotogrametría de decenas de miles de triángulos, y `ResourceProps` siembra
-hasta 2600 por tipo: un canto de 20.000 triángulos son 52 millones. G0 midió que
-3,4 millones cuestan 0,3 ms, pero eso era una malla, no cincuenta millones. Hay
-que decimar —un canto de LOD0 debería andar por 300-500 triángulos— y comprobar
-con números que el importador de glTF lo hace, en vez de suponerlo. Es la primera
-prueba de la fase, y va antes que cualquier arte.
+**El riesgo, medido (5-sep-2026) — y sale al revés de lo que suponía.**
+
+`scripts/tests/PropCosteProbe.gd`, escena aislada, 2600 instancias repartidas en
+4096 m, cámara de juego. El modelo es `rock_07` de Poly Haven, 14.844 triángulos:
+
+| | GPU | Triángulos dibujados |
+|---|---|---|
+| en crudo, sin LOD | 35,0 ms | 38.594.400 |
+| **con LOD generado** | **15,9 ms** | — |
+| caja de control, 12 triángulos | 14,8 ms | 31.202 |
+
+Tres cosas:
+
+1. **En crudo es inviable**, como se temía: 38,6 millones de triángulos para UN
+   tipo de prop, y hay ocho.
+2. **`ImporterMesh.generate_lods()` funciona sin editor** y da ocho niveles, de
+   14.844 a 78 triángulos. Y **`MultiMesh` los usa**: 35,0 → 15,9 ms.
+3. **Con LOD, la complejidad de la malla deja de importar.** Una roca de
+   fotogrametría cuesta 1,1 ms más que una caja de doce triángulos. Lo que manda
+   es **cuántas instancias hay y cuánta pantalla cubren**, no cuántos triángulos
+   tiene cada una.
+
+O sea que la suposición de este documento —«hay que decimar a 300-500
+triángulos»— era falsa. **No hace falta decimar ni buscar modelos de baja
+resolución: hace falta generar los LOD y ajustar `MAX_PER_KIND` y `per_cell`.**
+Eso abarata mucho la fase, porque el arte entra tal como viene.
+
+Aviso sobre esos milisegundos: la escena de la prueba no es el juego —no lleva
+el shader del terreno ni el resto—, así que el número absoluto no es el coste en
+partida. Lo que vale es la comparación entre los tres casos.
 
 *Criterio: se sabe qué hay en un paraje sin abrir un panel, y las casillas de
 vegetación y props del presupuesto siguen cabiendo en 3 ms.*
