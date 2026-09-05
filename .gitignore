@@ -50,3 +50,7 @@ data/dem/tiles/
 # scripts/tools/TerrainTextureIngest.gd desde ambientCG (CC0). Son 34 MB que
 # se reconstruyen solos, asi que se versiona el script y no el resultado.
 textures/terrain/
+
+# Modelos de props: los trae y los empaqueta scripts/tools/PropIngest.gd desde
+# Poly Haven (CC0). Se reconstruyen solos, asi que se versiona el script.
+models/props/

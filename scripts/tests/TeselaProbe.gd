@@ -67,6 +67,12 @@ func _init() -> void:
 		await _shoot(demo, "user://tesela_%d.png" % view, from_point, home)
 	material.set_shader_parameter("debug_view", 0)
 
+	# Vista de cerca, para comprobar que los props están donde deben y con la
+	# talla que dicen. A distancia de juego un canto de 34 cm es subpíxel, así
+	# que desde lejos no se puede saber si el modelo está bien o está roto.
+	await _shoot(demo, "user://props_cerca.png",
+		home + Vector3(9.0, 5.0, 12.0), home)
+
 	# Prueba de la oclusión del material sobre las sombras
 	for strength: float in [0.0, 0.25, 0.8]:
 		material.set_shader_parameter("ao_strength", strength)

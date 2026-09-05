@@ -30,6 +30,9 @@ var _layers: Dictionary = {}
 ## parte del MultiMesh porque un MultiMesh no se puede consultar por posición.
 var _picks: Array[Dictionary] = []
 
+## Los modelos de fotogrametria, o null si no se han generado todavia.
+var _library: PropLibrary
+
 
 ## Qué se ve en el suelo, de qué actividad sale, y con qué pinta.
 ##
@@ -41,8 +44,7 @@ func _catalogue() -> Array[Dictionary]:
 		{
 			"kind": Materia.Kind.FRUTO_SECO,
 			"from": Subsistence.Activity.RECOLECCION,
-			"mesh": _bush_mesh(1.7, 3.6),
-			"color": Color(0.26, 0.40, 0.18),
+			"model": "mata",
 			"per_cell": 4, "sway": 0.35,
 		},
 		{
@@ -50,16 +52,14 @@ func _catalogue() -> Array[Dictionary]:
 			# avellano, para que se distingan a distancia
 			"kind": Materia.Kind.FIBRA,
 			"from": Subsistence.Activity.RECOLECCION,
-			"mesh": _tuft_mesh(0.45, 1.1),
-			"color": Color(0.44, 0.52, 0.24),
+			"model": "helecho",
 			"per_cell": 5, "sway": 0.4,
 		},
 		{
 			# Rama caída: tumbada y alargada, nada que ver con una mata
 			"kind": Materia.Kind.LENA,
 			"from": Subsistence.Activity.RECOLECCION,
-			"mesh": _branch_mesh(),
-			"color": Color(0.34, 0.26, 0.17),
+			"model": "rama",
 			"per_cell": 3, "sway": 0.0,
 		},
 		{
@@ -74,16 +74,14 @@ func _catalogue() -> Array[Dictionary]:
 		{
 			"kind": Materia.Kind.PIEDRA,
 			"from": Subsistence.Activity.MATERIA_PRIMA,
-			"mesh": _cobble_mesh(),
-			"color": Color(0.58, 0.57, 0.53),
+			"model": "canto",
 			"per_cell": 8, "sway": 0.0,
 		},
 		{
 			# Ocre: nódulo rojo, muy escaso y muy visible
 			"kind": Materia.Kind.OCRE,
 			"from": Subsistence.Activity.MATERIA_PRIMA,
-			"mesh": _cobble_mesh(),
-			"color": Color(0.55, 0.24, 0.15),
+			"model": "nodulo",
 			# Una veta de ocre es un HALLAZGO, no un paisaje: sale en una de
 			# cada treinta celdas con piedra. Sin esto salian 1.812 nodulos
 			# repartidos por el valle, que es tanto como decir que no es raro.
@@ -93,8 +91,7 @@ func _catalogue() -> Array[Dictionary]:
 			# Pasto de claro: donde entra el ciervo
 			"kind": Materia.Kind.CARNE,
 			"from": Subsistence.Activity.CAZA,
-			"mesh": _tuft_mesh(0.6, 0.5),
-			"color": Color(0.50, 0.53, 0.27),
+			"model": "pasto",
 			"per_cell": 4, "sway": 0.3,
 		},
 		{
@@ -107,10 +104,26 @@ func _catalogue() -> Array[Dictionary]:
 	]
 
 
+## Carga la biblioteca de modelos. No va al repositorio -se reconstruye con
+## `scripts/tools/PropIngest.gd`-, asi que en una copia recien clonada no esta y
+## hay que decirlo, no fallar en silencio con el mapa lleno de nada.
+func _load_library() -> void:
+	if not ResourceLoader.exists(PropModels.LIBRARY_PATH):
+		push_warning("Faltan los modelos de props. Generalos con:
+"
+			+ "  godot --headless --path . --script res://scripts/tools/PropIngest.gd")
+		return
+	_library = load(PropModels.LIBRARY_PATH) as PropLibrary
+	if _library != null and not _library.is_usable():
+		push_warning("La biblioteca de props no cubre el catalogo actual")
+		_library = null
+
+
 func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	_terrain = terrain
 	_field = field
 	_rng.seed = 20260903
+	_load_library()
 
 	for entry: Dictionary in _catalogue():
 		_build_layer(entry)
@@ -124,6 +137,21 @@ func _build_layer(entry: Dictionary) -> void:
 	var kind := entry["kind"] as Materia.Kind
 	var per_cell := int(entry["per_cell"])
 	var sway := float(entry["sway"])
+
+	# La malla y su factor de talla. Los modelos vienen a la escala del escaneo
+	# -un canto de rock_07 mide catorce centimetros-, asi que el factor lo
+	# calcula la ingesta a partir de la altura que pide `PropModels` y entra en
+	# la transformacion de la instancia, que sale gratis.
+	var mesh: Mesh = entry.get("mesh")
+	var model_scale := 1.0
+	if entry.has("model"):
+		var key: String = entry["model"]
+		if _library == null or not _library.has(key):
+			return
+		mesh = _library.mesh(key)
+		model_scale = _library.scale_for(key)
+	if mesh == null:
+		return
 
 	# Fraccion de celdas donde asoma. Uno significa "en todas las que tengan
 	# el recurso"; lo escaso lleva un numero pequeno.
@@ -158,7 +186,7 @@ func _build_layer(entry: Dictionary) -> void:
 					continue
 
 				spot.y = _terrain.get_height_at(spot)
-				var scale := _rng.randf_range(0.75, 1.35)
+				var scale := _rng.randf_range(0.75, 1.35) * model_scale
 				var basis := Basis().rotated(Vector3.UP, _rng.randf() * TAU)
 				# Lo vegetal se inclina un poco; la piedra y el hueso no
 				if sway > 0.0:
@@ -169,6 +197,8 @@ func _build_layer(entry: Dictionary) -> void:
 				placements.append(Transform3D(basis, spot))
 				_picks.append({
 					"pos": spot, "kind": kind, "from": activity,
+					# El radio para pinchar va en METROS de mundo, asi que se
+					# mide sobre la talla ya aplicada y no sobre el azar suelto.
 					"radius": maxf(scale * 1.6, 1.2),
 				})
 
@@ -177,7 +207,7 @@ func _build_layer(entry: Dictionary) -> void:
 
 	var multi := MultiMesh.new()
 	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.mesh = entry["mesh"]
+	multi.mesh = mesh
 	multi.instance_count = placements.size()
 	for i in range(placements.size()):
 		multi.set_instance_transform(i, placements[i])
@@ -186,11 +216,17 @@ func _build_layer(entry: Dictionary) -> void:
 	node.name = "Recurso_" + Materia.material_name(kind)
 	node.multimesh = multi
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = entry["color"]
-	material.roughness = 0.95
-	material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-	node.material_override = material
+	# Solo se pinta lo que NO trae modelo. Un modelo de fotogrametria ya viene
+	# con su material y sus texturas, y un `material_override` las taparia: la
+	# roca saldria de un gris plano habiendo bajado su albedo, su normal y su
+	# ORM. Ver `PropModels` para cuales tienen modelo y cuales siguen siendo
+	# silueta -la cuerna y la concha, que no existen en CC0-.
+	if entry.has("color"):
+		var material := StandardMaterial3D.new()
+		material.albedo_color = entry["color"]
+		material.roughness = 0.95
+		material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+		node.material_override = material
 	# Se ven de lejos pero no desde el otro extremo del valle: a 900 m una mata
 	# de dos metros es subpíxel y solo aporta aliasing
 	node.visibility_range_end = 900.0
@@ -232,34 +268,7 @@ func pick(origin: Vector3, direction: Vector3) -> Dictionary:
 	return best
 
 
-## Mata alta y redonda: avellano.
-func _bush_mesh(radius: float, height: float) -> Mesh:
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh.radial_segments = 6
-	mesh.rings = 3
-	return mesh
 
-
-## Macolla baja: pasto y herbazal.
-func _tuft_mesh(radius: float, height: float) -> Mesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius * 0.3
-	mesh.bottom_radius = radius
-	mesh.height = height
-	mesh.radial_segments = 5
-	return mesh
-
-
-## Rama caída: tumbada y larga, para que no se confunda con una mata.
-func _branch_mesh() -> Mesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.07
-	mesh.bottom_radius = 0.12
-	mesh.height = 2.1
-	mesh.radial_segments = 4
-	return mesh
 
 
 ## Cuerna de desmogue: un asta con su candil, aproximada con un prisma
@@ -270,15 +279,6 @@ func _antler_mesh() -> Mesh:
 	mesh.size = Vector3(0.18, 0.85, 0.5)
 	return mesh
 
-
-## Canto rodado de barra de río, y nódulo de ocre.
-func _cobble_mesh() -> Mesh:
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.22
-	mesh.height = 0.26
-	mesh.radial_segments = 5
-	mesh.rings = 2
-	return mesh
 
 
 ## Costra de lapa en roca intermareal.
