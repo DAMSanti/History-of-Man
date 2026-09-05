@@ -57,6 +57,40 @@ donde la textura fotogramétrica va a afirmar más de lo que la geometría sosti
 es sólo el tramo de **1 a 5 m**. Es estrecho, y se rellena con parallax y con
 geometría dispersa (§8), no con ruido.
 
+### Medido (G0, 5-sep-2026)
+
+`scripts/tests/GpuProfile.gd` sobre el sitio 56, GTX 1070, 1920×1080, cámara de
+juego. **30,8 ms por fotograma: 0,4 de CPU de render y 28,7 de GPU.** El render
+por CPU no existe como problema; esto es GPU de cabo a rabo.
+
+| Se apaga | Total | GPU | Ahorro |
+|---|---|---|---|
+| — (todo encendido) | 30,8 | 28,7 | — |
+| **el terreno jugable entero** | 11,9 | 9,8 | **18,9** |
+| **el shader del terreno** (malla intacta) | 12,2 | 10,1 | **18,6** |
+| TAA | 23,5 | 21,2 | 7,5 |
+| Mapas de normales | 26,8 | 25,0 | 3,7 |
+| Sombras | 27,6 | 25,3 | 3,4 |
+| Corte de capa al 12 % | 30,0 | 27,8 | 0,9 |
+| Contorno | 30,0 | 27,8 | 0,9 |
+| Escala 3D al 50 % | 18,8 | 16,5 | 12,2 |
+
+Tres conclusiones, y las tres mueven el plan:
+
+**1. La geometría no cuesta nada; el shader lo es todo.** Quitar la malla ahorra
+18,9 ms y dejarla con material trivial ahorra 18,6: la diferencia son 0,3 ms. O
+sea que 3,4 millones de triángulos son gratis y el coste está **entero** en el
+fragmento. Es la premisa del §2, ahora con número: **18,6 ms, el 60 % del
+fotograma, es el triplanar**.
+
+**2. `weight_cutoff` no hace lo que parece.** Subirlo de 0,02 a 0,12 ahorra
+0,9 ms, porque recorta la contribución pero **no evita el muestreo**.
+Confirmación directa del punto 2.4.
+
+**3. TAA cuesta 7,5 ms, el 24 % del fotograma.** Encendido en
+`project.godot:81` con MSAA apagado, o sea corriendo solo. Es la palanca más
+barata que hay hoy y no tiene nada que ver con el revamp.
+
 ### Presupuesto de frame propuesto (Alto, 1070 @ 1080p)
 
 | Partida | ms |
@@ -279,8 +313,10 @@ Dos avisos honestos:
 
 ## 7. Fases, con criterio de aceptación
 
-**G0 · Medir.** Desglosar los 25 ms por partida, ampliando `GpuProfile.gd`.
-*Criterio: sabemos en qué se van, con número, antes de tocar arte.*
+**G0 · Medir. — HECHO (5-sep-2026).** No hizo falta ampliar `GpuProfile.gd`:
+ya medía todo lo que hacía falta y sólo había que ejecutarlo. Resultados y
+conclusiones en §1. *Criterio cumplido: 18,6 ms de los 28,7 de GPU son el
+shader del terreno, y la geometría cuesta 0,3.*
 
 **G1 · Reforma del shader.** Arrays, biplanar, salto por peso, ORM, compresión.
 *Criterio: el terreno se ve **igual que hoy** y cuesta ≤10 ms.*
