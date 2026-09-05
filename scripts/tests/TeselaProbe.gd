@@ -67,11 +67,23 @@ func _init() -> void:
 		await _shoot(demo, "user://tesela_%d.png" % view, from_point, home)
 	material.set_shader_parameter("debug_view", 0)
 
-	# Vista de cerca, para comprobar que los props están donde deben y con la
-	# talla que dicen. A distancia de juego un canto de 34 cm es subpíxel, así
-	# que desde lejos no se puede saber si el modelo está bien o está roto.
-	await _shoot(demo, "user://props_cerca.png",
-		home + Vector3(9.0, 5.0, 12.0), home)
+	# Vistas de un prop DE VERDAD, no del centro del mapa.
+	#
+	# Apuntar al poblado no servía: allí están las cabañas y la banda, y los
+	# props salen donde su hábitat les deja. Las capas de ResourceProps se
+	# llaman por su materia, así que se les puede preguntar dónde está su
+	# primera instancia y plantar la cámara encima.
+	for materia: String in ["Cuarcita", "Fruto seco", "Leña"]:
+		var spot := _first_instance(demo, "Recurso_" + materia)
+		if spot == Vector3.INF:
+			print("sin instancias de %s" % materia)
+			continue
+		var name := materia.to_lower().replace(" ", "_")
+		# De cerca, para ver la pieza; y a cien metros, que es zoom de juego
+		await _shoot(demo, "user://prop_%s_cerca.png" % name,
+			spot + Vector3(3.5, 2.2, 4.5), spot)
+		await _shoot(demo, "user://prop_%s_lejos.png" % name,
+			spot + Vector3(45.0, 40.0, 70.0), spot)
 
 	# Prueba de la oclusión del material sobre las sombras
 	for strength: float in [0.0, 0.25, 0.8]:
@@ -121,6 +133,24 @@ func _force_noon_env(node: Node) -> void:
 				env.fog_enabled = false
 			return
 		_force_noon_env(child)
+
+
+## Dónde está la primera instancia de una capa de props, o INF si no hay.
+func _first_instance(root_node: Node, layer_name: String) -> Vector3:
+	var node := _deep_find(root_node, layer_name) as MultiMeshInstance3D
+	if node == null or node.multimesh == null 			or node.multimesh.instance_count <= 0:
+		return Vector3.INF
+	return node.global_position 		+ node.multimesh.get_instance_transform(0).origin
+
+
+func _deep_find(node: Node, wanted: String) -> Node:
+	if node.name == wanted:
+		return node
+	for child in node.get_children():
+		var found := _deep_find(child, wanted)
+		if found:
+			return found
+	return null
 
 
 func _find_light(node: Node) -> DirectionalLight3D:

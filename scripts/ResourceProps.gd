@@ -29,8 +29,18 @@ const MIN_ABUNDANCE := 0.22
 ## un canto de treinta y cuatro centímetros no se ve, pero doscientos cantos
 ## juntos sí. Es lo que permite tener la talla real —la de verdad, la que casa
 ## con una persona de 1,70 m— y que el paraje se siga reconociendo de lejos.
+## Cuántas piezas van juntas en una mancha.
 const CLUSTER_SIZE := 9
-const CLUSTER_RADIUS := 6.0
+
+## Cómo de apretada va la mancha, en metros de radio por metro de talla.
+##
+## Escala con el TAMAÑO de la pieza y no es un número fijo, porque una barra de
+## cantos es un manto apretado y un avellanar está espaciado. Con un radio fijo
+## de seis metros, nueve cantos de treinta y cuatro centímetros quedaban a un
+## par de metros unos de otros: eso no es una barra de río, es grava perdida.
+const CLUSTER_SPREAD := 5.0
+const CLUSTER_RADIUS_MIN := 1.4
+const CLUSTER_RADIUS_MAX := 11.0
 
 ## Cuántos sitios se prueban antes de rendirse al buscar dónde plantar una
 ## mancha. Sin tope, una materia de hábitat estrecho recorrería la celda entera
@@ -199,6 +209,12 @@ func _build_layer(entry: Dictionary) -> void:
 
 	var habitat: Dictionary = entry.get("habitat", {})
 
+	# La talla real de la pieza gobierna dos cosas: cómo de apretada va la
+	# mancha y hasta dónde se ve.
+	var real_height := mesh_height * model_scale
+	var cluster_radius := clampf(real_height * CLUSTER_SPREAD,
+		CLUSTER_RADIUS_MIN, CLUSTER_RADIUS_MAX)
+
 	for z in range(_field.height):
 		for x in range(_field.width):
 			var abundance := _field.abundance_cell(activity, x, z)
@@ -237,7 +253,7 @@ func _build_layer(entry: Dictionary) -> void:
 					var angle := _rng.randf() * TAU
 					# Raíz de un aleatorio para que la mancha salga con densidad
 					# pareja: sin ella se amontona todo en el centro.
-					var reach := sqrt(_rng.randf()) * CLUSTER_RADIUS
+					var reach := sqrt(_rng.randf()) * cluster_radius
 					var spot := seed_spot + Vector3(
 						cos(angle) * reach, 0.0, sin(angle) * reach)
 
@@ -297,18 +313,29 @@ func _build_layer(entry: Dictionary) -> void:
 		material.roughness = 0.95
 		material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
 		node.material_override = material
-	# Se ven de lejos pero no desde el otro extremo del valle: a 900 m una mata
-	# de dos metros es subpíxel y solo aporta aliasing
-	node.visibility_range_end = 900.0
-	node.visibility_range_end_margin = 120.0
+	# Cada pieza se ve hasta donde da su tamaño, y no todas hasta 900 m.
+	#
+	# La cuenta: a doscientos metros un píxel son unos veintiséis centímetros,
+	# así que un canto de treinta y cuatro mide PÍXEL Y MEDIO. No se le puede
+	# ver, ni agrupándolo: nueve cantos en una mancha cubren el 0,7 % de su
+	# propia área en pantalla. Dibujarlo a esa distancia es pagar geometría por
+	# aliasing.
+	#
+	# Y no hace falta, porque a esa distancia el cantizal YA está representado:
+	# lo pinta la capa CANTOS del terreno, con su fotogrametría de grava. El
+	# canto en tres dimensiones es detalle de cerca, no un hito del paisaje.
+	# La mata y el bloque sí son hitos, y por eso se ven de lejos.
+	node.visibility_range_end = clampf(real_height * 350.0, 130.0, 900.0)
+	node.visibility_range_end_margin = node.visibility_range_end * 0.18
 	add_child(node)
 
 	_layers[kind] = node
 	# La talla va en el informe a proposito: es el numero con el que se pilla que
 	# algo esta sembrado a escala equivocada, y es lo que fallo con el radio de
 	# acierto de la mata.
-	print("ResourceProps: %d de %s · %.2f m" % [placements.size(),
-		Materia.material_name(kind), mesh_height * model_scale])
+	print("ResourceProps: %d de %s · %.2f m · mancha r%.1f · visible a %.0f m" % [
+		placements.size(), Materia.material_name(kind), real_height,
+		cluster_radius, node.visibility_range_end])
 
 
 # --- las siluetas ---------------------------------------------------------
