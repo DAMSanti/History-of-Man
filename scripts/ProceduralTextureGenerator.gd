@@ -314,7 +314,7 @@ static func generate_normal_from_noise(size: int = 512, frequency: float = 0.05,
 
 ## Genera todas las texturas del terreno y las guarda
 ## Version del algoritmo de generacion. Subirla invalida las caches en disco.
-const TEXTURE_SET_VERSION := 3
+const TEXTURE_SET_VERSION := 4
 const CACHE_PATH := "user://terrain_textures.res"
 
 ## Cache en memoria para no repetir el coste dentro de una misma sesion
@@ -375,4 +375,25 @@ static func generate_all_terrain_textures(_save_path: String = "res://textures/t
 ## anisotropico configurado en project.godot no tiene efecto sin niveles de mip.
 static func _finish_texture(image: Image) -> ImageTexture:
 	image.generate_mipmaps()
+	_compress(image)
 	return ImageTexture.create_from_image(image)
+
+
+## Comprime a BC7 antes de subirla a la tarjeta.
+##
+## Estaban en RGB8 crudo, que la tarjeta suele rellenar a RGBA8: cuatro bytes
+## por texel. BC7 es uno, o sea la CUARTA parte de trafico por cada fetch, con
+## la misma calidad a efectos practicos. Y el terreno hace varios fetch por
+## fragmento -material por plano, y otra vez para las normales-, asi que si el
+## shader esta limitado por memoria y no por aritmetica es aqui donde se nota.
+##
+## Se comprime DESPUES de generar los mipmaps: al reves habria que comprimir
+## cada nivel por separado y el resultado es peor.
+static func _compress(image: Image) -> void:
+	if image.is_compressed():
+		return
+	# BC7 pide cuatro canales; en RGB8 la llamada no hace nada y la textura se
+	# queda cruda sin avisar.
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	image.compress(Image.COMPRESS_BPTC, Image.COMPRESS_SOURCE_GENERIC)
