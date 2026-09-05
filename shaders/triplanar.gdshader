@@ -134,6 +134,49 @@ uniform float foam_tile_m : hint_range(1.0, 40.0) = 8.0;
 // espuma va en la lamina superficial, que corre mas que la media de la seccion.
 uniform float foam_drift : hint_range(0.0, 3.0) = 1.35;
 
+group_uniforms antitiling;
+// Romper la rejilla de la textura repetida.
+//
+// Una tesela de cuatro metros sobre una ladera de un kilometro se repite
+// doscientas cincuenta veces, y el ojo lee esa regularidad como un enrejado
+// muchisimo antes que como hierba. Comprobado con la vista de diagnostico: en
+// la de capa dominante el enrejado NO esta, o sea que no lo produce el reparto
+// de materiales sino la textura.
+//
+// Las dos palancas de aqui cuestan aritmetica y NINGUN muestreo extra, que es
+// lo que las hace viables: el shader ya iba justo. La alternativa buena
+// -teselado estocastico, muestrear dos veces con giro y mezclar- cuesta el
+// doble de fetches y se queda para el tier alto si esto no basta.
+
+// 1. Desplazar las coordenadas con ruido de onda larga. Deshace la ALINEACION
+//    de la rejilla: las teselas dejan de estar en filas y columnas.
+uniform float warp_amount : hint_range(0.0, 8.0) = 2.6;
+uniform float warp_scale_m : hint_range(4.0, 200.0) = 38.0;
+
+// 2. Y lo que de verdad la mata: muestrear LA MISMA capa a una escala mucho
+//    mayor y usarla para modular el color.
+//
+//    El desplazamiento solo mueve la rejilla; el contenido sigue siendo el
+//    mismo parche repitiendose, y el ojo lo pilla igual. Esto cambia el
+//    CONTENIDO: la copia grande aporta manchas claras y oscuras sacadas de la
+//    propia fotografia, no de un ruido, asi que se parecen a lo que la textura
+//    ya tiene. Y como el factor no es entero, el patron combinado tarda ocho
+//    veces mas en repetirse.
+//
+//    Cuesta UN muestreo, y de un solo plano porque es una senal de onda larga.
+uniform float macro_break : hint_range(0.0, 1.0) = 0.85;
+uniform float macro_break_factor : hint_range(2.0, 20.0) = 7.7;
+
+group_uniforms debug;
+// Vista de diagnostico. 0 normal · 1 que capa manda en cada punto, como color
+// plano · 2 albedo sin mezclar con nada, para mirar la teselacion sola.
+//
+// Existe porque «se ve una cuadricula» tiene al menos tres causas posibles -la
+// textura que se repite, el reparto de capas, o la variacion de mancha- y
+// mirando el terreno acabado no se distinguen. Pintando la capa dominante se
+// distinguen en una captura.
+uniform int debug_view : hint_range(0, 2) = 0;
+
 group_uniforms performance;
 // Los normal maps duplican el numero de muestreos. Desactivarlos es la palanca
 // mas directa para ganar frames en mundos grandes.
@@ -231,19 +274,61 @@ vec3 triplanar_normal(sampler2DArray tex, float layer, float tile,
 // grande, porque anadir el ORM en triplanar completo habria subido los
 // muestreos por fragmento un cincuenta por ciento, que es justo lo que este
 // shader no puede pagar.
-vec4 uniplanar_orm(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
-		vec3 weights) {
+// Muestreo por el plano dominante, para senales de onda larga que no dibujan
+// silueta. Lo usan el ORM y la copia a escala grande del anti-teselado.
+vec4 uniplanar(sampler2DArray tex, float layer, float tile, vec3 pos,
+		vec3 dpdx, vec3 dpdy, vec3 weights) {
 	float s = 1.0 / max(tile, 0.01);
 	if (weights.y >= weights.x && weights.y >= weights.z) {
-		return textureGrad(terrain_orm, vec3(pos.xz * s, layer),
-			dpdx.xz * s, dpdy.xz * s);
+		return textureGrad(tex, vec3(pos.xz * s, layer), dpdx.xz * s, dpdy.xz * s);
 	}
 	if (weights.x >= weights.z) {
-		return textureGrad(terrain_orm, vec3(pos.zy * s, layer),
-			dpdx.zy * s, dpdy.zy * s);
+		return textureGrad(tex, vec3(pos.zy * s, layer), dpdx.zy * s, dpdy.zy * s);
 	}
-	return textureGrad(terrain_orm, vec3(pos.xy * s, layer),
-		dpdx.xy * s, dpdy.xy * s);
+	return textureGrad(tex, vec3(pos.xy * s, layer), dpdx.xy * s, dpdy.xy * s);
+}
+
+vec4 uniplanar_albedo(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
+		vec3 weights) {
+	return uniplanar(terrain_albedo, layer, tile, pos, dpdx, dpdy, weights);
+}
+
+vec4 uniplanar_orm(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
+		vec3 weights) {
+	return uniplanar(terrain_orm, layer, tile, pos, dpdx, dpdy, weights);
+}
+
+// Devuelve DOS canales de una vez. La version anterior llamaba tres veces a un
+// ruido escalar para armar el desplazamiento, y eso -mas un tinte por ruido a
+// dos escalas- costaba 3,3 ms medidos. Con dos canales por llamada y sin el
+// tinte, el desplazamiento sale por una fraccion de eso.
+vec2 hash22(vec2 p) {
+	vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+	q += dot(q, q.yzx + 33.33);
+	return fract((q.xx + q.yz) * q.zy);
+}
+
+vec2 value_noise2(vec2 p) {
+	vec2 cell = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	vec2 a = hash22(cell);
+	vec2 b = hash22(cell + vec2(1.0, 0.0));
+	vec2 c = hash22(cell + vec2(0.0, 1.0));
+	vec2 d = hash22(cell + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Un color por capa, para la vista de diagnostico
+vec3 layer_color(int i) {
+	if (i == 0) { return vec3(0.35, 0.70, 0.20); }  // pradera
+	if (i == 1) { return vec3(0.08, 0.30, 0.10); }  // bosque
+	if (i == 2) { return vec3(0.72, 0.72, 0.76); }  // roquedo
+	if (i == 3) { return vec3(0.58, 0.46, 0.40); }  // canchal
+	if (i == 4) { return vec3(0.90, 0.70, 0.30); }  // cantos
+	if (i == 5) { return vec3(0.96, 0.88, 0.62); }  // arena
+	if (i == 6) { return vec3(0.36, 0.26, 0.18); }  // limo
+	return vec3(0.98, 0.98, 1.00);                  // nieve
 }
 
 void fragment() {
@@ -279,8 +364,23 @@ void fragment() {
 
 	// Derivadas de la posicion de mundo, calculadas una sola vez y fuera de
 	// cualquier rama. Las de cada plano salen de aqui con un swizzle.
+	//
+	// Se sacan de la posicion SIN deformar, a proposito: el desplazamiento de
+	// abajo es de onda larga, asi que apenas cambia la derivada, y usar la
+	// deformada solo serviria para que el nivel de mipmap diese bandazos.
 	vec3 dpdx = dFdx(world_position);
 	vec3 dpdy = dFdy(world_position);
+
+	// Posicion con la que se TEXTURA, desplazada para que la rejilla de la
+	// tesela deje de ser una rejilla. Dos ruidos a distinta escala y girados
+	// entre si; con uno solo el desplazamiento tiene direccion y se lee como un
+	// estirado.
+	vec3 tex_position = world_position;
+	if (warp_amount > 0.001) {
+		vec2 offset = (value_noise2(world_position.xz / max(warp_scale_m, 1.0))
+			- 0.5) * (warp_amount * 2.0);
+		tex_position.xz += offset;
+	}
 
 	// Calcular pendiente (slope) - 1.0 = vertical, 0.0 = horizontal
 	float slope = 1.0 - abs(world_normal.y);
@@ -339,8 +439,13 @@ void fragment() {
 	// Lo concavo y humedo cria bosque; lo convexo y expuesto, pasto. La mancha
 	// de UV2.y rompe la homogeneidad para que una ladera entera no salga de un
 	// solo material.
-	float wood = clamp(0.45 + curvature * curvature_influence
-		+ patch * macro_influence, 0.0, 1.0);
+	// El reparto pradera/bosque iba con un `clamp`, y un clamp SATURA: en casi
+	// todo el mapa valia 0 o 1, asi que el paso de uno a otro era un escalon con
+	// forma organica pero borde duro. Con `smoothstep` sobre un margen ancho la
+	// mezcla ocupa una franja de verdad y el bosque se deshilacha en el prado,
+	// que es lo que hace un bosque.
+	float wood_raw = curvature * curvature_influence + patch * macro_influence;
+	float wood = smoothstep(-0.55, 0.55, wood_raw);
 
 	// La marisma se queda en lo hondo y lo LLANO: un limo no se sostiene en
 	// pendiente. Sin la condicion de pendiente el fango trepaba por la ladera
@@ -411,18 +516,18 @@ void fragment() {
 	float tile1 = layer_tile_m[i1];
 
 	vec3 final_color = triplanar_texture(terrain_albedo, layer0, tile0,
-		world_position, dpdx, dpdy, triplanar_weights).rgb * w0;
+		tex_position, dpdx, dpdy, triplanar_weights).rgb * w0;
 	vec3 final_normal = vec3(0.0);
 	if (use_normal_maps) {
 		final_normal = triplanar_normal(terrain_normal, layer0, tile0,
-			world_position, dpdx, dpdy, triplanar_weights) * w0;
+			tex_position, dpdx, dpdy, triplanar_weights) * w0;
 	}
 
 	float final_roughness = roughness_fallback;
 	float occlusion = 1.0;
 	float surface_height = 0.5;
 	if (use_orm) {
-		vec4 orm0 = uniplanar_orm(layer0, tile0, world_position,
+		vec4 orm0 = uniplanar_orm(layer0, tile0, tex_position,
 			dpdx, dpdy, triplanar_weights);
 		final_roughness = orm0.g * w0;
 		occlusion = orm0.r * w0;
@@ -434,13 +539,13 @@ void fragment() {
 	// todo lo que no es transicion, que es la mayor parte del mapa.
 	if (w1 > 0.02) {
 		final_color += triplanar_texture(terrain_albedo, layer1, tile1,
-			world_position, dpdx, dpdy, triplanar_weights).rgb * w1;
+			tex_position, dpdx, dpdy, triplanar_weights).rgb * w1;
 		if (use_normal_maps) {
 			final_normal += triplanar_normal(terrain_normal, layer1, tile1,
-				world_position, dpdx, dpdy, triplanar_weights) * w1;
+				tex_position, dpdx, dpdy, triplanar_weights) * w1;
 		}
 		if (use_orm) {
-			vec4 orm1 = uniplanar_orm(layer1, tile1, world_position,
+			vec4 orm1 = uniplanar_orm(layer1, tile1, tex_position,
 				dpdx, dpdy, triplanar_weights);
 			final_roughness += orm1.g * w1;
 			occlusion += orm1.r * w1;
@@ -456,6 +561,21 @@ void fragment() {
 
 	if (use_orm) {
 		final_roughness = clamp(final_roughness * roughness_scale, 0.04, 1.0);
+	}
+
+	// La copia a escala grande de la MISMA capa. Ver `macro_break`.
+	//
+	// Se mezcla como "overlay" y no multiplicando: multiplicar solo oscurece y
+	// el terreno se apaga entero, mientras que overlay aclara donde la copia
+	// grande es clara y oscurece donde es oscura, que es lo que hace que unas
+	// manchas se lean mas secas y otras mas verdes sin cambiar el brillo medio.
+	if (macro_break > 0.001) {
+		vec3 wide = uniplanar_albedo(layer0, tile0 * macro_break_factor,
+			tex_position, dpdx, dpdy, triplanar_weights).rgb;
+		vec3 overlay = mix(2.0 * final_color * wide,
+			1.0 - 2.0 * (1.0 - final_color) * (1.0 - wide),
+			step(vec3(0.5), final_color));
+		final_color = mix(final_color, overlay, macro_break);
 	}
 
 	// --- Agua ------------------------------------------------------------
@@ -575,6 +695,12 @@ void fragment() {
 	}
 
 	// Salidas del shader
+	if (debug_view == 1) {
+		final_color = mix(layer_color(i0), layer_color(i1), w1);
+	} else if (debug_view == 2) {
+		final_normal = vec3(0.0, 0.0, 1.0);
+	}
+
 	ALBEDO = final_color;
 	// La oclusion va a AO y NO multiplicando el albedo. Multiplicar el color
 	// oscurece DOS veces lo que ya esta en sombra -la luz directa tambien
