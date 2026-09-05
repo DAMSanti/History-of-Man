@@ -42,7 +42,17 @@ func _init() -> void:
 		var slug: String = entry["slug"]
 		print("[%d/%d] %s (%s)" % [index + 1, keys.size(), entry["name"], slug])
 
-		var gltf_path := _fetch_model(slug)
+		var gltf_path := ""
+		if entry.has("local"):
+			# Pieza que no se puede descargar por script. Se suelta a mano en
+			# `PropModels.LOCAL_DIR` y se declara aquí con su autor y licencia.
+			gltf_path = ProjectSettings.globalize_path(
+				"%s/%s" % [PropModels.LOCAL_DIR, entry["local"]])
+			if not FileAccess.file_exists(gltf_path):
+				print("   falta el fichero local %s; se salta" % entry["local"])
+				continue
+		else:
+			gltf_path = _fetch_model(slug)
 		if gltf_path.is_empty():
 			print("   FALLO al traer el modelo; se salta")
 			continue
@@ -91,7 +101,69 @@ func _init() -> void:
 		file.close()
 	print("")
 	print("guardado %s · %.1f MB" % [PropModels.LIBRARY_PATH, bytes / 1048576.0])
+	_write_credits()
 	quit()
+
+
+## Escribe los créditos de todo lo que se usa.
+##
+## No es cortesía: una licencia CC-BY OBLIGA a atribuir, y eso se olvida si se
+## deja para el final. Se genera desde el catálogo, así que no puede quedarse
+## desfasado respecto a lo que de verdad se está usando. Poly Haven es CC0 y no
+## lo exige, pero se cita igual —cuesta nada y es de justicia—.
+func _write_credits() -> void:
+	var lines: Array[String] = []
+	lines.append("# Créditos de los assets")
+	lines.append("")
+	lines.append("Lo genera `scripts/tools/PropIngest.gd` a partir de los")
+	lines.append("catálogos, así que no se queda desfasado respecto a lo que de")
+	lines.append("verdad se usa. No se edita a mano.")
+	lines.append("")
+	lines.append("## Texturas del terreno")
+	lines.append("")
+	lines.append("[ambientCG](https://ambientcg.com), CC0.")
+	lines.append("")
+	for i in range(TerrainLayers.COUNT):
+		var layer: Dictionary = TerrainLayers.CATALOGUE[i]
+		lines.append("- %s — `%s`" % [layer["name"], layer["asset"]])
+	lines.append("")
+	lines.append("## Modelos del suelo")
+	lines.append("")
+	var pending: Array[String] = []
+	for key: String in PropModels.CATALOGUE:
+		var entry: Dictionary = PropModels.CATALOGUE[key]
+		if entry.has("local"):
+			lines.append("- %s — %s, %s. %s" % [entry["name"],
+				entry.get("author", "AUTOR SIN DECLARAR"),
+				entry.get("license", "LICENCIA SIN DECLARAR"),
+				entry.get("source_url", "")])
+			if not entry.has("author") or not entry.has("license"):
+				pending.append(entry["name"] as String)
+		else:
+			lines.append("- %s — [Poly Haven](https://polyhaven.com/a/%s), CC0."
+				% [entry["name"], entry["slug"]])
+	lines.append("")
+	if not pending.is_empty():
+		lines.append("> AVISO: sin autor o sin licencia declarados: %s."
+			% ", ".join(pending))
+		lines.append("> Una pieza con licencia CC-BY sin atribuir es un")
+		lines.append("> incumplimiento, no un descuido de formato.")
+		lines.append("")
+	lines.append("## Lo que falta")
+	lines.append("")
+	for key: String in PropModels.WANTED:
+		var want: Dictionary = PropModels.WANTED[key]
+		lines.append("- **%s** — %s" % [want["name"], want["note"]])
+
+	var file := FileAccess.open("res://CREDITOS.md", FileAccess.WRITE)
+	if file == null:
+		print("no se pudieron escribir los creditos")
+		return
+	file.store_string("
+".join(lines) + "
+")
+	file.close()
+	print("creditos en res://CREDITOS.md")
 
 
 ## Descarga el glTF y todo lo que declare su mapa `include`, y devuelve la ruta

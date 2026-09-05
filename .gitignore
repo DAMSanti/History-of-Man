@@ -54,3 +54,7 @@ textures/terrain/
 # Modelos de props: los trae y los empaqueta scripts/tools/PropIngest.gd desde
 # Poly Haven (CC0). Se reconstruyen solos, asi que se versiona el script.
 models/props/
+
+# Modelos que se sueltan a mano para la ingesta (asta, concha...). Se
+# versiona el catalogo que los declara, no el binario.
+models/props/source/

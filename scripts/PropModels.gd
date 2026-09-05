@@ -12,6 +12,14 @@ extends RefCounted
 ## caja de doce triángulos. O sea que **no hay que decimar nada**: hay que
 ## generar los LOD y vigilar el NÚMERO de instancias, que es lo que manda.
 
+## Dónde se dejan los modelos que NO se pueden descargar por script.
+##
+## Ni Poly Haven ni ambientCG tienen asta, hueso ni concha —comprobado contra el
+## catálogo entero—, y Sketchfab y Poly Pizza piden clave o OAuth. Así que para
+## esas piezas basta con soltar aquí el `.glb` o el `.gltf` y declararlo en el
+## catálogo con `local` en vez de `slug`, junto con su autor y su licencia.
+const LOCAL_DIR := "res://models/props/source"
+
 ## Resolución de textura que se pide. 1K basta: un canto ocupa un puñado de
 ## píxeles en pantalla y estas texturas van sobre miles de instancias.
 const RES := "1k"
@@ -78,6 +86,26 @@ const CATALOGUE := {
 		# más parecido que hay.
 		"slug": "moss_01", "name": "Musgo de yesca", "height_m": 0.18,
 	},
+}
+
+
+## Las piezas que faltan por conseguir, con lo que hay que buscar.
+##
+## Se quedan aquí escritas en vez de en un comentario suelto para que la propia
+## herramienta pueda decir qué falta, y para que no se olvide qué se buscó ya.
+const WANTED := {
+	"asta": {
+		"name": "Cuerna de desmogue",
+		"note": "Icono del Magdaleniense: azagayas y arpones salen de aquí. "
+			+ "No existe en Poly Haven ni en ambientCG.",
+	},
+	"concha": {
+		"name": "Concha de lapa o mejillón",
+		"note": "Ojo con la especie: `lambis_shell` de Poly Haven es una "
+			+ "caracola tropical, nada que ver con el marisqueo cantábrico.",
+	},
+	"seta": {"name": "Seta", "note": "Tampoco existe en CC0 scripteable."},
+	"hueso": {"name": "Hueso", "note": "Ídem."},
 }
 
 
