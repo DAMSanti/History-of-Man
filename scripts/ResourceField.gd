@@ -300,6 +300,79 @@ func is_frozen(activity: Subsistence.Activity, x: int, z: int) -> bool:
 	return i >= 0 and i < dead.size() and dead[i] != 0
 
 
+## Gasta de la MEJOR celda que haya al alcance, no de la de debajo.
+##
+## Existe por la pesca, y es un problema de todos los oficios de orilla: se
+## pesca DESDE la ribera, o sea desde una celda de tierra, y el pescado esta
+## en la celda de agua de al lado. Mirando solo la celda de debajo, un
+## pescador se pasaba la jornada en un cotarro con abundancia 0,000 y volvia
+## de vacio todos los dias -medido en el sitio 56: doce salidas, cero
+## pescado, con 156 celdas de rio con pesca en el mismo mapa.
+##
+## Vale para todo lo demas igual: nadie trabaja de pie sobre un punto, se
+## trabaja un trecho. Devuelve lo que quedaba en esa celda, de 0 a 1.
+func deplete_around(activity: Subsistence.Activity, centre: Vector3,
+		radius: float, amount: float) -> float:
+	if not grids.has(activity):
+		return 1.0
+	var grid: PackedFloat32Array = grids[activity]
+	var cap: PackedFloat32Array = capacities.get(activity, grid)
+
+	var best := -1
+	var best_stock := 0.0
+	for cell: Vector2i in cells_within(centre, radius):
+		var i := cell.y * width + cell.x
+		if i < 0 or i >= grid.size() or cap[i] <= 0.001:
+			continue
+		if grid[i] > best_stock:
+			best_stock = grid[i]
+			best = i
+	if best < 0:
+		return 0.0
+
+	var capacity := cap[best]
+	var before := grid[best]
+	grid[best] = maxf(before - amount, 0.0)
+	grids[activity] = grid
+	return clampf(before / capacity, 0.0, 1.0)
+
+
+## Las mejores celdas de esta actividad al alcance, de mas a menos.
+##
+## Devuelve varias y no una porque la mejor puede no servir: el que planta un
+## tajo tiene que poder descartar la celda que esta al otro lado del rio y
+## quedarse con la siguiente.
+func best_spots_near(activity: Subsistence.Activity, centre: Vector3,
+		radius: float, limit: int = 8) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	if not grids.has(activity):
+		return out
+	var grid: PackedFloat32Array = grids[activity]
+
+	var found: Array[Dictionary] = []
+	for cell: Vector2i in cells_within(centre, radius):
+		var i := cell.y * width + cell.x
+		if i < 0 or i >= grid.size() or grid[i] <= 0.001:
+			continue
+		found.append({"pos": cell_center(cell.x, cell.y), "stock": grid[i]})
+	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["stock"]) > float(b["stock"]))
+
+	for entry: Dictionary in found:
+		if out.size() >= limit:
+			break
+		out.append(entry["pos"] as Vector3)
+	return out
+
+
+## El centro de la mejor celda de esta actividad al alcance, o el propio punto
+## si no hay ninguna. Sirve para plantar un tajo donde de verdad hay algo.
+func best_spot_near(activity: Subsistence.Activity, centre: Vector3,
+		radius: float) -> Vector3:
+	var best := best_spots_near(activity, centre, radius, 1)
+	return best[0] if not best.is_empty() else centre
+
+
 ## Las celdas que caen dentro de un radio alrededor de un punto.
 func cells_within(centre: Vector3, radius: float) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []

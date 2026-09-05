@@ -686,3 +686,113 @@ func test_sin_tope_puesto_no_hay_memoria_que_valga() -> void:
 	var sim := _sim(_banda(4))
 	sim.store.add(Materia.Kind.CARNE_SECA, 500.0)
 	assert_false(sim.food_is_capped(), "sin tope, nunca esta lleno")
+
+
+# --- la pesca cuenta en el reparto ----------------------------------------
+
+func test_la_pesca_aprieta_cuando_falta_comida() -> void:
+	# Petición literal: «añado gente a la pesca de orilla, pero no hacen nada».
+	# Una de las tres causas: las especialidades de comida que no eran el
+	# forrajeo devolvían 1.0 fijo —"satisfecha"— pasara lo que pasara, así que
+	# empatadas con la recolección perdían siempre el desempate.
+	var sim := _sim(_banda(4))
+	for speciality: int in [Profession.Speciality.ORILLA,
+			Profession.Speciality.MARISQUEO, Profession.Speciality.CAZA_MENOR,
+			Profession.Speciality.TRAMPAS, Profession.Speciality.CAZA_MAYOR]:
+		var vacio := sim._speciality_pressure(speciality as Profession.Speciality)
+		assert_true(vacio < 0.5,
+			"con la despensa vacía, %s aprieta (%.2f)" % [
+				Profession.speciality_name(speciality as Profession.Speciality),
+				vacio])
+
+	sim.store.add(Materia.Kind.PESCADO, 600.0)
+	for speciality: int in [Profession.Speciality.ORILLA,
+			Profession.Speciality.CAZA_MENOR]:
+		assert_true(sim._speciality_pressure(
+			speciality as Profession.Speciality) > 0.9,
+			"y con la despensa llena deja de apretar")
+
+
+func test_la_orilla_empatada_con_la_recoleccion_manda_gente_al_rio() -> void:
+	var people := _banda(8)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	sim.set_work_site(Subsistence.Activity.RECOLECCION, Vector3(100.0, 0.0, 100.0))
+	sim.set_work_site(Subsistence.Activity.PESCA, Vector3(140.0, 0.0, 140.0))
+
+	for person: Inhabitant in people:
+		person.set_priority(Profession.task_id(Profession.Job.RECOLECCION,
+			Profession.Speciality.FORRAJEO), 1)
+		person.set_priority(Profession.task_id(Profession.Job.RIBERA,
+			Profession.Speciality.ORILLA), 1)
+	sim.apply_priorities()
+
+	var pescadores := 0
+	for person: Inhabitant in people:
+		if person.current_speciality == Profession.Speciality.ORILLA:
+			pescadores += 1
+	assert_true(pescadores > 0,
+		"con la orilla al mismo nivel que el forrajeo, alguien va al río")
+
+
+# --- no se llega al tajo: se prueba otro, y si no, otro oficio ------------
+
+func test_sin_camino_a_ningun_tajo_se_baja_al_siguiente_oficio() -> void:
+	# El fallo de fondo: si no había ruta, la persona se quedaba OCIOSA en el
+	# campamento «en vez de salir a estrellarse contra el río» —y se quedaba
+	# así para siempre, reintentando el mismo destino imposible cada día.
+	# Medido: veinte jornadas seguidas ociosa, hambre 100, sin una salida que
+	# pintar en los rastros.
+	var people := _banda(4)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	sim.set_work_site(Subsistence.Activity.PESCA, Vector3(140.0, 0.0, 140.0))
+
+	var person := people[0]
+	person.set_priority(Profession.task_id(Profession.Job.RIBERA,
+		Profession.Speciality.ORILLA), 1)
+	person.set_priority(Profession.task_id(Profession.Job.HOGAR), 2)
+	sim.apply_priorities()
+	assert_eq(person.job, Profession.Job.RIBERA, "de salida, al río")
+
+	# Y ahora resulta que al río no se llega por ningún lado
+	sim._unreachable_today[int(Subsistence.Activity.PESCA)] = true
+	sim.apply_priorities()
+	assert_eq(person.job, Profession.Job.HOGAR,
+		"sin camino al río se baja al siguiente oficio, no se queda mirando")
+
+
+func test_lo_inalcanzable_se_reintenta_al_dia_siguiente() -> void:
+	# Una pasarela o una piragua pueden abrir el paso, así que la marca dura
+	# una jornada y no toda la partida.
+	var sim := _sim(_banda(3))
+	sim._unreachable_today[int(Subsistence.Activity.PESCA)] = true
+	sim._end_of_day()
+	assert_true(sim._unreachable_today.is_empty(),
+		"al cerrar la jornada se olvida lo que hoy no tenía camino")
+
+
+# --- «se puede llegar» lo dice quien traza los caminos --------------------
+
+func test_can_reach_le_hace_caso_a_la_rejilla() -> void:
+	# Petición de fondo: `can_reach` medía una línea recta sobre el terreno y
+	# quien traza los caminos es la rejilla. Medido en el sitio 56:
+	# `can_reach` daba verdadero para el tajo de pesca y la rejilla decía
+	# `connected(casa, río) = false` —cuatro zonas, el abrigo en una y el río
+	# en otra—. Se plantaba un tajo imposible y la banda salía a por él todos
+	# los días sin llegar nunca.
+	var sim := _sim(_banda(3))
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3(400.0, 200.0, 400.0)
+
+	var cerca := Vector3(460.0, 200.0, 400.0)
+	assert_eq(sim.can_reach(cerca), sim._navgrid().connected(
+		sim.home_position, cerca),
+		"lo que dice `can_reach` es lo que dice la rejilla")
+
+	var lejos := Vector3(1800.0, 200.0, 1800.0)
+	assert_eq(sim.can_reach(lejos), sim._navgrid().connected(
+		sim.home_position, lejos),
+		"y también para lo lejano")

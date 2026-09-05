@@ -301,7 +301,20 @@ func can_reach(world_position: Vector3, margin: float = -1.0) -> bool:
 	# Las dos cosas que cortan el paso: el agua honda y el cortado. Mirar solo
 	# el agua dejaba asignar tajos detras de una pared, y la gente salia hacia
 	# ellos para quedarse atascada.
-	return _terrain.path_is_passable(home_position, stop, has_boat, has_bridge)
+	if not _terrain.path_is_passable(home_position, stop, has_boat, has_bridge):
+		return false
+
+	# Y lo que de verdad manda: la REJILLA, que es quien traza los caminos.
+	#
+	# La linea recta de arriba dice si el terreno deja pasar por el medio; no
+	# dice si hay camino andable, que es otra cosa. Medido en el sitio 56:
+	# `can_reach` daba verdadero para el tajo de pesca y la rejilla decia
+	# `connected(casa, rio) = false` —cuatro zonas, el abrigo en una y el rio
+	# en otra—. Se plantaba un tajo al que nadie podia llegar, la gente salia
+	# a por el, no habia ruta, y se quedaba dando vueltas por el monte sin
+	# traer un solo pez. Preguntar dos cosas distintas y creerse la que no
+	# manda es como se planta un sitio de trabajo imposible.
+	return _navgrid().connected(home_position, world_position)
 
 
 func set_work_site(activity: Subsistence.Activity, world_position: Vector3) -> void:
@@ -543,12 +556,12 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 			worst = minf(worst, tool_coverage(kind as Tool.Kind))
 		return worst
 
-	# El forrajeo no produce UN material: produce comida, y la comida se mide
-	# en raciones y contra los dias de reserva que se quieran tener. Sin esto
-	# el forrajeo devolvia 1.0 fijo -"satisfecho"- igual que la leña y la
-	# cantera, los tres empataban y el desempate se lo llevaba siempre el
-	# primero de la lista.
-	if speciality == Profession.Speciality.FORRAJEO:
+	# Las de comida no producen UN material: producen comida, y la comida se
+	# mide en raciones y contra los dias de reserva que se quieran tener. Sin
+	# esto devolvian 1.0 fijo -"satisfecho"- y no ganaban un empate jamas:
+	# poner la pesca de orilla en prioridad 1 al lado de la recoleccion no
+	# mandaba a nadie al rio.
+	if ESPECIALIDADES_DE_COMIDA.has(speciality):
 		var mouths := 0.0
 		for person: Inhabitant in people:
 			mouths += person.daily_food()
@@ -579,6 +592,27 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 func speciality_output(speciality: Profession.Speciality) -> int:
 	var out := speciality_outputs(speciality)
 	return out[0] if not out.is_empty() else -1
+
+
+## Las especialidades que traen COMIDA, sea del monte, del coto o del rio.
+##
+## Van juntas porque se miden igual: contra las raciones que hay guardadas y
+## los dias de reserva que se quieren tener, no contra un material suelto. Un
+## pescador y un forrajeador compiten por lo mismo -llenar la despensa-, y el
+## reparto tiene que poder empatarlos y luego separarlos por apiñamiento.
+##
+## Faltaban todas menos el forrajeo, y por eso subir la pesca de orilla a
+## prioridad 1 no mandaba a nadie al rio: empatada con la recoleccion, la
+## pesca devolvia 1.0 -"satisfecho"- y perdia siempre.
+const ESPECIALIDADES_DE_COMIDA := [
+	Profession.Speciality.FORRAJEO,
+	Profession.Speciality.TRAMPAS,
+	Profession.Speciality.CAZA_MENOR,
+	Profession.Speciality.CAZA_MAYOR,
+	Profession.Speciality.MARISQUEO,
+	Profession.Speciality.ORILLA,
+	Profession.Speciality.ALTURA,
+]
 
 
 ## Cuantos dias de comida se quieren tener guardados cuando el jugador no ha
@@ -739,6 +773,11 @@ func _activity_has_somewhere(job: Profession.Job, activity: int) -> bool:
 		return true
 
 	var act := activity as Subsistence.Activity
+	# Si hoy no se ha podido llegar a ningun tajo de esta actividad, no la
+	# hay: el reparto tiene que bajar a esa gente a su siguiente oficio en vez
+	# de dejarla mirando el rio desde el campamento.
+	if _unreachable_today.has(int(act)):
+		return false
 	if work_sites.has(act):
 		return true
 	if not (_known_spots.get(act, []) as Array).is_empty():
@@ -2593,14 +2632,30 @@ func _send_to_work(person: Inhabitant) -> void:
 		person.state = Inhabitant.State.TRABAJANDO
 		return
 
-	var destination := _best_known_spot(person)
-	if destination == Vector3.ZERO:
-		destination = _search_target(person)
+	# Se prueban VARIOS tajos, no uno.
+	#
+	# Antes se pedia el mejor, y si no habia camino la persona se quedaba
+	# ociosa en el campamento «en vez de salir a estrellarse contra el rio»
+	# —y se quedaba asi PARA SIEMPRE, reintentando el mismo destino imposible
+	# cada tick de cada dia. Medido en el sitio 56 con gente puesta en la
+	# pesca de orilla: veinte jornadas seguidas ociosa, ruta 0, hambre 100,
+	# sin una sola salida que pintar en los rastros. Desde fuera parecia que
+	# el oficio no hacia nada, que es literalmente lo que pasaba.
+	var destination := Vector3.ZERO
+	for candidate: Vector3 in _work_candidates(person):
+		_send_to(person, candidate)
+		if not person.route.is_empty():
+			destination = candidate
+			break
 
-	_send_to(person, destination)
-	if person.route.is_empty():
-		# Al tajo no se llega: se queda en el campamento en vez de salir a
-		# estrellarse contra el rio
+	if destination == Vector3.ZERO:
+		# A ningun tajo de este oficio se llega hoy. Se apunta —para que salga
+		# en los atascos y no en el silencio— y se marca la actividad como
+		# inalcanzable, que es lo que hace que el reparto de manana lo baje a
+		# su siguiente oficio en vez de dejarlo mirando el rio desde casa.
+		_record_stuck(person, "no hay camino hasta ningun tajo de %s"
+			% Subsistence.activity_name(person.activity).to_lower())
+		_unreachable_today[int(person.activity)] = true
 		person.has_task = true
 		person.state = Inhabitant.State.OCIOSO
 		return
@@ -2613,6 +2668,48 @@ func _send_to_work(person: Inhabitant) -> void:
 		person.begin_journey(Profession.job_name(person.job as Profession.Job),
 			day, hour, home_position)
 	person.state = Inhabitant.State.YENDO
+
+
+## Cuantos tajos se prueban antes de darse por vencido. Cinco: el mejor y
+## cuatro alternativas. Probar todos seria trazar cuarenta caminos por
+## persona y jornada para nada.
+const INTENTOS_DE_TAJO := 5
+
+## Actividades a las que hoy no se ha podido llegar por ningun sitio.
+##
+## Se limpia al cerrar la jornada, DESPUES del reparto, para que el reparto
+## la vea y mande a esa gente a otra cosa; al dia siguiente se vuelve a
+## intentar, porque una pasarela o una piragua pueden haber abierto el paso.
+var _unreachable_today: Dictionary = {}
+
+
+## Los sitios adonde se puede mandar a trabajar a alguien, por orden de
+## preferencia. El primero que tenga camino se lleva la jornada.
+func _work_candidates(person: Inhabitant) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var best := _best_known_spot(person)
+	if best != Vector3.ZERO:
+		out.append(best)
+
+	for entry: Dictionary in (_known_spots.get(person.activity, []) as Array):
+		if out.size() >= INTENTOS_DE_TAJO:
+			break
+		var spot: Vector3 = entry["pos"]
+		if not out.has(spot):
+			out.append(spot)
+
+	# El sitio de reserva, que es el que se monto al fundar y no depende de
+	# lo que la banda haya llegado a conocer
+	if work_sites.has(person.activity):
+		var site: Vector3 = work_sites[person.activity]
+		if not out.has(site):
+			out.append(site)
+
+	# Y, en ultimo termino, prospectar: mejor salir a buscar que quedarse
+	var search := _search_target(person)
+	if search != Vector3.ZERO and not out.has(search):
+		out.append(search)
+	return out
 
 
 ## Parajes conocidos por actividad, ya puntuados y ordenados. Se rehace una vez
@@ -3053,6 +3150,13 @@ func _spot_has(kind: Materia.Kind, point: Vector3) -> bool:
 ## oficios se quedan como estaban.
 const HARVEST_SCALE := 5.5
 
+## Hasta donde llega el brazo desde donde se planta uno a trabajar, en metros.
+##
+## Poco mas de una celda del campo de recursos: lo justo para que quien pesca
+## desde la orilla alcance el agua y quien recoge alcance la mata de al lado,
+## sin que un cotarro rinda desde el otro lado del valle.
+const ALCANCE_DEL_TAJO := 80.0
+
 
 func _harvest(person: Inhabitant, hours: float) -> void:
 	# Fraccion de la jornada trabajada en este tick
@@ -3078,10 +3182,15 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 	# Con 0,008 un paraje bueno aguanta unas cuarenta jornadas-persona antes de
 	# notarse, que es lo que da tiempo a que el jugador vea el rendimiento
 	# caer y reaccione.
+	# De la mejor celda AL ALCANCE, no de la de debajo de los pies. Se pesca
+	# desde la ribera -una celda de tierra- y el pescado esta en la celda de
+	# agua de al lado: mirando solo la de debajo, un pescador volvia de vacio
+	# todos los dias en un rio lleno de peces. Vale igual para lo demas:
+	# nadie trabaja de pie sobre un punto, se trabaja un trecho.
 	var left := 1.0
 	if field:
-		left = field.deplete_at(person.activity, person.position,
-			fraction * DEPLETION_PER_DAY)
+		left = field.deplete_around(person.activity, person.position,
+			ALCANCE_DEL_TAJO, fraction * DEPLETION_PER_DAY)
 
 	# El filo disponible. Un cazador sin azagaya sigue trayendo algo -trampa,
 	# carrona y caza menor-, pero poco; quien recolecta sin cesto trae lo que
@@ -3875,6 +3984,11 @@ func _end_of_day() -> void:
 	# o un crio que ha crecido, entran solos en los trabajos que ya tenian
 	# marcados sin que el jugador tenga que acordarse.
 	apply_priorities()
+
+	# Y AHORA se olvida lo que hoy no tenia camino. El reparto de arriba
+	# acaba de verlo -para eso esta-, y manana se vuelve a intentar: una
+	# pasarela o una piragua pueden haber abierto el paso mientras tanto.
+	_unreachable_today.clear()
 
 	_note_daily_state()
 

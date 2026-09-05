@@ -409,8 +409,9 @@ func _start_settlement() -> void:
 		# Se pesca y se coge agua DESDE la orilla. El punto que sale de la
 		# mascara cae en mitad del cauce, asi que primero se arrima a la ribera
 		# y luego se comprueba si se llega.
-		var spot: Vector3 = _nearest_shore(entry["position"])
-		if not sim.can_reach(spot):
+		var spot := _best_work_spot(entry["activity"] as Subsistence.Activity,
+			_nearest_shore(entry["position"]))
+		if spot == Vector3.ZERO:
 			descartados += 1
 			continue
 		entry["position"] = spot
@@ -601,6 +602,34 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 		found.append({"activity": Subsistence.Activity.RECOLECCION, "position": best_gather,
 			"label": "Recolección"})
 	return found
+
+
+## El mejor punto para plantar un tajo de esta actividad: el que MAS tiene y
+## al que ADEMAS se puede llegar. Vector3.ZERO si no hay ninguno.
+##
+## Los sitios de trabajo salian de la forma del terreno —ladera suave,
+## meandro, barra de cantos— sin preguntarle nada al campo de recursos ni a
+## la rejilla de caminos. Con eso, el tajo de pesca del sitio 56 caia en una
+## celda con abundancia 0,000 —habiendo 156 celdas de rio con pesca en el
+## mismo mapa— y encima en otra zona de la rejilla, o sea sin camino: la
+## banda salia a pescar, no llegaba, se ponia a prospectar por el monte y
+## volvia de vacio todos los dias de la partida.
+##
+## Ahora se pregunta a los dos: se ordenan las celdas que de verdad tienen
+## recurso cerca y se coge la primera a la que se pueda ir andando.
+func _best_work_spot(activity: Subsistence.Activity, near: Vector3) -> Vector3:
+	var candidates: Array[Vector3] = []
+	if sim.field:
+		for rich: Vector3 in sim.field.best_spots_near(activity, near, 400.0, 12):
+			candidates.append(rich)
+	candidates.append(near)
+
+	for candidate: Vector3 in candidates:
+		var spot := _nearest_shore(candidate)
+		spot.y = terrain.get_height_at(spot)
+		if sim.can_reach(spot):
+			return spot
+	return Vector3.ZERO
 
 
 ## Los postes azules que marcaban «aquí trabaja la gente» se han ido: eran
