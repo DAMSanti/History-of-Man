@@ -11,7 +11,7 @@ extends SceneTree
 ## en pantalla o no.
 
 const OUT := "user://prop_sheet.png"
-const STEP := 3.0
+const STEP := 2.2
 
 
 func _init() -> void:
@@ -77,8 +77,8 @@ func _init() -> void:
 	var camera := Camera3D.new()
 	camera.far = 500.0
 	world.add_child(camera)
-	camera.global_position = Vector3(0.0, 2.6, span * 0.62 + 6.0)
-	camera.look_at(Vector3(0.0, 1.0, 0.0), Vector3.UP)
+	camera.global_position = Vector3(0.0, 1.6, span * 0.40 + 3.0)
+	camera.look_at(Vector3(0.0, 0.7, 0.0), Vector3.UP)
 	camera.make_current()
 
 	for i in range(20):

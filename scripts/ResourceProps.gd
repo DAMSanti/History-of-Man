@@ -85,6 +85,7 @@ func _catalogue() -> Array[Dictionary]:
 			"kind": Materia.Kind.FRUTO_SECO,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "mata",
+			"share": 0.35,
 			# El avellano hace mancha en ladera suave y suelo hondo, no en el
 			# roquedo ni en la vega encharcada.
 			"habitat": {"slope": Vector2(0.02, 0.35), "humidity": Vector2(0.35, 0.95)},
@@ -96,6 +97,7 @@ func _catalogue() -> Array[Dictionary]:
 			"kind": Materia.Kind.FIBRA,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "helecho",
+			"share": 0.70,
 			# Helecho y zarza: humedad y media sombra, y no aguantan pendiente
 			# fuerte porque necesitan suelo.
 			"habitat": {"slope": Vector2(0.0, 0.30), "humidity": Vector2(0.45, 1.0)},
@@ -159,6 +161,7 @@ func _catalogue() -> Array[Dictionary]:
 			"kind": Materia.Kind.BAYA,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "arbusto",
+			"share": 0.35,
 			"habitat": {"slope": Vector2(0.05, 0.40), "humidity": Vector2(0.30, 0.85)},
 			"per_cell": 3, "sway": 0.3,
 		},
@@ -168,6 +171,7 @@ func _catalogue() -> Array[Dictionary]:
 			"kind": Materia.Kind.RAIZ,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "roseta",
+			"share": 0.30,
 			"habitat": {"slope": Vector2(0.0, 0.20), "humidity": Vector2(0.40, 0.95)},
 			"per_cell": 4, "sway": 0.25,
 		},
@@ -186,6 +190,7 @@ func _catalogue() -> Array[Dictionary]:
 			"kind": Materia.Kind.RESINA,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "conifera",
+			"share": 0.60,
 			"habitat": {"slope": Vector2(0.05, 0.45), "height": Vector2(0.25, 0.75)},
 			"per_cell": 2, "sway": 0.15, "rarity": 0.4,
 		},
@@ -230,9 +235,27 @@ func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	_load_library()
 
 	var catalogue := _catalogue()
-	_budget = maxi(200, MAX_TOTAL / maxi(catalogue.size(), 1))
 
+	# El cupo NO se reparte a partes iguales, porque el coste tampoco lo es.
+	#
+	# Medido con la bisección de `PropVisibleProbe`: la raíz cuesta 4,3 ms y la
+	# resina 1,2, y sin embargo la resina dibuja 1,98 MILLONES de triángulos y la
+	# raíz cuatrocientos mil. O sea que lo que pesa no es la geometría sino el
+	# RELLENO: una hoja con alfa cerca de la cámara cubre mucha pantalla, no tiene
+	# early-Z y se paga entera en fragmento.
+	#
+	# Por eso las plantas de hoja llevan una porción menor. Y pueden permitírselo:
+	# son grandes -de un metro para arriba- y se leen aunque estén ralas, que es
+	# justo lo contrario de un canto.
+	# La porción se aplica sobre el cupo a partes iguales, así que sólo puede
+	# RESTAR. El primer intento normalizaba por la suma de porciones, y eso hacía
+	# que las materias «baratas» subieran de mil a mil doscientas: el fotograma
+	# pasó de 35 a 56 ms. Y encima «barato» lo había medido en una cámara donde
+	# el pasto ni se dibujaba, así que el dato no valía para repartir nada.
+	var even := maxi(120, MAX_TOTAL / maxi(catalogue.size(), 1))
 	for entry: Dictionary in catalogue:
+		_budget = maxi(120, int(float(even)
+			* minf(float(entry.get("share", 1.0)), 1.0)))
 		_build_layer(entry)
 
 
@@ -377,7 +400,12 @@ func _build_layer(entry: Dictionary) -> void:
 			by_tile[tile] = ([] as Array[Transform3D])
 		(by_tile[tile] as Array[Transform3D]).append(placement)
 
-	var reach := clampf(real_height * 350.0, 130.0, 900.0)
+	# 220 metros por metro de talla, no 350. Medido: con 350 el sembrado se
+	# comía once milisegundos, y a 130 m una roseta de treinta centímetros mide
+	# un píxel. Dibujarla ahí es pagar geometría por nada, y más cuando el
+	# follaje con alfa no se deja simplificar -la roseta se queda en 15.962
+	# triángulos en su nivel más basto-.
+	var reach := clampf(real_height * 220.0, 70.0, 900.0)
 	var nodes: Array[MultiMeshInstance3D] = []
 
 	for tile: Vector2i in by_tile:

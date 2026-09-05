@@ -62,6 +62,67 @@ func _init() -> void:
 			node.visibility_range_end,
 			str(node.global_position.round()), str(first.round())])
 
+	# ¿Y cuántas caen cerca del poblado? Que una materia esté sembrada no quiere
+	# decir que se vea: si su hábitat la manda toda al otro extremo del valle,
+	# el jugador no la encuentra nunca. Esto mide reparto, no existencia.
+	var terrain: Node = _first(demo, "TerrainGenerator")
+	var home := Vector3(2048.0, 0.0, 2048.0)
+	if terrain and terrain.has_method("get_height_at"):
+		home.y = terrain.get_height_at(home)
+
+	var near: Dictionary = {}
+	var closest: Dictionary = {}
+	for node: MultiMeshInstance3D in layers:
+		var kind := node.name.substr(0, node.name.rfind("_", node.name.rfind("_") - 1))
+		var multi := node.multimesh
+		for i in range(multi.instance_count):
+			var world: Vector3 = node.global_position 				+ multi.get_instance_transform(i).origin
+			var flat := Vector2(world.x - home.x, world.z - home.z).length()
+			near[kind] = int(near.get(kind, 0)) + (1 if flat < 300.0 else 0)
+			if flat < float(closest.get(kind, 1e9)):
+				closest[kind] = flat
+
+	print("")
+	print("=== REPARTO RESPECTO AL POBLADO ===")
+	print("%-26s %10s %14s" % ["materia", "a <300 m", "la mas cercana"])
+	for kind: String in near:
+		print("%-26s %10d %11.0f m" % [kind, near[kind], closest[kind]])
+
+	# Bisección por materia: se apaga una y se mide. Es la única forma de saber
+	# cuál se está comiendo el fotograma, porque el coste no se reparte a partes
+	# iguales -un follaje con alfa no se deja simplificar y arrastra su nivel más
+	# basto entero-.
+	var kinds: Dictionary = {}
+	for node: MultiMeshInstance3D in layers:
+		var kind := node.name.substr(0, node.name.rfind("_", node.name.rfind("_") - 1))
+		if not kinds.has(kind):
+			kinds[kind] = ([] as Array[MultiMeshInstance3D])
+		(kinds[kind] as Array[MultiMeshInstance3D]).append(node)
+
+	var camera := Camera3D.new()
+	camera.far = 20000.0
+	demo.add_child(camera)
+	camera.global_position = home + Vector3(0.0, 75.0, 130.0)
+	camera.look_at(home, Vector3.UP)
+	camera.make_current()
+	var vp := root.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(vp, true)
+
+	var base := await _cost(vp)
+	print("")
+	print("=== QUÉ CUESTA CADA MATERIA (camara de juego) ===")
+	print("todo encendido            %5.1f ms · %d triangulos" % [base.x, int(base.y)])
+	for kind: String in kinds:
+		for node: MultiMeshInstance3D in kinds[kind]:
+			node.visible = false
+		var without := await _cost(vp)
+		for node: MultiMeshInstance3D in kinds[kind]:
+			node.visible = true
+		print("%-25s %5.1f ms · ahorra %4.1f ms y %d triangulos" % [
+			"sin " + kind.replace("Recurso_", ""), without.x,
+			base.x - without.x, int(base.y - without.y)])
+	camera.queue_free()
+
 	# Y la prueba que decide: apagar el recorte de visibilidad. Si con esto
 	# aparecen, es que el recorte los estaba tapando; si no, es que no están.
 	var target := Vector3.INF
@@ -83,6 +144,25 @@ func _init() -> void:
 
 	print("capturas en %s" % ProjectSettings.globalize_path("user://"))
 	quit()
+
+
+func _first(root_node: Node, type_name: String) -> Node:
+	for child in root_node.get_children():
+		var script: Variant = child.get_script()
+		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
+			return child
+	return null
+
+
+func _cost(vp: RID) -> Vector2:
+	for i in range(20):
+		await process_frame
+	var gpu := 0.0
+	for i in range(40):
+		await process_frame
+		gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
+	return Vector2(gpu / 40.0, float(RenderingServer.get_rendering_info(
+		RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)))
 
 
 func _collect(node: Node, out: Array[MultiMeshInstance3D]) -> void:

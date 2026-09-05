@@ -156,19 +156,94 @@ func _load_mesh(path: String) -> ArrayMesh:
 	var scene := doc.generate_scene(state)
 	if scene == null:
 		return null
-	return _first_mesh(scene)
+	return _merge_meshes(scene)
 
 
-func _first_mesh(node: Node) -> ArrayMesh:
+## Junta TODAS las mallas del glTF en una, cada una como su propia superficie.
+##
+## Antes se cogía la primera y ya. Y funciona con una roca, que viene de una
+## pieza, pero no con una planta: un arbusto llega partido en ramas y hoja
+## -porque la hoja lleva alfa y necesita su propio material-, así que quedarse
+## con la primera dejaba las ramas peladas. `shrub_02` salía como dos palitos en
+## vez de un matorral de metro y pico, y la roseta no salía casi.
+##
+## Cada malla se trae con la transformación del nodo aplicada, porque en un glTF
+## las piezas suelen estar colocadas por el nodo y no por los vértices.
+func _merge_meshes(scene: Node) -> ArrayMesh:
+	# Pares (malla, transformación acumulada). La transformación se acumula al
+	# bajar y NO se pide con `global_transform`: la escena que devuelve
+	# `generate_scene` no está dentro del árbol, y ahí `global_transform` avisa y
+	# devuelve la identidad, con lo que las piezas de un modelo se apilarían
+	# todas en el origen.
+	var parts: Array = []
+	_collect_meshes(scene, Transform3D.IDENTITY, parts)
+	if parts.is_empty():
+		return null
+
+	# Se agrupa POR MATERIAL y no una superficie por pieza. `moss_01` llega en
+	# doce mallas y `pine_sapling_small` en seis, pero casi todas comparten
+	# material: dejarlas sueltas daba doce llamadas de dibujado por cada zona
+	# sembrada, o sea más de setecientas sólo para el musgo. Fundidas por
+	# material son una.
+	var by_material: Dictionary = {}
+	var order: Array = []
+	for part: Dictionary in parts:
+		var mesh: ArrayMesh = part["mesh"]
+		if mesh == null:
+			continue
+		var local: Transform3D = part["xform"]
+		for surface in range(mesh.get_surface_count()):
+			var arrays := mesh.surface_get_arrays(surface)
+			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			if verts.is_empty():
+				continue
+			if local != Transform3D.IDENTITY:
+				for i in range(verts.size()):
+					verts[i] = local * verts[i]
+				arrays[Mesh.ARRAY_VERTEX] = verts
+				var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+				if not normals.is_empty():
+					for i in range(normals.size()):
+						normals[i] = (local.basis * normals[i]).normalized()
+					arrays[Mesh.ARRAY_NORMAL] = normals
+
+			var material := mesh.surface_get_material(surface)
+			var key := material.get_instance_id() if material else 0
+			if not by_material.has(key):
+				by_material[key] = {"material": material, "tool": SurfaceTool.new()}
+				(by_material[key]["tool"] as SurfaceTool).begin(
+					Mesh.PRIMITIVE_TRIANGLES)
+				order.append(key)
+			var tool: SurfaceTool = by_material[key]["tool"]
+			tool.append_from(_as_mesh(arrays), 0, Transform3D.IDENTITY)
+
+	var merged := ArrayMesh.new()
+	for key: Variant in order:
+		var tool: SurfaceTool = by_material[key]["tool"]
+		tool.index()
+		merged = tool.commit(merged)
+		merged.surface_set_material(merged.get_surface_count() - 1,
+			by_material[key]["material"])
+	return merged if merged.get_surface_count() > 0 else null
+
+
+## `SurfaceTool.append_from` quiere una malla, no un array de arrays.
+func _as_mesh(arrays: Array) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _collect_meshes(node: Node, above: Transform3D, out: Array) -> void:
+	var here := above
+	if node is Node3D:
+		here = above * (node as Node3D).transform
 	if node is MeshInstance3D:
 		var mesh := (node as MeshInstance3D).mesh
 		if mesh is ArrayMesh:
-			return mesh as ArrayMesh
+			out.append({"mesh": mesh as ArrayMesh, "xform": here})
 	for child in node.get_children():
-		var found := _first_mesh(child)
-		if found:
-			return found
-	return null
+		_collect_meshes(child, here, out)
 
 
 ## Reconstruye la malla como `ImporterMesh` y le pide los niveles de detalle.
@@ -190,9 +265,13 @@ func _make_lods(source: ArrayMesh) -> ArrayMesh:
 	var levels := importer.get_surface_lod_count(0)
 	if levels <= 0:
 		return null
-	var finest: PackedInt32Array = importer.get_surface_lod_indices(0, levels - 1)
-	print("   %d niveles, el mas basto de %d triangulos" % [
-		levels, finest.size() / 3])
+	var coarse := 0
+	for surface in range(importer.get_surface_count()):
+		var last := importer.get_surface_lod_count(surface) - 1
+		if last >= 0:
+			coarse += importer.get_surface_lod_indices(surface, last).size() / 3
+	print("   %d superficies · %d niveles · el mas basto de %d triangulos" % [
+		importer.get_surface_count(), levels, coarse])
 	return importer.get_mesh()
 
 
