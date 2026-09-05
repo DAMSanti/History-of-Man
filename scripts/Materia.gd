@@ -30,6 +30,7 @@ enum Kind {
 	CARNE,        ## Fresca. Se pudre.
 	CARNE_SECA,   ## Curada al humo. Aguanta estaciones.
 	PESCADO,
+	PESCADO_SECO, ## Ahumado en el secadero. Es lo que hace del remonte una despensa
 	MARISCO,      ## Con concha: pesa y abulta mucho para lo que alimenta
 	# Materia prima
 	PIEDRA,       ## Cuarcita y sílex en bruto
@@ -138,6 +139,14 @@ const CATALOGUE := {
 		"name": "Pescado", "unit": "ración", "kg": 0.5, "litros": 0.5,
 		"dias": 3, "alimenta": 1.0,
 		"desc": "Aún más perecedero que la carne.",
+	},
+	Kind.PESCADO_SECO: {
+		"name": "Pescado seco", "unit": "ración", "kg": 0.2, "litros": 0.2,
+		"dias": 200, "alimenta": 1.0,
+		"desc": "Abierto, sin espina y colgado sobre el humo. Un salmón "
+			+ "fresco dura tres días; ahumado, media vuelta al año. Es la "
+			+ "razón entera de plantarse en el río cuando sube el remonte: "
+			+ "no se pesca para comer hoy, se pesca para comer en enero.",
 	},
 	Kind.MARISCO: {
 		"name": "Marisco", "unit": "ración", "kg": 2.4, "litros": 3.2,

@@ -91,8 +91,30 @@ func _run() -> void:
 			sim._process(step)
 	print("--- tras %d dias ---" % DAYS)
 	_report(sim, elegidos)
-	print("  pescado en el abrigo: %.1f" % sim.store.amount(Materia.Kind.PESCADO))
+	print("  pescado fresco %.1f · pescado seco %.1f · raciones totales %.1f" % [
+		sim.store.amount(Materia.Kind.PESCADO),
+		sim.store.amount(Materia.Kind.PESCADO_SECO),
+		sim.store.food_rations()])
+	print("  secadero levantado: %s" % sim.camp_built.get(
+		CampProjects.Kind.SECADERO, false))
 	print("  atascos: %s" % JSON.stringify(sim.stuck_tally))
+	print("  cargas perdidas: %d" % sim.lost_loads)
+	print("  produccion diaria de pescado que cuenta la banda: %.2f"
+		% sim.production_of(Materia.Kind.PESCADO))
+	print("=== LO QUE DICE CADA SALIDA DE PESCA ===")
+	for person: Inhabitant in elegidos:
+		if person.activity != Subsistence.Activity.PESCA:
+			continue
+		print("  --- %s (lleva encima: %s) ---" % [person.given_name,
+			JSON.stringify(person.load)])
+		var contadas := 0
+		for i in range(person.journeys.size() - 1, -1, -1):
+			if contadas >= 10:
+				break
+			contadas += 1
+			var trip: Dictionary = person.journeys[i]
+			print("      d%d %-12s :: %s" % [int(trip["day"]),
+				String(trip["kind"]), String(trip["outcome"])])
 
 	print("=== DOS JORNADAS, HORA A HORA, DE UN PESCADOR ===")
 	var quien: Inhabitant = null

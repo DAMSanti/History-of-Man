@@ -124,7 +124,18 @@ func days_of_food(mouths_per_day: float) -> float:
 ## No se pierde de golpe al cumplir la fecha: empieza a estropearse a partir de
 ## la mitad de su vida, que es como funciona de verdad y además da margen al
 ## jugador para reaccionar antes de perderlo todo.
+## Lo que se ha echado a perder en la ultima jornada, material por material.
+##
+## Se guarda porque si no NO SE VE. Queja literal: «los pescadores pescan pero
+## no esta subiendo el pescado al almacen». Estaba entrando y pudriendose a la
+## vez —el pescado fresco aguanta tres dias— y desde fuera solo se veia un
+## numero que no crecia. Un monton que no sube porque se pudre y un monton
+## que no sube porque nadie lo trae se leen igual, y no son lo mismo.
+var spoiled: Dictionary = {}
+
+
 func age(days: int) -> void:
+	spoiled.clear()
 	for kind: int in contents.keys().duplicate():
 		var k := kind as Materia.Kind
 		var life := Materia.shelf_life(k)
@@ -144,6 +155,8 @@ func age(days: int) -> void:
 		var keep := 1.0 - spoiled_fraction
 		var had := amount(k)
 		var left := had * keep
+		if had - left > 0.0001:
+			spoiled[k] = had - left
 		if left <= 0.0001:
 			contents.erase(k)
 			ages.erase(k)

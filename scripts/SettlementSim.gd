@@ -1715,8 +1715,8 @@ func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
 
 	# Se prefiere lo que menos pesa por racion y mas aguanta: para llevar
 	# encima varios dias, la carne seca y el fruto son lo unico razonable
-	for kind: int in [Materia.Kind.CARNE_SECA, Materia.Kind.FRUTO_SECO,
-			Materia.Kind.GRASA]:
+	for kind: int in [Materia.Kind.CARNE_SECA, Materia.Kind.PESCADO_SECO,
+			Materia.Kind.FRUTO_SECO, Materia.Kind.GRASA]:
 		if needed <= 0.0:
 			break
 		var k := kind as Materia.Kind
@@ -2618,17 +2618,56 @@ func _work_on_project(person: Inhabitant, fraction: float) -> void:
 ## Cuanto ahuma un dia entero de trabajo al frente del secadero, a rendimiento
 ## perfecto. Una persona no seca una res al dia: es un goteo constante,
 ## limitado sobre todo por cuanta carne fresca vaya llegando de la caza.
-const DRY_PER_DAY := 4.0
+## Raciones que ahuma una jornada entera de alguien en el hogar.
+##
+## Eran cuatro, y cuatro no es un secadero: es un pincho. Medido en el sitio
+## 56 con tres personas en la pesca de orilla, la banda descargaba 53
+## raciones de pescado al dia y el almacen se quedaba clavado en 124, porque
+## el pescado fresco aguanta TRES DIAS y se pudria mas deprisa de lo que se
+## podia curar. El jugador lo veia como «pescan pero no sube el pescado».
+##
+## Veinticuatro es lo que da de si un bastidor sobre el hogar con alguien
+## atendiendolo la jornada entera: da para el remonte de un rio, que es
+## justo lo que tiene que dar.
+const DRY_PER_DAY := 24.0
 
 
+## Lo que se cura y en que se convierte. La carne en cecina, el pescado en
+## pescado seco: no es lo mismo y no se llama igual.
+const CURADO := {
+	Materia.Kind.PESCADO: Materia.Kind.PESCADO_SECO,
+	Materia.Kind.CARNE: Materia.Kind.CARNE_SECA,
+}
+
+
+## Ahuma lo que se pudre: carne y PESCADO.
+##
+## El secadero solo curaba carne, y el pescado —que aguanta tres dias, uno
+## menos que la carne— se perdia entero. Ahumar el remonte del salmon es la
+## razon de plantarse en el rio: no se pesca para comer hoy, se pesca para
+## comer en enero. Se cura primero lo que antes se pudre, que es lo mismo que
+## se come primero.
 func _dry_meat(fraction: float, skill: float) -> void:
 	var capacity := DRY_PER_DAY * fraction * skill
-	var available := store.amount(Materia.Kind.CARNE)
-	var dried := minf(capacity, available)
-	if dried <= 0.0:
+	if capacity <= 0.0:
 		return
-	store.take(Materia.Kind.CARNE, dried)
-	store.add(Materia.Kind.CARNE_SECA, dried)
+
+	var fresh: Array[int] = []
+	for kind: int in CURADO:
+		fresh.append(kind)
+	fresh.sort_custom(func(a: int, b: int) -> bool:
+		return Materia.shelf_life(a as Materia.Kind) 			< Materia.shelf_life(b as Materia.Kind))
+
+	for kind: int in fresh:
+		if capacity <= 0.0:
+			break
+		var raw := kind as Materia.Kind
+		var dried := minf(capacity, store.amount(raw))
+		if dried <= 0.0:
+			continue
+		store.take(raw, dried)
+		store.add(CURADO[raw] as Materia.Kind, dried)
+		capacity -= dried
 
 
 ## Manda a alguien a su tajo, o a buscarlo si no sabe donde esta.

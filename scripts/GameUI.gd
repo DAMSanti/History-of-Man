@@ -769,8 +769,13 @@ func show_store() -> void:
 			continue
 		var aged := float(sim.store.ages.get(kind, 0.0))
 		var left := maxi(life - int(aged), 0)
-		perishing.append("%s: %d días antes de echarse a perder"
-			% [Materia.material_name(kind), left])
+		# Y cuánto se ha ido AYER, que es la cifra que contesta «¿por qué no
+		# sube esto?». Un montón que no crece porque se pudre y un montón que
+		# no crece porque nadie lo trae se leen igual, y no son lo mismo.
+		var lost := float(sim.store.spoiled.get(kind, 0.0))
+		var tail := "" if lost < 0.05 else "  ·  ayer se echaron a perder %.1f" % lost
+		perishing.append("%s: %d días antes de echarse a perder%s"
+			% [Materia.material_name(kind), left, tail])
 	if perishing.is_empty():
 		_text(body, "Nada que se estropee de momento.", true)
 	else:
@@ -778,8 +783,10 @@ func show_store() -> void:
 			_text(body, "  · " + line, true)
 
 	if not sim.camp_built.get(CampProjects.Kind.SECADERO, false):
-		_text(body, "Sin secadero, la carne dura cuatro días. Secarla la lleva "
-			+ "a ciento ochenta: es el mejor negocio del Paleolítico.", true)
+		_notice(body, "Sin secadero, la carne dura cuatro días y el pescado "
+			+ "TRES. Ahumarlos los lleva a medio año: mientras no lo levantes, "
+			+ "una jornada buena de pesca se pudre antes de comérsela.",
+			UISkin.OCHRE)
 
 
 ## Aviso en color, con su filete a la izquierda. Se lee de un vistazo sin

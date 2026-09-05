@@ -24,6 +24,7 @@ enum Glyph {
 	ESPIRAL,    ## Caracol
 	CARNE,      ## Tajada con veta
 	TIRAS,      ## Tres tiras colgando: carne seca
+	PEZ_SECO,   ## Pez abierto en mariposa y colgado del humo
 	PEZ,        ## Cuerpo y cola
 	CONCHA,     ## Abanico con nervios
 	CANTO,      ## Polígono angular
@@ -79,6 +80,7 @@ const LOOK := {
 	Materia.Kind.CARNE: [Glyph.CARNE, Color(0.70, 0.28, 0.26)],
 	Materia.Kind.CARNE_SECA: [Glyph.TIRAS, Color(0.51, 0.24, 0.18)],
 	Materia.Kind.PESCADO: [Glyph.PEZ, Color(0.46, 0.60, 0.68)],
+	Materia.Kind.PESCADO_SECO: [Glyph.PEZ_SECO, Color(0.72, 0.58, 0.40)],
 	Materia.Kind.MARISCO: [Glyph.CONCHA, Color(0.66, 0.63, 0.57)],
 	Materia.Kind.PIEDRA: [Glyph.CANTO, Color(0.58, 0.57, 0.53)],
 	Materia.Kind.SILEX: [Glyph.CANTO, Color(0.40, 0.47, 0.55)],
@@ -236,6 +238,20 @@ func _draw() -> void:
 			_line(Vector2(0.50, 0.84), Vector2(0.28, 0.32), s, dark, 0.045)
 			_line(Vector2(0.50, 0.84), Vector2(0.50, 0.22), s, dark, 0.045)
 			_line(Vector2(0.50, 0.84), Vector2(0.72, 0.32), s, dark, 0.045)
+		Glyph.PEZ_SECO:
+			# Abierto en mariposa y colgado de una vara: asi se ahuma, y asi
+			# se distingue de un pez entero de un vistazo
+			_line(Vector2(0.08, 0.16), Vector2(0.92, 0.16), s, dark, 0.055)
+			_line(Vector2(0.50, 0.16), Vector2(0.50, 0.30), s, dark, 0.04)
+			_poly([Vector2(0.50, 0.28), Vector2(0.22, 0.52), Vector2(0.34, 0.86),
+				Vector2(0.50, 0.92)], s, tint)
+			_poly([Vector2(0.50, 0.28), Vector2(0.78, 0.52), Vector2(0.66, 0.86),
+				Vector2(0.50, 0.92)], s, tint.darkened(0.18))
+			# La espina, que es lo que queda a la vista al abrirlo
+			_line(Vector2(0.50, 0.30), Vector2(0.50, 0.90), s, dark, 0.035)
+			for i in range(3):
+				var y := 0.44 + float(i) * 0.16
+				_line(Vector2(0.34, y), Vector2(0.66, y), s, dark, 0.022)
 		Glyph.CANTO:
 			_poly([Vector2(0.20, 0.44), Vector2(0.42, 0.16), Vector2(0.78, 0.30),
 				Vector2(0.84, 0.64), Vector2(0.52, 0.86), Vector2(0.20, 0.72)], s, tint)
