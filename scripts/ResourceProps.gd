@@ -198,7 +198,7 @@ func _catalogue() -> Array[Dictionary]:
 			# coge la chispa.
 			"kind": Materia.Kind.YESCA,
 			"from": Subsistence.Activity.RECOLECCION,
-			"model": "musgo",
+			"model": "yesca",
 			"habitat": {"slope": Vector2(0.0, 0.35), "humidity": Vector2(0.55, 1.0)},
 			"per_cell": 3, "sway": 0.0,
 		},

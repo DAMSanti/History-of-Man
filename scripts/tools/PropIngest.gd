@@ -90,6 +90,7 @@ func _init() -> void:
 				print("   «%s» de %s · %s" % [credit.get("title", "?"),
 					credit.get("author", "?"), credit.get("license", "?")])
 
+		_grade(with_lods, PropModels.grade_of(key))
 		_compress_textures(with_lods)
 		library.meshes[key] = with_lods
 		library.scales[key] = factor
@@ -396,6 +397,57 @@ func _read_credit(path: String) -> Dictionary:
 		if (extras as Dictionary).has(key):
 			out[key] = (extras as Dictionary)[key]
 	return out
+
+
+## Gradúa el color del albedo, horneándolo en la propia textura.
+##
+## Se hace AQUI y no en un shader por dos razones. Una, que en ejecución no
+## cuesta nada: la textura ya viene graduada. Y dos, que los props usan el
+## material que trae cada modelo -algunos con alfa para la hoja-, así que meterles
+## un shader propio obligaría a replicar ese material a mano y a mantenerlo.
+##
+## Se desatura hacia el gris de la misma luminancia y despues se tinta, en ese
+## orden. Al reves el tinte se diluiria justo en las piezas que mas hay que
+## corregir, que es lo que ya se aprendio con las capas del terreno.
+##
+## Sólo toca el ALBEDO. La normal, la rugosidad y la oclusión describen la
+## superficie, no su color, y tocarlas sería estropear el material.
+func _grade(mesh: ArrayMesh, grade: Dictionary) -> void:
+	var tint: Color = grade["tint"]
+	var sat: float = grade["sat"]
+	if tint == Color.WHITE and is_equal_approx(sat, 1.0):
+		return
+
+	for surface in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(surface)
+		if not (material is BaseMaterial3D):
+			continue
+		var base := material as BaseMaterial3D
+		var texture := base.get_texture(BaseMaterial3D.TEXTURE_ALBEDO)
+		if texture == null:
+			continue
+		var image := texture.get_image()
+		if image == null or image.is_compressed():
+			continue
+		if image.get_format() != Image.FORMAT_RGBA8:
+			image.convert(Image.FORMAT_RGBA8)
+
+		var data := image.get_data()
+		var count := data.size() / 4
+		for i in range(count):
+			var o := i * 4
+			var r := float(data[o]) / 255.0
+			var g := float(data[o + 1]) / 255.0
+			var b := float(data[o + 2]) / 255.0
+			var lum := 0.299 * r + 0.587 * g + 0.114 * b
+			data[o] = int(clampf((lum + (r - lum) * sat) * tint.r, 0.0, 1.0) * 255.0)
+			data[o + 1] = int(clampf((lum + (g - lum) * sat) * tint.g, 0.0, 1.0) * 255.0)
+			data[o + 2] = int(clampf((lum + (b - lum) * sat) * tint.b, 0.0, 1.0) * 255.0)
+
+		var graded := Image.create_from_data(image.get_width(),
+			image.get_height(), image.has_mipmaps(), Image.FORMAT_RGBA8, data)
+		base.set_texture(BaseMaterial3D.TEXTURE_ALBEDO,
+			ImageTexture.create_from_image(graded))
 
 
 ## Comprime a BC7 las texturas que trae el modelo.
