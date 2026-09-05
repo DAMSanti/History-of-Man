@@ -197,3 +197,67 @@ func test_todo_lo_que_saca_la_pesca_sale_en_la_ficha_del_paraje() -> void:
 				"%s se saca pescando, así que tiene que estar en el surtido "
 					% Materia.material_name(kind as Materia.Kind)
 					+ "de la pesca")
+
+
+# --- el aparejo existe de verdad para el taller y para el almacén ---------
+
+func test_cada_aparejo_lo_sabe_hacer_alguien() -> void:
+	# Petición literal: «no aparece la nasa, el anzuelo, la red o el arpón en
+	# el utillaje; añádelo tanto a la lista de objetos fabricados por los
+	# manufactureros como a la lista de almacén».
+	for method_key: int in Fishing.ORDER:
+		var tool := Fishing.tool_of(method_key as Fishing.Method)
+		if tool < 0:
+			continue
+		var maker := -1
+		for speciality: int in SettlementSim.SPECIALITY_MAKES:
+			if (SettlementSim.SPECIALITY_MAKES[speciality] as Array).has(tool):
+				maker = speciality
+				break
+		assert_true(maker >= 0,
+			"%s tiene que salir de algún taller" % Tool.kind_name(tool as Tool.Kind))
+
+
+func test_cada_aparejo_tiene_receta_desgaste_e_icono() -> void:
+	# Sin receta no se fabrica, sin desgaste no se repone nunca y sin icono
+	# la fila del almacén sale con el dibujo de una piedra cualquiera.
+	for method_key: int in Fishing.ORDER:
+		var tool_key := Fishing.tool_of(method_key as Fishing.Method)
+		if tool_key < 0:
+			continue
+		var tool := tool_key as Tool.Kind
+		assert_false(Tool.recipe(tool).is_empty(),
+			"%s se hace con algo" % Tool.kind_name(tool))
+		assert_true(Tool.wear_per_day(tool) > 0.0,
+			"%s se gasta con el uso" % Tool.kind_name(tool))
+		assert_true(MateriaIcon.TOOL_LOOK.has(int(tool)),
+			"%s tiene icono propio" % Tool.kind_name(tool))
+		assert_true(Tool.KIND_NAMES.has(int(tool)),
+			"%s tiene nombre" % Tool.kind_name(tool))
+
+
+func test_el_aparejo_no_se_pide_hasta_saber_usarlo() -> void:
+	# Y al reves: no tiene sentido que el taller trence redes cuando la banda
+	# ni sabe calarlas. Se pide lo de la mejor manera que se SEPA.
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260903
+	for i in range(6):
+		var person := Inhabitant.create(i, Vector3.ZERO, rng)
+		person.age_years = 30
+		person.age_group = Inhabitant.Age.ADULTO
+		sim.people.append(person)
+		Profession.assign(Profession.Job.RIBERA, person,
+			Profession.Speciality.ORILLA)
+
+	sim.techs = TechTree.new()
+	var demand := sim.tool_demand()
+	for tool: Tool.Kind in [Tool.Kind.NASA, Tool.Kind.ANZUELO, Tool.Kind.RED,
+			Tool.Kind.ARPON]:
+		assert_eq(int(demand.get(tool, 0)), 0,
+			"sin saber pescar de esa manera no se pide %s" % Tool.kind_name(tool))
+
+	sim.techs.known[TechTree.Tech.PESQUERA] = true
+	sim.techs.known[TechTree.Tech.NASA] = true
+	assert_true(int(sim.tool_demand().get(Tool.Kind.NASA, 0)) > 0,
+		"sabida la nasa, el taller la tiene en la lista")

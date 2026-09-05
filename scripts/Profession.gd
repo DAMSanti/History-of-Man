@@ -136,8 +136,9 @@ const SPECIALITY_INFO := {
 	},
 	Speciality.ASTA: {
 		"name": "Asta y hueso",
-		"desc": "Azagayas, arpones, agujas y punzones. Necesita BURILES para "
-			+ "ranurar el asta: sin tallador, este oficio se para.",
+		"desc": "Azagayas, arpones, anzuelos, agujas y punzones. Necesita "
+			+ "BURILES para ranurar el asta y el hueso: sin tallador, este "
+			+ "oficio se para.",
 	},
 	Speciality.PELETERIA: {
 		"name": "Peletería",
@@ -146,9 +147,10 @@ const SPECIALITY_INFO := {
 	},
 	Speciality.CORDELERIA: {
 		"name": "Cordelería y cestería",
-		"desc": "Fibra trenzada: ligaduras, lazos, redes y cestos. Es el único "
-			+ "taller que no necesita herramienta de piedra, y de él salen los "
-			+ "recipientes que deciden cuánto se trae de cada jornada.",
+		"desc": "Fibra trenzada: cuerda, cestos, nasas y redes de pesca. Es el "
+			+ "único taller que no necesita herramienta de piedra, y de él "
+			+ "salen los recipientes que deciden cuánto se trae de cada "
+			+ "jornada y medio aparejo del río.",
 	},
 	Speciality.BATIDA: {
 		"name": "Batida",

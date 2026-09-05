@@ -44,6 +44,9 @@ enum Glyph {
 	PUNZON,     ## Espiga maciza
 	LANZA,      ## Astil con punta enmangada
 	ARPON,      ## Astil con dientes a un lado
+	NASA,       ## Cesto en embudo, tumbado: la trampa de mimbre
+	ANZUELO,    ## Bastoncillo apuntado por los dos cabos, con su cordel
+	RED,        ## Malla de rombos con las plomadas colgando
 	BURIL,      ## Barrita con bisel en la punta
 	RAEDERA,    ## Media luna: filo curvo y dorso recto
 	PUNTA,      ## Hoja triangular con nervio
@@ -108,6 +111,9 @@ const TOOL_LOOK := {
 	Tool.Kind.CESTO: [Glyph.CESTA, Color(0.56, 0.48, 0.28)],
 	Tool.Kind.ODRE: [Glyph.ODRE, Color(0.60, 0.44, 0.30)],
 	Tool.Kind.CUERDA: [Glyph.HEBRAS, Color(0.50, 0.58, 0.28)],
+	Tool.Kind.NASA: [Glyph.NASA, Color(0.62, 0.52, 0.30)],
+	Tool.Kind.ANZUELO: [Glyph.ANZUELO, Color(0.85, 0.83, 0.76)],
+	Tool.Kind.RED: [Glyph.RED, Color(0.46, 0.62, 0.55)],
 }
 
 ## Forma y color de cada especie de caza. La clave es el nombre tal cual lo
@@ -326,6 +332,43 @@ func _draw() -> void:
 				var base := Vector2(0.62, 0.10).lerp(Vector2(0.34, 0.94), along)
 				_poly([base, base + Vector2(0.26, 0.02),
 					base + Vector2(0.06, 0.16)], s, dark)
+		Glyph.NASA:
+			# Embudo tumbado, con la boca ancha a la izquierda y el trenzado
+			# marcado: es un cesto, pero echado y con entrada de embudo
+			_poly([Vector2(0.08, 0.14), Vector2(0.08, 0.86), Vector2(0.88, 0.68),
+				Vector2(0.88, 0.32)], s, tint)
+			# El aro de la boca, a la izquierda, y el cono de entrada por el
+			# que el pez pasa y ya no sabe volver. En claro y no en oscuro:
+			# sobre el fondo del panel, lo oscuro desaparece y la nasa se leia
+			# como un cuerno.
+			_line(Vector2(0.08, 0.12), Vector2(0.08, 0.88), s,
+				tint.lightened(0.45), 0.09)
+			_poly([Vector2(0.08, 0.18), Vector2(0.08, 0.82), Vector2(0.38, 0.56),
+				Vector2(0.38, 0.44)], s, tint.lightened(0.25))
+			# El trenzado
+			_line(Vector2(0.46, 0.28), Vector2(0.46, 0.72), s, dark, 0.04)
+			_line(Vector2(0.66, 0.30), Vector2(0.66, 0.70), s, dark, 0.04)
+			_line(Vector2(0.85, 0.32), Vector2(0.85, 0.68), s, dark, 0.04)
+		Glyph.ANZUELO:
+			# NO es un gancho: es un bastoncillo apuntado por los dos cabos y
+			# atado por el medio. Dibujarlo curvo seria dibujar un anzuelo
+			# mesolitico en un juego del Paleolitico.
+			_poly([Vector2(0.16, 0.84), Vector2(0.44, 0.50), Vector2(0.56, 0.56),
+				Vector2(0.30, 0.90)], s, tint)
+			_poly([Vector2(0.84, 0.16), Vector2(0.56, 0.50), Vector2(0.44, 0.44),
+				Vector2(0.70, 0.10)], s, tint)
+			# La ligadura del medio, que es de donde tira el sedal
+			_circle(Vector2(0.50, 0.50), 0.10, s, dark)
+			_line(Vector2(0.50, 0.50), Vector2(0.92, 0.72), s, dark, 0.04)
+		Glyph.RED:
+			# Malla de rombos y las plomadas de la relinga de abajo
+			for i in range(4):
+				var x := 0.10 + float(i) * 0.26
+				_line(Vector2(x, 0.10), Vector2(x + 0.36, 0.74), s, tint, 0.045)
+				_line(Vector2(x + 0.36, 0.10), Vector2(x, 0.74), s, tint, 0.045)
+			_line(Vector2(0.04, 0.74), Vector2(0.96, 0.74), s, dark, 0.05)
+			for i in range(3):
+				_circle(Vector2(0.22 + float(i) * 0.28, 0.86), 0.07, s, dark)
 		Glyph.BURIL:
 			# Barrita con bisel: el filo es la esquina, no el canto
 			_poly([Vector2(0.38, 0.90), Vector2(0.62, 0.90), Vector2(0.62, 0.26),

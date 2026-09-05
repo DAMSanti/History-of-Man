@@ -916,17 +916,17 @@ func _show_toolkit(body: VBoxContainer) -> void:
 	# Se listan TODAS las piezas que la banda necesita, tenga o no ninguna. Lo
 	# que no existe es justo lo que hay que ver, y en una lista de lo que hay
 	# nunca aparece.
+	# TODAS las del catalogo, no solo las que hoy se piden o se tienen.
+	#
+	# Antes se listaba lo que tuviera demanda o existencias, y eso dejaba
+	# fuera el aparejo de pesca entero: la nasa, el anzuelo, la red y el
+	# arpon no se piden hasta que la banda sabe usarlos, asi que el jugador
+	# no los veia en ninguna parte y no habia forma de saber que existian ni
+	# que hacia falta para llegar a ellos. Lo que no se tiene es justo lo que
+	# hay que ver.
 	var kinds: Array[int] = []
-	for kind: int in demand:
-		if int(demand[kind]) > 0:
-			kinds.append(kind)
-	for row: Dictionary in sim.toolkit.summary():
-		if not kinds.has(int(row["kind"])):
-			kinds.append(int(row["kind"]))
-
-	if kinds.is_empty():
-		_text(body, "Sin una sola herramienta.", true)
-		return
+	for kind: int in Tool.Kind.values():
+		kinds.append(kind)
 
 	# En el orden del catálogo, SIN ordenar por cobertura.
 	#
@@ -1371,6 +1371,15 @@ func _how_and_what_for(kind: Tool.Kind) -> String:
 		lines.append("Hace falta %s para hacerla."
 			% Tool.kind_name(prerequisite as Tool.Kind).to_lower())
 
+	# Y la tecnica, que en el aparejo de pesca es la mitad del asunto: se
+	# puede tener el asta y el buril y seguir sin saber hacer un arpon.
+	var needed_tech := _tech_behind(kind)
+	if needed_tech >= 0:
+		var got := tech != null and tech.has(needed_tech as TechTree.Tech)
+		lines.append("Pide saber %s%s." % [
+			TechTree.tech_name(needed_tech as TechTree.Tech).to_lower(),
+			"" if got else " — y todavia no se sabe"])
+
 	var who := _crafted_by(kind)
 	if not who.is_empty():
 		lines.append("La saca: %s." % who)
@@ -1409,7 +1418,23 @@ func _tool_serves(kind: Tool.Kind) -> String:
 		jobs.append("ranurar asta y hueso")
 	if kind == Tool.Kind.RAEDERA:
 		jobs.append("raspar pieles")
+	# El aparejo de pesca no sale de `activity_tool`: cual se usa depende de
+	# la manera de pescar que la banda pueda hoy -ver [Fishing].
+	for method_key: int in Fishing.ORDER:
+		var method := method_key as Fishing.Method
+		if Fishing.tool_of(method) == int(kind):
+			jobs.append("pescar de orilla (%s)"
+				% Fishing.method_name(method).to_lower())
 	return ", ".join(jobs)
+
+
+## La tecnica que hay que dominar para poder hacer esta pieza, o -1.
+func _tech_behind(kind: Tool.Kind) -> int:
+	for method_key: int in Fishing.ORDER:
+		var method := method_key as Fishing.Method
+		if Fishing.tool_of(method) == int(kind):
+			return Fishing.tech_of(method)
+	return -1
 
 
 ## Cuánto mueve una pulsación el objetivo.
