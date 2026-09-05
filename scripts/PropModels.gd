@@ -54,6 +54,30 @@ const CATALOGUE := {
 	"pasto": {
 		"slug": "grass_medium_01", "name": "Pasto de claro", "height_m": 0.45,
 	},
+	"arbusto": {
+		# Endrino y zarzamora. `shrub_02` no es ninguno de los dos, pero a
+		# distancia de juego lo que se lee es la silueta de un matorral leñoso.
+		"slug": "shrub_02", "name": "Arbusto de baya", "height_m": 1.10,
+	},
+	"roseta": {
+		# La raíz no se ve: lo que se ve es la mata de hoja que la delata, y por
+		# eso se busca por la hoja. Una roseta baja sirve.
+		"slug": "dandelion_01", "name": "Mata de raíz", "height_m": 0.30,
+	},
+	"tocon": {
+		# De donde se saca la corteza para recipientes y cordel.
+		"slug": "tree_stump_01", "name": "Tocón", "height_m": 0.75,
+	},
+	"conifera": {
+		# La resina sale de la conífera. En el Magdaleniense cantábrico el pino
+		# es parte del bosque de refugio, así que además cuadra con la época.
+		"slug": "pine_sapling_small", "name": "Conífera joven", "height_m": 1.40,
+	},
+	"musgo": {
+		# Yesca: lo que prende. Musgo seco y hongo de corteza; el musgo es lo
+		# más parecido que hay.
+		"slug": "moss_01", "name": "Musgo de yesca", "height_m": 0.18,
+	},
 }
 
 

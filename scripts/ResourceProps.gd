@@ -14,8 +14,15 @@ extends Node3D
 ## un mapa donde una unidad es un metro, y desde la cámara solo se leían como
 ## manchas oscuras.
 
-## Techo de instancias por material. Es el límite de coste.
-const MAX_PER_KIND := 2600
+## Techo GLOBAL de instancias, repartido a partes iguales entre las materias que
+## se siembran.
+##
+## Antes era un techo por materia, y eso no acota nada: cada materia nueva sumaba
+## su cupo entero al coste. Medido en `PropCosteProbe`, lo que manda el precio del
+## sembrado es el NÚMERO de instancias y no los triángulos de cada una, así que el
+## techo tiene que estar donde está el coste. Ahora añadir una materia adelgaza a
+## las demás en vez de encarecer el fotograma, que es la propiedad que se quiere.
+const MAX_TOTAL := 13000
 
 ## Por debajo de esta abundancia no se dibuja: sembrar una mata suelta en cada
 ## celda llena el mapa de ruido y esconde dónde está lo bueno.
@@ -62,6 +69,9 @@ var _picks: Array[Dictionary] = []
 
 ## Los modelos de fotogrametria, o null si no se han generado todavia.
 var _library: PropLibrary
+
+## Cupo de instancias de cada materia: el techo global partido entre todas.
+var _budget := 1000
 
 
 ## Qué se ve en el suelo, de qué actividad sale, y con qué pinta.
@@ -143,6 +153,52 @@ func _catalogue() -> Array[Dictionary]:
 			"per_cell": 4, "sway": 0.3,
 		},
 		{
+			# Endrino y zarzamora: borde de matorral, ni en el claro ni en lo
+			# cerrado. Poca caloría y mucha vitamina, y por eso importa que se
+			# vea dónde están.
+			"kind": Materia.Kind.BAYA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "arbusto",
+			"habitat": {"slope": Vector2(0.05, 0.40), "humidity": Vector2(0.30, 0.85)},
+			"per_cell": 3, "sway": 0.3,
+		},
+		{
+			# La raíz no se ve: lo que se ve es la hoja que la delata. Vega
+			# llana y húmeda, que es donde el tubérculo engorda.
+			"kind": Materia.Kind.RAIZ,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "roseta",
+			"habitat": {"slope": Vector2(0.0, 0.20), "humidity": Vector2(0.40, 0.95)},
+			"per_cell": 4, "sway": 0.25,
+		},
+		{
+			# Tocón: de donde sale la corteza para recipientes y cordel. Va bajo
+			# arbolado y es ocasional, no un paisaje.
+			"kind": Materia.Kind.CORTEZA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "tocon",
+			"habitat": {"slope": Vector2(0.0, 0.30), "humidity": Vector2(0.50, 1.0)},
+			"per_cell": 1, "sway": 0.0, "rarity": 0.25,
+		},
+		{
+			# La resina sale de la conífera, y el pino de refugio del
+			# Magdaleniense está en ladera y en alto, no en la vega.
+			"kind": Materia.Kind.RESINA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "conifera",
+			"habitat": {"slope": Vector2(0.05, 0.45), "height": Vector2(0.25, 0.75)},
+			"per_cell": 2, "sway": 0.15, "rarity": 0.4,
+		},
+		{
+			# Yesca: lo que prende. Musgo de sombra húmeda, que seco es lo que
+			# coge la chispa.
+			"kind": Materia.Kind.YESCA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "musgo",
+			"habitat": {"slope": Vector2(0.0, 0.35), "humidity": Vector2(0.55, 1.0)},
+			"per_cell": 3, "sway": 0.0,
+		},
+		{
 			"kind": Materia.Kind.MARISCO,
 			"from": Subsistence.Activity.MARISQUEO,
 			"mesh": _shell_mesh(),
@@ -173,7 +229,10 @@ func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	_rng.seed = 20260903
 	_load_library()
 
-	for entry: Dictionary in _catalogue():
+	var catalogue := _catalogue()
+	_budget = maxi(200, MAX_TOTAL / maxi(catalogue.size(), 1))
+
+	for entry: Dictionary in catalogue:
 		_build_layer(entry)
 
 
@@ -244,7 +303,7 @@ func _build_layer(entry: Dictionary) -> void:
 			# reconociendo de lejos.
 			var clusters := maxi(1, int(ceil(float(count) / float(CLUSTER_SIZE))))
 			for cluster in range(clusters):
-				if placements.size() >= MAX_PER_KIND:
+				if placements.size() >= _budget:
 					break
 				var seed_spot := _find_spot(x, z, cell_x, cell_z, habitat)
 				if seed_spot == Vector3.INF:
@@ -252,7 +311,7 @@ func _build_layer(entry: Dictionary) -> void:
 
 				var here := mini(CLUSTER_SIZE, count - cluster * CLUSTER_SIZE)
 				for i in range(here):
-					if placements.size() >= MAX_PER_KIND:
+					if placements.size() >= _budget:
 						break
 					var angle := _rng.randf() * TAU
 					# Raíz de un aleatorio para que la mancha salga con densidad
