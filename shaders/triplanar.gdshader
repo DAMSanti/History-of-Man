@@ -128,6 +128,15 @@ uniform bool use_normal_maps = true;
 // salta su muestreo.
 uniform float weight_cutoff : hint_range(0.0, 0.1) = 0.02;
 
+// Corte de PLANO, aparte del de material y mucho mas agresivo.
+//
+// Son dos cosas distintas y por eso llevan dos numeros. Descartar un material
+// se ve: es un color que desaparece de la mezcla. Descartar un plano no, porque
+// el plano no aporta color propio sino la misma textura mirada desde otro eje,
+// y su peso se reparte entre los que quedan (ver fragment). O sea que aqui se
+// puede cortar donde alli no.
+uniform float plane_cutoff : hint_range(0.0, 0.3) = 0.15;
+
 varying vec3 world_position;
 varying vec3 world_normal;
 varying float vertex_height_normalized;
@@ -192,6 +201,34 @@ vec3 triplanar_normal(sampler2D tex, vec3 pos, vec3 dpdx, vec3 dpdy, vec3 weight
 
 void fragment() {
 	vec3 triplanar_weights = get_triplanar_weights(world_normal, triplanar_sharpness);
+
+	// Tirar los planos que no aportan y REPARTIR su peso entre los que quedan.
+	//
+	// El reparto es lo que permite que el corte sea agresivo. Sin el, el peso
+	// descartado simplemente se pierde: la suma baja de 1 y el material se
+	// oscurece, asi que el corte tenia que quedarse en 0.02 -un plano que
+	// aporta un 2%- y a ese nivel casi no descarta nada. Medido en el sitio 56,
+	// una ladera suave da pesos del orden de (0.05, 0.90, 0.05) y los TRES
+	// planos pasaban el corte para aportar una veinteava parte cada uno.
+	//
+	// Con reparto, un plano al 15% se puede tirar entero y el color no cambia,
+	// porque su peso se lo llevan los que sí se muestrean. El tope del rango es
+	// 0.3 a proposito: los tres pesos suman 1, asi que por debajo de un tercio
+	// siempre sobrevive al menos uno y la division nunca se queda sin nada.
+	// El descarte se DESVANECE, no corta en seco. Con un `step` puro salian
+	// manchas planas de borde duro por toda la ladera: al cruzar el umbral el
+	// plano desaparecia de golpe, los pesos de los otros dos pegaban un salto
+	// para repartirse el suyo, y el cambio de textura dibujaba la linea de
+	// nivel del umbral en el monte.
+	//
+	// Asi el peso baja suave hasta cero en la mitad inferior del margen y solo
+	// se salta el muestreo cuando ya vale cero exacto. Se sigue ahorrando en
+	// todo lo que cae por debajo de la mitad del corte, que es la mayor parte,
+	// y la transicion no se ve.
+	triplanar_weights *= smoothstep(
+		vec3(plane_cutoff * 0.5), vec3(plane_cutoff), triplanar_weights);
+	triplanar_weights /= max(
+		triplanar_weights.x + triplanar_weights.y + triplanar_weights.z, 0.0001);
 
 	// Derivadas de la posicion de mundo, calculadas una sola vez y fuera de
 	// cualquier rama. Las de cada plano salen de aqui con un swizzle.
