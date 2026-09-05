@@ -4,20 +4,27 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 // Tri-planar terrain shader con blending por altura y pendiente
 // Evita el estiramiento de texturas en pendientes pronunciadas
 
-group_uniforms textures;
-uniform sampler2D texture_grass : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D texture_rock : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D texture_snow : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D texture_sand : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+// Ocho capas de material en tres arrays, en el orden de TerrainLayers.Layer:
+//   0 pradera · 1 bosque · 2 roquedo · 3 canchal
+//   4 cantos  · 5 arena  · 6 limo    · 7 nieve
+//
+// Antes eran ocho samplers sueltos para cuatro materiales -albedo y normal-, y
+// anadir una capa significaba tocar el shader. Con arrays, anadir capas cuesta
+// VRAM y no codigo, y sobre todo no cuesta MUESTREOS: se muestrean siempre las
+// DOS capas de mas peso, sean ocho o veinte.
+#define LAYERS 8
 
-group_uniforms normal_maps;
-uniform sampler2D normal_grass : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D normal_rock : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D normal_snow : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D normal_sand : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+group_uniforms textures;
+uniform sampler2DArray terrain_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2DArray terrain_normal : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+// R oclusion · G rugosidad · B metalico · A altura
+uniform sampler2DArray terrain_orm : filter_linear_mipmap_anisotropic, repeat_enable;
 
 group_uniforms texture_settings;
-uniform float texture_scale : hint_range(0.01, 10.0) = 0.25;
+// Lado de la tesela de cada capa, en METROS de mundo. Antes habia una sola
+// escala para las cuatro, que es lo que hacia imposible que un canto rodado y
+// una mata de hierba tuviesen su tamano real a la vez.
+uniform float layer_tile_m[LAYERS];
 uniform float blend_sharpness : hint_range(0.1, 10.0) = 2.0;
 uniform float triplanar_sharpness : hint_range(0.1, 10.0) = 3.0;
 
@@ -34,10 +41,17 @@ uniform float slope_threshold : hint_range(0.0, 1.0) = 0.7;
 uniform float slope_blend : hint_range(0.01, 1.0) = 0.2;
 
 group_uniforms material_properties;
-uniform float roughness_grass : hint_range(0.0, 1.0) = 0.9;
-uniform float roughness_rock : hint_range(0.0, 1.0) = 0.85;
-uniform float roughness_snow : hint_range(0.0, 1.0) = 0.7;
-uniform float roughness_sand : hint_range(0.0, 1.0) = 0.95;
+// La rugosidad ya no es una constante por material: viene en el canal verde del
+// ORM, o sea que cambia DENTRO de la textura. Una piedra mojada en la sombra de
+// una grieta y la misma piedra al sol no tienen el mismo acabado, y con una
+// constante por capa eso no se puede decir.
+uniform bool use_orm = true;
+// Margen para retocar lo que traiga la textura sin volver a ingerirla.
+uniform float roughness_scale : hint_range(0.2, 2.0) = 1.0;
+uniform float ao_strength : hint_range(0.0, 1.0) = 0.8;
+// Rugosidad cuando el ORM esta apagado -tier bajo-. Muy mate a proposito:
+// ninguna superficie natural de este mapa refleja de forma especular.
+uniform float roughness_fallback : hint_range(0.0, 1.0) = 0.93;
 
 // Reflectancia especular del terreno. Estaba clavada a 0.3 dentro del fragment
 // y era la causa del brillo metalico: tierra, hierba y roca son dielectricos
@@ -162,41 +176,74 @@ vec3 get_triplanar_weights(vec3 normal, float sharpness) {
 // Se usa textureGrad y no texture porque dentro de control de flujo divergente
 // el LOD implicito queda indefinido: las derivadas hay que calcularlas fuera
 // de las ramas o el mipmap sale mal justo en los bordes entre materiales.
-vec4 triplanar_texture(sampler2D tex, vec3 pos, vec3 dpdx, vec3 dpdy, vec3 weights, float cutoff) {
-	float s = texture_scale;
+vec4 triplanar_texture(sampler2DArray tex, float layer, float tile,
+		vec3 pos, vec3 dpdx, vec3 dpdy, vec3 weights) {
+	float s = 1.0 / max(tile, 0.01);
 	vec4 result = vec4(0.0);
-	if (weights.x > cutoff) {
-		result += textureGrad(tex, pos.zy * s, dpdx.zy * s, dpdy.zy * s) * weights.x;
+	// Los pesos llegan ya recortados a cero por `plane_cutoff`, asi que basta
+	// comparar contra cero: el plano que no aporta ni se pide.
+	if (weights.x > 0.0) {
+		result += textureGrad(tex, vec3(pos.zy * s, layer),
+			dpdx.zy * s, dpdy.zy * s) * weights.x;
 	}
-	if (weights.y > cutoff) {
-		result += textureGrad(tex, pos.xz * s, dpdx.xz * s, dpdy.xz * s) * weights.y;
+	if (weights.y > 0.0) {
+		result += textureGrad(tex, vec3(pos.xz * s, layer),
+			dpdx.xz * s, dpdy.xz * s) * weights.y;
 	}
-	if (weights.z > cutoff) {
-		result += textureGrad(tex, pos.xy * s, dpdx.xy * s, dpdy.xy * s) * weights.z;
+	if (weights.z > 0.0) {
+		result += textureGrad(tex, vec3(pos.xy * s, layer),
+			dpdx.xy * s, dpdy.xy * s) * weights.z;
 	}
 	return result;
 }
 
 // Igual que la anterior pero reorientando las normales de cada eje
-vec3 triplanar_normal(sampler2D tex, vec3 pos, vec3 dpdx, vec3 dpdy, vec3 weights, float cutoff) {
-	float s = texture_scale;
+vec3 triplanar_normal(sampler2DArray tex, float layer, float tile,
+		vec3 pos, vec3 dpdx, vec3 dpdy, vec3 weights) {
+	float s = 1.0 / max(tile, 0.01);
 	vec3 result = vec3(0.0);
-	if (weights.x > cutoff) {
-		vec3 n = textureGrad(tex, pos.zy * s, dpdx.zy * s, dpdy.zy * s).rgb * 2.0 - 1.0;
+	if (weights.x > 0.0) {
+		vec3 n = textureGrad(tex, vec3(pos.zy * s, layer),
+			dpdx.zy * s, dpdy.zy * s).rgb * 2.0 - 1.0;
 		n = vec3(n.xy + world_normal.zy, abs(n.z) * world_normal.x);
 		result += n.zyx * weights.x;
 	}
-	if (weights.y > cutoff) {
-		vec3 n = textureGrad(tex, pos.xz * s, dpdx.xz * s, dpdy.xz * s).rgb * 2.0 - 1.0;
+	if (weights.y > 0.0) {
+		vec3 n = textureGrad(tex, vec3(pos.xz * s, layer),
+			dpdx.xz * s, dpdy.xz * s).rgb * 2.0 - 1.0;
 		n = vec3(n.xy + world_normal.xz, abs(n.z) * world_normal.y);
 		result += n.xzy * weights.y;
 	}
-	if (weights.z > cutoff) {
-		vec3 n = textureGrad(tex, pos.xy * s, dpdx.xy * s, dpdy.xy * s).rgb * 2.0 - 1.0;
+	if (weights.z > 0.0) {
+		vec3 n = textureGrad(tex, vec3(pos.xy * s, layer),
+			dpdx.xy * s, dpdy.xy * s).rgb * 2.0 - 1.0;
 		n = vec3(n.xy + world_normal.xy, abs(n.z) * world_normal.z);
 		result += n.xyz * weights.z;
 	}
 	return result;
+}
+
+// El ORM se muestrea por UN SOLO plano, el dominante, y no por los tres.
+//
+// No es un atajo sin criterio: oclusion y rugosidad son senales de baja
+// frecuencia y de rango corto -no dibujan silueta, modulan luz-, asi que el
+// error de proyectarlas por un solo eje en una ladera no se ve. Y el ahorro es
+// grande, porque anadir el ORM en triplanar completo habria subido los
+// muestreos por fragmento un cincuenta por ciento, que es justo lo que este
+// shader no puede pagar.
+vec4 uniplanar_orm(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
+		vec3 weights) {
+	float s = 1.0 / max(tile, 0.01);
+	if (weights.y >= weights.x && weights.y >= weights.z) {
+		return textureGrad(terrain_orm, vec3(pos.xz * s, layer),
+			dpdx.xz * s, dpdy.xz * s);
+	}
+	if (weights.x >= weights.z) {
+		return textureGrad(terrain_orm, vec3(pos.zy * s, layer),
+			dpdx.zy * s, dpdy.zy * s);
+	}
+	return textureGrad(terrain_orm, vec3(pos.xy * s, layer),
+		dpdx.xy * s, dpdy.xy * s);
 }
 
 void fragment() {
@@ -237,119 +284,184 @@ void fragment() {
 
 	// Calcular pendiente (slope) - 1.0 = vertical, 0.0 = horizontal
 	float slope = 1.0 - abs(world_normal.y);
-
-	// Calcular factor de roca por pendiente
-	float slope_rock_factor = smoothstep(slope_threshold - slope_blend, slope_threshold + slope_blend, slope);
-
-	// Calcular pesos de materiales por altura
 	float height = vertex_height_normalized;
 
-	float sand_weight = smoothstep(sand_max_height, sand_max_height * 0.5, height);
-	float grass_weight = smoothstep(sand_max_height * 0.8, sand_max_height, height) *
-						 smoothstep(grass_max_height + 0.1, grass_max_height - 0.1, height);
-	float rock_weight = smoothstep(rock_min_height - 0.1, rock_min_height + 0.1, height) *
-						smoothstep(rock_max_height + 0.1, rock_max_height - 0.1, height);
-	float snow_weight = smoothstep(snow_min_height - 0.1, snow_min_height + 0.1, height);
-
-	// Aplicar factor de pendiente (pendientes pronunciadas = más roca)
-	grass_weight *= (1.0 - slope_rock_factor);
-	sand_weight *= (1.0 - slope_rock_factor);
-	snow_weight *= (1.0 - slope_rock_factor * 0.5); // Nieve resiste más en pendientes
-	rock_weight = max(rock_weight, slope_rock_factor);
-
-	// Curvatura y manchas. Sin esto una ladera entera sale del mismo color,
-	// porque pendiente y altitud apenas cambian a lo largo de ella.
+	// Curvatura y mancha, por VERTICE, asi que aqui no cuestan nada.
+	// UV2.x trae la curvatura (0.5 plano, >0.5 concavo) y UV2.y la variacion.
+	float curvature = 0.0;
+	float patch = 0.0;
 	if (use_terrain_variation) {
-		float curvature = UV2.x * 2.0 - 1.0;   // -1 convexo, +1 concavo
-		float patch = (UV2.y - 0.5) * 2.0;
+		curvature = UV2.x * 2.0 - 1.0;
+		patch = (UV2.y - 0.5) * 2.0;
+	}
 
-		float soil = 1.0 + curvature * curvature_influence + patch * macro_influence;
-		float bare = 1.0 - curvature * curvature_influence - patch * macro_influence;
+	// El agua del cauce llega por COLOR.a. La orilla -donde el agua lame pero
+	// no cubre- es donde se acumulan los CANTOS, y por eso es una capa de
+	// material y ya no un tinte falso sobre la hierba.
+	float river = clamp(COLOR.a, 0.0, 1.0);
+	float shore = smoothstep(0.02, 0.30, river)
+		* (1.0 - smoothstep(0.35, 0.70, river));
 
-		grass_weight *= max(soil, 0.05);
-		sand_weight *= max(soil * 0.6 + 0.4, 0.05);
-		rock_weight *= max(bare, 0.05);
+	// --- Reparto entre las ocho capas ------------------------------------
+	//
+	// Tres bandas de altura, y dentro de cada una un reparto por lo que
+	// distingue de verdad a las dos capas que la comparten. La altura sola no
+	// separa pasto de bosque ni arena de marisma: eso lo dicen la pendiente y
+	// la curvatura.
+	// El borde de la orilla se separa de cero a la fuerza. Con `bands_relative`
+	// -que es lo que usa el mapa local- `sand_max_height` sale practicamente 0,
+	// y un `smoothstep(0.0, 0.0, x)` tiene los dos bordes iguales, que en GLSL
+	// es COMPORTAMIENTO INDEFINIDO. De ahi salia limo de marisma repartido por
+	// media ladera.
+	float shore_edge = max(sand_max_height, 0.004);
+	float band_low = 1.0 - smoothstep(shore_edge * 0.5, shore_edge, height);
+	float band_mid = smoothstep(shore_edge * 0.5, shore_edge, height)
+		* smoothstep(grass_max_height + 0.1, grass_max_height - 0.1, height);
+	float band_top = smoothstep(snow_min_height - 0.1, snow_min_height + 0.1, height);
 
-		// Un hondo suave acumula tierra, pero una vaguada marcada en ladera es
-		// un barranco: cauce de temporal, escarbado hasta la roca. Hacen falta
-		// las DOS condiciones, porque solo con la concavidad tambien saldria
-		// de roca el fondo llano de un valle.
-		float ravine = smoothstep(ravine_curvature, 1.0, curvature)
-			* smoothstep(ravine_slope - 0.06, ravine_slope + 0.10, slope)
-			* ravine_strength;
-		if (ravine > 0.001) {
-			grass_weight *= 1.0 - ravine;
-			sand_weight *= 1.0 - ravine;
-			rock_weight = max(rock_weight, ravine);
+	// Roca por pendiente, en DOS escalones. El suave es el manto de derrubio
+	// que baja de la pared -el canchal- y el fuerte es la pared en si. Antes
+	// habia un solo escalon y la transicion se pintaba como un degradado de
+	// color; ahora es un material propio, que es lo que de verdad hay ahi.
+	float scree_factor = smoothstep(slope_threshold - slope_blend,
+		slope_threshold + slope_blend, slope);
+	float cliff_factor = smoothstep(slope_threshold + slope_blend * 0.5,
+		slope_threshold + slope_blend * 2.5, slope);
+
+	// Un hondo suave acumula tierra, pero una vaguada marcada en ladera es un
+	// barranco: cauce de temporal escarbado hasta la roca. Hacen falta las DOS
+	// condiciones, porque solo con la concavidad tambien saldria de roca el
+	// fondo llano de un valle.
+	float ravine = smoothstep(ravine_curvature, 1.0, curvature)
+		* smoothstep(ravine_slope - 0.06, ravine_slope + 0.10, slope)
+		* ravine_strength;
+
+	// Lo concavo y humedo cria bosque; lo convexo y expuesto, pasto. La mancha
+	// de UV2.y rompe la homogeneidad para que una ladera entera no salga de un
+	// solo material.
+	float wood = clamp(0.45 + curvature * curvature_influence
+		+ patch * macro_influence, 0.0, 1.0);
+
+	// La marisma se queda en lo hondo y lo LLANO: un limo no se sostiene en
+	// pendiente. Sin la condicion de pendiente el fango trepaba por la ladera
+	// de la ria.
+	float marsh = smoothstep(0.05, 0.35, curvature)
+		* (1.0 - smoothstep(0.04, 0.12, slope));
+
+	float ground = 1.0 - max(scree_factor, ravine);
+
+	float w[LAYERS];
+	w[0] = band_mid * (1.0 - wood) * ground;              // pradera
+	w[1] = band_mid * wood * ground;                      // bosque
+	w[2] = max(cliff_factor, ravine);                     // roquedo
+	w[3] = max(scree_factor - cliff_factor, 0.0);         // canchal
+	w[4] = shore;                                         // cantos de rio
+	w[5] = band_low * (1.0 - marsh) * ground;             // arena
+	w[6] = band_low * marsh * ground;                     // limo
+	w[7] = band_top * (1.0 - scree_factor * 0.5);         // nieve
+
+	// Recortar la cola y renormalizar. Es lo que permite quedarse con las dos
+	// de mas peso sin que se vea el cambio: una capa que iba a entrar por un
+	// dos por ciento llega a cero ANTES de cruzarse con otra, asi que cuando se
+	// intercambian el segundo y el tercer puesto los dos valen ya cero y no hay
+	// salto. Sin esto, quedarse con dos capas dibuja costuras donde la tercera
+	// y la cuarta se adelantan.
+	float total = 0.0;
+	for (int i = 0; i < LAYERS; i++) {
+		w[i] = max(w[i] - weight_cutoff, 0.0);
+		total += w[i];
+	}
+	if (total <= 0.0) {
+		// Todo por debajo del corte: se cae a pradera, que es el fondo del
+		// valle y el material mas comun.
+		w[0] = 1.0;
+		total = 1.0;
+	}
+
+	// Las DOS de mas peso. Es lo que hace que ocho capas cuesten lo mismo que
+	// dos: el bucle es aritmetica sobre ocho flotantes -barata y sin
+	// divergencia- y los muestreos son siempre dos, no ocho.
+	int i0 = 0;
+	int i1 = 0;
+	float w0 = -1.0;
+	float w1 = -1.0;
+	for (int i = 0; i < LAYERS; i++) {
+		float wi = w[i];
+		if (wi > w0) {
+			i1 = i0; w1 = w0;
+			i0 = i; w0 = wi;
+		} else if (wi > w1) {
+			i1 = i; w1 = wi;
 		}
 	}
+	float pair = max(w0 + w1, 0.0001);
+	w0 /= pair;
+	w1 /= pair;
 
-	// Normalizar pesos
-	float total_weight = sand_weight + grass_weight + rock_weight + snow_weight;
-	if (total_weight > 0.0) {
-		sand_weight /= total_weight;
-		grass_weight /= total_weight;
-		rock_weight /= total_weight;
-		snow_weight /= total_weight;
-	}
+	// Endurecer la mezcla entre las dos. Se hace AQUI, sobre dos numeros, y no
+	// con una potencia sobre los ocho pesos: son ocho `pow` por fragmento que
+	// no hacen falta.
+	float sharp = clamp((blend_sharpness - 1.0) * 0.5, 0.0, 1.0);
+	w1 = mix(w1, w1 * w1 * (3.0 - 2.0 * w1), sharp);
+	w0 = 1.0 - w1;
 
-	// Aplicar sharpness al blend
-	sand_weight = pow(sand_weight, blend_sharpness);
-	grass_weight = pow(grass_weight, blend_sharpness);
-	rock_weight = pow(rock_weight, blend_sharpness);
-	snow_weight = pow(snow_weight, blend_sharpness);
+	float layer0 = float(i0);
+	float layer1 = float(i1);
+	float tile0 = layer_tile_m[i0];
+	float tile1 = layer_tile_m[i1];
 
-	// Re-normalizar después de sharpness
-	total_weight = sand_weight + grass_weight + rock_weight + snow_weight;
-	if (total_weight > 0.0) {
-		sand_weight /= total_weight;
-		grass_weight /= total_weight;
-		rock_weight /= total_weight;
-		snow_weight /= total_weight;
-	}
-
-	// Muestrear solo los materiales con peso apreciable. Antes se muestreaban
-	// los cuatro siempre: 24 fetches por fragmento aunque tres de ellos
-	// acabasen multiplicados por cero.
-	float cut = weight_cutoff;
-	vec3 final_color = vec3(0.0);
+	vec3 final_color = triplanar_texture(terrain_albedo, layer0, tile0,
+		world_position, dpdx, dpdy, triplanar_weights).rgb * w0;
 	vec3 final_normal = vec3(0.0);
-
-	if (sand_weight > cut) {
-		final_color += triplanar_texture(texture_sand, world_position, dpdx, dpdy, triplanar_weights, cut).rgb * sand_weight;
-		if (use_normal_maps) {
-			final_normal += triplanar_normal(normal_sand, world_position, dpdx, dpdy, triplanar_weights, cut) * sand_weight;
-		}
-	}
-	if (grass_weight > cut) {
-		final_color += triplanar_texture(texture_grass, world_position, dpdx, dpdy, triplanar_weights, cut).rgb * grass_weight;
-		if (use_normal_maps) {
-			final_normal += triplanar_normal(normal_grass, world_position, dpdx, dpdy, triplanar_weights, cut) * grass_weight;
-		}
-	}
-	if (rock_weight > cut) {
-		final_color += triplanar_texture(texture_rock, world_position, dpdx, dpdy, triplanar_weights, cut).rgb * rock_weight;
-		if (use_normal_maps) {
-			final_normal += triplanar_normal(normal_rock, world_position, dpdx, dpdy, triplanar_weights, cut) * rock_weight;
-		}
-	}
-	if (snow_weight > cut) {
-		final_color += triplanar_texture(texture_snow, world_position, dpdx, dpdy, triplanar_weights, cut).rgb * snow_weight;
-		if (use_normal_maps) {
-			final_normal += triplanar_normal(normal_snow, world_position, dpdx, dpdy, triplanar_weights, cut) * snow_weight;
-		}
+	if (use_normal_maps) {
+		final_normal = triplanar_normal(terrain_normal, layer0, tile0,
+			world_position, dpdx, dpdy, triplanar_weights) * w0;
 	}
 
-	// Calcular roughness combinado
-	float final_roughness = roughness_sand * sand_weight +
-							roughness_grass * grass_weight +
-							roughness_rock * rock_weight +
-							roughness_snow * snow_weight;
+	float final_roughness = roughness_fallback;
+	float occlusion = 1.0;
+	float surface_height = 0.5;
+	if (use_orm) {
+		vec4 orm0 = uniplanar_orm(layer0, tile0, world_position,
+			dpdx, dpdy, triplanar_weights);
+		final_roughness = orm0.g * w0;
+		occlusion = orm0.r * w0;
+		surface_height = orm0.a * w0;
+	}
+
+	// La segunda capa solo si aporta. Por debajo de un dos por ciento no se
+	// distingue de no estar, y saltarsela ahorra la mitad de los muestreos en
+	// todo lo que no es transicion, que es la mayor parte del mapa.
+	if (w1 > 0.02) {
+		final_color += triplanar_texture(terrain_albedo, layer1, tile1,
+			world_position, dpdx, dpdy, triplanar_weights).rgb * w1;
+		if (use_normal_maps) {
+			final_normal += triplanar_normal(terrain_normal, layer1, tile1,
+				world_position, dpdx, dpdy, triplanar_weights) * w1;
+		}
+		if (use_orm) {
+			vec4 orm1 = uniplanar_orm(layer1, tile1, world_position,
+				dpdx, dpdy, triplanar_weights);
+			final_roughness += orm1.g * w1;
+			occlusion += orm1.r * w1;
+			surface_height += orm1.a * w1;
+		}
+	} else if (use_orm) {
+		// Con una sola capa los pesos no suman 1 y todo saldria oscuro y liso
+		float inv = 1.0 / max(w0, 0.0001);
+		final_roughness *= inv;
+		occlusion *= inv;
+		surface_height *= inv;
+	}
+
+	if (use_orm) {
+		final_roughness = clamp(final_roughness * roughness_scale, 0.04, 1.0);
+	}
 
 	// --- Agua ------------------------------------------------------------
 	// El color de vertice trae la hidrografia entera: rg el sentido de la
-	// corriente, b si el agua esta quieta, a la lamina.
-	float river = clamp(COLOR.a, 0.0, 1.0);
+	// corriente, b si el agua esta quieta, a la lamina. `river` ya se calculo
+	// arriba, porque de el sale la orilla de cantos.
 	float specular_out = terrain_specular;
 
 	if (river > 0.005) {
@@ -424,15 +536,12 @@ void fragment() {
 		float foam = rapids * mix(churn, 1.0, rapids * 0.55);
 		water_color = mix(water_color, foam_color, foam * 0.80);
 
-		// Grava y canto rodado en la ribera, donde el agua lame pero no cubre.
-		// Sin esto el pasto llega hasta la lamina como si el rio no arrastrase
-		// nada, y una orilla de rio es piedra suelta, no cesped.
-		float shore = smoothstep(0.02, 0.30, river) * (1.0 - smoothstep(0.35, 0.70, river));
-		final_color = mix(final_color, final_color * 1.18 + vec3(0.06), shore * 0.7);
-		final_roughness = mix(final_roughness, 0.95, shore * 0.7);
+		// Aqui habia un tinte que aclaraba el pasto de la ribera para fingir
+		// grava. Ya no hace falta: la orilla es la capa CANTOS, con su
+		// fotogrametria de canto rodado, y se reparte con las demas como
+		// cualquier otro material.
 
 		final_color = mix(final_color, water_color, river);
-		// La espuma es aire y agua batidos: mucho mas mate que la lamina lisa
 		// La espuma es aire y agua batidos: mucho mas mate que la lamina lisa
 		final_roughness = mix(final_roughness,
 			mix(river_roughness, 0.70, foam), river);
@@ -467,6 +576,15 @@ void fragment() {
 
 	// Salidas del shader
 	ALBEDO = final_color;
+	// La oclusion va a AO y NO multiplicando el albedo. Multiplicar el color
+	// oscurece DOS veces lo que ya esta en sombra -la luz directa tambien
+	// cae-, y el terreno se iba a negro en cuanto la ladera daba la espalda al
+	// sol. Con AO_LIGHT_AFFECT a cero la oclusion solo toca la luz indirecta,
+	// que es la unica que una grieta puede tapar.
+	if (use_orm) {
+		AO = mix(1.0, occlusion, ao_strength);
+		AO_LIGHT_AFFECT = 0.0;
+	}
 	if (use_normal_maps && length(final_normal) > 0.001) {
 		NORMAL_MAP = normalize(final_normal) * 0.5 + 0.5;
 	}

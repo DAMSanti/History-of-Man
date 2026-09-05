@@ -7,7 +7,7 @@ func _init() -> void:
 		dir.remove("terrain_textures.res")
 		print("cache de texturas borrada")
 
-	var textures: Dictionary = ProceduralTextureGenerator.get_terrain_textures()
+	var textures: Dictionary = ProceduralTextureGenerator.get_water_textures()
 	var total := 0
 	for name: String in textures:
 		var tex: Texture2D = textures[name]

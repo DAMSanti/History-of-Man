@@ -1,81 +1,82 @@
 class_name TerrainMaterialManager
 extends RefCounted
 ## Gestiona el material del terreno con shader triplanar.
-## Genera y aplica texturas procedurales al terreno.
+##
+## Antes generaba cuatro texturas procedurales píxel a píxel y las ataba a ocho
+## samplers sueltos. Ahora carga los tres [Texture2DArray] que deja
+## `scripts/tools/TerrainTextureIngest.gd` —ocho capas de fotogrametría con
+## albedo, normal y ORM— y sólo sigue generando las del agua, que son patrones
+## que teselan y no fotografías.
+
+## Dónde avisar si faltan los arrays. Se regeneran con la herramienta y no van
+## al repositorio, así que en una copia recién clonada no están.
+const MISSING_HINT := "Faltan las texturas del terreno. Genéralas con:\n" \
+	+ "  godot --headless --path . --script res://scripts/tools/TerrainTextureIngest.gd"
 
 var _material: ShaderMaterial
-var _textures: Dictionary = {}
+var _arrays: TerrainTextureArrays
+var _water: Dictionary = {}
 
 
 ## Crea el material del terreno con shader triplanar
 func create_terrain_material() -> ShaderMaterial:
 	_material = ShaderMaterial.new()
-	
-	# Cargar el shader triplanar
+
 	var shader := load("res://shaders/triplanar.gdshader") as Shader
 	if not shader:
 		push_error("No se pudo cargar el shader triplanar")
 		return null
-	
 	_material.shader = shader
-	
-	# Generar texturas procedurales
-	_generate_textures()
-	
-	# Aplicar texturas al shader
-	_apply_textures()
-	
-	# Configurar parámetros del shader
+
+	_load_arrays()
+	_load_water_textures()
 	_configure_shader_params()
-	
-	print("Material de terreno creado con shader triplanar")
-	
+
 	return _material
 
 
-func _generate_textures() -> void:
-	print("Generando texturas de terreno...")
-	_textures = ProceduralTextureGenerator.get_terrain_textures()
-
-
-func _apply_textures() -> void:
-	if not _material:
+func _load_arrays() -> void:
+	if not ResourceLoader.exists(TerrainLayers.ARRAYS_PATH):
+		push_error(MISSING_HINT)
 		return
-	
-	# Texturas de albedo
-	if _textures.has("grass"):
-		_material.set_shader_parameter("texture_grass", _textures["grass"])
-	if _textures.has("rock"):
-		_material.set_shader_parameter("texture_rock", _textures["rock"])
-	if _textures.has("snow"):
-		_material.set_shader_parameter("texture_snow", _textures["snow"])
-	if _textures.has("sand"):
-		_material.set_shader_parameter("texture_sand", _textures["sand"])
-	
-	# Normal maps
-	if _textures.has("grass_normal"):
-		_material.set_shader_parameter("normal_grass", _textures["grass_normal"])
-	if _textures.has("rock_normal"):
-		_material.set_shader_parameter("normal_rock", _textures["rock_normal"])
-	if _textures.has("snow_normal"):
-		_material.set_shader_parameter("normal_snow", _textures["snow_normal"])
-	if _textures.has("sand_normal"):
-		_material.set_shader_parameter("normal_sand", _textures["sand_normal"])
+
+	_arrays = load(TerrainLayers.ARRAYS_PATH) as TerrainTextureArrays
+	if _arrays == null or not _arrays.is_usable():
+		# Que el recurso exista no basta: puede ser de una ingesta anterior con
+		# otro número de capas, y entonces los índices del shader apuntarían a
+		# materiales cambiados de sitio.
+		push_error("Las texturas del terreno no coinciden con %d capas. %s"
+			% [TerrainLayers.COUNT, MISSING_HINT])
+		_arrays = null
+		return
+
+	_material.set_shader_parameter("terrain_albedo", _arrays.albedo())
+	_material.set_shader_parameter("terrain_normal", _arrays.normal())
+	_material.set_shader_parameter("terrain_orm", _arrays.orm())
+	_material.set_shader_parameter("layer_tile_m", TerrainLayers.tiles_in_order())
+
+	print("Terreno: %d capas de %d px" % [_arrays.layers, _arrays.size])
+
+
+## Las del agua siguen siendo procedurales, y con motivo: son patrones que
+## tienen que teselar EXACTAMENTE y desfilar sobre el cauce, y eso se construye
+## con senos de periodo entero. Una fotografía de agua no tesela sin costura.
+func _load_water_textures() -> void:
+	_water = ProceduralTextureGenerator.get_water_textures()
+	if _water.has("water_normal"):
+		_material.set_shader_parameter("water_normal_tex", _water["water_normal"])
+	if _water.has("water_foam"):
+		_material.set_shader_parameter("water_foam_tex", _water["water_foam"])
 
 
 func _configure_shader_params() -> void:
 	if not _material:
 		return
-	
-	# Escala de textura - mayor = más detalle visible
-	_material.set_shader_parameter("texture_scale", 0.15)
-	
+
 	# Sharpness del blend entre materiales (más bajo = transiciones más suaves)
 	_material.set_shader_parameter("blend_sharpness", 1.5)
-	
-	# Sharpness del triplanar
 	_material.set_shader_parameter("triplanar_sharpness", 2.5)
-	
+
 	# Configuración de alturas para el blend (valores normalizados 0-1)
 	_material.set_shader_parameter("grass_max_height", 0.45)
 	_material.set_shader_parameter("rock_min_height", 0.35)
@@ -83,7 +84,7 @@ func _configure_shader_params() -> void:
 	_material.set_shader_parameter("snow_min_height", 0.65)
 	_material.set_shader_parameter("sand_max_height", 0.15)
 	_material.set_shader_parameter("max_world_height", 30.0)
-	
+
 	# Configuración de pendiente - pendientes pronunciadas muestran más roca
 	# `slope` es 1 - |normal.y|. Empezo en 0.55 -unos 63 grados, casi solo
 	# cortados- y por eso no salia una piedra en ninguna ladera. Bajo a 0.26
@@ -93,20 +94,19 @@ func _configure_shader_params() -> void:
 	# aflora: por encima de esa pendiente el suelo no se sostiene. Y el blend
 	# es ancho a proposito -0.20- para que la transicion sea un manto de
 	# derrubio que va clareando, no una linea de nivel pintada en la ladera.
+	#
+	# Ese manto ya no es un degradado de color: entre el pasto y la pared hay
+	# una capa propia, el CANCHAL, que sale de la mitad baja de este mismo
+	# margen. Ver el reparto de pesos en el shader.
 	_material.set_shader_parameter("slope_threshold", 0.15)
 	_material.set_shader_parameter("slope_blend", 0.20)
-	
-	# Propiedades de material. Todo muy mate a proposito: ninguna superficie
-	# natural de este mapa -hierba, tierra, caliza- refleja de forma especular.
-	_material.set_shader_parameter("roughness_grass", 0.95)
-	_material.set_shader_parameter("roughness_rock", 0.94)
-	_material.set_shader_parameter("roughness_snow", 0.85)
-	_material.set_shader_parameter("roughness_sand", 0.97)
+
+	# La rugosidad ya no es una constante por material: la trae el canal verde
+	# del ORM. Aquí sólo queda el margen para retocarla en bloque.
+	_material.set_shader_parameter("use_orm", true)
+	_material.set_shader_parameter("roughness_scale", 1.0)
+	_material.set_shader_parameter("ao_strength", 0.8)
 	_material.set_shader_parameter("terrain_specular", 0.08)
-	if _textures.has("water_normal"):
-		_material.set_shader_parameter("water_normal_tex", _textures["water_normal"])
-	if _textures.has("water_foam"):
-		_material.set_shader_parameter("water_foam_tex", _textures["water_foam"])
 
 
 ## Obtiene el material
