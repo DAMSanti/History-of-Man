@@ -60,6 +60,10 @@ enum Glyph {
 	LIEBRE,     ## Cuerpo agazapado con orejas largas
 	LOBO,       ## Cuerpo esbelto, orejas triangulares, cola baja
 	UROGALLO,   ## Ave con la cola en abanico
+	AVE,        ## Ave pequena de tierra: perdiz
+	ANADE,      ## Ave de agua: cuello largo y pico ancho
+	CABALLO,    ## Cabeza de perfil con crin
+	URO,        ## Cabeza ancha con cuernos en lira
 }
 
 ## Forma y color de cada material.
@@ -124,10 +128,17 @@ const SPECIES_LOOK := {
 	"ciervo": [Glyph.CIERVO, Color(0.52, 0.36, 0.20)],
 	"corzo": [Glyph.CORZO, Color(0.64, 0.48, 0.28)],
 	"rebeco": [Glyph.REBECO, Color(0.48, 0.38, 0.26)],
-	"jabalí": [Glyph.JABALI, Color(0.28, 0.24, 0.20)],
 	"liebre": [Glyph.LIEBRE, Color(0.64, 0.54, 0.40)],
 	"lobo": [Glyph.LOBO, Color(0.56, 0.54, 0.50)],
 	"urogallo": [Glyph.UROGALLO, Color(0.22, 0.22, 0.24)],
+	# La clave va SIN tilde: es un identificador, no un rotulo. El nombre
+	# bonito lo pone `Fauna.species_name`, que para eso esta.
+	"jabali": [Glyph.JABALI, Color(0.28, 0.24, 0.20)],
+	"conejo": [Glyph.LIEBRE, Color(0.55, 0.47, 0.38)],
+	"perdiz": [Glyph.AVE, Color(0.62, 0.50, 0.36)],
+	"anade": [Glyph.ANADE, Color(0.32, 0.46, 0.42)],
+	"caballo": [Glyph.CABALLO, Color(0.60, 0.48, 0.32)],
+	"uro": [Glyph.URO, Color(0.34, 0.28, 0.24)],
 }
 
 var glyph: Glyph = Glyph.CANTO
@@ -458,6 +469,51 @@ func _draw() -> void:
 			_line(Vector2(0.30, 0.30), Vector2(0.92, 0.12), s, tint.lightened(0.2), 0.02)
 			_line(Vector2(0.30, 0.52), Vector2(0.92, 0.70), s, tint.lightened(0.2), 0.02)
 			_circle(Vector2(0.20, 0.38), 0.04, s, dark)
+		Glyph.AVE:
+			# Perdiz: cuerpo redondo, cabeza pequena y cola corta. Se
+			# distingue del urogallo por no llevar el abanico
+			_circle(Vector2(0.46, 0.56), 0.22, s, tint)
+			_circle(Vector2(0.26, 0.38), 0.10, s, tint)
+			_poly([Vector2(0.16, 0.38), Vector2(0.24, 0.34), Vector2(0.24, 0.42)],
+				s, dark)
+			_poly([Vector2(0.62, 0.50), Vector2(0.88, 0.40), Vector2(0.86, 0.62)],
+				s, dark)
+			_line(Vector2(0.42, 0.76), Vector2(0.40, 0.92), s, dark, 0.04)
+			_line(Vector2(0.54, 0.76), Vector2(0.56, 0.92), s, dark, 0.04)
+		Glyph.ANADE:
+			# Ave de agua: cuello en S, pico ancho y el cuerpo posado
+			_poly([Vector2(0.24, 0.62), Vector2(0.42, 0.52), Vector2(0.78, 0.56),
+				Vector2(0.88, 0.70), Vector2(0.60, 0.80), Vector2(0.28, 0.76)],
+				s, tint)
+			_line(Vector2(0.42, 0.56), Vector2(0.38, 0.30), s, tint, 0.09)
+			_circle(Vector2(0.38, 0.26), 0.10, s, tint)
+			_poly([Vector2(0.28, 0.24), Vector2(0.10, 0.26), Vector2(0.28, 0.32)],
+				s, dark)
+			_line(Vector2(0.24, 0.80), Vector2(0.86, 0.80), s, tint.lightened(0.35), 0.04)
+		Glyph.CABALLO:
+			# Cabeza de perfil con la crin erizada: el caballo de las
+			# cuevas, que es como se dibujaba entonces
+			_poly([Vector2(0.30, 0.86), Vector2(0.34, 0.44), Vector2(0.52, 0.32),
+				Vector2(0.78, 0.34), Vector2(0.90, 0.50), Vector2(0.62, 0.58),
+				Vector2(0.52, 0.86)], s, tint)
+			_poly([Vector2(0.46, 0.34), Vector2(0.42, 0.16), Vector2(0.54, 0.28)],
+				s, dark)
+			for i in range(4):
+				var x := 0.36 + float(i) * 0.11
+				_line(Vector2(x, 0.36), Vector2(x - 0.05, 0.16), s, dark, 0.035)
+			_circle(Vector2(0.62, 0.44), 0.04, s, dark)
+		Glyph.URO:
+			# Testuz ancho y cuernos en lira hacia delante: el uro no es una
+			# vaca, y en las paredes se le pinta justo por eso
+			_poly([Vector2(0.32, 0.48), Vector2(0.68, 0.48), Vector2(0.62, 0.88),
+				Vector2(0.38, 0.88)], s, tint)
+			_circle(Vector2(0.50, 0.48), 0.17, s, tint)
+			_line(Vector2(0.36, 0.42), Vector2(0.16, 0.26), s, dark, 0.06)
+			_line(Vector2(0.16, 0.26), Vector2(0.22, 0.10), s, dark, 0.05)
+			_line(Vector2(0.64, 0.42), Vector2(0.84, 0.26), s, dark, 0.06)
+			_line(Vector2(0.84, 0.26), Vector2(0.78, 0.10), s, dark, 0.05)
+			_circle(Vector2(0.44, 0.50), 0.035, s, dark)
+			_circle(Vector2(0.56, 0.50), 0.035, s, dark)
 		Glyph.CUMBRE:
 			# Dos crestas y el nevero de arriba. La segunda cresta, más baja y
 			# detrás, es lo que lo hace leerse como monte y no como triángulo

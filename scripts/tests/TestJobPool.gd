@@ -796,3 +796,78 @@ func test_can_reach_le_hace_caso_a_la_rejilla() -> void:
 	assert_eq(sim.can_reach(lejos), sim._navgrid().connected(
 		sim.home_position, lejos),
 		"y también para lo lejano")
+
+
+# --- lo que el jugador pone arriba manda ---------------------------------
+
+func test_el_uno_gana_a_todos_los_doses() -> void:
+	# Queja literal: «Haro no debería tener como profesión principal trampas
+	# cuando tiene pesca de orilla en 1; la selección del jugador tiene
+	# prioridad sobre todo». Con el sitio de pesca en pie, la tiene.
+	var people := _banda(5)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	for activity: int in [Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		sim.set_work_site(activity as Subsistence.Activity, Vector3(100.0, 0.0, 100.0))
+
+	var person := people[0]
+	for job_key: int in Profession.CATALOGUE:
+		for task: int in Profession.tasks_of(job_key as Profession.Job):
+			person.set_priority(task, 2)
+	person.set_priority(Profession.task_id(Profession.Job.RIBERA,
+		Profession.Speciality.ORILLA), 1)
+	sim.apply_priorities()
+
+	assert_eq(person.current_speciality, Profession.Speciality.ORILLA,
+		"con la orilla sola en 1, se pesca de orilla y no se ponen trampas")
+
+
+func test_una_tarea_que_se_puede_hacer_no_tiene_estorbo() -> void:
+	var people := _banda(4)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	sim.set_work_site(Subsistence.Activity.PESCA, Vector3(100.0, 0.0, 100.0))
+
+	var tarea := Profession.task_id(Profession.Job.RIBERA,
+		Profession.Speciality.ORILLA)
+	assert_eq(sim.task_blocked_by(people[0], tarea), "",
+		"con sitio de pesca conocido no hay nada que lo estorbe")
+
+
+func test_cuando_se_baja_una_tarea_se_dice_por_que() -> void:
+	# Lo que de verdad estaba mal no era bajarla —a veces hay que bajarla—:
+	# era bajarla EN SILENCIO. Desde fuera parecía que el panel no servía.
+	var people := _banda(4)
+	var sim := _sim(people)
+	sim.field = ResourceField.new()
+	sim.field.setup(8, 8, Vector2(512.0, 512.0))
+	# Mundo montado y NADA de pesca en ninguna parte
+	var tarea := Profession.task_id(Profession.Job.RIBERA,
+		Profession.Speciality.ORILLA)
+	var motivo := sim.task_blocked_by(people[0], tarea)
+	assert_false(motivo.is_empty(), "sin sitio de pesca, hay motivo que dar")
+	assert_true(motivo.contains("pesca"), "y el motivo nombra la pesca: %s" % motivo)
+
+	# Y si lo que pasa es que hoy no hay camino, se dice eso y no lo otro
+	sim.set_work_site(Subsistence.Activity.PESCA, Vector3(100.0, 0.0, 100.0))
+	assert_eq(sim.task_blocked_by(people[0], tarea), "", "con sitio, ninguno")
+	sim._unreachable_today[int(Subsistence.Activity.PESCA)] = true
+	assert_true(sim.task_blocked_by(people[0], tarea).contains("camino"),
+		"y si no hay camino, lo dice con esas palabras")
+
+
+func test_la_eleccion_de_arriba_es_la_que_se_lee() -> void:
+	var people := _banda(3)
+	var sim := _sim(people)
+	var person := people[0]
+	person.set_priority(Profession.task_id(Profession.Job.CAZA,
+		Profession.Speciality.TRAMPAS), 2)
+	person.set_priority(Profession.task_id(Profession.Job.RIBERA,
+		Profession.Speciality.ORILLA), 1)
+	assert_eq(Profession.task_speciality(sim.top_choice(person)),
+		Profession.Speciality.ORILLA,
+		"lo que el jugador puso arriba es la orilla, no las trampas")

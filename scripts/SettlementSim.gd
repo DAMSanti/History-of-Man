@@ -799,6 +799,53 @@ const APINAMIENTO := 0.35
 const HABITO := 0.08
 
 
+## Por que una tarea que el jugador ha marcado NO se puede hacer hoy. "" si
+## si se puede.
+##
+## Existe porque el reparto la descartaba en silencio. Queja literal: «Haro no
+## deberia tener como profesion principal trampas cuando tiene pesca de orilla
+## en 1; la seleccion del jugador tiene prioridad sobre todo». Y la tiene: lo
+## marcado manda salvo que ese dia sea IMPOSIBLE -no hay adonde ir, no hay con
+## que trabajar, la despensa esta al tope-. Lo que no puede ser es que sea
+## imposible y no se diga: desde fuera parece que el panel no sirve.
+func task_blocked_by(person: Inhabitant, task: int) -> String:
+	var job := Profession.task_job(task)
+	if not Profession.can_do(job, person):
+		return "no puede: no le toca por edad o por criar"
+
+	if food_is_capped() and _feeds_the_band(job):
+		return "la despensa esta al tope; nadie sale a por mas comida"
+
+	var speciality := Profession.task_speciality(task)
+	if not _task_has_somewhere(job, task):
+		var act := Profession.activity_of(job, speciality)
+		if _unreachable_today.has(int(act)):
+			return "hoy no hay camino a ningun sitio de %s" 				% Subsistence.activity_name(act).to_lower()
+		return "no se conoce ningun sitio de %s" 			% Subsistence.activity_name(act).to_lower()
+
+	if not _speciality_can_work(speciality):
+		return "no hay materia prima en el abrigo para eso"
+
+	return ""
+
+
+## La tarea que el jugador ha puesto MAS ARRIBA para esta persona, se pueda
+## hacer hoy o no. -1 si no ha marcado ninguna.
+func top_choice(person: Inhabitant) -> int:
+	var best := -1
+	var best_level := 99
+	for job_key: int in Profession.CATALOGUE:
+		if job_key == Profession.Job.OCIOSO:
+			continue
+		for task: int in Profession.tasks_of(job_key as Profession.Job):
+			var level := person.priority_for(task)
+			if level <= 0 or level >= best_level:
+				continue
+			best_level = level
+			best = task
+	return best
+
+
 func apply_priorities() -> void:
 	# Cuanta gente lleva ya asignada cada especialidad en este reparto.
 	var taken: Dictionary = {}

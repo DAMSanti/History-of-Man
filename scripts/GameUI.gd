@@ -2800,6 +2800,43 @@ func _person_row(body: VBoxContainer, person: Inhabitant, index: int) -> void:
 		today.add_theme_color_override("font_color", UISkin.OCHRE)
 		today.tooltip_text = _doing_text(person))
 
+	# Y si lo que hace HOY no es lo que el jugador puso arriba, se dice por
+	# que. Antes se descartaba en silencio y desde fuera parecia que el panel
+	# no servia: alguien con la pesca de orilla en 1 aparecia poniendo
+	# trampas sin una palabra de explicacion.
+	var why := Label.new()
+	why.add_theme_font_size_override("font_size", 10)
+	why.add_theme_color_override("font_color", UISkin.ALARM)
+	why.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	why.clip_text = true
+	row.add_child(why)
+	_bind(why, func() -> void:
+		why.text = _demotion_text(person))
+
+
+## Por que esta persona no esta haciendo lo que tiene marcado mas arriba.
+## Cadena vacia si SI lo esta haciendo, que es lo normal.
+func _demotion_text(person: Inhabitant) -> String:
+	if sim == null:
+		return ""
+	var wanted := sim.top_choice(person)
+	if wanted < 0:
+		return ""
+	var doing := Profession.task_id(person.job as Profession.Job,
+		person.current_speciality as Profession.Speciality)
+	if doing == wanted:
+		return ""
+	var reason := sim.task_blocked_by(person, wanted)
+	if reason.is_empty():
+		# Empate: hay otra tarea al mismo nivel y hoy hacia mas falta. Eso no
+		# es que se le ignore, es lo que significa poner dos cosas iguales.
+		if person.priority_for(doing) == person.priority_for(wanted):
+			return ""
+		return ""
+	return "%s: %s" % [String(SPECIALITY_SHORT.get(
+		Profession.task_speciality(wanted), JOB_SHORT.get(
+			Profession.task_job(wanted), "?"))), reason]
+
 
 ## Una fila de la rejilla con el hueco del nombre ya puesto, para que las
 ## cabeceras caigan exactamente encima de las casillas.

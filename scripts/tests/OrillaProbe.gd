@@ -67,11 +67,21 @@ func _run() -> void:
 			break
 		if not Profession.can_do(Profession.Job.RIBERA, person):
 			continue
+		# Exactamente el reparto de la captura del jugador: TODO a 2 y la
+		# orilla sola en 1. Sin empates que valgan.
+		for job_key: int in Profession.CATALOGUE:
+			for task: int in Profession.tasks_of(job_key as Profession.Job):
+				person.set_priority(task, 2)
 		person.set_priority(Profession.task_id(Profession.Job.RIBERA,
 			Profession.Speciality.ORILLA), 1)
 		elegidos.append(person)
 	sim.apply_priorities()
 	print("=== A LA ORILLA: %s ===" % _names(elegidos))
+	for person: Inhabitant in elegidos:
+		var wanted := sim.top_choice(person)
+		print("  %s quiere %s | estorbo: «%s»" % [person.given_name,
+			Profession.speciality_name(Profession.task_speciality(wanted)),
+			sim.task_blocked_by(person, wanted)])
 
 	_report(sim, elegidos)
 

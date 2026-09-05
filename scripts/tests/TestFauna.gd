@@ -66,7 +66,10 @@ func test_species_text_coincide_con_species_at() -> void:
 
 	if found_solo:
 		var species := Fauna.species_at(solo, Subsistence.Season.OTONO)
-		assert_eq(Fauna.species_text(solo, Subsistence.Season.OTONO), species[0],
+		# La CLAVE es un identificador sin tilde -"jabali"- y el ROTULO es lo
+		# que se lee -«jabalí»-. El texto usa el rotulo, que es lo suyo.
+		assert_eq(Fauna.species_text(solo, Subsistence.Season.OTONO),
+			Fauna.species_name(species[0]).to_lower(),
 			"con una sola especie, el texto es esa sola")
 	if found_varias:
 		var text := Fauna.species_text(varias, Subsistence.Season.OTONO)
