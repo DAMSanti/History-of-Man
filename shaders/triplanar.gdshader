@@ -25,6 +25,15 @@ group_uniforms texture_settings;
 // escala para las cuatro, que es lo que hacia imposible que un canto rodado y
 // una mata de hierba tuviesen su tamano real a la vez.
 uniform float layer_tile_m[LAYERS];
+
+// Graduacion de color por capa. Ver TerrainLayers.CATALOGUE para el porque de
+// cada numero: en corto, la fotogrametria de la biblioteca esta hecha en un
+// prado ingles de junio y esto es una estepa fria de hace quince mil anos, y
+// ese material no existe en CC0. La textura pone la estructura y el color se
+// gradua.
+uniform vec3 layer_tint[LAYERS];
+// Cuanto se conserva del color original: 1 tal cual, 0 gris.
+uniform float layer_saturation[LAYERS];
 uniform float blend_sharpness : hint_range(0.1, 10.0) = 2.0;
 uniform float triplanar_sharpness : hint_range(0.1, 10.0) = 3.0;
 
@@ -319,6 +328,13 @@ vec2 value_noise2(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+// Desatura hacia el gris de misma luminancia y despues tinta. En ese orden: al
+// reves, el tinte se diluiria justo en las capas que mas hay que corregir.
+vec3 grade(vec3 c, int layer) {
+	float lum = dot(c, vec3(0.299, 0.587, 0.114));
+	return mix(vec3(lum), c, layer_saturation[layer]) * layer_tint[layer];
+}
+
 // Un color por capa, para la vista de diagnostico
 vec3 layer_color(int i) {
 	if (i == 0) { return vec3(0.35, 0.70, 0.20); }  // pradera
@@ -515,8 +531,8 @@ void fragment() {
 	float tile0 = layer_tile_m[i0];
 	float tile1 = layer_tile_m[i1];
 
-	vec3 final_color = triplanar_texture(terrain_albedo, layer0, tile0,
-		tex_position, dpdx, dpdy, triplanar_weights).rgb * w0;
+	vec3 final_color = grade(triplanar_texture(terrain_albedo, layer0, tile0,
+		tex_position, dpdx, dpdy, triplanar_weights).rgb, i0) * w0;
 	vec3 final_normal = vec3(0.0);
 	if (use_normal_maps) {
 		final_normal = triplanar_normal(terrain_normal, layer0, tile0,
@@ -538,8 +554,8 @@ void fragment() {
 	// distingue de no estar, y saltarsela ahorra la mitad de los muestreos en
 	// todo lo que no es transicion, que es la mayor parte del mapa.
 	if (w1 > 0.02) {
-		final_color += triplanar_texture(terrain_albedo, layer1, tile1,
-			tex_position, dpdx, dpdy, triplanar_weights).rgb * w1;
+		final_color += grade(triplanar_texture(terrain_albedo, layer1, tile1,
+			tex_position, dpdx, dpdy, triplanar_weights).rgb, i1) * w1;
 		if (use_normal_maps) {
 			final_normal += triplanar_normal(terrain_normal, layer1, tile1,
 				tex_position, dpdx, dpdy, triplanar_weights) * w1;
@@ -570,8 +586,8 @@ void fragment() {
 	// grande es clara y oscurece donde es oscura, que es lo que hace que unas
 	// manchas se lean mas secas y otras mas verdes sin cambiar el brillo medio.
 	if (macro_break > 0.001) {
-		vec3 wide = uniplanar_albedo(layer0, tile0 * macro_break_factor,
-			tex_position, dpdx, dpdy, triplanar_weights).rgb;
+		vec3 wide = grade(uniplanar_albedo(layer0, tile0 * macro_break_factor,
+			tex_position, dpdx, dpdy, triplanar_weights).rgb, i0);
 		vec3 overlay = mix(2.0 * final_color * wide,
 			1.0 - 2.0 * (1.0 - final_color) * (1.0 - wide),
 			step(vec3(0.5), final_color));

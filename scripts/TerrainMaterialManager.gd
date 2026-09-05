@@ -54,6 +54,9 @@ func _load_arrays() -> void:
 	_material.set_shader_parameter("terrain_normal", _arrays.normal())
 	_material.set_shader_parameter("terrain_orm", _arrays.orm())
 	_material.set_shader_parameter("layer_tile_m", TerrainLayers.tiles_in_order())
+	_material.set_shader_parameter("layer_tint", TerrainLayers.tints_in_order())
+	_material.set_shader_parameter("layer_saturation",
+		TerrainLayers.saturations_in_order())
 
 	print("Terreno: %d capas de %d px" % [_arrays.layers, _arrays.size])
 

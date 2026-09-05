@@ -50,6 +50,12 @@ func _init() -> void:
 		print("sin terreno"); quit(); return
 	var material: ShaderMaterial = terrain.get_terrain_material()
 
+	# Luz de mediodía a la fuerza. La partida arranca a las 06:00 y con niebla,
+	# y bajo esa luz no se puede juzgar una PALETA: todo sale gris azulado y
+	# cualquier graduación de color parece la misma. Para calibrar hace falta una
+	# luz de referencia, igual que para medir hace falta una tanda de referencia.
+	_force_noon(demo)
+
 	var home := Vector3(2048.0, 0.0, 2048.0)
 	home.y = terrain.get_height_at(home)
 
@@ -64,6 +70,54 @@ func _init() -> void:
 	print("0 terreno · 1 capa dominante · 2 albedo sin normales")
 	print("en %s" % ProjectSettings.globalize_path("user://"))
 	quit()
+
+
+## Sol alto, luz plena y sin bruma, para juzgar color.
+##
+## Aviso para quien mire estas capturas: las laderas en sombra salen casi
+## NEGRAS, y eso no es la paleta. Se probaron y se descartaron cuatro causas:
+## `ssao_intensity` (estaba en 2,0), `ambient_light_energy`, `tonemap_white`
+## (6,0, que con ACES aplasta) y que WeatherView estuviese pisando el entorno
+## —sólo toca la niebla—. Ninguna de las cuatro abre las sombras.
+##
+## Lo que queda es que NO HAY LUZ DE REBOTE: con SDFGI apagado, una ladera de
+## espaldas al sol sólo recibe el cielo. Es físicamente lo que se ha pedido, y
+## por eso ningún ajuste lo arregla: falta una fuente de luz, no sobra un
+## número. Pendiente de probar con SDFGI encendido.
+func _force_noon(node: Node) -> void:
+	var light := _find_light(node)
+	if light:
+		light.rotation_degrees = Vector3(-62.0, -50.0, 0.0)
+		light.light_energy = 1.15
+	for child in node.get_children():
+		if child is WorldEnvironment:
+			var env: Environment = (child as WorldEnvironment).environment
+			if env:
+				env.volumetric_fog_enabled = false
+				env.fog_enabled = false
+			return
+		_force_noon_env(child)
+
+
+func _force_noon_env(node: Node) -> void:
+	for child in node.get_children():
+		if child is WorldEnvironment:
+			var env: Environment = (child as WorldEnvironment).environment
+			if env:
+				env.volumetric_fog_enabled = false
+				env.fog_enabled = false
+			return
+		_force_noon_env(child)
+
+
+func _find_light(node: Node) -> DirectionalLight3D:
+	for child in node.get_children():
+		if child is DirectionalLight3D:
+			return child as DirectionalLight3D
+		var deeper := _find_light(child)
+		if deeper:
+			return deeper
+	return null
 
 
 func _first(root_node: Node, type_name: String) -> Node:
