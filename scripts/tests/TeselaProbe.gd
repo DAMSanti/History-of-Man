@@ -73,6 +73,15 @@ func _init() -> void:
 	# props salen donde su hábitat les deja. Las capas de ResourceProps se
 	# llaman por su materia, así que se les puede preguntar dónde está su
 	# primera instancia y plantar la cámara encima.
+	# Se borran antes de sacarlas: si una vista no se puede tomar, mejor que
+	# falte el fichero a que quede el de la vuelta anterior haciéndose pasar
+	# por el resultado de ésta.
+	var dir := DirAccess.open("user://")
+	if dir:
+		for old: String in dir.get_files():
+			if old.begins_with("prop_"):
+				dir.remove(old)
+
 	for materia: String in ["Cuarcita", "Fruto seco", "Leña"]:
 		var spot := _first_instance(demo, "Recurso_" + materia)
 		if spot == Vector3.INF:
@@ -137,17 +146,21 @@ func _force_noon_env(node: Node) -> void:
 
 ## Dónde está la primera instancia de una capa de props, o INF si no hay.
 func _first_instance(root_node: Node, layer_name: String) -> Vector3:
-	var node := _deep_find(root_node, layer_name) as MultiMeshInstance3D
+	# Por PREFIJO y no por nombre exacto: las capas se trocean por zonas y se
+	# llaman `Recurso_Cuarcita_3_0`. Buscando el nombre exacto no encontraba
+	# nada, la sonda se saltaba la captura, y quedaba en disco la de la vuelta
+	# anterior. Dos veces me creí una imagen rancia por esto.
+	var node := _deep_find_prefix(root_node, layer_name) as MultiMeshInstance3D
 	if node == null or node.multimesh == null 			or node.multimesh.instance_count <= 0:
 		return Vector3.INF
 	return node.global_position 		+ node.multimesh.get_instance_transform(0).origin
 
 
-func _deep_find(node: Node, wanted: String) -> Node:
-	if node.name == wanted:
+func _deep_find_prefix(node: Node, prefix: String) -> Node:
+	if node is MultiMeshInstance3D and node.name.begins_with(prefix):
 		return node
 	for child in node.get_children():
-		var found := _deep_find(child, wanted)
+		var found := _deep_find_prefix(child, prefix)
 		if found:
 			return found
 	return null

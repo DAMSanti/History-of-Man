@@ -47,6 +47,10 @@ const CLUSTER_RADIUS_MAX := 11.0
 ## en cada intento.
 const HABITAT_TRIES := 6
 
+## Lado de la zona en que se trocea cada capa, en metros. Ver el porqué en
+## `_build_layer`: sin trocear, el recorte de visibilidad no mide lo que dice.
+const TILE_M := 512.0
+
 var _field: ResourceField
 var _terrain: TerrainGenerator
 var _rng := RandomNumberGenerator.new()
@@ -291,51 +295,85 @@ func _build_layer(entry: Dictionary) -> void:
 	if placements.is_empty():
 		return
 
-	var multi := MultiMesh.new()
-	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.mesh = mesh
-	multi.instance_count = placements.size()
-	for i in range(placements.size()):
-		multi.set_instance_transform(i, placements[i])
-
-	var node := MultiMeshInstance3D.new()
-	node.name = "Recurso_" + Materia.material_name(kind)
-	node.multimesh = multi
-
-	# Solo se pinta lo que NO trae modelo. Un modelo de fotogrametria ya viene
-	# con su material y sus texturas, y un `material_override` las taparia: la
-	# roca saldria de un gris plano habiendo bajado su albedo, su normal y su
-	# ORM. Ver `PropModels` para cuales tienen modelo y cuales siguen siendo
-	# silueta -la cuerna y la concha, que no existen en CC0-.
-	if entry.has("color"):
-		var material := StandardMaterial3D.new()
-		material.albedo_color = entry["color"]
-		material.roughness = 0.95
-		material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
-		node.material_override = material
-	# Cada pieza se ve hasta donde da su tamaño, y no todas hasta 900 m.
+	# Se trocea por ZONAS, y no es un lujo: es lo que hace que el recorte de
+	# visibilidad signifique algo.
 	#
-	# La cuenta: a doscientos metros un píxel son unos veintiséis centímetros,
-	# así que un canto de treinta y cuatro mide PÍXEL Y MEDIO. No se le puede
-	# ver, ni agrupándolo: nueve cantos en una mancha cubren el 0,7 % de su
-	# propia área en pantalla. Dibujarlo a esa distancia es pagar geometría por
-	# aliasing.
+	# `visibility_range_end` se mide desde el NODO, no desde cada instancia. Con
+	# un solo MultiMesh para todo el valle, el nodo está en el origen del mapa y
+	# las instancias a kilómetros de él, así que el recorte comparaba la
+	# distancia de la cámara AL ORIGEN. Con 900 m de recorte y el poblado a
+	# 2.896 m del origen, el resultado era que los props no se veían NUNCA en
+	# toda la zona de juego. Llevaba así desde siempre.
 	#
-	# Y no hace falta, porque a esa distancia el cantizal YA está representado:
-	# lo pinta la capa CANTOS del terreno, con su fotogrametría de grava. El
-	# canto en tres dimensiones es detalle de cerca, no un hito del paisaje.
-	# La mata y el bloque sí son hitos, y por eso se ven de lejos.
-	node.visibility_range_end = clampf(real_height * 350.0, 130.0, 900.0)
-	node.visibility_range_end_margin = node.visibility_range_end * 0.18
-	add_child(node)
+	# Con un nodo por zona, cada uno se planta en el centro de la suya, el
+	# recorte mide lo que dice medir, y además Godot puede descartar por
+	# frustum zonas enteras —cosa que con un MultiMesh único no hace, porque
+	# para el motor es un solo objeto que ocupa el valle entero—.
+	var by_tile: Dictionary = {}
+	for placement: Transform3D in placements:
+		var tile := Vector2i(
+			int(floor(placement.origin.x / TILE_M)),
+			int(floor(placement.origin.z / TILE_M)))
+		if not by_tile.has(tile):
+			by_tile[tile] = ([] as Array[Transform3D])
+		(by_tile[tile] as Array[Transform3D]).append(placement)
 
-	_layers[kind] = node
-	# La talla va en el informe a proposito: es el numero con el que se pilla que
-	# algo esta sembrado a escala equivocada, y es lo que fallo con el radio de
-	# acierto de la mata.
-	print("ResourceProps: %d de %s · %.2f m · mancha r%.1f · visible a %.0f m" % [
+	var reach := clampf(real_height * 350.0, 130.0, 900.0)
+	var nodes: Array[MultiMeshInstance3D] = []
+
+	for tile: Vector2i in by_tile:
+		var group: Array[Transform3D] = by_tile[tile]
+		var centre := Vector3(
+			(float(tile.x) + 0.5) * TILE_M, 0.0, (float(tile.y) + 0.5) * TILE_M)
+
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh
+		multi.instance_count = group.size()
+		for i in range(group.size()):
+			# Relativas al centro de la zona, que es donde se planta el nodo
+			var placement: Transform3D = group[i]
+			multi.set_instance_transform(i,
+				Transform3D(placement.basis, placement.origin - centre))
+
+		var node := MultiMeshInstance3D.new()
+		node.name = "Recurso_%s_%d_%d" % [
+			Materia.material_name(kind), tile.x, tile.y]
+		node.multimesh = multi
+		node.position = centre
+
+		# Solo se pinta lo que NO trae modelo. Un modelo de fotogrametria ya
+		# viene con su material y sus texturas, y un `material_override` las
+		# taparia: la roca saldria de un gris plano habiendo bajado su albedo,
+		# su normal y su ORM. Ver `PropModels` para cuales tienen modelo y
+		# cuales siguen siendo silueta -la cuerna y la concha-.
+		if entry.has("color"):
+			var material := StandardMaterial3D.new()
+			material.albedo_color = entry["color"]
+			material.roughness = 0.95
+			material.specular_mode = BaseMaterial3D.SPECULAR_DISABLED
+			node.material_override = material
+
+		# Cada pieza se ve hasta donde da su tamaño, y no todas hasta 900 m.
+		#
+		# La cuenta: a doscientos metros un píxel son unos veintiséis
+		# centímetros, así que un canto de treinta y cuatro mide PÍXEL Y MEDIO.
+		# No se le puede ver, ni agrupándolo. Y no hace falta, porque a esa
+		# distancia el cantizal ya lo pinta la capa CANTOS del terreno con su
+		# fotogrametría de grava. El canto en tres dimensiones es detalle de
+		# cerca; la mata y el bloque sí son hitos, y por eso se ven de lejos.
+		#
+		# El recorte se suma a la media diagonal de la zona para que una pieza
+		# del borde no desaparezca antes de tiempo: el nodo está en el centro.
+		node.visibility_range_end = reach + TILE_M * 0.71
+		node.visibility_range_end_margin = reach * 0.18
+		add_child(node)
+		nodes.append(node)
+
+	_layers[kind] = nodes
+	print("ResourceProps: %d de %s · %.2f m · mancha r%.1f · visible a %.0f m · %d zonas" % [
 		placements.size(), Materia.material_name(kind), real_height,
-		cluster_radius, node.visibility_range_end])
+		cluster_radius, reach, nodes.size()])
 
 
 # --- las siluetas ---------------------------------------------------------
