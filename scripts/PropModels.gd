@@ -81,6 +81,19 @@ const CATALOGUE := {
 		# es parte del bosque de refugio, así que además cuadra con la época.
 		"slug": "pine_sapling_small", "name": "Conífera joven", "height_m": 1.40,
 	},
+	"asta": {
+		# Cuerna de desmogue: lo que se recoge, no lo que se caza. De ella salen
+		# azagayas y arpones, así que es icono de la época.
+		"local": "asta.glb", "name": "Cuerna", "height_m": 0.70,
+	},
+	"concha": {
+		"local": "concha.glb", "name": "Concha", "height_m": 0.11,
+	},
+	"concha2": {
+		# Dos conchas distintas a propósito: un conchero de una sola forma
+		# repetida se lee como un patrón, no como marisco.
+		"local": "concha2.glb", "name": "Concha menuda", "height_m": 0.085,
+	},
 	"musgo": {
 		# Yesca: lo que prende. Musgo seco y hongo de corteza; el musgo es lo
 		# más parecido que hay.

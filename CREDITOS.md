@@ -30,6 +30,9 @@ verdad se usa. No se edita a mano.
 - Mata de raíz — [Poly Haven](https://polyhaven.com/a/dandelion_01), CC0.
 - Tocón — [Poly Haven](https://polyhaven.com/a/tree_stump_01), CC0.
 - Conífera joven — [Poly Haven](https://polyhaven.com/a/pine_sapling_small), CC0.
+- Cuerna — «Deer horn» de alban (https://sketchfab.com/alban), CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). https://sketchfab.com/3d-models/deer-horn-dd102097d1da44acbf586ffcc73c15d0
+- Concha — «Seashell Fossil» de NaRoCreations (https://sketchfab.com/NaRoCreations), CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). https://sketchfab.com/3d-models/seashell-fossil-bc4b85625dd045608b498c41f8b5c1a7
+- Concha menuda — «Seashell» de yaocheng (https://sketchfab.com/yaocheng), CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/). https://sketchfab.com/3d-models/seashell-9b59afbf4a694e8cb6daa0e0235cff86
 - Musgo de yesca — [Poly Haven](https://polyhaven.com/a/moss_01), CC0.
 
 ## Lo que falta

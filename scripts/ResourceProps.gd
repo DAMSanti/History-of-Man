@@ -118,8 +118,7 @@ func _catalogue() -> Array[Dictionary]:
 			# no un paisaje: una por celda buena y en invierno.
 			"kind": Materia.Kind.ASTA,
 			"from": Subsistence.Activity.RECOLECCION,
-			"mesh": _antler_mesh(),
-			"color": Color(0.78, 0.73, 0.62),
+			"model": "asta",
 			"per_cell": 1, "sway": 0.0, "rarity": 0.25,
 		},
 		{
@@ -206,8 +205,9 @@ func _catalogue() -> Array[Dictionary]:
 		{
 			"kind": Materia.Kind.MARISCO,
 			"from": Subsistence.Activity.MARISQUEO,
-			"mesh": _shell_mesh(),
-			"color": Color(0.60, 0.57, 0.52),
+			# Dos conchas distintas: un conchero de una sola forma repetida se
+			# lee como un patrón, no como marisco.
+			"models": ["concha", "concha2"],
 			"per_cell": 9, "sway": 0.0,
 		},
 	]
@@ -252,8 +252,24 @@ func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	# que las materias «baratas» subieran de mil a mil doscientas: el fotograma
 	# pasó de 35 a 56 ms. Y encima «barato» lo había medido en una cámara donde
 	# el pasto ni se dibujaba, así que el dato no valía para repartir nada.
-	var even := maxi(120, MAX_TOTAL / maxi(catalogue.size(), 1))
+	# Una materia puede traer VARIAS siluetas. Se expande a una capa por silueta
+	# y se parte su porción entre ellas, así que dar variedad a una materia no le
+	# cuesta instancias a las demás.
+	var expanded: Array[Dictionary] = []
 	for entry: Dictionary in catalogue:
+		if not entry.has("models"):
+			expanded.append(entry)
+			continue
+		var variants: Array = entry["models"]
+		for model: String in variants:
+			var copy := entry.duplicate()
+			copy.erase("models")
+			copy["model"] = model
+			copy["share"] = float(entry.get("share", 1.0)) / float(variants.size())
+			expanded.append(copy)
+
+	var even := maxi(120, MAX_TOTAL / maxi(expanded.size(), 1))
+	for entry: Dictionary in expanded:
 		_budget = maxi(120, int(float(even)
 			* minf(float(entry.get("share", 1.0)), 1.0)))
 		_build_layer(entry)
@@ -424,8 +440,10 @@ func _build_layer(entry: Dictionary) -> void:
 				Transform3D(placement.basis, placement.origin - centre))
 
 		var node := MultiMeshInstance3D.new()
-		node.name = "Recurso_%s_%d_%d" % [
-			Materia.material_name(kind), tile.x, tile.y]
+		node.name = "Recurso_%s%s_%d_%d" % [
+			Materia.material_name(kind),
+			("_" + String(entry["model"])) if entry.has("model") else "",
+			tile.x, tile.y]
 		node.multimesh = multi
 		node.position = centre
 
@@ -550,21 +568,4 @@ func pick(origin: Vector3, direction: Vector3) -> Dictionary:
 
 
 
-## Cuerna de desmogue: un asta con su candil, aproximada con un prisma
-## alargado e inclinado. Poca cosa, pero desde arriba se lee como algo
-## puntiagudo y claro sobre el suelo, y eso basta para que se distinga.
-func _antler_mesh() -> Mesh:
-	var mesh := PrismMesh.new()
-	mesh.size = Vector3(0.18, 0.85, 0.5)
-	return mesh
 
-
-
-## Costra de lapa en roca intermareal.
-func _shell_mesh() -> Mesh:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.035
-	mesh.bottom_radius = 0.06
-	mesh.height = 0.05
-	mesh.radial_segments = 5
-	return mesh

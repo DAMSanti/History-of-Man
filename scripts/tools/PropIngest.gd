@@ -39,7 +39,13 @@ func _init() -> void:
 	for index in range(keys.size()):
 		var key: String = keys[index]
 		var entry: Dictionary = PropModels.CATALOGUE[key]
-		var slug: String = entry["slug"]
+		# `slug` sólo lo tienen las piezas que se descargan. Las locales traen
+		# `local`, y pedirles `slug` reventaba `_init` a media ingesta: el error
+		# aborta la función pero el `SceneTree` sigue vivo sin llegar a `quit()`,
+		# así que el proceso se quedaba media hora al dos por ciento de CPU sin
+		# imprimir nada y sin terminar. Un fallo de script en `_init` de una
+		# herramienta no se ve: se cuelga.
+		var slug: String = entry.get("slug", entry.get("local", "?"))
 		print("[%d/%d] %s (%s)" % [index + 1, keys.size(), entry["name"], slug])
 
 		var gltf_path := ""
@@ -75,6 +81,15 @@ func _init() -> void:
 		if box.size.y > 0.0001:
 			factor = float(entry["height_m"]) / box.size.y
 
+		if entry.has("local"):
+			var credit := _read_credit(gltf_path)
+			if credit.is_empty():
+				print("   SIN atribucion dentro del fichero")
+			else:
+				library.credits[key] = credit
+				print("   «%s» de %s · %s" % [credit.get("title", "?"),
+					credit.get("author", "?"), credit.get("license", "?")])
+
 		_compress_textures(with_lods)
 		library.meshes[key] = with_lods
 		library.scales[key] = factor
@@ -101,7 +116,7 @@ func _init() -> void:
 		file.close()
 	print("")
 	print("guardado %s · %.1f MB" % [PropModels.LIBRARY_PATH, bytes / 1048576.0])
-	_write_credits()
+	_write_credits(library)
 	quit()
 
 
@@ -111,7 +126,7 @@ func _init() -> void:
 ## deja para el final. Se genera desde el catálogo, así que no puede quedarse
 ## desfasado respecto a lo que de verdad se está usando. Poly Haven es CC0 y no
 ## lo exige, pero se cita igual —cuesta nada y es de justicia—.
-func _write_credits() -> void:
+func _write_credits(library: PropLibrary) -> void:
 	var lines: Array[String] = []
 	lines.append("# Créditos de los assets")
 	lines.append("")
@@ -133,11 +148,13 @@ func _write_credits() -> void:
 	for key: String in PropModels.CATALOGUE:
 		var entry: Dictionary = PropModels.CATALOGUE[key]
 		if entry.has("local"):
-			lines.append("- %s — %s, %s. %s" % [entry["name"],
-				entry.get("author", "AUTOR SIN DECLARAR"),
-				entry.get("license", "LICENCIA SIN DECLARAR"),
-				entry.get("source_url", "")])
-			if not entry.has("author") or not entry.has("license"):
+			var credit: Dictionary = library.credits.get(key, {})
+			lines.append("- %s — «%s» de %s, %s. %s" % [entry["name"],
+				credit.get("title", "?"),
+				credit.get("author", "AUTOR SIN DECLARAR"),
+				credit.get("license", "LICENCIA SIN DECLARAR"),
+				credit.get("source", "")])
+			if not credit.has("author") or not credit.has("license"):
 				pending.append(entry["name"] as String)
 		else:
 			lines.append("- %s — [Poly Haven](https://polyhaven.com/a/%s), CC0."
@@ -345,6 +362,40 @@ func _make_lods(source: ArrayMesh) -> ArrayMesh:
 	print("   %d superficies · %d niveles · el mas basto de %d triangulos" % [
 		importer.get_surface_count(), levels, coarse])
 	return importer.get_mesh()
+
+
+## Saca autor y licencia de dentro del propio .glb.
+##
+## Sketchfab los incrusta en `asset.extras`, así que la atribución sale del
+## fichero y no de que alguien se acuerde de teclearla. Es la diferencia entre
+## un crédito que puede quedarse desfasado y uno que no puede.
+##
+## Se lee el glb a mano -cabecera de doce bytes y el primer trozo, que es el
+## JSON- porque `GLTFState` no expone `asset.extras`.
+func _read_credit(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {}
+	if file.get_buffer(4).get_string_from_ascii() != "glTF":
+		return {}
+	file.get_32()  # version
+	file.get_32()  # tamaño total
+	var chunk_length := file.get_32()
+	file.get_32()  # tipo de trozo
+	var text := file.get_buffer(chunk_length).get_string_from_utf8()
+	file.close()
+
+	var data: Variant = JSON.parse_string(text)
+	if not (data is Dictionary):
+		return {}
+	var extras: Variant = ((data as Dictionary).get("asset", {}) as Dictionary) 		.get("extras", {})
+	if not (extras is Dictionary):
+		return {}
+	var out := {}
+	for key: String in ["title", "author", "license", "source"]:
+		if (extras as Dictionary).has(key):
+			out[key] = (extras as Dictionary)[key]
+	return out
 
 
 ## Comprime a BC7 las texturas que trae el modelo.

@@ -23,6 +23,13 @@ extends Resource
 ## si alguna se ha colado sin LOD.
 @export var triangles: Dictionary = {}
 
+## Clave -> autor, licencia, título y URL de las piezas que no son CC0.
+##
+## Se lee de dentro del propio .glb —Sketchfab lo incrusta en `asset.extras`— y
+## no se teclea a mano, así que la atribución no puede quedarse desfasada ni
+## salir mal escrita. De aquí sale CREDITOS.md.
+@export var credits: Dictionary = {}
+
 
 func has(key: String) -> bool:
 	return meshes.has(key) and meshes[key] != null
