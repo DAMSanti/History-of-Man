@@ -19,7 +19,25 @@ extends RefCounted
 ##
 ## Ahora que cada nodo es leer un número de una lista —y no quince muestras
 ## del terreno— el tope se puede tener alto sin que se note.
-const MAX_NODES := 12000
+## Cuarenta mil, y no doce mil.
+##
+## Doce mil bastaban mientras medio valle estaba incomunicado: los caminos
+## largos ni se intentaban. Al abrir los vados —ver `Navgrid._has_ford`— la
+## banda pasa a cruzar el río y a ir de punta a punta de la comarca, y una
+## búsqueda así puede sacar y volver a meter la misma celda varias veces, así
+## que el tope de doce mil se agotaba ANTES de llegar. El síntoma era «se quedó
+## sin camino trazado» sobre un sitio perfectamente alcanzable: 26 en tres
+## jornadas, medido en el sitio 56.
+const MAX_NODES := 40000
+
+## Cuánto se empuja la heurística por encima del mínimo teórico.
+##
+## Es lo que separa un A* de una inundación. Ceñida al mínimo -el paso de un
+## llano de vacío- la búsqueda se abre en todas direcciones: medido en el sitio
+## 56, 7,5 ms de media para una búsqueda de jornada. Con cuatro baja a la mitad
+## larga. A cambio el camino deja de ser EL óptimo y pasa a ser uno bueno, que
+## en un valle son metros de diferencia, no otro rumbo.
+const HEURISTIC_PUSH := 4.0
 
 ## Nodos que costó la última búsqueda.
 ##
@@ -54,8 +72,20 @@ static func find(grid: Navgrid, from_point: Vector3,
 		to_point = grid.point_of(dry)
 		straight = PackedVector3Array([to_point])
 
+	# El atajo de «está al lado, ve derecho» SÓLO si la línea recta está limpia.
+	#
+	# Aquí estaba el atasco grande. Cualquier destino a menos de sesenta metros
+	# se resolvía con una recta sin mirar el terreno de en medio, así que
+	# bastaba un cortado de diez metros entre la persona y su tajo para que la
+	# «ruta» fuera un único punto al otro lado de una pared. Desde fuera se veía
+	# como «camino 1 hito, va por el 0, el siguiente a 54 m» y no avanza: el
+	# planificador no había mirado nada.
+	#
+	# Medido en el sitio 56: la caza menor trabaja a cincuenta y pico metros del
+	# sitio, o sea justo dentro del atajo, y cerraba el 81 % de sus salidas con
+	# «atascado».
 	var span := Vector2(to_point.x - from_point.x, to_point.z - from_point.z).length()
-	if span < Navgrid.CELL * 1.5:
+	if span < Navgrid.CELL * 1.5 and _clear_line(grid, from_point, to_point):
 		return straight
 
 	# Los dos extremos se amarran a suelo pisable. El destino porque el jugador
@@ -71,6 +101,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 	if start == goal:
 		return straight
 
+
 	# Y si están en zonas distintas del mapa, no hay camino y no hace falta
 	# buscarlo. Esto es lo que antes costaba doce mil nodos.
 	if grid.area[start] < 0 or grid.area[start] != grid.area[goal]:
@@ -79,7 +110,15 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# El coste mínimo posible de una celda, para que la heurística no se pase.
 	# Una heurística que sobreestima da caminos malos; ésta se queda corta a
 	# propósito, que es lo que garantiza que el que salga sea el mejor.
-	var floor_cost := 1.0 / Traversal.hiking_speed(0.0)
+	#
+	# Y se le da un EMPUJE. Ceñida al mínimo teórico —el paso de un llano de
+	# vacío— la heurística se queda tan corta que el A* se comporta casi como
+	# una inundación: medido en el sitio 56 con el valle entero comunicado, 181
+	# búsquedas al azar salían a 37 ms de media y 14.000 nodos la peor, o sea
+	# más celdas que las que tiene el mapa. Con el empuje deja de explorar hacia
+	# atrás; a cambio el camino puede no ser EL óptimo, sino uno bueno, que en
+	# un valle es una diferencia de metros y no de rumbo.
+	var floor_cost := HEURISTIC_PUSH / Traversal.hiking_speed(0.0)
 	var wide := grid.wide
 	var tall := grid.tall
 	var cells := wide * tall
@@ -117,8 +156,20 @@ static func find(grid: Navgrid, from_point: Vector3,
 		* Navgrid.CELL * floor_cost)
 	var visited := 0
 
+	# La lista de CERRADAS. Sin ella, una celda a la que se llega por un camino
+	# mejor se vuelve a meter en el montón y se vuelve a expandir entera, y las
+	# entradas viejas siguen saliendo después: la misma celda se abría una y
+	# otra vez. Medido en el sitio 56 con el valle comunicado, una búsqueda de
+	# novecientos metros llegaba a expandir catorce mil nodos —más celdas que
+	# las que tiene el mapa entero— y tardaba ochenta milisegundos.
+	var closed := PackedByteArray()
+	closed.resize(cells)
+
 	while not heap.is_empty() and visited < MAX_NODES:
 		var current := heap.pop()
+		if closed[current] == 1:
+			continue
+		closed[current] = 1
 		if current == goal:
 			last_nodes = visited
 			return _rebuild(came, current, start, grid, to_point)
@@ -144,6 +195,28 @@ static func find(grid: Navgrid, from_point: Vector3,
 				if cost <= Navgrid.BLOCKED:
 					continue
 
+				# NO SE CORTAN ESQUINAS. Una diagonal sólo vale si las dos
+				# celdas ortogonales que la rodean están abiertas.
+				#
+				# Aquí estaba el atasco de verdad, y no era la rejilla: el A*
+				# encadena centros de celda y la persona anda en LÍNEA RECTA de
+				# uno a otro. Con la diagonal libre, el camino podía colarse por
+				# el vértice entre dos celdas cerradas —un paso que no existe
+				# sobre el terreno— y quien lo seguía se metía de frente en una
+				# de ellas. Desde fuera se veía como «tiene camino, el hito es
+				# pisable, y no avanza»: el planificador prometía un paso de
+				# anchura cero.
+				#
+				# Medido en el sitio 56 con la caza menor: el 81 % de las
+				# salidas se cerraban con «atascado» y la cuadrilla acababa
+				# siempre en el mismo punto, a diez metros de la linde de su
+				# celda.
+				if dx != 0 and dz != 0:
+					if costs[cz * wide + nx] <= Navgrid.BLOCKED:
+						continue
+					if costs[nz * wide + cx] <= Navgrid.BLOCKED:
+						continue
+
 				var step := Navgrid.CELL * (1.414 if dx != 0 and dz != 0 else 1.0)
 				var total := here + cost * step
 				if total >= so_far[neighbour]:
@@ -158,6 +231,22 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# Se ha agotado la búsqueda sin llegar: NO hay camino.
 	last_nodes = visited
 	return PackedVector3Array()
+
+
+## Si de aquí a allí se puede ir en línea recta sin pisar celda cerrada.
+##
+## Se mira cada media celda: es el paso más largo con el que no se puede saltar
+## por encima de una celda de cuarenta metros sin verla.
+static func _clear_line(grid: Navgrid, from_point: Vector3,
+		to_point: Vector3) -> bool:
+	var span := Vector2(to_point.x - from_point.x,
+		to_point.z - from_point.z).length()
+	var steps := maxi(int(span / (Navgrid.CELL * 0.5)), 1)
+	for i in range(steps + 1):
+		var at := from_point.lerp(to_point, float(i) / float(steps))
+		if not grid.passable(at):
+			return false
+	return true
 
 
 static func _rebuild(came: PackedInt32Array, goal: int, start: int,

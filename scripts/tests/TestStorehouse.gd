@@ -117,8 +117,15 @@ func test_las_raciones_se_cuentan_juntas() -> void:
 	store.add(Materia.Kind.FRUTO_SECO, 10.0)
 	store.add(Materia.Kind.CARNE, 5.0)
 	store.add(Materia.Kind.PIEDRA, 20.0)
-	assert_near(store.food_rations(), 15.0, 0.01,
+	# La cuenta no va escrita a mano: la racion se DERIVA de las calorias -ver
+	# [Materia.KCAL_RACION]-, y clavar aqui un quince obligaria a reescribir la
+	# prueba cada vez que se afine la composicion de un alimento. Lo que tiene
+	# que defender es que la comida suma y la piedra no.
+	var esperado := 10.0 * Materia.nutrition(Materia.Kind.FRUTO_SECO) \
+		+ 5.0 * Materia.nutrition(Materia.Kind.CARNE)
+	assert_near(store.food_rations(), esperado, 0.01,
 		"la comida suma; la piedra no alimenta")
+	assert_gt(esperado, 0.0, "y algo alimenta, no es que todo sea cero")
 
 
 func test_la_grasa_alimenta_mas_que_su_peso() -> void:
@@ -131,8 +138,13 @@ func test_la_grasa_alimenta_mas_que_su_peso() -> void:
 func test_los_dias_de_autonomia_dependen_de_las_bocas() -> void:
 	var store := _abrigo()
 	store.add(Materia.Kind.FRUTO_SECO, 40.0)
-	assert_near(store.days_of_food(10.0), 4.0, 0.01, "diez bocas, cuatro días")
-	assert_near(store.days_of_food(20.0), 2.0, 0.01, "veinte bocas, dos días")
+	# «Bocas» aqui son RACIONES AL DIA, no personas: un adulto come dos -una
+	# racion es media jornada-. Lo que la prueba defiende es la proporcion.
+	var raciones := store.food_rations()
+	assert_near(store.days_of_food(10.0), raciones / 10.0, 0.01,
+		"diez raciones al dia duran lo que dan")
+	assert_near(store.days_of_food(20.0), raciones / 20.0, 0.01,
+		"y el doble de bocas, la mitad de dias")
 
 
 # --- lo que se echa a perder ----------------------------------------------
@@ -246,3 +258,73 @@ func test_la_grasa_va_con_la_materia_prima_aunque_alimente() -> void:
 		"pero se guarda con la materia prima")
 	assert_true(Materia.is_provision(Materia.Kind.BAYA),
 		"y la baya en la despensa")
+
+
+# --- lo que va y vuelve en la mochila no es produccion -------------------
+#
+# Al volver, todo lo que trae encima se apuntaba como produccion de la banda, y
+# la mitad de lo que traia un explorador era lo que se habia llevado de casa sin
+# gastar: la despensa decia que la banda producia comida que solo habia ido y
+# vuelto en una mochila.
+
+func _con_reservas() -> SettlementSim:
+	var sim := SettlementSim.new()
+	sim.store.add(Materia.Kind.CARNE_SECA, 40.0)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.LENA, 40.0)
+	return sim
+
+
+func test_lo_que_se_lleva_de_casa_y_vuelve_no_cuenta() -> void:
+	var sim := _con_reservas()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260907
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	sim.people = [person]
+
+	# Sale con viveres y vivac del almacen, y vuelve sin haber cogido nada
+	person.add_load(Materia.Kind.CARNE_SECA, 6.0)
+	person.note_from_store(Materia.Kind.CARNE_SECA, 6.0)
+	person.add_load(Materia.Kind.PIEL, 1.0)
+	person.note_from_store(Materia.Kind.PIEL, 1.0)
+
+	sim._deliver(person)
+	assert_eq(sim.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
+		"la comida que fue y volvio no la ha producido nadie")
+	assert_eq(sim.produced_today.get(int(Materia.Kind.PIEL), 0.0), 0.0,
+		"ni la piel de la tienda")
+
+
+func test_lo_que_se_trae_del_monte_si_cuenta() -> void:
+	var sim := _con_reservas()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var person := Inhabitant.create(1, Vector3.ZERO, rng)
+	sim.people = [person]
+
+	# Sale con dos de carne seca y vuelve con esas dos mas cinco de pescado
+	person.add_load(Materia.Kind.CARNE_SECA, 2.0)
+	person.note_from_store(Materia.Kind.CARNE_SECA, 2.0)
+	person.add_load(Materia.Kind.PESCADO, 5.0)
+
+	sim._deliver(person)
+	assert_eq(sim.produced_today.get(int(Materia.Kind.PESCADO), 0.0), 5.0,
+		"el pescado si lo ha pescado")
+	assert_eq(sim.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
+		"la carne seca sigue siendo la misma de casa")
+
+
+func test_lo_comido_por_el_camino_deja_de_estar_apuntado() -> void:
+	# Si no se descontara al comer, al volver se le restaria a la produccion
+	# una comida que ya no lleva encima.
+	var sim := _con_reservas()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9
+	var person := Inhabitant.create(2, Vector3.ZERO, rng)
+	sim.people = [person]
+	person.add_load(Materia.Kind.CARNE_SECA, 4.0)
+	person.note_from_store(Materia.Kind.CARNE_SECA, 4.0)
+
+	sim._eat_from_pack(person, 24.0)
+	assert_lt(person.brought_from_store(Materia.Kind.CARNE_SECA), 4.0,
+		"lo comido ya no se le debe al almacen")

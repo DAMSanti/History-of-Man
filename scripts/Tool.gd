@@ -201,7 +201,36 @@ static func recipe(kind_value: Kind) -> Dictionary:
 			return {Materia.Kind.FIBRA: 1.5}
 
 
-## Herramienta que hace falta PARA fabricar este tipo, o -1 si ninguna.
+## La tecnica que hay que saber para hacer esta pieza, o -1 si no hace falta.
+##
+## Es la puerta que faltaba. La unica que habia era indirecta -si nadie pide la
+## pieza, no se hace-, y eso deja el arbol de tecnicas de adorno en este
+## frente: la banda podia trenzar una red sin haber aprendido a calarla, y el
+## almacen listaba arpones y anzuelos desde el primer dia como si fueran
+## cosas que se pueden tener.
+##
+## Solo se cierran las piezas que TIENEN una tecnica con su nombre. El buril y
+## el punzon se quedan abiertos a proposito aunque sean tardios: son requisito
+## de otras piezas -ver `needs_tool`- y cerrarlos cerraria la cadena entera.
+static func tech_of(kind_value: Kind) -> int:
+	match kind_value:
+		Kind.AZAGAYA:
+			return TechTree.Tech.AZAGAYA
+		Kind.ARPON:
+			return TechTree.Tech.ARPON
+		Kind.AGUJA:
+			return TechTree.Tech.AGUJA
+		Kind.NASA:
+			return TechTree.Tech.NASA
+		Kind.ANZUELO:
+			return TechTree.Tech.ANZUELO
+		Kind.RED:
+			return TechTree.Tech.RED
+		_:
+			return -1
+
+
+## Herramienta que hace falta PARA fabricar este tipo, o -1 si ninguna.## Herramienta que hace falta PARA fabricar este tipo, o -1 si ninguna.
 ##
 ## Es lo que teje la cadena: el astero necesita buriles que hace el tallador, y
 ## el peletero raederas. Sin tallador, dos talleres se paran.

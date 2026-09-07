@@ -1152,6 +1152,38 @@ func _get_vertex_color(height_normalized: float, humidity: float) -> Color:
 	return base_color
 
 
+## Los mapas en crudo, para quien necesite HORNEARLOS en vez de consultarlos.
+##
+## Existe por [GroundCover]. La hierba se coloca en el shader, y para eso el
+## shader necesita la altura y la cobertura como texturas: consultar el terreno
+## una vez por brizna en GDScript son decenas de miles de llamadas y casi dos
+## segundos de construcción, y además habría que repetirlas cada vez que la
+## cámara se mueve. Con los mapas en la mano se hornean dos texturas UNA VEZ y
+## la CPU deja de aparecer en la cuenta.
+##
+## Se devuelven las rejillas tal cual, sin copiar: son `PackedFloat32Array` y en
+## GDScript se pasan por referencia con copia perezosa, así que esto no duplica
+## varios megas cada vez que alguien pregunta.
+func sample_maps() -> Dictionary:
+	return {
+		"resolution": resolution,
+		# Metros de mundo que cubre la rejilla entera, que es lo que hace falta
+		# para pasar de una posición del mundo a una coordenada de textura.
+		"extent": Vector2(float(terrain_size.x), float(terrain_size.y))
+			* meters_per_unit,
+		"origin": Vector2(global_position.x, global_position.z),
+		"height": _height_map,
+		"humidity": _humidity_map,
+		"geology": _geology_map,
+		"river": _river_map,
+		"ford": _ford_map,
+		# La cota de la lámina de agua, en las MISMAS unidades que el mapa de
+		# alturas. Va aquí porque quien siembra algo sobre el terreno necesita
+		# saber dónde deja de haber terreno: sin esto la hierba entraba en la ría.
+		"water_y": _to_units(sea_level),
+	}
+
+
 ## Obtiene la altura en una posición del mundo
 func get_height_at(world_pos: Vector3) -> float:
 	if _height_map.is_empty():
@@ -1228,6 +1260,31 @@ func set_region_mask_texture(texture: Texture2D) -> void:
 ##
 ## Lo usa el overlay de recursos: en vez de sembrar el mundo de nodos, le pasa
 ## una textura y deja que el shader la mezcle con el albedo.
+## Las mallas del terreno, para quien necesite volver a dibujarlas aparte.
+##
+## Existe por [GroundCover], que hornea el color del terreno fotografiándolo
+## desde arriba con su propio material. Es la única forma de saber de qué color
+## es el suelo SIN aproximarlo: el sombreado del terreno mezcla ocho capas por
+## curvatura, pendiente y ruido, les aplica oclusión, macro variación y el
+## apagado de fuera de región, y reproducir todo eso en GDScript sería duplicar
+## medio shader y verlo desincronizarse al primer cambio.
+##
+## Se devuelven los nodos, no copias: quien los use que los duplique.
+func mesh_pieces() -> Array[MeshInstance3D]:
+	var out: Array[MeshInstance3D] = []
+	if _terrain_mesh == null:
+		return out
+	# El nodo raiz lleva malla en el modo de una pieza, y en el troceado no:
+	# ahi solo es el padre de los trozos.
+	if _terrain_mesh.mesh != null:
+		out.append(_terrain_mesh)
+	for child in _terrain_mesh.get_children():
+		var piece := child as MeshInstance3D
+		if piece != null and piece.mesh != null:
+			out.append(piece)
+	return out
+
+
 func get_terrain_material() -> ShaderMaterial:
 	if _material_manager == null:
 		return null
@@ -1486,63 +1543,6 @@ func get_slope_at(world_pos: Vector3) -> float:
 	
 	return sqrt(dx * dx + dz * dz)
 
-
-## Puebla un Chunk con recursos basados en la geología.
-## deposit_spacing: separación en celdas entre depósitos. Con 1 se llenaba TODA
-## la malla del chunk (16384 depósitos en un mapa de 128x128), lo que ni parece
-## un yacimiento ni cabe en el MultiMesh del visualizador.
-func populate_chunk_resources(chunk: Chunk, materials_map: Dictionary, threshold: float = 0.5, deposit_spacing: int = 3) -> void:
-	var chunk_world_pos := chunk.global_position
-	var step := maxi(deposit_spacing, 1)
-	var high_span := maxf(1.0 - threshold, 0.001)
-	
-	# Jitter determinista para que los depósitos no queden en rejilla perfecta
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value + 3000
-	
-	var iron: RawMaterial = materials_map.get("iron")
-	var coal: RawMaterial = materials_map.get("coal")
-	var stone: RawMaterial = materials_map.get("stone")
-	
-	for z in range(0, chunk.chunk_size.y, step):
-		for x in range(0, chunk.chunk_size.x, step):
-			var cell_x := clampi(x + rng.randi_range(0, step - 1), 0, chunk.chunk_size.x - 1)
-			var cell_z := clampi(z + rng.randi_range(0, step - 1), 0, chunk.chunk_size.y - 1)
-			
-			var cell_world_pos := Vector3(
-				chunk_world_pos.x + (cell_x + 0.5) * chunk.cell_size,
-				0,
-				chunk_world_pos.z + (cell_z + 0.5) * chunk.cell_size
-			)
-			cell_world_pos.y = get_height_at(cell_world_pos)
-
-			# Sin depositos en el fondo del mar
-			if cell_world_pos.y <= _to_units(sea_level):
-				continue
-
-			var geology := get_geology_at(cell_world_pos)
-			
-			# Determinar qué material colocar basado en geología
-			if geology > threshold:
-				# Hierro en geología alta
-				if iron:
-					var amount := (geology - threshold) / high_span * 100.0
-					chunk.add_resource_at(cell_world_pos, iron, amount)
-			elif geology < (1.0 - threshold):
-				# Carbón en geología baja
-				if coal:
-					var amount := ((1.0 - threshold) - geology) / high_span * 80.0
-					chunk.add_resource_at(cell_world_pos, coal, amount)
-			
-			# Piedra en pendientes
-			var slope := get_slope_at(cell_world_pos)
-			if slope > 0.5 and stone:
-				chunk.add_resource_at(cell_world_pos, stone, slope * 50.0)
-	
-	chunk_populated.emit(chunk)
-
-
-## Obtiene posiciones válidas para vegetación basadas en humedad y pendiente
 func get_vegetation_positions(min_humidity: float = 0.4, max_slope: float = 0.5, spacing: float = 3.0) -> PackedVector3Array:
 	var positions: PackedVector3Array = []
 	

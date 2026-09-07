@@ -310,14 +310,18 @@ func is_frozen(activity: Subsistence.Activity, x: int, z: int) -> bool:
 ## pescado, con 156 celdas de rio con pesca en el mismo mapa.
 ##
 ## Vale para todo lo demas igual: nadie trabaja de pie sobre un punto, se
-## trabaja un trecho. Devuelve lo que quedaba en esa celda, de 0 a 1.
-func deplete_around(activity: Subsistence.Activity, centre: Vector3,
-		radius: float, amount: float) -> float:
+## La celda mas rica al alcance para esta actividad, o -1 si no hay ninguna.
+##
+## Se saco de `deplete_around` porque MIRAR y RESTAR son dos cosas y hacian
+## falta por separado: la cosecha necesita saber cuanto queda ANTES de decidir
+## cuanto se lleva, y restar antes de coger obligaba a que la merma fuera un
+## numero fijo por jornada en vez de lo que de verdad se ha cogido.
+func best_cell(activity: Subsistence.Activity, centre: Vector3,
+	radius: float) -> int:
 	if not grids.has(activity):
-		return 1.0
+		return -1
 	var grid: PackedFloat32Array = grids[activity]
 	var cap: PackedFloat32Array = capacities.get(activity, grid)
-
 	var best := -1
 	var best_stock := 0.0
 	for cell: Vector2i in cells_within(centre, radius):
@@ -327,14 +331,30 @@ func deplete_around(activity: Subsistence.Activity, centre: Vector3,
 		if grid[i] > best_stock:
 			best_stock = grid[i]
 			best = i
-	if best < 0:
-		return 0.0
+	return best
 
-	var capacity := cap[best]
-	var before := grid[best]
-	grid[best] = maxf(before - amount, 0.0)
+
+## Cuanto le queda a esa celda, de 0 a 1. Sin tocarla.
+func stock_of_cell(activity: Subsistence.Activity, index: int) -> float:
+	if index < 0 or not grids.has(activity):
+		return 0.0
+	var grid: PackedFloat32Array = grids[activity]
+	var cap: PackedFloat32Array = capacities.get(activity, grid)
+	if index >= grid.size() or cap[index] <= 0.001:
+		return 0.0
+	return clampf(grid[index] / cap[index], 0.0, 1.0)
+
+
+## Le quita a esa celda lo que se haya cogido de ella.
+func take_from_cell(activity: Subsistence.Activity, index: int,
+	amount: float) -> void:
+	if index < 0 or amount <= 0.0 or not grids.has(activity):
+		return
+	var grid: PackedFloat32Array = grids[activity]
+	if index >= grid.size():
+		return
+	grid[index] = maxf(grid[index] - amount, 0.0)
 	grids[activity] = grid
-	return clampf(before / capacity, 0.0, 1.0)
 
 
 ## Las mejores celdas de esta actividad al alcance, de mas a menos.

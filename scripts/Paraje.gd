@@ -105,7 +105,24 @@ var resting: bool = false
 var contents: Dictionary = {}
 
 ## Radio del paraje en metros. No es un punto: es una mancha de monte.
+##
+## Y no todos miden lo mismo, que es lo que lo dejaba mal: un paraje de
+## pescadores con ciento veinte metros de radio se comia la ladera entera a los
+## dos lados del cauce, cuando lo que es de verdad son el agua y su orilla. El
+## rio de este valle tiene entre cuarenta y ochenta metros de ancho, asi que
+## setenta de radio cubren el cauce y el borde y nada mas. Ver [EXTENSION].
 var extent: float = 120.0
+
+## Cuanto abarca un paraje segun de que sea. Lo que no esta aqui usa el radio
+## de siempre.
+##
+## Pendiente de playtest en las cifras; lo que NO esta pendiente es que la
+## pesca y el marisqueo abarquen menos que la recoleccion, porque el agua es
+## una linea en el paisaje y un avellanar es una mancha.
+const EXTENSION := {
+	Subsistence.Activity.PESCA: 70.0,
+	Subsistence.Activity.MARISQUEO: 70.0,
+}
 
 
 ## Cuánto se sabe de este sitio, de 0 a 1.
@@ -172,6 +189,7 @@ static func create(x: int, z: int, activity_value: Subsistence.Activity,
 	paraje.kind = kind_value
 	paraje.position = world
 	paraje.found_day = day
+	paraje.extent = float(EXTENSION.get(activity_value, paraje.extent))
 	paraje.name_text = build_name(x, z, kind_value)
 	return paraje
 
@@ -195,6 +213,15 @@ static func create(x: int, z: int, activity_value: Subsistence.Activity,
 ## Lo ya sabido no se olvida al cambiar de estación -conocer una colmena no
 ## se borra porque ahora sea invierno-, así que se preserva antes de
 ## rehacer la lista.
+## El vadeo del suelo que hay debajo, apuntado al nacer el paraje.
+##
+## Decide QUE puede haber aqui: en el cauce no hay avellanas y en el canchal
+## no hay pescado. Ver `Parajes.material_fits`. Se guarda en vez de preguntarle
+## al terreno cada vez porque `fill_contents` se llama en cada cambio de
+## estacion para los parajes de todo el valle, y el terreno no cambia.
+var ford: float = 0.0
+
+
 func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 	var previously_known := {}
 	for k: int in contents:
@@ -210,6 +237,11 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 			Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 			Subsistence.Activity.MARISQUEO, Subsistence.Activity.MATERIA_PRIMA]:
 		var activity_value := activity_key as Subsistence.Activity
+		# Lo que el SUELO permite, antes que lo que el campo de recursos diga.
+		# Sin esto, una celda del cauce que llegue al umbral de recoleccion se
+		# bautiza como avellanar y sale con corteza y ocre en medio del rio.
+		if not Parajes.activity_fits(activity_value, ford):
+			continue
 		var amount := field.seasonal_abundance_at(activity_value, position, season)
 		if amount < Parajes.threshold_for(activity_value):
 			continue
@@ -219,7 +251,8 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 		# lo que da un sitio es lo que lo bautiza: un cotarro de caza también
 		# deja piel y hueso, un avellanar también da seta o miel según toque.
 		var primary := Parajes._kind_for(activity_value, position, season)
-		if not fresh.has(int(primary)) and Parajes.in_season(primary, season):
+		if not fresh.has(int(primary)) and Parajes.in_season(primary, season) \
+			and Parajes.material_fits(primary, ford):
 			fresh[int(primary)] = {
 				"abundancia": amount,
 				"sabido": primary == kind or previously_known.has(int(primary)),
@@ -227,7 +260,8 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 
 		var picked := Parajes.extra_materials_at(activity_value, position, primary)
 		for extra_kind: Materia.Kind in picked:
-			if fresh.has(int(extra_kind)) or not Parajes.in_season(extra_kind, season):
+			if fresh.has(int(extra_kind)) or not Parajes.in_season(extra_kind, season) \
+				or not Parajes.material_fits(extra_kind, ford):
 				continue
 			# La mitad de lo medido: es lo que se lleva de paso, no lo que se
 			# ha ido a buscar.
@@ -245,7 +279,8 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 		# siga habiendo prados buenos y prados flojos.
 		for rest: Materia.Kind in (Parajes.EXTRAS_BY_ACTIVITY.get(
 				activity_value, []) as Array):
-			if fresh.has(int(rest)) or not Parajes.in_season(rest, season):
+			if fresh.has(int(rest)) or not Parajes.in_season(rest, season) \
+				or not Parajes.material_fits(rest, ford):
 				continue
 			fresh[int(rest)] = {
 				"abundancia": amount * Parajes.DE_PASO,
@@ -255,9 +290,14 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 	# Siempre hay algo que se lleva quien pasa por allí, aunque el sitio no sea
 	# de eso: leña del suelo y fibra de las matas. Salen como incógnita, salvo
 	# que ya se supieran de una estación anterior.
+	#
+	# Siempre, pero EN TIERRA. Esto se metía sin mirar el suelo y era lo último
+	# que quedaba mintiendo: cuarenta y un parajes de agua con su haz de leña
+	# flotando. Del fondo de un río no se saca leña ni fibra.
 	for extra: int in [Materia.Kind.LENA, Materia.Kind.FIBRA]:
-		if not fresh.has(extra):
-			fresh[extra] = {"abundancia": 0.12, "sabido": previously_known.has(extra)}
+		if fresh.has(extra) or not Parajes.material_fits(extra as Materia.Kind, ford):
+			continue
+		fresh[extra] = {"abundancia": 0.12, "sabido": previously_known.has(extra)}
 
 	contents = fresh
 

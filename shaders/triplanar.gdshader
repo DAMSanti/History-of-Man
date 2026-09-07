@@ -173,6 +173,18 @@ uniform float warp_scale_m : hint_range(4.0, 200.0) = 38.0;
 //    veces mas en repetirse.
 //
 //    Cuesta UN muestreo, y de un solo plano porque es una senal de onda larga.
+// --- Teselado estocástico ---------------------------------------------------
+// Ver `hex_sample`. Es lo único que quita de verdad la cuadrícula de la textura
+// repetida; el desplazamiento por ruido y la copia a escala grande la disimulan
+// pero no la quitan, porque el patrón sigue estando ahí.
+uniform bool use_hex_tiling = true;
+// Cuánto gira cada parche. Uno es giro libre. Se baja sólo si el material tiene
+// dirección -vetas, ladrillo-, y ninguno de los nuestros la tiene.
+uniform float hex_rotation : hint_range(0.0, 1.0) = 1.0;
+// La corrección de contraste de la mezcla. Por encima de 0,9 empieza a
+// asomar la rejilla hexagonal; por debajo de 0,6 el material se lava.
+uniform float hex_contrast : hint_range(0.51, 0.95) = 0.75;
+
 uniform float macro_break : hint_range(0.0, 1.0) = 0.85;
 uniform float macro_break_factor : hint_range(2.0, 20.0) = 7.7;
 
@@ -221,6 +233,123 @@ vec3 get_triplanar_weights(vec3 normal, float sharpness) {
 	return weights;
 }
 
+// --- Teselado estocástico (hex-tiling) -------------------------------------
+//
+// Lo que de verdad quita la cuadrícula. Es el «histogram-preserving blending»
+// de Heitz y Neyret (HPG 2018) en la forma práctica de Mikkelsen (JCGT 2022):
+// se parte el plano en una rejilla triangular, cada vértice coge un trozo
+// DISTINTO de la textura -desplazado y girado por su propio azar- y se mezclan
+// los tres que tocan cada píxel.
+//
+// La gracia no es mezclar, que eso es viejo y emborrona: es cómo se mezcla. Una
+// media de tres muestras baja el contraste y apaga el material -tres piedras
+// distintas promediadas dan gris-. Aquí los pesos se sesgan hacia la muestra
+// dominante con una potencia alta y después se corrige la ganancia, así que el
+// resultado conserva el histograma del original: sigue habiendo negros y
+// blancos, no una papilla.
+//
+// Cuesta TRES muestreos en vez de uno, y por eso sólo lo lleva el albedo: es
+// donde se ve la repetición. Un mapa de normales teselado se nota mucho menos
+// porque el relieve fino se pierde con la distancia antes que el color.
+
+// Rejilla triangular: los tres vértices que tocan este punto y su peso.
+void hex_grid(out float w1, out float w2, out float w3,
+		out ivec2 v1, out ivec2 v2, out ivec2 v3, vec2 st) {
+	st *= 3.4641016;
+	mat2 skew = mat2(vec2(1.0, 0.0), vec2(-0.57735027, 1.15470054));
+	vec2 skewed = skew * st;
+
+	ivec2 base = ivec2(floor(skewed));
+	vec3 f = vec3(fract(skewed), 0.0);
+	f.z = 1.0 - f.x - f.y;
+
+	float pick = step(0.0, -f.z);
+	float turn = 2.0 * pick - 1.0;
+
+	w1 = -f.z * turn;
+	w2 = pick - f.y * turn;
+	w3 = pick - f.x * turn;
+
+	v1 = base + ivec2(int(pick), int(pick));
+	v2 = base + ivec2(int(pick), int(1.0 - pick));
+	v3 = base + ivec2(int(1.0 - pick), int(pick));
+}
+
+vec2 hex_hash(vec2 p) {
+	mat2 m = mat2(vec2(127.1, 269.5), vec2(311.7, 183.3));
+	return fract(sin(m * p) * 43758.5453);
+}
+
+vec2 hex_centre(ivec2 vertex) {
+	mat2 unskew = mat2(vec2(1.0, 0.0), vec2(0.5, 0.86602540));
+	return (unskew * vec2(vertex)) / 3.4641016;
+}
+
+// Cada hexágono gira su trozo de textura un ángulo propio. Sin giro se ve que
+// todos los parches son la misma imagen desplazada; con giro, no.
+mat2 hex_turn(ivec2 idx, float amount) {
+	float angle = abs(float(idx.x * idx.y)) + abs(float(idx.x + idx.y)) + PI;
+	angle = mod(angle, 2.0 * PI);
+	if (angle > PI) { angle -= 2.0 * PI; }
+	angle *= amount;
+	float cs = cos(angle);
+	float sn = sin(angle);
+	return mat2(vec2(cs, sn), vec2(-sn, cs));
+}
+
+// La corrección de ganancia que conserva el histograma. Sin ella la mezcla de
+// tres muestras sale lavada justo en las costuras.
+vec3 hex_gain(vec3 x, float r) {
+	float k = log(1.0 - r) / log(0.5);
+	vec3 up = 2.0 * step(vec3(0.5), x);
+	vec3 down = 2.0 * (1.0 - up);
+	vec3 out_v = 0.5 * up + 0.25 * down
+		* pow(max(vec3(0.0), up + x * down), vec3(k));
+	return out_v / max(out_v.x + out_v.y + out_v.z, 0.0001);
+}
+
+// Un muestreo de la capa `layer` con teselado estocástico.
+vec4 hex_sample(sampler2DArray tex, float layer, vec2 st,
+		vec2 ddx, vec2 ddy) {
+	float w1, w2, w3;
+	ivec2 v1, v2, v3;
+	hex_grid(w1, w2, w3, v1, v2, v3, st);
+
+	mat2 r1 = hex_turn(v1, hex_rotation);
+	mat2 r2 = hex_turn(v2, hex_rotation);
+	mat2 r3 = hex_turn(v3, hex_rotation);
+
+	vec2 c1 = hex_centre(v1);
+	vec2 c2 = hex_centre(v2);
+	vec2 c3 = hex_centre(v3);
+
+	// Cada muestra lleva SUS derivadas giradas: si se pasaran sin girar, el
+	// nivel de mipmap sería el de otra orientación y saldrían costuras justo
+	// donde se cruzan los parches.
+	vec4 s1 = textureGrad(tex,
+		vec3(r1 * (st - c1) + c1 + hex_hash(vec2(v1)), layer),
+		r1 * ddx, r1 * ddy);
+	vec4 s2 = textureGrad(tex,
+		vec3(r2 * (st - c2) + c2 + hex_hash(vec2(v2)), layer),
+		r2 * ddx, r2 * ddy);
+	vec4 s3 = textureGrad(tex,
+		vec3(r3 * (st - c3) + c3 + hex_hash(vec2(v3)), layer),
+		r3 * ddx, r3 * ddy);
+
+	// Los pesos se sesgan hacia la muestra dominante -la potencia alta es lo
+	// que evita la papilla- y se ponderan por luminancia, para que un parche
+	// oscuro no se coma a uno claro sólo por caer más cerca del centro.
+	vec3 luma = vec3(dot(s1.rgb, vec3(0.299, 0.587, 0.114)),
+		dot(s2.rgb, vec3(0.299, 0.587, 0.114)),
+		dot(s3.rgb, vec3(0.299, 0.587, 0.114)));
+	luma = mix(vec3(1.0), luma, 0.6);
+	vec3 w = luma * pow(vec3(w1, w2, w3), vec3(7.0));
+	w /= max(w.x + w.y + w.z, 0.0001);
+	w = hex_gain(w, hex_contrast);
+
+	return w.x * s1 + w.y * s2 + w.z * s3;
+}
+
 // Muestrea una textura usando tri-planar mapping, saltando los planos que no
 // aportan. En terreno de heightmap la normal apunta casi siempre hacia arriba,
 // asi que dos de los tres planos suelen tener peso cero.
@@ -235,16 +364,22 @@ vec4 triplanar_texture(sampler2DArray tex, float layer, float tile,
 	// Los pesos llegan ya recortados a cero por `plane_cutoff`, asi que basta
 	// comparar contra cero: el plano que no aporta ni se pide.
 	if (weights.x > 0.0) {
-		result += textureGrad(tex, vec3(pos.zy * s, layer),
-			dpdx.zy * s, dpdy.zy * s) * weights.x;
+		result += (use_hex_tiling
+			? hex_sample(tex, layer, pos.zy * s, dpdx.zy * s, dpdy.zy * s)
+			: textureGrad(tex, vec3(pos.zy * s, layer),
+				dpdx.zy * s, dpdy.zy * s)) * weights.x;
 	}
 	if (weights.y > 0.0) {
-		result += textureGrad(tex, vec3(pos.xz * s, layer),
-			dpdx.xz * s, dpdy.xz * s) * weights.y;
+		result += (use_hex_tiling
+			? hex_sample(tex, layer, pos.xz * s, dpdx.xz * s, dpdy.xz * s)
+			: textureGrad(tex, vec3(pos.xz * s, layer),
+				dpdx.xz * s, dpdy.xz * s)) * weights.y;
 	}
 	if (weights.z > 0.0) {
-		result += textureGrad(tex, vec3(pos.xy * s, layer),
-			dpdx.xy * s, dpdy.xy * s) * weights.z;
+		result += (use_hex_tiling
+			? hex_sample(tex, layer, pos.xy * s, dpdx.xy * s, dpdy.xy * s)
+			: textureGrad(tex, vec3(pos.xy * s, layer),
+				dpdx.xy * s, dpdy.xy * s)) * weights.z;
 	}
 	return result;
 }
@@ -297,9 +432,33 @@ vec4 uniplanar(sampler2DArray tex, float layer, float tile, vec3 pos,
 	return textureGrad(tex, vec3(pos.xy * s, layer), dpdx.xy * s, dpdy.xy * s);
 }
 
+// La copia a escala grande del albedo, tambien con teselado estocastico.
+//
+// Sin el, ESTA era la unica cuadricula que quedaba en el terreno, y la mas
+// visible de todas: `macro_break` muestrea la misma capa a 7,7 veces su tesela
+// -treinta metros para la pradera-, asi que las pajas secas que trae la foto de
+// `Grass007` se convierten en trazos de casi un metro. Con teselado plano eso
+// se repite cada treinta metros y sale como rayas paralelas por todo el prado.
+// Se vio comparando las capturas de `AntiTeselaProbe`: con solo hex la vega
+// sale limpia, y al añadir la escala grande vuelven las rayas.
 vec4 uniplanar_albedo(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
 		vec3 weights) {
-	return uniplanar(terrain_albedo, layer, tile, pos, dpdx, dpdy, weights);
+	if (!use_hex_tiling) {
+		return uniplanar(terrain_albedo, layer, tile, pos, dpdx, dpdy, weights);
+	}
+	float s = 1.0 / max(tile, 0.01);
+	// El plano dominante, igual que `uniplanar`: a esta escala la diferencia
+	// entre planos no se lee, y pedir los tres seria pagar nueve muestreos.
+	if (weights.y >= weights.x && weights.y >= weights.z) {
+		return hex_sample(terrain_albedo, layer, pos.xz * s,
+			dpdx.xz * s, dpdy.xz * s);
+	}
+	if (weights.x >= weights.z) {
+		return hex_sample(terrain_albedo, layer, pos.zy * s,
+			dpdx.zy * s, dpdy.zy * s);
+	}
+	return hex_sample(terrain_albedo, layer, pos.xy * s,
+		dpdx.xy * s, dpdy.xy * s);
 }
 
 vec4 uniplanar_orm(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,

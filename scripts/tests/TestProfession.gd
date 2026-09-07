@@ -218,8 +218,14 @@ func test_hay_oficios_con_especialidad_y_oficios_sin_ella() -> void:
 		"una trampa no es una montería")
 	assert_true(Profession.has_specialities(Profession.Job.RIBERA),
 		"la rasa, el rio y el mar de fuera son tres cosas")
+	# Y el HOGAR no se reparte, tambien a proposito. Tuvo tres especialidades y
+	# era repartir en tres a la unica persona que suele haber: en una banda de
+	# quince el hogar son uno o dos, y pedir ademas cual de las tres cosas hacen
+	# es una decision sin decision. En el Paleolitico el hogar lo hace todo.
 	assert_false(Profession.has_specialities(Profession.Job.HOGAR),
-		"el hogar es uno y no se reparte")
+		"el hogar es uno y lo hace todo")
+	assert_eq(Profession.specialities_of(Profession.Job.HOGAR).size(), 0,
+		"sin especialidades que repartir")
 
 
 func test_la_manufactura_no_es_solo_talla() -> void:

@@ -125,3 +125,55 @@ func test_la_capacidad_de_carga_es_finita_y_razonable() -> void:
 	var capacity := Subsistence.carrying_capacity(_inland, 25)
 	assert_between(float(capacity), 15.0, 60.0,
 		"un abrigo paleolitico sostiene decenas de personas, no miles")
+
+
+# --- la cuenta del invierno, la que decide la epoca ----------------------
+#
+# SLICE_PALEOLITICO §3: el otoño decide si se sobrevive al invierno. Hasta
+# ahora esa cuenta no existía en ningún sitio; vivía repartida entre el almacén
+# y la cabeza del jugador.
+
+func test_la_reserva_de_invierno_se_mide_contra_una_estacion_entera() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260906
+	var people: Array[Inhabitant] = []
+	for i in range(6):
+		var person := Inhabitant.create(i, Vector3.ZERO, rng)
+		person.age_years = 30
+		person.age_group = Inhabitant.Age.ADULTO
+		people.append(person)
+	sim.people = people
+
+	var stock := sim.winter_stock()
+	assert_gt(float(stock["needed"]), 0.0, "seis bocas comen algo")
+	assert_eq(stock["share"], 0.0, "con el almacen vacio no se llega a nada")
+
+	# Justo lo de una estacion entera
+	sim.store.add(Materia.Kind.CARNE_SECA,
+		float(stock["needed"]) / Materia.nutrition(Materia.Kind.CARNE_SECA))
+	var full := sim.winter_stock()
+	assert_true(absf(float(full["share"]) - 1.0) < 0.05,
+		"con la despensa justa, el invierno esta cubierto (%.2f)" % full["share"])
+
+
+func test_volcarse_en_la_berrea_manda_gente_a_la_caza_mayor() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var people: Array[Inhabitant] = []
+	for i in range(8):
+		var person := Inhabitant.create(i, Vector3.ZERO, rng)
+		person.age_years = 28
+		person.age_group = Inhabitant.Age.ADULTO
+		person.nursing = false
+		Profession.assign(Profession.Job.OCIOSO, person)
+		people.append(person)
+	sim.people = people
+
+	sim.focus_on_rut()
+	var hunters := 0
+	for person: Inhabitant in sim.people:
+		if person.job == Profession.Job.CAZA:
+			hunters += 1
+	assert_gt(float(hunters), 0.0, "la decision mueve gente de verdad")

@@ -82,6 +82,127 @@ func count() -> int:
 	return _markers.size()
 
 
+## El aparejo de cada trampa, al pie de la estaca.
+##
+## La estaca sola dice «aquí hay una trampa» y nada más: cuatro tipos distintos
+## se veían exactamente iguales, y son cuatro jornadas y cuatro presas muy
+## distintas. Cada una lleva ahora su forma, pequeña y a ras de suelo, que es
+## como está una trampa de verdad: lo que se ve de un lazo puesto es la vara
+## doblada, no el lazo.
+func _build_gear(holder: Node3D, kind: Trap.Kind, wood: StandardMaterial3D) -> void:
+	match kind:
+		Trap.Kind.LAZO:
+			# Vara doblada y corredera colgando del cabo.
+			var bow := MeshInstance3D.new()
+			var rod := CylinderMesh.new()
+			rod.top_radius = 0.045
+			rod.bottom_radius = 0.07
+			rod.height = 2.1
+			rod.radial_segments = 5
+			bow.mesh = rod
+			bow.material_override = wood
+			bow.position = Vector3(0.35, 0.85, 0.0)
+			bow.rotation = Vector3(0.0, 0.0, deg_to_rad(-38.0))
+			holder.add_child(bow)
+
+			var loop := MeshInstance3D.new()
+			var ring := TorusMesh.new()
+			ring.inner_radius = 0.20
+			ring.outer_radius = 0.26
+			ring.rings = 8
+			ring.ring_segments = 5
+			loop.mesh = ring
+			loop.material_override = _paint_of(Color(0.68, 0.72, 0.42))
+			loop.position = Vector3(1.02, 0.30, 0.0)
+			loop.rotation = Vector3(deg_to_rad(90.0), 0.0, 0.0)
+			holder.add_child(loop)
+
+		Trap.Kind.CEPO:
+			# Losa calzada sobre un palo: la piedra encima y el disparador.
+			var slab := MeshInstance3D.new()
+			var stone := BoxMesh.new()
+			stone.size = Vector3(1.5, 0.22, 1.1)
+			slab.mesh = stone
+			slab.material_override = _paint_of(Color(0.46, 0.44, 0.41))
+			slab.position = Vector3(0.55, 0.62, 0.0)
+			slab.rotation = Vector3(0.0, deg_to_rad(12.0), deg_to_rad(-22.0))
+			holder.add_child(slab)
+
+			var prop := MeshInstance3D.new()
+			var stick := CylinderMesh.new()
+			stick.top_radius = 0.04
+			stick.bottom_radius = 0.05
+			stick.height = 0.85
+			stick.radial_segments = 5
+			prop.mesh = stick
+			prop.material_override = wood
+			prop.position = Vector3(1.05, 0.42, 0.0)
+			prop.rotation = Vector3(0.0, 0.0, deg_to_rad(9.0))
+			holder.add_child(prop)
+
+		Trap.Kind.RED_AVES:
+			# Dos varas y la malla tendida entre ellas.
+			for side: float in [-1.0, 1.0]:
+				var post := MeshInstance3D.new()
+				var pole_mesh := CylinderMesh.new()
+				pole_mesh.top_radius = 0.045
+				pole_mesh.bottom_radius = 0.06
+				pole_mesh.height = 2.4
+				pole_mesh.radial_segments = 5
+				post.mesh = pole_mesh
+				post.material_override = wood
+				post.position = Vector3(1.3 * side, 1.2, 0.0)
+				holder.add_child(post)
+
+			var mesh_panel := MeshInstance3D.new()
+			var sheet := QuadMesh.new()
+			sheet.size = Vector2(2.6, 1.9)
+			mesh_panel.mesh = sheet
+			var net := _paint_of(Color(0.46, 0.62, 0.55))
+			net.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			net.albedo_color.a = 0.42
+			net.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mesh_panel.mesh.material = net
+			mesh_panel.material_override = net
+			mesh_panel.position = Vector3(0.0, 1.45, 0.0)
+			holder.add_child(mesh_panel)
+
+		Trap.Kind.FOSO:
+			# El brocal de tierra removida y el ramaje que lo tapa.
+			var lip := MeshInstance3D.new()
+			var rim := TorusMesh.new()
+			rim.inner_radius = 1.05
+			rim.outer_radius = 1.45
+			rim.rings = 12
+			rim.ring_segments = 6
+			lip.mesh = rim
+			lip.material_override = _paint_of(Color(0.38, 0.29, 0.20))
+			lip.position = Vector3(0.9, 0.14, 0.0)
+			holder.add_child(lip)
+
+			for i in range(4):
+				var branch := MeshInstance3D.new()
+				var twig := CylinderMesh.new()
+				twig.top_radius = 0.035
+				twig.bottom_radius = 0.045
+				twig.height = 2.2
+				twig.radial_segments = 4
+				branch.mesh = twig
+				branch.material_override = wood
+				branch.position = Vector3(0.9, 0.24, 0.0)
+				branch.rotation = Vector3(deg_to_rad(90.0),
+					TAU * float(i) / 4.0 + 0.3, 0.0)
+				holder.add_child(branch)
+
+
+## Un material mate de un color, que es lo único que se pide aquí.
+func _paint_of(colour: Color) -> StandardMaterial3D:
+	var paint := StandardMaterial3D.new()
+	paint.albedo_color = colour
+	paint.roughness = 1.0
+	return paint
+
+
 func _key(trap: Trap) -> String:
 	return "%d_%d_%d_%d" % [int(trap.kind), int(trap.position.x),
 		int(trap.position.z), trap.set_day]
@@ -112,6 +233,8 @@ func _build(trap: Trap, terrain: TerrainGenerator) -> Node3D:
 	wood.roughness = 1.0
 	stake.material_override = wood
 	holder.add_child(stake)
+
+	_build_gear(holder, trap.kind, wood)
 
 	# Y la señal de arriba, que es la que se ve de lejos y la que cambia de
 	# color cuando hay presa dentro.

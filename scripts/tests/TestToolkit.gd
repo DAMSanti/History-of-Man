@@ -222,3 +222,151 @@ func test_la_durabilidad_por_tipo_usa_su_materia_habitual() -> void:
 	assert_near(Tool.durability_of(Tool.Kind.AZAGAYA),
 		Tool.DURABILITY[Tool.Stuff.ASTA], 0.01,
 		"y la azagaya de asta")
+
+
+# --- lo que se está fabricando, para que se pueda ENSEÑAR ----------------
+#
+# `craft_progress` llevaba desde siempre en `Inhabitant` y no lo leía nadie
+# fuera de `SettlementSim`: en pantalla no había forma de saber qué estaba
+# tallando alguien ni cuánto le faltaba. Ver [CraftMarkers].
+
+func _artesano(sim: SettlementSim) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260906
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.age_years = 30
+	person.age_group = Inhabitant.Age.ADULTO
+	person.nursing = false
+	Profession.assign(Profession.Job.MANUFACTURA, person, Profession.Speciality.TALLA)
+	sim.people = [person]
+	# Sin materia prima en el abrigo `_next_piece` no elige nada: el artesano
+	# no se planta delante de una pieza que no puede pagar.
+	sim.store.add(Materia.Kind.PIEDRA, 40.0)
+	sim.store.add(Materia.Kind.LENA, 20.0)
+	sim.store.add(Materia.Kind.FIBRA, 20.0)
+	sim.store.add(Materia.Kind.ASTA, 10.0)
+	sim.store.add(Materia.Kind.HUESO, 10.0)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.RESINA, 10.0)
+	sim.store.add(Materia.Kind.TENDON, 10.0)
+	return person
+
+
+func test_el_artesano_no_pasa_por_trabajando() -> void:
+	# La trampa que dejaba la chapa apagada siempre: el taller NO sale del
+	# abrigo, asi que quien talla se queda en OCIOSO y `_craft` se llama desde
+	# ahi. Mirar `TRABAJANDO` para saber si alguien fabrica no vale.
+	var sim := SettlementSim.new()
+	var person := _artesano(sim)
+	sim.hour = 10.0
+	person.state = Inhabitant.State.OCIOSO
+	person.craft_progress = 0.4
+
+	var work := sim.crafting_now(person)
+	assert_false(work.is_empty(), "en OCIOSO tambien se esta tallando")
+	assert_eq(work["progress"], 0.4, "y se sabe cuanto lleva")
+
+
+func test_de_noche_no_se_talla() -> void:
+	var sim := SettlementSim.new()
+	var person := _artesano(sim)
+	person.state = Inhabitant.State.DURMIENDO
+	sim.hour = 3.0
+	assert_true(sim.crafting_now(person).is_empty(),
+		"a las tres de la manana no hay nadie en el taller")
+
+
+func test_quien_no_es_del_taller_no_fabrica() -> void:
+	var sim := SettlementSim.new()
+	var person := _artesano(sim)
+	sim.hour = 10.0
+	Profession.assign(Profession.Job.CAZA, person)
+	assert_true(sim.crafting_now(person).is_empty(),
+		"un cazador no lleva chapa de taller")
+
+
+# --- el arbol de tecnicas, como arbol ------------------------------------
+
+func test_todas_las_tecnicas_estan_en_una_rama() -> void:
+	# Una tecnica fuera de las ramas no se ve en ninguna ventana: existe en el
+	# catalogo y no en la pantalla, que es la peor clase de contenido.
+	var seen: Dictionary = {}
+	for branch: int in TechTree.BRANCHES:
+		for tech: int in (TechTree.BRANCHES[branch] as Array):
+			assert_false(seen.has(tech),
+				"%s sale en dos ramas" % TechTree.tech_name(tech as TechTree.Tech))
+			seen[tech] = true
+	for tech: int in TechTree.CATALOGUE.keys():
+		assert_true(seen.has(tech),
+			"%s no esta en ninguna rama" % TechTree.tech_name(tech as TechTree.Tech))
+
+
+func test_la_profundidad_sale_de_los_prerrequisitos() -> void:
+	assert_eq(TechTree.depth_of(TechTree.Tech.LASCA), 0, "la lasca es la raiz")
+	assert_eq(TechTree.depth_of(TechTree.Tech.NUCLEO), 1, "el nucleo cuelga de ella")
+	assert_eq(TechTree.depth_of(TechTree.Tech.HOJA), 2, "y la hoja del nucleo")
+	assert_gt(float(TechTree.depth_of(TechTree.Tech.ARPON)), 2.0,
+		"el arpon es de lo mas hondo del arbol")
+
+# --- aprender cuesta material, no solo tiempo ----------------------------
+#
+# «No sirven de nada cuarenta y cinco jornadas si no se tiene nada con lo que
+# trabajar». El tiempo pasa solo; el material hay que traerlo, y esa es toda
+# la diferencia entre un arbol de progreso y un reloj.
+
+func test_sin_material_las_jornadas_no_bastan() -> void:
+	var tree := TechTree.new()
+	tree.larder = Storehouse.new()
+	var cost := TechTree.learning_cost(TechTree.Tech.NUCLEO)
+	assert_false(cost.is_empty(), "el nucleo preparado cuesta piedra")
+	var gained := tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	assert_false(tree.has(TechTree.Tech.NUCLEO),
+		"con el abrigo vacio no se aprende por muchas jornadas que se echen")
+	assert_eq(gained.size(), 0, "y no se anuncia nada")
+
+
+func test_con_material_se_aprende_y_se_paga() -> void:
+	var tree := TechTree.new()
+	tree.larder = Storehouse.new()
+	tree.larder.add(Materia.Kind.PIEDRA, 100.0)
+	var before := tree.larder.amount(Materia.Kind.PIEDRA)
+	tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	assert_true(tree.has(TechTree.Tech.NUCLEO), "con piedra si se aprende")
+	assert_lt(tree.larder.amount(Materia.Kind.PIEDRA), before,
+		"y la piedra se gasta aprendiendo")
+
+
+func test_lo_que_falta_se_puede_decir() -> void:
+	# La ventana tiene que poder escribir «falta 12 cuarcita», no «falta algo».
+	var tree := TechTree.new()
+	tree.larder = Storehouse.new()
+	var short := tree.missing_for(TechTree.Tech.NUCLEO)
+	assert_false(short.is_empty(), "con el abrigo vacio falta algo, y se dice")
+
+
+func test_sin_despensa_el_arbol_se_comporta_como_antes() -> void:
+	# Las pruebas viejas y las partidas guardadas montan arboles sueltos, sin
+	# almacen: alli aprender no puede costar material o nada funcionaria.
+	var tree := TechTree.new()
+	tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	assert_true(tree.has(TechTree.Tech.NUCLEO),
+		"sin despensa que consultar, las jornadas bastan")
+
+
+func test_cada_rama_del_arbol_es_un_oficio_de_verdad() -> void:
+	# La ventana pinta una pestaña por rama y le pone el nombre del oficio: una
+	# rama que no fuera un oficio saldria sin nombre.
+	for job: int in TechTree.BRANCHES:
+		assert_true(Profession.CATALOGUE.has(job),
+			"la rama %d es un oficio del catalogo" % job)
+		assert_false((TechTree.BRANCHES[job] as Array).is_empty(),
+			"%s tiene tecnicas" % Profession.job_name(job as Profession.Job))
+
+
+func test_todas_las_tecnicas_tienen_cara_con_la_que_dibujarse() -> void:
+	# El arbol dibuja un icono por tecnica. Sin entrada en la tabla se dibuja
+	# un canto gris y todas parecen la misma.
+	for tech: int in TechTree.CATALOGUE.keys():
+		assert_true(TechTree.TECH_FACE.has(tech),
+			"%s tiene con que dibujarse" % TechTree.tech_name(
+				tech as TechTree.Tech))

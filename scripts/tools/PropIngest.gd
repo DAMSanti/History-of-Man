@@ -27,6 +27,18 @@ const WORK_DIR := "user://prop_ingest"
 ## initialize». Lo baja `curl`, que viene de serie.
 const CURL_ARGS := ["-sSL", "--fail", "--retry", "2", "--max-time", "300"]
 
+## Techo de triángulos de la malla que se GUARDA.
+##
+## Los árboles de Poly Haven son escaneos completos: el pino trae 17.182.252
+## triángulos y el abeto casi siete millones. Guardarlos enteros dejó la
+## biblioteca en 1,3 GB, y eso es geometría, no texturas.
+##
+## Y no hace falta: un árbol se ve desde treinta metros para arriba. Así que se
+## conserva el nivel de detalle más fino que quepa bajo este techo y ese pasa a
+## ser la malla BASE, con sus propios niveles por debajo. Lo que se tira es
+## detalle que no cabe en pantalla ni acercándose.
+const MAX_BASE_TRIS := 24000
+
 
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(WORK_DIR))
@@ -63,23 +75,35 @@ func _init() -> void:
 			print("   FALLO al traer el modelo; se salta")
 			continue
 
-		var mesh := _load_mesh(gltf_path)
-		if mesh == null:
+		var raw_variants := _load_mesh(gltf_path)
+		if raw_variants.is_empty():
 			print("   FALLO al leer la malla; se salta")
 			continue
 
-		var raw := _triangles(mesh)
-		var with_lods := _make_lods(mesh)
-		if with_lods == null:
-			# No es un fallo: `generate_lods` no simplifica lo que ya es simple,
-			# y hay piezas -el pasto- que llegan con menos de mil triangulos.
-			print("   sin niveles: la malla ya es bastante simple")
-			with_lods = mesh
+		var raw := 0
+		var ready: Array[Mesh] = []
+		var tallest := 0.0
+		for variant: ArrayMesh in raw_variants:
+			raw += _triangles(variant)
+			var capped := _cap_detail(variant)
+			var with_lods := _make_lods(capped)
+			if with_lods == null:
+				# `generate_lods` no simplifica lo que ya es simple.
+				with_lods = capped
+			_grade(with_lods, PropModels.grade_of(key))
+			_compress_textures(with_lods)
+			ready.append(with_lods)
+			tallest = maxf(tallest, with_lods.get_aabb().size.y)
 
-		var box := with_lods.get_aabb()
+		# La talla se calcula sobre la variante MÁS ALTA y se aplica a todas por
+		# igual: si cada una se normalizase por su cuenta, tres ramas de tamaños
+		# distintos acabarían midiendo lo mismo y se perdería la variedad.
 		var factor := 1.0
-		if box.size.y > 0.0001:
-			factor = float(entry["height_m"]) / box.size.y
+		if tallest > 0.0001:
+			factor = float(entry["height_m"]) / tallest
+
+		print("   %d variantes · %d triangulos · mas alta %.2f m · factor x%.3f" % [
+			ready.size(), raw, tallest, factor])
 
 		if entry.has("local"):
 			var credit := _read_credit(gltf_path)
@@ -90,13 +114,9 @@ func _init() -> void:
 				print("   «%s» de %s · %s" % [credit.get("title", "?"),
 					credit.get("author", "?"), credit.get("license", "?")])
 
-		_grade(with_lods, PropModels.grade_of(key))
-		_compress_textures(with_lods)
-		library.meshes[key] = with_lods
+		library.meshes[key] = ready
 		library.scales[key] = factor
 		library.triangles[key] = raw
-		print("   %d triangulos · alto de origen %.2f m · factor x%.3f" % [
-			raw, box.size.y, factor])
 
 	if not library.is_usable():
 		print("")
@@ -167,6 +187,43 @@ func _write_credits(library: PropLibrary) -> void:
 		lines.append("> Una pieza con licencia CC-BY sin atribuir es un")
 		lines.append("> incumplimiento, no un descuido de formato.")
 		lines.append("")
+	lines.append("## Personas")
+	lines.append("")
+	lines.append("«Animated Human» de [Quaternius](https://quaternius.com)"
+		+ " ([OpenGameArt](https://opengameart.org/content/animated-human-low-poly)),"
+		+ " CC0. `scripts/tools/BandaAtlas.gd` hornea sus siete animaciones"
+		+ " -reposo, andar, correr, salto, golpe, trabajo, muerte- a textura"
+		+ " de vértice para dibujar la banda entera en un solo `MultiMesh`;"
+		+ " ver ese fichero para el porqué.")
+	lines.append("")
+	lines.append("## Fauna")
+	lines.append("")
+	lines.append("Lobo, caballo, vaca, cerdo, oveja, águila y pájaro pequeño de"
+		+ " [Quaternius](https://quaternius.com) —"
+		+ " [Animal Pack Vol.2](https://opengameart.org/content/animated-animales-low-poly),"
+		+ " [Farm Animals](https://opengameart.org/content/lowpoly-animated-farm-animal-pack)—,"
+		+ " CC0. Ciervo, venado y toro del"
+		+ " [Ultimate Animated Animal Pack](https://quaternius.com/packs/ultimateanimatedanimals.html)"
+		+ " del mismo autor, CC0. Pato de [Gobkit](https://gobkit.com), CC0."
+		+ " `scripts/tools/FaunaAtlas.gd` los hornea igual que a la banda.")
+	lines.append("")
+	lines.append("`WildlifeHerds.gd` reparte once mallas entre las doce especies"
+		+ " de [Fauna]. La caza mayor ya no anda prestada de caballo ni de oveja"
+		+ " —esas dos mallas de granja sólo traen reposo y salto, y por eso"
+		+ " jabalí, corzo y rebeco cruzaban el valle con las patas quietas—, pero"
+		+ " tres cosas siguen faltando y conviene tenerlas escritas:")
+	lines.append("")
+	lines.append("- **Cabra montés y rebeco.** No hay bóvido de montaña CC0"
+		+ " descargable por script. El rebeco lleva la malla del corzo con otra"
+		+ " talla y otro tinte: anda bien, pero comparte silueta con él.")
+	lines.append("- **Jabalí.** Tampoco hay suido con ciclo de marcha. Lleva la"
+		+ " del toro, que es lo más parecido que anda: cuerpo bajo y macizo con"
+		+ " la cabeza pesada delante.")
+	lines.append("- **La cuerna del venado.** El `Stag.fbx` trae las astas en una"
+		+ " malla aparte, colgada de un hueso, y el horneado a textura de"
+		+ " vértice sólo se lleva una malla con pesos. Se hornea el cuerpo; las"
+		+ " astas se pierden, que en la época de la berrea se nota.")
+	lines.append("")
 	lines.append("## Lo que falta")
 	lines.append("")
 	for key: String in PropModels.WANTED:
@@ -238,43 +295,82 @@ func _curl(url: String, to_path: String) -> bool:
 	return true
 
 
-func _load_mesh(path: String) -> ArrayMesh:
+func _load_mesh(path: String) -> Array[ArrayMesh]:
 	var doc := GLTFDocument.new()
 	var state := GLTFState.new()
 	if doc.append_from_file(path, state) != OK:
-		return null
+		return []
 	var scene := doc.generate_scene(state)
 	if scene == null:
-		return null
-	return _merge_meshes(scene)
+		return []
+	return _split_variants(scene)
 
 
-## Junta TODAS las mallas del glTF en una, cada una como su propia superficie.
+## Separa el glTF en VARIANTES, y junta las piezas de cada una.
 ##
-## Antes se cogía la primera y ya. Y funciona con una roca, que viene de una
-## pieza, pero no con una planta: un arbusto llega partido en ramas y hoja
-## -porque la hoja lleva alfa y necesita su propio material-, así que quedarse
-## con la primera dejaba las ramas peladas. `shrub_02` salía como dos palitos en
-## vez de un matorral de metro y pico, y la roseta no salía casi.
+## Poly Haven empaqueta varios ejemplares en un mismo fichero: `dry_branches`
+## trae tres ramas distintas, `nettle_plant` cuatro matas, `pine_sapling_small`
+## tres arbolitos. Fusionarlo todo en una malla hacía que CADA instancia fuese
+## «las tres ramas a la vez», siempre igual y siempre en la misma disposición.
+## Separadas, cada una es una silueta distinta y se alterna entre instancias.
 ##
-## Cada malla se trae con la transformación del nodo aplicada, porque en un glTF
-## las piezas suelen estar colocadas por el nodo y no por los vértices.
-func _merge_meshes(scene: Node) -> ArrayMesh:
-	# Pares (malla, transformación acumulada). La transformación se acumula al
-	# bajar y NO se pide con `global_transform`: la escena que devuelve
-	# `generate_scene` no está dentro del árbol, y ahí `global_transform` avisa y
-	# devuelve la identidad, con lo que las piezas de un modelo se apilarían
-	# todas en el origen.
+## Cómo se distingue una variante de una pieza: por PROXIMIDAD. Las piezas de un
+## mismo objeto se tocan —el tronco y la copa comparten sitio— y las variantes
+## están puestas una al lado de otra. Así que se agrupan las mallas cuyas cajas
+## se solapan, y cada grupo es una variante.
+func _split_variants(scene: Node) -> Array[ArrayMesh]:
 	var parts: Array = []
 	_collect_meshes(scene, Transform3D.IDENTITY, parts)
 	if parts.is_empty():
-		return null
+		return []
 
-	# Se agrupa POR MATERIAL y no una superficie por pieza. `moss_01` llega en
-	# doce mallas y `pine_sapling_small` en seis, pero casi todas comparten
-	# material: dejarlas sueltas daba doce llamadas de dibujado por cada zona
-	# sembrada, o sea más de setecientas sólo para el musgo. Fundidas por
-	# material son una.
+	# Caja de cada pieza, ya colocada
+	var boxes: Array[AABB] = []
+	for part: Dictionary in parts:
+		var box: AABB = (part["mesh"] as ArrayMesh).get_aabb()
+		boxes.append((part["xform"] as Transform3D) * box)
+
+	# Union-find sobre las cajas que se tocan. El margen es pequeño a proposito:
+	# con uno grande, dos variantes vecinas se fundirian otra vez.
+	var owner: Array[int] = []
+	for i in range(parts.size()):
+		owner.append(i)
+	for i in range(parts.size()):
+		for j in range(i + 1, parts.size()):
+			if boxes[i].grow(0.02).intersects(boxes[j]):
+				var a := _root(owner, i)
+				var b := _root(owner, j)
+				if a != b:
+					owner[b] = a
+
+	var groups: Dictionary = {}
+	for i in range(parts.size()):
+		var key := _root(owner, i)
+		if not groups.has(key):
+			groups[key] = ([] as Array)
+		(groups[key] as Array).append(parts[i])
+
+	var out: Array[ArrayMesh] = []
+	for key: int in groups:
+		var merged := _merge_parts(groups[key] as Array)
+		if merged != null:
+			out.append(merged)
+	return out
+
+
+func _root(owner: Array[int], i: int) -> int:
+	while owner[i] != i:
+		owner[i] = owner[owner[i]]
+		i = owner[i]
+	return i
+
+
+## Junta las piezas de UNA variante, agrupadas por material.
+##
+## Agrupar por material importa: `moss_01` llega en doce mallas que comparten
+## material, y dejarlas como superficies sueltas daba doce llamadas de dibujado
+## por cada zona sembrada.
+func _merge_parts(parts: Array) -> ArrayMesh:
 	var by_material: Dictionary = {}
 	var order: Array = []
 	for part: Dictionary in parts:
@@ -448,6 +544,109 @@ func _grade(mesh: ArrayMesh, grade: Dictionary) -> void:
 			image.get_height(), image.has_mipmaps(), Image.FORMAT_RGBA8, data)
 		base.set_texture(BaseMaterial3D.TEXTURE_ALBEDO,
 			ImageTexture.create_from_image(graded))
+
+
+## Baja la malla al nivel de detalle más fino que quepa bajo `MAX_BASE_TRIS`.
+##
+## Se pide a `ImporterMesh` que genere los niveles y se coge uno como base
+## nueva, remapeando los vértices para no arrastrar los que dejan de usarse: sin
+## remapear, la malla seguiría ocupando lo mismo en disco aunque dibujara menos.
+func _cap_detail(mesh: ArrayMesh) -> ArrayMesh:
+	if _triangles(mesh) <= MAX_BASE_TRIS:
+		return mesh
+
+	var importer := ImporterMesh.new()
+	for surface in range(mesh.get_surface_count()):
+		importer.add_surface(mesh.surface_get_primitive_type(surface),
+			mesh.surface_get_arrays(surface), [], {},
+			mesh.surface_get_material(surface))
+	if not importer.has_method("generate_lods"):
+		print("   sin generate_lods: no se puede recortar")
+		return mesh
+	importer.callv("generate_lods", [25.0, 60.0, []])
+
+	var levels := ""
+	for surface in range(importer.get_surface_count()):
+		levels += " %d" % importer.get_surface_lod_count(surface)
+	print("   recorte: %d superficies, niveles por superficie:%s" % [
+		importer.get_surface_count(), levels])
+
+	var out := ArrayMesh.new()
+	var total := 0
+	for surface in range(importer.get_surface_count()):
+		var arrays := importer.get_surface_arrays(surface)
+		var chosen: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		# Del más fino al más basto, quedarse con el primero que quepa
+		var share := MAX_BASE_TRIS / maxi(importer.get_surface_count(), 1)
+		for level in range(importer.get_surface_lod_count(surface)):
+			var indices: PackedInt32Array = importer.get_surface_lod_indices(
+				surface, level)
+			chosen = indices
+			if indices.size() / 3 <= share:
+				break
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,
+			_remap(arrays, chosen))
+		out.surface_set_material(out.get_surface_count() - 1,
+			importer.get_surface_material(surface))
+		total += chosen.size() / 3
+	print("   recortada a %d triangulos de base" % total)
+	return out
+
+
+## Reconstruye los arrays quedándose sólo con los vértices que usa el índice.
+func _remap(arrays: Array, indices: PackedInt32Array) -> Array:
+	var out := []
+	out.resize(Mesh.ARRAY_MAX)
+
+	var mapping: Dictionary = {}
+	var order: PackedInt32Array = PackedInt32Array()
+	var fresh := PackedInt32Array()
+	fresh.resize(indices.size())
+	for i in range(indices.size()):
+		var old: int = indices[i]
+		if not mapping.has(old):
+			mapping[old] = order.size()
+			order.append(old)
+		fresh[i] = mapping[old]
+
+	for channel: int in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL,
+			Mesh.ARRAY_TANGENT, Mesh.ARRAY_COLOR, Mesh.ARRAY_TEX_UV,
+			Mesh.ARRAY_TEX_UV2]:
+		var source: Variant = arrays[channel]
+		if source == null:
+			continue
+		# La tangente va en cuatro flotantes por vértice, no en uno
+		var stride := 4 if channel == Mesh.ARRAY_TANGENT else 1
+		var packed: Variant = _take(source, order, stride)
+		if packed != null:
+			out[channel] = packed
+	out[Mesh.ARRAY_INDEX] = fresh
+	return out
+
+
+func _take(source: Variant, order: PackedInt32Array, stride: int) -> Variant:
+	if source is PackedVector3Array:
+		var v3 := PackedVector3Array()
+		for i: int in order:
+			v3.append((source as PackedVector3Array)[i])
+		return v3
+	if source is PackedVector2Array:
+		var v2 := PackedVector2Array()
+		for i: int in order:
+			v2.append((source as PackedVector2Array)[i])
+		return v2
+	if source is PackedColorArray:
+		var c := PackedColorArray()
+		for i: int in order:
+			c.append((source as PackedColorArray)[i])
+		return c
+	if source is PackedFloat32Array:
+		var f := PackedFloat32Array()
+		for i: int in order:
+			for k in range(stride):
+				f.append((source as PackedFloat32Array)[i * stride + k])
+		return f
+	return null
 
 
 ## Comprime a BC7 las texturas que trae el modelo.

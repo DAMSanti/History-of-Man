@@ -21,16 +21,60 @@ extends RefCounted
 ## treinta metros, gruesa para que la comarca entera quepa en diez mil celdas.
 const CELL := 40.0
 
-## Los puntos que se miran dentro de cada celda: el centro y cuatro alrededor.
+## Los puntos que se miran de cada celda: las nueve de un tablero de tres en
+## raya, ESQUINAS INCLUIDAS.
 ##
 ## Con una sola muestra en el centro, un río que pasa entre dos centros es
-## invisible y la gente sale a cruzarlo; y un barranco más estrecho que la
-## celda no existe, que es por lo que tiraban por él.
-const PROBES: Array[Vector2] = [
-	Vector2(0.0, 0.0),
-	Vector2(-0.34, -0.34), Vector2(0.34, -0.34),
-	Vector2(-0.34, 0.34), Vector2(0.34, 0.34),
-]
+## invisible y la gente sale a cruzarlo; y un barranco más estrecho que la celda
+## no existe, que es por lo que tiraban por él.
+##
+## Eran cinco y estaban todas DENTRO —a ±0,34 de celda—, o sea que cubrían el
+## cuadrado interior y dejaban sin mirar el borde y las cuatro esquinas. Y las
+## esquinas es justo donde acaba la gente: medido en el sitio 56, la rejilla
+## daba por pisables puntos de pendiente 1,85 con el límite de escalada en 1,20,
+## y quien llegaba allí se quedaba empujando la pared hasta que la noche lo
+## mandaba a casa. El caso concreto que lo destapó fue una cuadrilla de caza
+## menor plantada día tras día en el mismo punto, a diez metros del borde de su
+## celda.
+##
+## A ±0,5 los puntos caen en el borde, así que dos celdas vecinas comparten sus
+## muestras: un cortado justo en la linde cierra las dos, que es lo correcto —a
+## una linde no se llega por un lado sin llegar por el otro—.
+##
+## Cuántas por lado. Tres, el tres en raya, y NO cinco: está probado.
+##
+## Con tres quedan veinte metros entre muestra y muestra y la rejilla promete de
+## más en el 0,20 % del mapa —pendientes de hasta 1,71 con el límite de escalada
+## en 1,20—, o sea puntos que el trazado da por buenos y en los que no se puede
+## dar un paso. Cinco por lado estrecha la malla a diez metros y baja esa mentira
+## a la mitad (0,12 %, la peor pendiente 1,53).
+##
+## Y aun así sale peor, medido con la banda andando ocho jornadas en el sitio 56:
+## el precio de mirar más de cerca es cerrar más suelo bueno —del 3,87 % al
+## 5,13 % del mapa—, y eso son rodeos y tajos descartados. Las salidas que traen
+## algo bajaron de 26-30 a 22, y los atascos siguieron en cero con las dos, que
+## es lo que dice que esa mentira del 0,2 % no es la que atora a nadie: el
+## andador ya la absorbe —ver `SettlementSim._can_step_into`— y quien no se mueve
+## acaba renunciando al sitio, no clavado.
+##
+## Construirla, además, pasa de 540 ms a 1575 ms.
+const PROBE_SIDE := 3
+
+## Las muestras de cada celda, repartidas por igual de borde a borde.
+##
+## Se calculan en vez de escribirse a mano para poder cambiar [PROBE_SIDE] sin
+## reescribir la lista ni las líneas del vado.
+static var PROBES: Array[Vector2] = _build_probes()
+
+
+static func _build_probes() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var last := float(PROBE_SIDE - 1)
+	for row in range(PROBE_SIDE):
+		for col in range(PROBE_SIDE):
+			out.append(Vector2(
+				-0.5 + float(col) / last, -0.5 + float(row) / last))
+	return out
 
 ## Cuánto pesa el riesgo frente a la distancia.
 const RISK_WEIGHT := 5.0
@@ -92,6 +136,28 @@ static func from_terrain(terrain: TerrainGenerator,
 
 	grid._flood_areas()
 	return grid
+
+
+## Si por esta celda se puede cruzar el agua de lado a lado.
+##
+## Las nueve muestras son un tres en raya; se mira la fila de en medio y la
+## columna de en medio. Si alguna de las dos se vadea entera, hay paso.
+static func _has_ford(fords: PackedFloat32Array, has_boat: bool,
+		has_bridge: bool) -> bool:
+	# La fila y la columna de en medio de la malla de muestras.
+	var mid := PROBE_SIDE / 2
+	var across: Array[int] = []
+	var down: Array[int] = []
+	for i in range(PROBE_SIDE):
+		across.append(mid * PROBE_SIDE + i)
+		down.append(i * PROBE_SIDE + mid)
+	for line: Array in [across, down]:
+		var deepest := 0.0
+		for i: int in line:
+			deepest = maxf(deepest, fords[i])
+		if Hydrography.can_cross(deepest, has_boat, has_bridge):
+			return true
+	return false
 
 
 ## Cuánto alrededor del abrigo se garantiza andable, en metros.
@@ -161,8 +227,14 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 		has_boat: bool, has_bridge: bool) -> float:
 	var total := 0.0
 	var worst := 0.0
+	# El vadeo de cada muestra, en el orden de `PROBES`, para poder mirar
+	# después si hay una LÍNEA que cruce la celda y no sólo un punto somero.
+	var fords := PackedFloat32Array()
+	fords.resize(PROBES.size())
+	var index := -1
 
 	for probe: Vector2 in PROBES:
+		index += 1
 		var point := Vector3(
 			centre.x + probe.x * CELL, 0.0, centre.z + probe.y * CELL)
 		point.y = terrain.get_height_at(point)
@@ -170,18 +242,23 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 		var slope := terrain.get_slope_at(point)
 		var ford := terrain.crossing_difficulty_at(point)
 
-		# Cualquiera de los cinco puntos que no se pase cierra la celda, y va
-		# para el agua Y para la pendiente.
+		# LA PENDIENTE Y EL AGUA NO SE JUZGAN IGUAL, y ésa es la diferencia.
 		#
-		# Se probó a aflojarlo para la pendiente —que una peña suelta no
-		# cerrara los cuarenta metros— y salió peor, con el juego delante:
-		# 385 minutos de gente parada contra una pared. El motivo es que el
-		# ANDADOR comprueba punto a punto, así que una celda que el
-		# planificador da por buena porque su centro se pisa es una celda que
-		# la persona no puede cruzar. El planificador que promete más de lo
-		# que el andador cumple no es optimista: deja a la gente clavada.
-		if not Traversal.is_passable(slope, ford, has_boat, has_bridge):
+		# Una pared que cruza la celda la cierra: se mire por donde se mire, por
+		# ahí no se sube, y cualquiera de las nueve muestras basta para
+		# cerrarla. Se probó a aflojarlo —que una peña suelta no cerrara los
+		# cuarenta metros— y salió peor, con el juego delante: 385 minutos de
+		# gente parada contra una pared.
+		#
+		# Un río NO. Un río se cruza POR EL VADO, no por un punto cualquiera, y
+		# midiéndolo con la muestra más honda se cerraba el cauce entero
+		# —incluidos los vados—. Medido en el sitio 56: se vadea hasta 0,35 y el
+		# mejor paso del río estaba en 0,32, o sea que había vado y la rejilla
+		# no lo veía; el resultado era un tercio del valle incomunicado del
+		# abrigo para toda la partida. El agua se juzga por su MEJOR paso.
+		if absf(slope) > Traversal.CLIMB_LIMIT:
 			return BLOCKED
+		fords[index] = ford
 
 		# Lo que cuesta andarlo: la función de marcha ya sabe que subir cansa
 		# y que bajar mucho también. El suelo de velocidad va dentro de
@@ -204,6 +281,16 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 		var value := step * (1.0 + risk * RISK_WEIGHT)
 		total += value
 		worst = maxf(worst, value)
+
+	# Y el agua, una vez y por si hay POR DÓNDE CRUZAR LA CELDA.
+	#
+	# No basta con que un punto suelto sea somero: eso abriría la celda por un
+	# charco de una esquina y mandaría a la gente a cruzar por lo hondo. Lo que
+	# hace falta es una línea que la atraviese de lado a lado —la fila de en
+	# medio o la columna de en medio de las nueve muestras—, que es lo que de
+	# verdad significa «aquí hay vado».
+	if not _has_ford(fords, has_boat, has_bridge):
+		return BLOCKED
 
 	return lerpf(total / float(PROBES.size()), worst, WORST_BIAS)
 
@@ -327,6 +414,17 @@ func nearest_open(point: Vector3, rings: int = 3) -> int:
 	return -1
 
 
+## Las celdas vecinas por las que SE PUEDE PASAR desde ésta.
+##
+## Con la misma regla de esquinas que usa el buscador de caminos: una diagonal
+## sólo cuenta si las dos ortogonales que la rodean están abiertas. Es lo que
+## hace que `connected` diga la verdad.
+##
+## Sin esto, la inundación de zonas unía dos trozos de mapa por el vértice entre
+## dos celdas cerradas —un paso de anchura cero que nadie puede dar—, así que
+## `connected` daba que sí y el buscador se quedaba sin camino. Desde fuera se
+## veía como «se quedó sin camino trazado» sobre un sitio que la rejilla juraba
+## alcanzable.
 func neighbours(cell: int) -> Array[int]:
 	var out: Array[int] = []
 	var x := cell % wide
@@ -339,6 +437,11 @@ func neighbours(cell: int) -> Array[int]:
 			var nz := z + dz
 			if nx < 0 or nz < 0 or nx >= wide or nz >= tall:
 				continue
+			if dx != 0 and dz != 0:
+				if cost[z * wide + nx] <= BLOCKED:
+					continue
+				if cost[nz * wide + x] <= BLOCKED:
+					continue
 			out.append(nz * wide + nx)
 	return out
 

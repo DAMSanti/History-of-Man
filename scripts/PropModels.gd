@@ -120,6 +120,99 @@ const CATALOGUE := {
 		# Pino de refugio: verde frío y apagado.
 		"tint": Color(0.90, 0.98, 0.78), "sat": 0.60,
 	},
+	# --- Lo que viste el terreno --------------------------------------------
+	#
+	# Éstas no son recursos: nadie las recolecta. Son el paisaje, y se siembran
+	# contra el TERRENO -pendiente, humedad, altura- y no contra el campo de
+	# abundancia.
+	#
+	# Aquí NO hay árboles, y no por olvido. Los de Poly Haven son escaneos de
+	# cine: `pine_tree_01` trae 17.182.252 triángulos y `fir_tree_01` casi siete
+	# millones. Guardarlos dejaba la biblioteca en 1,3 GB, y no se pueden
+	# recortar porque el generador de niveles de detalle de Godot los rechaza:
+	# «Mesh LOD generation failed, mesh is too complex». Además hay superficies
+	# que salen con CERO niveles, y una sola superficie sin simplificar arrastra
+	# el total.
+	#
+	# O sea que no es un ajuste que falte: hacen falta árboles hechos para un
+	# juego -unos miles de triángulos y la hoja en planos con alfa-, y eso no
+	# está en Poly Haven. Ver `WANTED`.
+
+	"herbazal": {
+		# Relleno: la hierba que tapa el suelo desnudo. Es la que más instancias
+		# se lleva y la que hace que el terreno deje de parecer una textura.
+		"slug": "grass_medium_02", "name": "Herbazal", "height_m": 0.38,
+		"tint": Color(3.10, 2.80, 1.60), "sat": 0.30,
+	},
+	"pena": {
+		# Peña suelta de ladera. Es la deuda de G2: lo único que da silueta y
+		# sombra REALES entre uno y cinco metros, que el shader no puede fingir.
+		"slug": "namaqualand_boulder_02", "name": "Peña", "height_m": 2.6,
+		"tint": Color(1.04, 1.03, 1.00), "sat": 0.45,
+	},
+
+	"pena2": {
+		"slug": "namaqualand_boulder_03", "name": "Peña partida", "height_m": 1.9,
+		"tint": Color(1.05, 1.04, 1.00), "sat": 0.45,
+	},
+	"pena3": {
+		"slug": "namaqualand_boulder_05", "name": "Peña baja", "height_m": 1.4,
+		"tint": Color(1.03, 1.02, 0.99), "sat": 0.45,
+	},
+
+	# --- Árboles ------------------------------------------------------------
+	#
+	# Bosque del Magdaleniense cantábrico, que no es el bosque de hoy: estepa
+	# fría con bosque de refugio en los valles encajados. Pino albar y abedul en
+	# lo húmedo y abrigado, enebro y matorral en lo expuesto, y troncos secos en
+	# pie por toda la estepa. Árboles de porte MODESTO -entre tres y ocho metros-,
+	# no el hayedo de postal: a quince mil años el clima no daba para más.
+	#
+	# Las alturas son deliberadamente cortas para la especie. Los modelos de Poly
+	# Haven que se pueden usar son planteles -saplings-, no árboles adultos, y
+	# estirar un plantel a veinte metros da un palo con cuatro ramas. A ocho lo
+	# que sale es un pino joven de umbría, que es exactamente lo que había.
+	#
+	# Los adultos de verdad de Poly Haven NO se pueden traer: `pine_tree_01` son
+	# 905 MB de geometría y `fir_tree_01` 456 MB, y Godot ya rechazó generarles
+	# niveles de detalle -«mesh is too complex»-. Medido con su propia API.
+	"pino": {
+		"slug": "fir_sapling_medium", "name": "Pino de refugio", "height_m": 8.0,
+		# Conífera de clima frío: verde azulado y apagado, no el verde de vivero.
+		"tint": Color(0.82, 0.95, 0.80), "sat": 0.55,
+	},
+	"pino_joven": {
+		"slug": "fir_sapling", "name": "Pino joven", "height_m": 4.0,
+		"tint": Color(0.86, 0.98, 0.82), "sat": 0.58,
+	},
+	"abedul": {
+		# La hoja caduca del bosque de refugio. `tree_small_02` no es un abedul
+		# -Poly Haven no tiene ninguno- pero es el único árbol de HOJA que se
+		# puede traer, y a distancia de juego lo que se lee es la silueta: copa
+		# redonda contra la punta de la conífera. Queda anotado por si aparece uno.
+		"slug": "tree_small_02", "name": "Abedul", "height_m": 6.5,
+		# Abedul: hoja clara, casi amarillenta, y tronco pálido.
+		"tint": Color(1.18, 1.14, 0.82), "sat": 0.50,
+	},
+	"seco": {
+		# Tronco CAÍDO, no en pie, y la diferencia importa mucho más de lo que
+		# parece. Se pidió como árbol muerto y al fotografiarlo para el atlas de
+		# impostores salió con proporción alto/ancho 0,10: está TUMBADO. Con la
+		# altura puesta a 4,5 m -pensada para un árbol- la ingesta lo habría
+		# escalado por nueve y el valle se habría llenado de troncos de cuarenta y
+		# cinco metros de largo.
+		#
+		# Su sitio es la LEÑA: un tronco caído es exactamente lo que se recoge
+		# para el fuego, y le da a esa materia una silueta grande que la rama
+		# suelta no tiene. La altura es ahora su GROSOR, que es lo que mide un
+		# tronco tumbado de arriba abajo.
+		"slug": "dead_tree_trunk", "name": "Tronco caído", "height_m": 0.5,
+		"tint": Color(1.06, 1.00, 0.90), "sat": 0.45,
+	},
+	"seco2": {
+		"slug": "dead_tree_trunk_02", "name": "Tronco partido", "height_m": 0.6,
+		"tint": Color(1.04, 0.99, 0.91), "sat": 0.45,
+	},
 	"asta": {
 		# Cuerna de desmogue: lo que se recoge, no lo que se caza. De ella salen
 		# azagayas y arpones, así que es icono de la época.
@@ -168,6 +261,13 @@ const WANTED := {
 			+ "caracola tropical, nada que ver con el marisqueo cantábrico.",
 	},
 	"seta": {"name": "Seta", "note": "Tampoco existe en CC0 scripteable."},
+	"arbol": {
+		"name": "Árbol adulto de verdad",
+		"note": "Los de Poly Haven son escaneos de cine -17 millones de "
+			+ "triángulos el pino- y Godot se niega a generarles niveles de "
+			+ "detalle: «mesh is too complex». Hace falta un árbol hecho para "
+			+ "juego: unos miles de triángulos y la hoja en planos con alfa.",
+	},
 	"hueso": {"name": "Hueso", "note": "Ídem."},
 }
 

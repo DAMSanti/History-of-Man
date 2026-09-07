@@ -57,17 +57,27 @@ func test_la_rejilla_es_lo_bastante_fina_y_lo_bastante_gruesa() -> void:
 		"el mapa entero cabe en el presupuesto de busqueda")
 
 
-func test_la_celda_se_mira_por_dentro_y_no_solo_en_el_centro() -> void:
+func test_la_celda_se_mira_entera_esquinas_incluidas() -> void:
 	# Es el fallo que mandaba a la gente al rio: con una sola muestra, un
-	# cauce que pasa entre dos centros de celda no existe para el A*
-	assert_true(Navgrid.PROBES.size() >= 5, "varias muestras por celda")
+	# cauce que pasa entre dos centros de celda no existe para el A*.
+	#
+	# Y las muestras llegan HASTA EL BORDE, no sólo al cuadrado interior.
+	# Estaban a ±0,34 de celda, o sea que las cuatro esquinas no se miraban
+	# nunca, y las esquinas es donde acaba la gente: medido en el sitio 56, la
+	# rejilla daba por pisables puntos de pendiente 1,85 con el limite de
+	# escalada en 1,20.
+	assert_true(Navgrid.PROBES.size() >= 9, "las nueve del tres en raya")
 	var centres := 0
+	var corners := 0
 	for probe: Vector2 in Navgrid.PROBES:
 		if probe == Vector2.ZERO:
 			centres += 1
-		assert_true(absf(probe.x) < 0.5 and absf(probe.y) < 0.5,
-			"la muestra %s cae dentro de su celda" % probe)
-	assert_eq(centres, 1, "y una de ellas es el centro")
+		if absf(probe.x) == 0.5 and absf(probe.y) == 0.5:
+			corners += 1
+		assert_true(absf(probe.x) <= 0.5 and absf(probe.y) <= 0.5,
+			"la muestra %s no se sale de su celda" % probe)
+	assert_eq(centres, 1, "una de ellas es el centro")
+	assert_eq(corners, 4, "y las cuatro esquinas se miran")
 
 
 func test_el_mal_paso_de_la_celda_encarece_la_celda() -> void:
@@ -289,3 +299,419 @@ func test_una_pena_suelta_no_cierra_la_celda() -> void:
 		"una comarca sin agua ni cortados es UNA sola zona, no %d" % grid.areas)
 	assert_gt(grid.open_fraction(), 0.95,
 		"y se anda entera (%.0f%%)" % (grid.open_fraction() * 100.0))
+
+
+# ------------------------------------------- cada uno por su carril ------
+#
+# El reparto de `SettlementSim._best_known_spot` separa el TAJO, no el camino.
+# El trazado de `Wayfinder` es uno solo, así que dos personas con el mismo tramo
+# se dibujaban una dentro de otra durante todo el trayecto y sólo se despegaban
+# al llegar. El carril es el desvío lateral, estable por persona, que las separa
+# mientras andan.
+
+func _andando(id: int, from: Vector3, to: Vector3) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260906 + id
+	var person := Inhabitant.create(id, from, rng)
+	person.position = from
+	person.target = to
+	return person
+
+
+func test_dos_personas_del_mismo_tramo_no_van_por_la_misma_linea() -> void:
+	var sim := SettlementSim.new()
+	var origen := Vector3(400.0, 0.0, 400.0)
+	var destino := Vector3(900.0, 0.0, 400.0)
+	var rumbo := destino - origen
+
+	var separacion := 0.0
+	# Se prueban ids consecutivos porque es el caso real: la banda se crea de
+	# corrido y quien sale junto a otro suele llevar el id de al lado.
+	for id in range(8):
+		var uno := _andando(id, origen, destino)
+		var otro := _andando(id + 1, origen, destino)
+		var a := sim._lane_shift(uno, rumbo)
+		var b := sim._lane_shift(otro, rumbo)
+		separacion = (a - b).length()
+		assert_gt(separacion, 0.6,
+			"id %d y %d se separan solo %.2f m" % [id, id + 1, separacion])
+
+
+func test_el_carril_es_lateral_y_no_alarga_el_camino() -> void:
+	var sim := SettlementSim.new()
+	var person := _andando(3, Vector3(400.0, 0.0, 400.0), Vector3(900.0, 0.0, 400.0))
+	var rumbo := person.target - person.position
+	var desviado := sim._lane_shift(person, rumbo)
+
+	# Lo que se suma tiene que ser perpendicular a la marcha: si tuviera
+	# componente en el sentido del camino, el carril adelantaria o frenaria a
+	# quien lo lleva y la cuadrilla se estiraria sola.
+	var añadido := desviado - rumbo
+	assert_lt(absf(añadido.normalized().dot(rumbo.normalized())), 0.01,
+		"el desvio es perpendicular a la marcha")
+	assert_lt(añadido.length(), SettlementSim.LANE_SPREAD + 0.01,
+		"y no se va mas alla del carril")
+
+
+func test_el_carril_se_deshace_al_llegar() -> void:
+	# Si el desvio siguiera vivo en los ultimos metros, nadie tocaria nunca su
+	# destino: se quedarian dando vueltas alrededor a dos metros y medio, que
+	# es peor que el solape que viene a arreglar.
+	var sim := SettlementSim.new()
+	var destino := Vector3(900.0, 0.0, 400.0)
+	# En el borde mismo de la llegada el desvio ya tiene que ser bastante menor
+	# que el radio de llegada, o el destino queda fuera de alcance para siempre.
+	for metros: float in [1.0, 3.0, sim.arrive_radius]:
+		var person := _andando(3, destino + Vector3(metros, 0.0, 0.0), destino)
+		var rumbo := destino - person.position
+		var desvio := (sim._lane_shift(person, rumbo) - rumbo).length()
+		assert_lt(desvio, sim.arrive_radius * 0.5,
+			"a %.0f m del destino el carril ya no estorba (%.2f m)" % [metros, desvio])
+
+
+func test_el_carril_no_cambia_de_un_fotograma_a_otro() -> void:
+	# Estable por identidad y no sorteado: con un desvio aleatorio por
+	# fotograma la persona no se separa, tiembla.
+	var sim := SettlementSim.new()
+	var person := _andando(5, Vector3(400.0, 0.0, 400.0), Vector3(900.0, 0.0, 400.0))
+	var rumbo := person.target - person.position
+	var primero := sim._lane_shift(person, rumbo)
+	for _i in range(10):
+		assert_eq(sim._lane_shift(person, rumbo), primero,
+			"el carril es el mismo mientras no se mueva")
+
+
+# --- no avanzar no puede durar para siempre ------------------------------
+#
+# La caza menor cerraba el 81 % de sus salidas con «atascado: no avanza por el
+# camino trazado» -medido con semilla fija-, y no era el camino: era que en un
+# cortado el paso se quedaba en el 2 % de lo normal y que replanificar contra
+# la misma pared devuelve la misma ruta imposible.
+
+func test_nadie_anda_a_velocidad_cero() -> void:
+	# Tobler por el suelo por la carga puede bajar al 2 %, y a ese paso
+	# cincuenta metros son media jornada: desde fuera no se distingue de estar
+	# parado, y la vigilancia de atascos lo da por plantado con razon.
+	assert_gt(SettlementSim.MIN_PACE, 0.05,
+		"hay un suelo de paso: lento no es parado")
+	assert_lt(SettlementSim.MIN_PACE, 0.35,
+		"pero sigue siendo mucho mas lento que el llano")
+
+
+func test_se_deja_de_insistir_contra_la_misma_pared() -> void:
+	assert_gt(float(SettlementSim.BLOCKED_REPLANS), 1.0,
+		"un roce con la orilla lo arregla el esquive: no se abandona a la primera")
+	assert_lt(float(SettlementSim.BLOCKED_REPLANS), 8.0,
+		"ni se pasa la tarde intentandolo")
+
+
+func test_moverse_reinicia_el_reloj_de_atasco_aunque_estes_llegando() -> void:
+	# El fallo: al acercarse a menos de arrive_radius*1,5 del tajo el reloj
+	# dejaba de reiniciarse aunque la persona siguiera andando, y a las dos
+	# horas se la daba por enganchada.
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260907
+	var person := Inhabitant.create(0, Vector3(700.0, 200.0, 700.0), rng)
+	person.state = Inhabitant.State.YENDO
+	person.target = Vector3(704.0, 200.0, 700.0)
+	person.position = Vector3(700.0, 200.0, 700.0)
+	person.stuck_where = person.position
+	person.stuck_hours = 0.0
+	sim.people = [person]
+
+	# Anda de sobra, pero pegado a su destino
+	person.position = Vector3(720.0, 200.0, 700.0)
+	sim._watch_for_stuck(person, 1.0)
+	assert_eq(person.stuck_hours, 0.0,
+		"quien se ha movido veinte metros no esta atascado, este donde este")
+
+
+func test_quien_llega_y_no_se_mueve_si_se_detecta() -> void:
+	# La otra mitad: el caso que la condicion mala venia a resolver tiene que
+	# seguir saliendo por su rama.
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var person := Inhabitant.create(0, Vector3(700.0, 200.0, 700.0), rng)
+	person.state = Inhabitant.State.YENDO
+	person.position = Vector3(700.0, 200.0, 700.0)
+	person.target = person.position
+	person.stuck_where = person.position
+	sim.people = [person]
+
+	sim._watch_for_stuck(person, SettlementSim.STUCK_HOURS + 0.1)
+	assert_eq(person.state, Inhabitant.State.OCIOSO,
+		"llego y el estado se ha soltado solo")
+
+
+# --- las esquinas no se cortan -------------------------------------------
+#
+# El A* encadena centros de celda y la persona anda en LÍNEA RECTA de uno a
+# otro. Con la diagonal libre, el camino podía colarse por el vértice entre dos
+# celdas cerradas -un paso de anchura cero- y quien lo seguía se metía de frente
+# en una de ellas. Era el atasco de verdad: 81 % de las salidas de caza menor
+# cerradas con «atascado», medido con semilla fija.
+
+func test_el_atajo_de_cerca_mira_lo_que_hay_en_medio() -> void:
+	# El atasco grande: cualquier destino a menos de sesenta metros se resolvia
+	# con una recta SIN MIRAR el terreno de en medio, asi que bastaba un
+	# cortado entre la persona y su tajo para que la «ruta» fuera un unico
+	# punto al otro lado de una pared.
+	var grid := Navgrid.new()
+	grid.wide = 3
+	grid.tall = 1
+	grid.world = Vector2(3.0, 1.0) * Navgrid.CELL
+	grid.cost.resize(3)
+	grid.area.resize(3)
+	for i in range(3):
+		grid.cost[i] = 1.0
+	grid.cost[1] = Navgrid.BLOCKED
+	grid._flood_areas()
+
+	# Cincuenta y cinco metros, o sea dentro del atajo, con la celda de en
+	# medio cerrada.
+	var from := Vector3(10.0, 0.0, 20.0)
+	var to := Vector3(65.0, 0.0, 20.0)
+	assert_lt(Vector2(to.x - from.x, to.z - from.z).length(),
+		Navgrid.CELL * 1.5, "el destino cae dentro del atajo")
+
+	var route := Wayfinder.find(grid, from, to)
+	assert_false(route.size() == 1 and route[0].distance_to(to) < 1.0,
+		"no se manda a nadie derecho a traves de una celda cerrada")
+
+
+func test_el_atajo_de_cerca_sigue_valiendo_con_el_paso_libre() -> void:
+	# El arreglo no puede cargarse el atajo: sin el, cada paseo de treinta
+	# metros lanzaria una busqueda entera.
+	var grid := Navgrid.new()
+	grid.wide = 3
+	grid.tall = 1
+	grid.world = Vector2(3.0, 1.0) * Navgrid.CELL
+	grid.cost.resize(3)
+	grid.area.resize(3)
+	for i in range(3):
+		grid.cost[i] = 1.0
+	grid._flood_areas()
+
+	var to := Vector3(65.0, 0.0, 20.0)
+	var route := Wayfinder.find(grid, Vector3(10.0, 0.0, 20.0), to)
+	assert_eq(route.size(), 1, "con el paso libre se va derecho")
+
+
+func test_la_diagonal_libre_si_vale() -> void:
+	# El arreglo no puede cerrar las diagonales buenas: sin ellas los caminos
+	# salen en escalera y se andan un 40 % mas de metros.
+	var grid := Navgrid.new()
+	grid.wide = 3
+	grid.tall = 3
+	grid.world = Vector2(3.0, 3.0) * Navgrid.CELL
+	grid.cost.resize(9)
+	grid.area.resize(9)
+	for i in range(9):
+		grid.cost[i] = 1.0
+	grid._flood_areas()
+
+	var route := Wayfinder.find(grid, grid.point_of(0), grid.point_of(1 * 3 + 1))
+	assert_false(route.is_empty(), "con todo abierto hay camino")
+
+
+# --- el agua se juzga por el vado, no por lo hondo -----------------------
+#
+# Una pared que cruza la celda la cierra: se mire por donde se mire, por ahi no
+# se sube. Un rio NO: se cruza POR EL VADO. Midiendolo con la muestra mas honda
+# se cerraba el cauce entero -vados incluidos- y en el sitio 56 eso dejaba un
+# tercio del valle incomunicado del abrigo para toda la partida.
+
+func _fords(values: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(Navgrid.PROBES.size())
+	for i in range(mini(values.size(), out.size())):
+		out[i] = float(values[i])
+	return out
+
+
+func test_una_linea_vadeable_abre_la_celda() -> void:
+	# Fila de en medio -indices 3,4,5- somera de lado a lado.
+	# Hondo es por encima de FORD_IMPASSABLE, que es donde `can_cross` dice que
+	# no: FORD_WADEABLE es sólo donde se deja de cruzar sin mojarse.
+	var shallow := Hydrography.FORD_WADEABLE * 0.5
+	var deep := Hydrography.FORD_IMPASSABLE + 0.2
+	var fords := _fords([deep, deep, deep, shallow, shallow, shallow,
+		deep, deep, deep])
+	assert_true(Navgrid._has_ford(fords, false, false),
+		"si se cruza de lado a lado por la fila de en medio, hay paso")
+
+
+func test_un_charco_suelto_no_abre_la_celda() -> void:
+	# Un unico punto somero en una esquina no es un vado: cruzar por ahi seria
+	# meterse en lo hondo dos pasos despues.
+	var shallow := Hydrography.FORD_WADEABLE * 0.5
+	var deep := Hydrography.FORD_IMPASSABLE + 0.2
+	var fords := _fords([shallow, deep, deep, deep, deep, deep,
+		deep, deep, deep])
+	assert_false(Navgrid._has_ford(fords, false, false),
+		"un punto somero suelto no es por donde se cruza")
+
+
+func test_el_cauce_hondo_sigue_cerrado() -> void:
+	var deep := Hydrography.FORD_IMPASSABLE + 0.2
+	var fords := _fords([deep, deep, deep, deep, deep, deep, deep, deep, deep])
+	assert_false(Navgrid._has_ford(fords, false, false),
+		"un rio que no se vadea sigue siendo una pared")
+
+
+# --- las zonas y el buscador tienen que decir lo mismo -------------------
+
+func test_las_zonas_no_se_unen_por_el_vertice() -> void:
+	# Si la inundacion de zonas une dos trozos por el vertice entre dos celdas
+	# cerradas y el buscador no lo cruza, `connected` miente: dice que si hay
+	# camino, la busqueda vuelve vacia, y la persona se queda «sin camino
+	# trazado» sobre un sitio que la rejilla juraba alcanzable.
+	var grid := Navgrid.new()
+	grid.wide = 2
+	grid.tall = 2
+	grid.world = Vector2(2.0, 2.0) * Navgrid.CELL
+	grid.cost.resize(4)
+	grid.area.resize(4)
+	grid.cost[0] = 1.0
+	grid.cost[1] = Navgrid.BLOCKED
+	grid.cost[2] = Navgrid.BLOCKED
+	grid.cost[3] = 1.0
+	grid._flood_areas()
+
+	assert_eq(grid.areas, 2,
+		"las dos abiertas se tocan solo por el vertice: son dos zonas")
+	assert_false(grid.connected(grid.point_of(0), grid.point_of(3)),
+		"y no se llega de una a otra")
+
+# --- llegar a casa -------------------------------------------------------
+#
+# El camino de vuelta lo traza la rejilla, y la rejilla no deja a nadie mas
+# cerca que su celda: la ruta se acaba legitimamente a veinte metros de la
+# boca. Preguntando por seis metros al punto del abrigo, quien volvia se
+# plantaba ahi y no entregaba, no cenaba y no dormia, y a la mañana siguiente
+# perdia la carga entera. Medido antes de arreglarlo, sitio 56, ocho jornadas:
+# 264 horas-persona de pie en la puerta y el 85 % de las salidas de
+# recoleccion cerradas como «volvio de vacio»; despues, 16 %.
+
+func test_con_camino_por_delante_todavia_no_se_ha_llegado() -> void:
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.position = Vector3(Navgrid.CELL * 0.5, 0.0, 0.0)
+	person.route = PackedVector3Array([Vector3.ZERO])
+	person.route_step = 0
+	assert_false(sim._home_reached(person),
+		"con hitos sin pisar se sigue volviendo")
+
+
+func test_sin_camino_y_a_una_celda_de_la_boca_se_ha_llegado() -> void:
+	# Es el caso que dejaba a la banda en la puerta: no queda ruta que andar,
+	# asi que esperar a pisar el punto exacto es esperar para siempre.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.position = Vector3(Navgrid.CELL * 0.5, 0.0, 0.0)
+	person.route = PackedVector3Array()
+	person.route_step = 0
+	assert_true(sim._home_reached(person),
+		"agotado el camino y a media celda, se ha llegado")
+
+
+func test_lejos_de_casa_no_se_ha_llegado_aunque_no_quede_camino() -> void:
+	# La otra mitad: quedarse sin ruta en mitad del monte no es estar en casa.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.position = Vector3(Navgrid.CELL * 4.0, 0.0, 0.0)
+	person.route = PackedVector3Array()
+	person.route_step = 0
+	assert_false(sim._home_reached(person),
+		"a cuatro celdas no se ha llegado a ninguna parte")
+
+
+# --- el hogar y el taller trabajan ---------------------------------------
+#
+# Los dos oficios que no salen del abrigo hacian su jornada desde OCIOSO, asi
+# que la banda figuraba parada media jornada sin estarlo: el 39,6 % de las
+# horas de luz salia como ocio y de ese ocio el 17,2 % era el hogar y el
+# 16,0 % el taller.
+
+func test_el_hogar_y_el_taller_cuentan_como_trabajo() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for job: Profession.Job in [Profession.Job.HOGAR,
+		Profession.Job.MANUFACTURA]:
+		var person := Inhabitant.create(0, Vector3.ZERO, rng)
+		person.job = job
+		assert_true(sim._works_at_camp(person),
+			"%s trabaja en el abrigo" % Profession.job_name(job))
+
+
+func test_el_de_monte_no_trabaja_en_el_abrigo() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	for job: Profession.Job in [Profession.Job.RECOLECCION,
+		Profession.Job.CAZA, Profession.Job.RIBERA,
+		Profession.Job.EXPLORACION]:
+		var person := Inhabitant.create(0, Vector3.ZERO, rng)
+		person.job = job
+		assert_false(sim._works_at_camp(person),
+			"%s tiene su tajo fuera" % Profession.job_name(job))
+
+
+func test_el_taller_no_se_echa_a_andar_al_destino_viejo() -> void:
+	# TRABAJANDO es uno de los estados que ANDAN. Al pasar el taller a ese
+	# estado habia que pararle el paso, o se iria al tajo del oficio anterior.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.job = Profession.Job.MANUFACTURA
+	person.position = Vector3(10.0, 0.0, 10.0)
+	person.target = Vector3(900.0, 0.0, 900.0)
+	person.route = PackedVector3Array([person.target])
+	person.route_step = 0
+	sim._camp_work(person, 0.0)
+	assert_eq(person.target, person.position, "se le para el paso")
+	assert_eq(person.route.size(), 0, "y se le tira el camino viejo")
+
+func test_el_abrigo_llega_hasta_donde_se_reparte_la_gente() -> void:
+	# La averia de origen, en una linea: el radio de llegada son seis metros y
+	# la gente en casa se reparte por la campa hasta dieciocho -medido en el
+	# sitio 56: la campa a 11,3 m del punto del abrigo mas 7,0 de reparto-. O
+	# sea que estar en casa caia fuera de haber llegado a casa.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	sim.home_forecourt = Vector3(11.3, 0.0, 0.0)
+	sim.home_inside = Vector3(-6.9, 0.0, 0.0)
+	assert_true(sim._shelter_reach() >= 11.3 + SettlementSim.FORECOURT_SPREAD,
+		"el abrigo llega hasta el ultimo sitio de la campa")
+	assert_true(sim._shelter_reach() >= 6.9 + SettlementSim.CAVE_SPREAD,
+		"y hasta el fondo de la galeria")
+	assert_true(sim._shelter_reach() > sim.arrive_radius,
+		"y desde luego mas alla del radio de llegada")
+
+
+func test_sin_cueva_marcada_el_abrigo_es_solo_el_reparto() -> void:
+	# Sin boca de cueva -las pruebas, un campamento al raso- `_home_spot` sigue
+	# repartiendo a la gente alrededor del punto del abrigo, asi que el abrigo
+	# llega hasta ahi y ni un metro mas: nada de inventarse cuarenta.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	assert_true(sim._shelter_reach() >= SettlementSim.FORECOURT_SPREAD,
+		"llega hasta donde se reparte la campa")
+	assert_true(sim._shelter_reach() < Navgrid.CELL,
+		"y no se inventa un abrigo de una celda entera")

@@ -1,6 +1,6 @@
 extends Node3D
 ## Demo principal que integra todos los sistemas:
-## TerrainGenerator, Chunk, MultiMeshVegetation, Architecto, TimeManager y WorldEnvironment
+## TerrainGenerator, Chunk, Architecto y WorldEnvironment
 
 @export_group("Demo Settings")
 @export var terrain_size: Vector2i = Vector2i(2048, 2048)
@@ -37,7 +37,6 @@ extends Node3D
 ## Referencias a nodos
 var terrain: TerrainGenerator
 var chunk: Chunk
-var vegetation: MultiMeshVegetation
 var architecto: Architecto
 var camera: OrbitalCamera
 var debug_label: Label
@@ -51,6 +50,12 @@ var field: ResourceField
 var knowledge: BandKnowledge
 var herds: WildlifeHerds
 var props: ResourceProps
+## Si se siembra hierba de detalle. Ver dónde se monta para el porqué de que
+## venga apagada.
+@export var ground_cover := false
+
+var cover: GroundCover
+var forest: Forest
 
 ## Capas del overlay que no son una actividad concreta
 const OVERLAY_OFF := -1
@@ -68,6 +73,10 @@ var _overlay_texture: ImageTexture
 var tech: TechTree
 var ui: GameUI
 
+## El recuento de lo que hay pintado en el mundo, para la pestaña de
+## Entidades. Ver [EntityCensus].
+var census: EntityCensus
+
 ## Con el modo construccion activo el clic levanta en vez de seleccionar
 var _build_mode: bool = false
 
@@ -75,12 +84,20 @@ var _build_mode: bool = false
 var _caves: Array[CaveMouth] = []
 
 ## Marcadores de recurso en el mundo 3D, agrupados por actividad
-var resource_visualizer: ResourceVisualizer
 
 ## Marcadores de los sitios con nombre. Ver [ParajeMarkers].
 var paraje_markers: ParajeMarkers
 var trail_view: TrailView
 var trap_markers: TrapMarkers
+
+## La hoguera en la boca de la cueva. Ver [HearthFire].
+var hearth_fire: HearthFire
+
+## Las hogueras de vivac de quien duerme fuera. Ver [BivouacFires].
+var bivouac_fires: BivouacFires
+
+## Lo que está haciendo cada cual, sobre su cabeza. Ver [WorkMarkers].
+var craft_markers: WorkMarkers
 var weather_view: WeatherView
 var nav_overlay: NavOverlay
 
@@ -120,9 +137,7 @@ func _ready() -> void:
 	# unidad sobre un mapa donde 1 unidad = 1 m, o sea arbolitos de un metro
 	# que desde la camara solo se leian como manchas oscuras en el suelo.
 	# Vuelve cuando haya especies de verdad con porte y altura por era.
-	# _setup_vegetation()
 	_phase_start(); _setup_architecto(); _phase_end("_setup_architecto")
-	_phase_start(); _setup_resource_visualizer(); _phase_end("_setup_resource_visualizer")
 	_phase_start(); _setup_camera(); _phase_end("_setup_camera")
 	_phase_start(); _setup_ui(); _phase_end("_setup_ui")
 	_phase_start(); _setup_performance_overlay(); _phase_end("_setup_performance_overlay")
@@ -147,10 +162,8 @@ func _ready() -> void:
 		_phase_start(); _build_minimap(_minimap_canvas); _phase_end("_build_minimap")
 
 	# Poblar recursos
-	_phase_start(); _populate_resources(); _phase_end("_populate_resources")
 
 	# Visualizar recursos
-	_phase_start(); _visualize_resources(); _phase_end("_visualize_resources")
 
 	# Elementos reales del emplazamiento: cuevas, yacimientos, ruinas
 	_phase_start(); _place_site_features(); _phase_end("_place_site_features")
@@ -341,6 +354,13 @@ func _start_settlement() -> void:
 	trap_markers.name = "Trampas"
 	add_child(trap_markers)
 
+	# Y lo que está haciendo cada cual, encima de su cabeza: sin esto quien
+	# trabaja y quien da vueltas se ven exactamente igual.
+	craft_markers = WorkMarkers.new()
+	craft_markers.name = "Faena"
+	add_child(craft_markers)
+	craft_markers.setup(camera, sim)
+
 	trail_view = TrailView.new()
 	trail_view.name = "Rastros"
 	add_child(trail_view)
@@ -384,16 +404,81 @@ func _start_settlement() -> void:
 	add_child(props)
 	props.setup(terrain, field)
 
+	# LA HIERBA VA APAGADA, y es una decisión, no un descuido.
+	#
+	# `GroundCover` sólo puede sembrar alrededor de la cámara —doscientas mil
+	# briznas y un millón largo de triángulos en un disco de 165 m—, y ese disco
+	# se LEE: en cuanto se levanta un poco la cámara, el valle tiene un círculo
+	# verde de detalle en el centro y nada alrededor, que es peor que no tener
+	# hierba. Ese millón de triángulos se va ahora al bosque, que sí cubre el
+	# mapa entero.
+	#
+	# El sistema se conserva entero: es cambiar este `if` para volver a tenerla.
+	if ground_cover:
+		cover = GroundCover.new()
+		cover.name = "Hierba"
+		add_child(cover)
+		cover.setup(terrain)
+
+	# El bosque va aparte de la hierba y de los props, y por una razón de fondo:
+	# aquellos son detalle de cerca y éste es PAISAJE. Un bosque se ve desde
+	# cualquier altura de cámara y cubre laderas enteras, así que tiene que estar
+	# entero desde el principio -con impostores de dos triángulos- y sólo la malla
+	# de verdad se transmite alrededor de la cámara. Ver [Forest].
+	forest = Forest.new()
+	forest.name = "Bosque"
+	add_child(forest)
+	forest.setup(terrain)
+
+	# La hoguera del abrigo. Va aquí y no dentro de la cueva porque no es parte
+	# de la cueva: es una obra de la banda, aparece cuando la levantan y se apaga
+	# cuando se les acaba la leña. Ver [HearthFire].
+	hearth_fire = HearthFire.new()
+	hearth_fire.name = "Hoguera"
+	add_child(hearth_fire)
+	# La cueva de casa manda dónde se duerme y dónde se hace corro. Sin esto la
+	# banda se apila en el punto del emplazamiento, a la intemperie.
+	var home_cave := _cave_at(sim.home_position)
+	if home_cave != null:
+		sim.home_inside = home_cave.inside_point()
+		sim.home_forecourt = home_cave.forecourt_point()
+		# El interior NO se apoya en el terreno, y ahí está la diferencia: la
+		# galería se mete DENTRO de la ladera, así que preguntarle la altura al
+		# terreno en ese punto devuelve la del monte que hay encima —medido,
+		# once metros más arriba— y la banda dormía en el tejado de su cueva. El
+		# suelo de la cueva es el de su boca.
+		sim.home_inside.y = home_cave.pick_position().y
+		if terrain:
+			sim.home_forecourt.y = terrain.get_height_at(sim.home_forecourt)
+
+	# La hoguera va en la campa de la boca, no encima del abrigo: es donde se
+	# hace el fuego de una cueva.
+	hearth_fire.setup(sim, terrain,
+		sim.home_forecourt if sim.home_forecourt != Vector3.ZERO
+		else sim.home_position)
+
+	# Y las hogueras de quien duerme fuera. Ver [BivouacFires].
+	bivouac_fires = BivouacFires.new()
+	bivouac_fires.name = "Vivacs"
+	add_child(bivouac_fires)
+	bivouac_fires.setup(sim, terrain)
+
 	herds = WildlifeHerds.new()
 	herds.name = "Wildlife"
 	add_child(herds)
 	herds.setup(terrain, field)
+	# La fauna anda al compas de la partida: en pausa no se mueve. Ver
+	# `WildlifeHerds.sim`.
+	herds.sim = sim
 
 	tech = TechTree.new()
 	# La simulacion consulta el arbol de verdad, no solo la ficha: con que se
 	# pesca hoy sale de ahi -ver `Fishing`-, y sin el solo se pesca a mano.
 	if sim:
 		sim.techs = tech
+		# Y el arbol consulta la despensa: aprender cuesta material, no solo
+		# jornadas. Ver `TechTree.LEARNING_COST`.
+		tech.larder = sim.store
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -404,8 +489,19 @@ func _start_settlement() -> void:
 	ui.field = field
 	ui.tech = tech
 	ui.site = Expedition.site
+	# El censo de lo pintado y la camara a la que lleva. Va DESPUES de props,
+	# bosque y fauna a proposito: el censo les pregunta a ellos, asi que si se
+	# monta antes se queda con referencias nulas y la pestana sale vacia.
+	census = EntityCensus.new()
+	census.setup(sim, herds, props, forest)
+	ui.census = census
+	ui.camera = camera
 	ui.cave_action.connect(_on_cave_action)
 	add_child(ui)
+	# Y que la interfaz se entere de los momentos: hallazgos que enseñar y
+	# decisiones que pedir. Ver [Moment].
+	if sim != null:
+		ui.watch_moments(sim)
 
 	_build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
@@ -424,9 +520,12 @@ func _start_settlement() -> void:
 		entry["position"] = spot
 		sim.set_work_site(entry["activity"], spot)
 
-	# El reparto va AQUI, con los tajos ya montados: dentro de `setup` la lista
-	# estaba vacia y la banda entera se quedaba sin oficio
-	sim.assign_default_jobs()
+	# La banda arranca SIN REPARTIR: toda la tabla de trabajos en «—», y el
+	# primer reparto lo hace el jugador. Es la primera decision de la partida y
+	# se la estaba dando hecha `assign_default_jobs`, que sigue existiendo
+	# -la usan las sondas, que necesitan una banda trabajando para medir- pero
+	# ya no se llama al empezar.
+	sim.apply_priorities()
 
 	print("Asentamiento: %d personas, %d sitios de trabajo" % [
 		sim.population(), sim.work_sites.size()])
@@ -546,8 +645,15 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 			var point := Vector3(x, 0, z)
 			point.y = terrain.get_height_at(point)
 			var distance := Vector2(x - home.x, z - home.z).length()
-			# Nada demasiado lejos: se va y se vuelve en el dia
-			if distance > 1500.0 or distance < 90.0:
+			# Nada demasiado lejos: se va y se vuelve en el dia.
+			#
+			# Y el suelo baja de 90 m a 30. Ese suelo era el que mandaba a los
+			# pescadores a 800 m con el río a cincuenta pasos de la cueva:
+			# medido, salían por la mañana, no llegaban a tiempo de trabajar y
+			# se pasaban la partida entera yendo y volviendo sin traer un pez.
+			# Un abrigo se elige POR estar junto al agua; que el tajo no pueda
+			# estar donde está el agua es justo lo contrario de lo que se quiere.
+			if distance > 1500.0 or distance < 30.0:
 				continue
 
 			var river: float = terrain.heightmap.sample_river_mask_meters(
@@ -564,7 +670,13 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 			# barrido: el trayecto recorre cientos de celdas y hacerlo dos mil
 			# veces colgaba la fundacion.
 			if river > 0.25:
-				var score := river - distance / 4000.0
+				# El precio de la distancia no es un descuento simbólico: es lo
+				# que decide si se puede trabajar el sitio o sólo llegar a él.
+				# Con `distance / 4000` un cauce un pelo mejor a ochocientos
+				# metros le ganaba a uno bueno a cien, y la cuadrilla se pasaba
+				# la jornada andando. Ahora la distancia MULTIPLICA, así que un
+				# sitio al que no da tiempo a ir no gana nunca.
+				var score := river * clampf(1.0 - distance / 1200.0, 0.05, 1.0)
 				# A la pesquera se llega por la ribera, asi que el trayecto se
 				# corta antes del cauce en vez de en el radio de llegada
 				if score > best_river_score and sim.can_reach(point, RIVER_APPROACH_M):
@@ -583,7 +695,8 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 				best_hunt = point
 
 			# Recoleccion: ladera suave y cerca
-			var gather := (1.0 - clampf(slope * 0.7, 0.0, 1.0)) - distance / 2200.0
+			var gather_fit := 1.0 - clampf(slope * 0.7, 0.0, 1.0)
+			var gather := gather_fit * clampf(1.0 - distance / 1400.0, 0.05, 1.0)
 			if gather > best_gather_score and sim.can_reach(point):
 				best_gather_score = gather
 				best_gather = point
@@ -770,134 +883,6 @@ func _setup_chunk() -> void:
 	chunk.chunk_size = terrain_size
 	chunk.cell_size = 1.0
 	add_child(chunk)
-
-
-func _setup_vegetation() -> void:
-	vegetation = MultiMeshVegetation.new()
-	vegetation.name = "Vegetation"
-	
-	# Crear mesh de árbol con material
-	var tree_mesh := _create_better_tree_mesh()
-	vegetation.vegetation_mesh = tree_mesh
-	# El espaciado escala con el mundo: a 4 m sobre un mapa de 7 km serian
-	# 3 millones de muestras de terreno solo para decidir donde va cada arbol
-	vegetation.min_spacing = clampf(float(terrain_size.x) / 230.0, 4.0, 30.0)
-	vegetation.max_instances = 20000
-
-	# El rango de LOD venia calibrado para el mapa de 128 unidades: con
-	# end = 200 sobre un mundo de 7 km no se dibujaba NI UN arbol, porque la
-	# camara orbita a miles de unidades. Ahora escala con el mundo, que ademas
-	# es lo que permite subir la densidad sin pagarla en la vista general.
-	var world_span := float(maxi(terrain_size.x, terrain_size.y))
-	vegetation.lod_distance_end = maxf(200.0, world_span * 0.30)
-	vegetation.lod_fade_margin = vegetation.lod_distance_end * 0.15
-	# Sin limite cercano: no hay una version de detalle que releve a esta
-	vegetation.lod_distance_begin = 0.0
-	vegetation.base_scale = Vector3(1, 1, 1)
-	vegetation.scale_variation = 0.4
-	vegetation.min_humidity = 0.35
-	vegetation.max_slope = 0.5
-	# Las llanuras quedan en torno a 0.10-0.20 normalizado: con el min_height
-	# por defecto (0.15) se quedaban casi peladas
-	vegetation.min_height = 0.06
-	vegetation.max_height_normalized = 0.62
-	
-	# Material para la vegetación
-	var veg_material := StandardMaterial3D.new()
-	veg_material.vertex_color_use_as_albedo = true
-	veg_material.roughness = 0.8
-	veg_material.cull_mode = BaseMaterial3D.CULL_DISABLED  # Ver hojas desde ambos lados
-	vegetation.vegetation_material = veg_material
-	
-	add_child(vegetation)
-
-
-func _setup_resource_visualizer() -> void:
-	resource_visualizer = ResourceVisualizer.new()
-	resource_visualizer.name = "ResourceVisualizer"
-	resource_visualizer.resource_scale = 0.6
-	resource_visualizer.max_instances_per_type = 3000
-	add_child(resource_visualizer)
-
-
-func _visualize_resources() -> void:
-	if resource_visualizer and chunk and terrain:
-		resource_visualizer.initialize(chunk, terrain)
-		print("Recursos visualizados")
-
-
-func _create_better_tree_mesh() -> ArrayMesh:
-	# Crear un árbol más detallado
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	
-	var trunk_height := 1.8
-	var trunk_radius := 0.12
-	
-	# Tronco - color marrón más natural
-	st.set_color(Color(0.35, 0.22, 0.1))
-	_add_cylinder(st, Vector3(0, 0, 0), trunk_radius, trunk_height, 6)
-	
-	# Copa del árbol - múltiples conos para más volumen
-	# Cono inferior (más ancho)
-	st.set_color(Color(0.18, 0.42, 0.15))
-	_add_cone(st, Vector3(0, trunk_height + 1.2, 0), 1.4, 2.4, 8)
-	
-	# Cono medio
-	st.set_color(Color(0.22, 0.48, 0.18))
-	_add_cone(st, Vector3(0, trunk_height + 2.2, 0), 1.1, 2.0, 8)
-	
-	# Cono superior (punta)
-	st.set_color(Color(0.25, 0.52, 0.2))
-	_add_cone(st, Vector3(0, trunk_height + 3.0, 0), 0.7, 1.5, 8)
-	
-	st.generate_normals()
-	return st.commit()
-
-
-func _add_cylinder(st: SurfaceTool, base_center: Vector3, radius: float, height: float, segments: int) -> void:
-	var top_center := base_center + Vector3(0, height, 0)
-	
-	for i in range(segments):
-		var angle1 := float(i) / float(segments) * TAU
-		var angle2 := float(i + 1) / float(segments) * TAU
-		
-		var bottom1 := base_center + Vector3(cos(angle1) * radius, 0, sin(angle1) * radius)
-		var bottom2 := base_center + Vector3(cos(angle2) * radius, 0, sin(angle2) * radius)
-		var top1 := top_center + Vector3(cos(angle1) * radius * 0.8, 0, sin(angle1) * radius * 0.8)
-		var top2 := top_center + Vector3(cos(angle2) * radius * 0.8, 0, sin(angle2) * radius * 0.8)
-		
-		# Lado del cilindro (2 triángulos por segmento)
-		st.add_vertex(bottom1)
-		st.add_vertex(bottom2)
-		st.add_vertex(top1)
-		
-		st.add_vertex(top1)
-		st.add_vertex(bottom2)
-		st.add_vertex(top2)
-
-
-func _add_cone(st: SurfaceTool, tip: Vector3, base_radius: float, height: float, segments: int) -> void:
-	var base_center := tip - Vector3(0, height, 0)
-	
-	for i in range(segments):
-		var angle1 := float(i) / float(segments) * TAU
-		var angle2 := float(i + 1) / float(segments) * TAU
-		
-		var p1 := base_center + Vector3(cos(angle1) * base_radius, 0, sin(angle1) * base_radius)
-		var p2 := base_center + Vector3(cos(angle2) * base_radius, 0, sin(angle2) * base_radius)
-		
-		# Lado del cono
-		st.add_vertex(tip)
-		st.add_vertex(p1)
-		st.add_vertex(p2)
-		
-		# Base del cono
-		st.add_vertex(base_center)
-		st.add_vertex(p2)
-		st.add_vertex(p1)
-
-
 func _setup_architecto() -> void:
 	architecto = Architecto.new()
 	architecto.name = "Architecto"
@@ -1001,11 +986,6 @@ func _connect_signals() -> void:
 	architecto.building_collapsed.connect(_on_building_collapsed)
 	architecto.placement_denied.connect(_on_placement_denied)
 	
-	# Conectar al TimeManager
-	if has_node("/root/TimeManager"):
-		var tm = get_node("/root/TimeManager")
-		tm.tick_advance.connect(_on_time_tick)
-		tm.season_changed.connect(_on_season_changed)
 
 
 ## Aparta un punto del agua hasta la orilla seca más cercana.
@@ -1050,29 +1030,8 @@ func _on_terrain_generated() -> void:
 	# Inicializar vegetación después de generar terreno
 	# Solo si hay vegetacion: esta desactivada mientras no haya especies con
 	# porte de verdad, y estas llamadas se quedaban colgando de un nodo nulo
-	if vegetation:
-		vegetation.initialize(terrain)
 
 
-func _populate_resources() -> void:
-	print("Poblando recursos...")
-	
-	# Solo materiales realmente cargados: un valor null pasaba el has() del
-	# generador y se colaban depósitos sin material
-	var materials_map := {}
-	for key: String in ["iron", "coal", "stone"]:
-		var mat: RawMaterial = materials.get(key)
-		if mat:
-			materials_map[key] = mat
-	
-	# threshold 0.68 sobre la geología ya normalizada: vetas separadas en vez de
-	# una alfombra de recursos sobre todas las celdas. El espaciado escala con
-	# el mundo para no recorrer millones de celdas en un mapa de 2 km.
-	var spacing := maxi(3, int(terrain_size.x / 170))
-	terrain.populate_chunk_resources(chunk, materials_map, 0.68, spacing)
-	
-	var cells := chunk.get_all_resource_cells()
-	print("Recursos colocados en ", cells.size(), " celdas")
 
 
 func _spawn_test_buildings() -> void:
@@ -1495,6 +1454,18 @@ func _refresh_resource_overlay() -> void:
 ##
 ## Una cueva sin descubrir no se dibuja: no es que esté oculta, es que para el
 ## jugador todavía no existe. Es lo que da sentido a explorar.
+## La boca de cueva más cercana a un punto, o null si no hay ninguna cerca.
+func _cave_at(point: Vector3) -> CaveMouth:
+	var best: CaveMouth = null
+	var best_dist := 90.0
+	for cave: CaveMouth in _caves:
+		var reach := cave.pick_position().distance_to(point)
+		if reach < best_dist:
+			best_dist = reach
+			best = cave
+	return best
+
+
 func _check_discoveries() -> void:
 	if knowledge == null:
 		return
@@ -1635,6 +1606,7 @@ func _process(_delta: float) -> void:
 	if frame % 15 == 0:
 		_update_band_panel()
 		_update_minimap()
+		_refresh_debug_label()
 		# El tiempo cambia por horas de juego, no por fotogramas: mirarlo
 		# cuatro veces por segundo va sobrado, y la capa corta sola si no ha
 		# cambiado nada
@@ -1652,17 +1624,24 @@ func _process(_delta: float) -> void:
 		_refresh_minimap_fog()
 
 
-func _on_time_tick(_tick: int, _day: int, _season: int, _year: int) -> void:
-	if debug_label and show_debug_ui:
-		var tm = get_node("/root/TimeManager")
-		debug_label.text = "CityBuilder Demo\n"
-		debug_label.text += "Fecha: " + tm.format_full() + "\n"
-		debug_label.text += "Velocidad: x" + str(tm.time_speed) + "\n"
-		debug_label.text += "Pausado: " + str(tm.is_paused) + "\n"
-		debug_label.text += "Edificios: " + str(architecto.get_all_buildings().size()) + "\n"
-		if vegetation:
-			debug_label.text += "Vegetación: " + str(vegetation.get_instance_count()) + "\n"
-
+## La ficha de depuración, leída de la FUENTE y no de un espejo.
+##
+## Antes salía de `TimeManager`, un autoload que no era dueño de nada: la
+## simulación le paraba el reloj al arrancar -`time_speed = 0.0`- y le empujaba
+## su hora cada fotograma con `sync_from`. O sea que sostenía una copia del
+## tiempo cuyo único consumidor era esta etiqueta. Eliminado el autoload, esto
+## lee `sim` y `GameState`, que son quienes de verdad llevan la cuenta.
+func _refresh_debug_label() -> void:
+	if not debug_label or not show_debug_ui or sim == null:
+		return
+	debug_label.text = "CityBuilder Demo\n"
+	debug_label.text += "Fecha: %s, dia %d, %s, ano %d\n" % [
+		Subsistence.month_name(GameState.season, sim.season_day),
+		sim.day, Subsistence.season_name(GameState.season), GameState.year]
+	debug_label.text += "Hora: %02d:%02d\n" % [
+		int(sim.hour), int((sim.hour - float(int(sim.hour))) * 60.0)]
+	debug_label.text += "Velocidad: x%s\n" % str(sim.time_scale)
+	debug_label.text += "Edificios: %d\n" % architecto.get_all_buildings().size()
 
 func _on_season_changed(_season: int, season_name: String) -> void:
 	print("Nueva estación: ", season_name)
@@ -1897,9 +1876,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				_build_mode = not _build_mode
 				print("Modo construccion: %s" % ("activo" if _build_mode else "apagado"))
 			# El teclado mueve LA MISMA velocidad que los botones del reloj.
-			# Antes tocaba el reloj del TimeManager, que ahora va esclavo de la
-			# simulacion: acelerar por teclado movia el sol y dejaba a la banda
-			# a su ritmo, o sea que descuadraba las dos cosas.
+			# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
+			# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
+			# segundo reloj: sólo manda `sim`.
 			KEY_P, KEY_SPACE:
 				if sim:
 					sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0

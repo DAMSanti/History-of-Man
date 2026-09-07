@@ -13,7 +13,20 @@ extends Camera3D
 ## crece con la distancia, que es lo unico que funciona cuando el rango va de
 ## 70 a 14000 unidades. Con el paso fijo anterior (5 unidades) hacian falta
 ## unas 2800 muescas para recorrer el rango entero.
-@export_range(1.01, 2.0, 0.01) var zoom_factor: float = 1.18
+@export_range(1.01, 2.0, 0.01) var zoom_factor: float = 1.13
+
+## Y cuánto vale una muesca ABAJO DEL TODO, pegado al suelo.
+##
+## El paso multiplicativo es proporcional a la distancia, que es lo correcto
+## mientras la distancia sea grande: un 13 % de dos kilómetros es un salto de
+## dos kilómetros de vista, y está bien. Abajo no: a cincuenta metros de órbita
+## se distingue a la gente y a los árboles uno por uno, y ahí un 13 % es medio
+## encuadre de golpe. La muesca se afina según se baja, de modo que el tramo
+## nuevo de zoom —el que antes no existía— se recorra despacio.
+@export_range(1.01, 2.0, 0.01) var zoom_factor_near: float = 1.045
+
+## En qué parte del recorrido se termina de afinar la muesca, de 0 -abajo- a 1.
+@export_range(0.05, 1.0, 0.05) var zoom_fine_span: float = 0.45
 @export var min_distance: float = 10.0
 @export var max_distance: float = 200.0
 
@@ -30,7 +43,15 @@ extends Camera3D
 ## muesca cerca vale metros y lejos vale kilometros, asi que repartir en lineal
 ## no daria pasos iguales.
 const ZOOM_STEPS := 16
-@export_range(0, 16) var zoom_near_step: int = 6
+##
+## El extremo cercano estaba en la muesca 6, o sea a unos 300 m de órbita en un
+## mapa de cuatro kilómetros. Eso no era "acercarse": era mirar el valle desde
+## un poco más abajo, y tenía dos consecuencias que se veían. Una, que nunca se
+## distinguía nada —ni la gente, ni un animal, ni un árbol de otro—. Y dos, que
+## el bosque no llegaba a relevar el impostor por la malla de verdad, porque ese
+## relevo está justo en los 300 m (`Forest.near_distance`): al zoom más cercano
+## TODO el bosque quedaba al otro lado del corte y todo eran impostores.
+@export_range(0, 16) var zoom_near_step: int = 1
 @export_range(0, 16) var zoom_far_step: int = 13
 
 ## Consulta de altura del terreno. La pone la escena; si no hay, la camara se
@@ -38,8 +59,12 @@ const ZOOM_STEPS := 16
 ## zoom: el limite util no es una distancia fija sino la propia superficie.
 var height_probe: Callable = Callable()
 
-## Metros por encima del terreno a los que se frena el acercamiento
-@export var ground_clearance: float = 12.0
+## Metros por encima del terreno a los que se frena el acercamiento.
+##
+## Baja de 12 a 6: doce metros es la altura de un pino, así que con el zoom
+## abierto hasta los cincuenta metros de órbita el tope se comía buena parte del
+## recorrido nuevo.
+@export var ground_clearance: float = 6.0
 
 ## Limites del recuadro jugable. La camara no sale de aqui aunque el terreno
 ## siga: las casillas de alrededor estan para que el mapa no se corte a
@@ -69,10 +94,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_apply_zoom(1.0 / zoom_factor)
+			_apply_zoom(1.0 / _zoom_step())
 			get_viewport().set_input_as_handled()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_apply_zoom(zoom_factor)
+			_apply_zoom(_zoom_step())
 			get_viewport().set_input_as_handled()
 	
 	if event is InputEventMouseMotion and _is_rotating:
@@ -107,9 +132,9 @@ func _process(delta: float) -> void:
 	
 	# Zoom con Q/E, tambien proporcional a la distancia actual
 	if Input.is_key_pressed(KEY_Q):
-		_apply_zoom(pow(zoom_factor, delta * 6.0))
+		_apply_zoom(pow(_zoom_step(), delta * 6.0))
 	if Input.is_key_pressed(KEY_E):
-		_apply_zoom(pow(1.0 / zoom_factor, delta * 6.0))
+		_apply_zoom(pow(1.0 / _zoom_step(), delta * 6.0))
 	
 	if input_dir != Vector3.ZERO:
 		input_dir = input_dir.normalized()
@@ -151,6 +176,20 @@ func set_distance_limits(full_near: float, full_far: float) -> void:
 	orbit_distance = clampf(orbit_distance, min_distance, max_distance)
 
 
+## Cuánto vale una muesca de rueda AQUÍ.
+##
+## Se mide en el recorrido logarítmico —que es el que recorre la rueda— y no en
+## metros: abajo del todo la muesca es `zoom_factor_near` y a partir de
+## `zoom_fine_span` del recorrido ya es la de siempre.
+func _zoom_step() -> float:
+	var span := log(max_distance / maxf(min_distance, 0.001))
+	if span <= 0.001:
+		return zoom_factor
+	var t := log(orbit_distance / maxf(min_distance, 0.001)) / span
+	return lerpf(zoom_factor_near, zoom_factor,
+		smoothstep(0.0, zoom_fine_span, clampf(t, 0.0, 1.0)))
+
+
 ## Aplica un zoom multiplicativo respetando los limites
 func _apply_zoom(factor: float) -> void:
 	orbit_distance = clampf(orbit_distance * factor, min_distance, max_distance)
@@ -168,10 +207,23 @@ func _update_camera() -> void:
 	# Tope de acercamiento por la SUPERFICIE, no por una distancia fija: en un
 	# valle puedes bajar mucho y en una ladera no, y con un limite unico o te
 	# quedas corto en el llano o te metes dentro del monte.
+	#
+	# Y se sube por la ÓRBITA, no en vertical. Levantar el ojo a secas lo sacaba
+	# de la esfera: la distancia real a la que estaba la cámara dejaba de ser
+	# `orbit_distance`, y como la rueda calcula su paso sobre `orbit_distance`,
+	# el zoom se desincronizaba de lo que se veía —muescas que no movían nada,
+	# y un tope de acercamiento que aparecía y desaparecía según la ladera que
+	# hubiera debajo—. Subiendo por la esfera sólo cambia el ángulo, y la
+	# distancia sigue siendo exactamente la pedida.
 	if height_probe.is_valid():
 		var ground: float = height_probe.call(eye)
-		if eye.y < ground + ground_clearance:
-			eye.y = ground + ground_clearance
+		var floor_y := ground + ground_clearance
+		if eye.y < floor_y:
+			var lifted := eye
+			lifted.y = floor_y
+			var reach := (lifted - target_position).length()
+			if reach > 0.001:
+				eye = target_position 					+ (lifted - target_position) / reach * orbit_distance
 
 	global_position = eye
 	look_at(target_position, Vector3.UP)

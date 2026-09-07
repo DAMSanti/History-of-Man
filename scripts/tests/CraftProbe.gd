@@ -68,6 +68,12 @@ func _run(inst: Node) -> void:
 	# que el jugador le de al play
 	sim.time_scale = 1.0
 
+	# La partida arranca con la tabla de trabajos en blanco -el primer reparto
+	# es del jugador-. Sin esto, la sonda ponia a tres al taller y dejaba a los
+	# otros doce parados: nadie bajaba materia prima al abrigo y el taller no
+	# sacaba una sola pieza. Se reparte primero y se pisa despues lo del taller.
+	sim.assign_default_jobs()
+
 	# Tres al taller con la recoleccion de segunda: asi se ve a la vez que
 	# tallan cuando hay materia y que se bajan al monte cuando no la hay
 	var workshop: Array[Inhabitant] = []

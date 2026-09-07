@@ -27,6 +27,23 @@ var _people: Array[Inhabitant] = []
 var _terrain: TerrainGenerator
 var _since_redraw: float = 0.0
 
+## El rastro de UNA entidad suelta, que es lo que mira el censo.
+##
+## Va por su lado y no reutiliza `_job` porque contesta otra pregunta. El
+## oficio pregunta «¿por dónde anda la recolección?» y saca quince líneas; el
+## censo pregunta «¿por dónde ha andado ESTE uro?» y saca una. Mezclarlas
+## obligaría a apagar una para ver la otra, y la gracia de tener las dos es
+## poder ver el rastro de un lobo con el de los cazadores puesto.
+##
+## `_solo_source` es un `Callable` y no una lista de puntos porque el rastro
+## crece: una lista se congela en el instante en que se pulsó, y lo que se
+## quiere ver es por dónde va AHORA. Devuelve `Array[PackedVector3Array]`, que
+## es una persona con varias salidas o un animal con un solo recorrido.
+var _solo_lines: Array[MeshInstance3D] = []
+var _solo_source: Callable = Callable()
+var _solo_tint := Color.WHITE
+var _solo_name := ""
+
 ## Cada cuánto se vuelve a pintar, en segundos.
 ##
 ## El rastro crece mientras la gente anda, así que un dibujo hecho una vez al
@@ -41,10 +58,7 @@ func showing() -> int:
 
 
 func clear() -> void:
-	for line: MeshInstance3D in _lines:
-		if is_instance_valid(line):
-			line.queue_free()
-	_lines.clear()
+	_wipe(_lines)
 	_job = -1
 	_people.clear()
 
@@ -58,25 +72,86 @@ func show_job(job: int, people: Array[Inhabitant],
 	_repaint()
 
 
+## Sigue el rastro de una sola entidad: una persona, un uro, un lobo.
+##
+## `source` se llama en cada repintado y devuelve los tramos a dibujar. Se pide
+## así -y no una lista ya hecha- porque el rastro crece mientras el bicho anda:
+## con una lista, el dibujo se queda en la foto del instante en que se pulsó.
+func follow(source: Callable, tint: Color, terrain: TerrainGenerator,
+		label: String = "") -> void:
+	_solo_source = source
+	_solo_tint = tint
+	_solo_name = label
+	if terrain != null:
+		_terrain = terrain
+	_repaint_solo()
+
+
+func stop_following() -> void:
+	_solo_source = Callable()
+	_solo_name = ""
+	_wipe(_solo_lines)
+
+
+## A quién se está siguiendo, o cadena vacía si a nadie.
+func following() -> String:
+	return _solo_name if _solo_source.is_valid() else ""
+
+
 func _process(delta: float) -> void:
-	# Se repinta solo mientras haya un oficio elegido. Sin esto habia que
-	# cerrar y abrir el panel para ver por donde iban ahora, que es justo la
-	# pregunta que uno se hace con el rastro delante.
-	if _job < 0:
+	# Se repinta solo mientras haya algo elegido. Sin esto habia que cerrar y
+	# abrir el panel para ver por donde iban ahora, que es justo la pregunta
+	# que uno se hace con el rastro delante.
+	if _job < 0 and not _solo_source.is_valid():
 		return
 	_since_redraw += delta
 	if _since_redraw < REDRAW_EVERY:
 		return
 	_since_redraw = 0.0
-	_repaint()
+	if _job >= 0:
+		_repaint()
+	if _solo_source.is_valid():
+		_repaint_solo()
+
+
+## El rastro de la entidad seguida, entero de una vez.
+##
+## Se dibuja SIN apagar en los tramos viejos, al reves que el de oficio: aqui
+## hay una sola linea y lo que se pregunta es la forma del recorrido completo
+## -si repite querencia, si el lobo lo echo del prado-, no cual es el trecho
+## de hoy.
+func _repaint_solo() -> void:
+	_wipe(_solo_lines)
+	var paths: Variant = _solo_source.call()
+	if not (paths is Array):
+		return
+	var head := true
+	for path: PackedVector3Array in (paths as Array):
+		_draw_solo(path, head)
+		head = false
+
+
+func _draw_solo(points: PackedVector3Array, live: bool) -> void:
+	if points.size() < 2:
+		return
+	var mesh := _drape(points)
+	if live:
+		_diamond(mesh, points[points.size() - 1])
+	var line := _hang(mesh, _solo_tint if live
+		else _solo_tint * Color(1.0, 1.0, 1.0, 0.45), "RastroSolo")
+	_solo_lines.append(line)
+
+
+## Tira las lineas de una tanda y deja la lista vacia.
+func _wipe(lines: Array[MeshInstance3D]) -> void:
+	for line: MeshInstance3D in lines:
+		if is_instance_valid(line):
+			line.queue_free()
+	lines.clear()
 
 
 func _repaint() -> void:
-	for line: MeshInstance3D in _lines:
-		if is_instance_valid(line):
-			line.queue_free()
-	_lines.clear()
-
+	_wipe(_lines)
 	for person: Inhabitant in _people:
 		_draw_person(person)
 
@@ -112,7 +187,15 @@ func _draw_path(points: PackedVector3Array, person: Inhabitant, tint: Color,
 		live: bool) -> void:
 	if points.size() < 2:
 		return
+	var mesh := _drape(points)
+	# La punta de la salida en curso lleva rombo: es donde esta la persona
+	if live:
+		_diamond(mesh, points[points.size() - 1])
+	_lines.append(_hang(mesh, tint, "Rastro%s" % person.given_name))
 
+
+## La linea, partida cada DRAPE metros y pegada al relieve.
+func _drape(points: PackedVector3Array) -> ImmediateMesh:
 	var mesh := ImmediateMesh.new()
 	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	for i in range(points.size() - 1):
@@ -125,22 +208,22 @@ func _draw_path(points: PackedVector3Array, person: Inhabitant, tint: Color,
 				point.y = _terrain.get_height_at(point)
 			mesh.surface_add_vertex(point + Vector3(0.0, LIFT, 0.0))
 	mesh.surface_end()
+	return mesh
 
-	# La punta de la salida en curso lleva rombo: es donde esta la persona
-	if live:
-		var head := points[points.size() - 1]
-		if _terrain:
-			head.y = _terrain.get_height_at(head)
-		head.y += LIFT
-		mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-		mesh.surface_add_vertex(head + Vector3(-MARK, 0.0, 0.0))
-		mesh.surface_add_vertex(head + Vector3(0.0, 0.0, -MARK))
-		mesh.surface_add_vertex(head + Vector3(MARK, 0.0, 0.0))
-		mesh.surface_add_vertex(head + Vector3(0.0, 0.0, MARK))
-		mesh.surface_add_vertex(head + Vector3(-MARK, 0.0, 0.0))
-		mesh.surface_end()
 
-	_finish(mesh, person, tint)
+## El rombo de la punta: donde esta ahora quien deja el rastro.
+func _diamond(mesh: ImmediateMesh, at: Vector3) -> void:
+	var head := at
+	if _terrain:
+		head.y = _terrain.get_height_at(head)
+	head.y += LIFT
+	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	mesh.surface_add_vertex(head + Vector3(-MARK, 0.0, 0.0))
+	mesh.surface_add_vertex(head + Vector3(0.0, 0.0, -MARK))
+	mesh.surface_add_vertex(head + Vector3(MARK, 0.0, 0.0))
+	mesh.surface_add_vertex(head + Vector3(0.0, 0.0, MARK))
+	mesh.surface_add_vertex(head + Vector3(-MARK, 0.0, 0.0))
+	mesh.surface_end()
 
 
 ## Un color por persona, repartido por el círculo cromático.
@@ -152,9 +235,9 @@ static func colour_for(person_id: int) -> Color:
 
 
 ## Cuelga la malla ya montada del arbol, con su material.
-func _finish(mesh: ImmediateMesh, person: Inhabitant, tint: Color) -> void:
+func _hang(mesh: ImmediateMesh, tint: Color, label: String) -> MeshInstance3D:
 	var line := MeshInstance3D.new()
-	line.name = "Rastro%s" % person.given_name
+	line.name = label
 	line.mesh = mesh
 	var material := StandardMaterial3D.new()
 	material.albedo_color = tint
@@ -165,4 +248,4 @@ func _finish(mesh: ImmediateMesh, person: Inhabitant, tint: Color) -> void:
 	line.material_override = material
 	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(line)
-	_lines.append(line)
+	return line

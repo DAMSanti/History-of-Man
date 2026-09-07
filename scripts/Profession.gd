@@ -69,6 +69,10 @@ enum Speciality {
 	MARISQUEO,     ## Lapa, mejillón, berberecho: lo que sostiene el invierno
 	ORILLA,        ## Río y estuario, con arpón
 	ALTURA,        ## Mar abierto. Hace falta embarcación: todavía no la hay
+	# Hogar
+	YESQUERO,      ## El fuego: prenderlo, alimentarlo, no dejar que se apague
+	AHUMADO,       ## El secadero: carne fresca a carne que dura el invierno
+	CUIDADO,       ## Críos, viejos y heridos: los que no se valen solos
 }
 
 ## Qué especialidades admite cada oficio.
@@ -82,6 +86,17 @@ const SPECIALITIES := {
 		Speciality.PELETERIA, Speciality.CORDELERIA],
 	Job.EXPLORACION: [Speciality.BATIDA, Speciality.EXPEDICION,
 		Speciality.ASCENSION],
+	# El HOGAR no tiene especialidades, y es a proposito.
+	#
+	# Las tuvo -yesquero, ahumado, cuidado- y era repartir en tres a la unica
+	# persona que suele haber: en una banda de quince, el hogar son uno o dos, y
+	# pedirle al jugador que ademas elija cual de las tres cosas hacen es una
+	# decision sin decision. En el Paleolitico el hogar LO HACE TODO: prende el
+	# fuego, lo mantiene, ahuma la carne y el pescado, cuida de quien no se vale
+	# y ensena a hacer vivac -ver `SettlementSim._bivouac`-.
+	#
+	# Los tres efectos no se han perdido: se aplican siempre a quien atiende el
+	# hogar en vez de a quien lleve el rotulo.
 }
 
 
@@ -214,6 +229,27 @@ const SPECIALITY_INFO := {
 		"desc": "Mar abierto, donde está lo grande. Hace falta embarcación, y "
 			+ "una embarcación no se improvisa: hasta que la banda sepa "
 			+ "hacerla, esto se mira desde la playa.",
+	},
+	Speciality.YESQUERO: {
+		"name": "Yesquero",
+		"desc": "El fuego: prenderlo, alimentarlo y no dejar que se apague. "
+			+ "Gasta menos leña que quien lo cuida de paso, y si se apaga lo "
+			+ "levanta en la mitad de tiempo. La banda sabe hacer fuego desde "
+			+ "siempre; lo que cuesta es tenerlo encendido todos los días.",
+	},
+	Speciality.AHUMADO: {
+		"name": "Ahumado",
+		"desc": "Colgar la carne sobre el humo y no perderla de vista. Una "
+			+ "ración fresca dura cuatro días y seca ciento ochenta, así que "
+			+ "esto es lo que convierte un otoño bueno en un invierno vivo. "
+			+ "Hace falta secadero, y el secadero hace falta fuego.",
+	},
+	Speciality.CUIDADO: {
+		"name": "Cuidado",
+		"desc": "Críos, viejos y heridos. Quien vuelve con un tobillo torcido "
+			+ "vuelve antes al trabajo si hay alguien pendiente de él, y una "
+			+ "banda de quince no puede permitirse tener a nadie de baja más "
+			+ "días de los necesarios.",
 	},
 	Speciality.ASCENSION: {
 		"name": "Ascensión",

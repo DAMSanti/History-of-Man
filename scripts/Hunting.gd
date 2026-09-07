@@ -99,6 +99,33 @@ static func pieces_per_day(speciality: Profession.Speciality,
 	return base
 
 
+## Cuánta gente hace falta para que la rama rinda de verdad.
+##
+## La caza menor se hace al acecho, solo o de a dos, y una cuadrilla no
+## acecha mejor que un cazador solo: de sobra con uno, y por eso no tiene
+## curva -devuelve 1,0 tenga quien tenga al lado-. La caza mayor es la
+## BATIDA -varias manos que acorralan y rematan-, y un cazador solo contra
+## un uro no trae un uro: vuelve con la azagaya rota, con suerte. Sin este
+## factor un cazador solo de caza mayor cobraba lo mismo por cabeza que una
+## cuadrilla entera, y «cuadrilla» se quedaba en el docstring sin pasar al
+## juego.
+##
+## No es lineal a propósito: por debajo de cuatro manos la partida no rodea
+## de verdad al animal, así que el rendimiento por debajo de eso cae fuerte;
+## de cuatro para arriba ya hay brazos de sobra y una quinta persona no
+## ayuda a acorralar mejor.
+const CREW := {
+	Profession.Speciality.CAZA_MAYOR: [0.20, 0.45, 0.75, 1.0],
+}
+
+static func crew_factor(speciality: Profession.Speciality, crew_size: int) -> float:
+	var curve: Array = CREW.get(speciality, [])
+	if curve.is_empty():
+		return 1.0
+	var index: int = clampi(crew_size, 1, curve.size()) - 1
+	return float(curve[index])
+
+
 ## Las técnicas de esta rama que ya se dominan, para poder decírselo al
 ## jugador sin que tenga que cruzar dos pantallas.
 static func known_improvements(speciality: Profession.Speciality,
@@ -185,8 +212,15 @@ static func yields_at(speciality: Profession.Speciality, position: Vector3,
 
 ## El riesgo medio de una jornada de esta rama en este sitio: lo que puede
 ## costarle a quien la hace. Un uro no es un conejo.
+##
+## `crew_size` reparte el peligro, no sólo el trabajo: ir en cuadrilla no es
+## sólo más pieza -[crew_factor]- sino también más seguro, porque cuatro
+## batidores no corren cada uno el riesgo entero del que va solo. Pedirlo
+## aparte y no dentro de [crew_factor] es a propósito: uno decide CUÁNTO se
+## caza, el otro CUÁNTO CUESTA, y son preguntas distintas aunque compartan
+## el mismo número de gente.
 static func risk_at(speciality: Profession.Speciality, position: Vector3,
-		season: Subsistence.Season) -> float:
+		season: Subsistence.Season, crew_size: int = 1) -> float:
 	var species: Array[String] = []
 	for one: String in Fauna.species_at(position, season):
 		if Fauna.porte_of(one) <= porte_of(speciality):
@@ -196,7 +230,7 @@ static func risk_at(speciality: Profession.Speciality, position: Vector3,
 	var total := 0.0
 	for one: String in species:
 		total += Fauna.risk_of(one)
-	return total / float(species.size())
+	return (total / float(species.size())) / float(maxi(crew_size, 1))
 
 
 static func _add(into: Dictionary, kind: Materia.Kind, units: float) -> void:

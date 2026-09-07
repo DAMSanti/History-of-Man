@@ -215,3 +215,88 @@ func test_no_se_amontonan_las_trampas_en_el_mismo_claro() -> void:
 		"pegada a otra, no")
 	assert_true(sim._room_for_trap(Vector3(400.0, 0.0, 400.0)),
 		"a cuatrocientos metros, sí")
+
+
+# --- la cuadrilla: cuánta gente hace falta según la rama -----------------
+
+func test_caza_mayor_sola_rinde_muy_poco() -> void:
+	# La petición: «según el tipo de caza y el animal se necesitará más o
+	# menos gente». Un solo batidor contra un uro no es una cuadrilla.
+	assert_lt(Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 1), 0.30,
+		"un cazador solo de caza mayor rinde a menos de un tercio")
+
+
+func test_caza_mayor_con_cuadrilla_completa_rinde_entero() -> void:
+	assert_eq(Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 4), 1.0,
+		"con cuatro manos, la batida rinde entera")
+	assert_eq(Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 9), 1.0,
+		"de cuatro para arriba no hay más que ganar: sobran brazos, no faltan")
+
+
+func test_caza_mayor_sube_con_cada_mano_de_mas() -> void:
+	var uno := Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 1)
+	var dos := Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 2)
+	var tres := Hunting.crew_factor(Profession.Speciality.CAZA_MAYOR, 3)
+	assert_true(uno < dos and dos < tres,
+		"cada mano de más sube el rendimiento, no sólo la de cuatro")
+
+
+func test_caza_menor_no_necesita_cuadrilla() -> void:
+	# Al acecho, solo o de a dos: una cuadrilla no acecha mejor que un
+	# cazador solo, y por eso NO tiene curva.
+	assert_eq(Hunting.crew_factor(Profession.Speciality.CAZA_MENOR, 1), 1.0,
+		"solo, rinde entero")
+	assert_eq(Hunting.crew_factor(Profession.Speciality.CAZA_MENOR, 5), 1.0,
+		"y con cuadrilla, igual: no cunde ni estorba")
+
+
+func test_las_trampas_no_tienen_curva_de_cuadrilla() -> void:
+	assert_eq(Hunting.crew_factor(Profession.Speciality.TRAMPAS, 1), 1.0,
+		"la trampa trabaja sola, no tiene noción de cuadrilla")
+
+
+func test_hunters_in_cuenta_solo_esta_especialidad_de_caza() -> void:
+	# No toda la actividad CAZA: trampas, menor y mayor son cuadrillas
+	# distintas y no se mezclan al contar manos.
+	var sim := SettlementSim.new()
+	var mayor_uno := Inhabitant.create(0, Vector3.ZERO, sim._rng)
+	mayor_uno.has_task = true
+	mayor_uno.current_speciality = Profession.Speciality.CAZA_MAYOR
+	var mayor_dos := Inhabitant.create(1, Vector3.ZERO, sim._rng)
+	mayor_dos.has_task = true
+	mayor_dos.current_speciality = Profession.Speciality.CAZA_MAYOR
+	var menor := Inhabitant.create(2, Vector3.ZERO, sim._rng)
+	menor.has_task = true
+	menor.current_speciality = Profession.Speciality.CAZA_MENOR
+	var ocioso := Inhabitant.create(3, Vector3.ZERO, sim._rng)
+	ocioso.has_task = false
+	ocioso.current_speciality = Profession.Speciality.CAZA_MAYOR
+	sim.people = [mayor_uno, mayor_dos, menor, ocioso]
+
+	assert_eq(sim.hunters_in(Profession.Speciality.CAZA_MAYOR), 2,
+		"dos en cuadrilla mayor, sin contar al que no tiene tarea hoy")
+	assert_eq(sim.hunters_in(Profession.Speciality.CAZA_MENOR), 1,
+		"uno solo en menor, aparte del todo")
+
+
+# --- el riesgo: un uro no es un conejo ------------------------------------
+
+func test_la_cuadrilla_reparte_tambien_el_peligro() -> void:
+	# Ir en cuadrilla no es sólo más pieza: es también más seguro. Cuatro
+	# batidores no corren, cada uno, el riesgo entero del que va solo.
+	var solo := Hunting.risk_at(Profession.Speciality.CAZA_MAYOR,
+		Vector3(2048.0, 0.0, 2048.0), Subsistence.Season.OTONO, 1)
+	var cuadrilla := Hunting.risk_at(Profession.Speciality.CAZA_MAYOR,
+		Vector3(2048.0, 0.0, 2048.0), Subsistence.Season.OTONO, 4)
+	if solo > 0.0:
+		assert_eq(cuadrilla, solo / 4.0, "el riesgo se reparte entre manos")
+
+
+func test_un_uro_no_es_un_conejo() -> void:
+	# El aviso literal de Fauna.gd, hecho número: la caza mayor arriesga más
+	# que la trampa, porque las piezas que persigue son más peligrosas.
+	var mayor := Hunting.risk_at(Profession.Speciality.CAZA_MAYOR,
+		Vector3(2048.0, 0.0, 2048.0), Subsistence.Season.OTONO)
+	var menuda := Hunting.risk_at(Profession.Speciality.TRAMPAS,
+		Vector3(2048.0, 0.0, 2048.0), Subsistence.Season.OTONO)
+	assert_gt(mayor, menuda, "la pieza mayor arriesga más que la de trampa")

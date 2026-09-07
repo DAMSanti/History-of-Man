@@ -327,6 +327,77 @@ Dos avisos honestos:
 - El escalado con FSR2 en Bajo es lo que hará que esto corra en una integrada.
   Sin él no hay tier bajo que valga.
 
+### 6.1 Las sombras SÍ estaban negras: la medida anterior era mala (6-sep-2026)
+
+Lo de arriba —«las sombras estaban bien, 18,5 %»— **es falso, y el error era
+del método**. `LuzProbe` compara dos RECTÁNGULOS fijos de una captura, uno que
+hace de sombra y otro que hace de sol. El que hacía de sombra no lo estaba: era
+terreno al sol de albedo oscuro. Con rectángulos a mano hay además un problema
+de fondo, y es que a otra hora la sombra está en otro sitio, así que la medida
+no se puede repetir a lo largo del día.
+
+`scripts/tests/SombraDiaProbe.gd` mide sin depender del encuadre: fotografía la
+misma vista **con el sol y sin él**, y compara. La segunda captura es,
+literalmente, la primera en sombra —el mismo terreno, el mismo albedo, la misma
+cámara—, así que la razón entre las dos es la profundidad de sombra de la
+escena. Se recorta el cielo con una tercera captura a oscuras, porque el cielo
+entra brillante en las dos y tira la razón hacia el 100 % sin querer decir nada.
+
+Con eso, el sitio 56 a mediodía de primavera daba **5,8 %**. El propio
+`LuzProbe` pone en 8 % la raya de lo que ya se lee como negro.
+
+**Por qué `ambient_light_energy` «no hacía nada».** Estaba en la lista de
+hipótesis descartadas de `ReboteProbe`, y con razón aparente: no movía el
+render. La causa es que con `ambient_light_source = SKY` la contribución del
+cielo vale 1, y entonces el término de color —que es al que multiplica
+`ambient_light_energy`— queda **fuera de la mezcla**. No es que el ambiente no
+sirva de palanca: es que la palanca estaba desconectada. Bajando
+`ambient_light_sky_contribution` a 0,5 el término entra y se gobierna.
+
+**Ajuste elegido:** `ambient_energy = 0,9`, `ambient_sky_share = 0,5`,
+`ambient_night_floor = 0,06` (`WorldEnvironmentSetup`). Medido:
+
+| | altura del sol | sombra | sol | razón |
+|---|---|---|---|---|
+| arranque primavera 6:00 | −0,3° | 0,0127 | 0,0224 | 56,8 % |
+| amanecer primavera 7:30 | 15,8° | 0,0395 | 0,1464 | 27,0 % |
+| **mediodía primavera 13:00** | 44,2° | 0,0433 | 0,2478 | **17,5 %** |
+| atardecer verano 20:00 | −3,5° | 0,0004 | 0,0018 | 25,0 % |
+| amanecer invierno 9:00 | 11,5° | 0,0370 | 0,1526 | 24,2 % |
+| **mediodía invierno 12:00** | 23,3° | 0,0421 | 0,2325 | **18,1 %** |
+| atardecer invierno 16:30 | −1,0° | 0,0116 | 0,0267 | 43,3 % |
+| noche primavera 2:00 | −39,5° | 0,0000 | 0,0000 | — |
+
+Los dos mediodías caen en el centro del 15-20 % de una foto de campo. Con el
+sol bajo sube a 24-27 %, y **eso no es un fallo del ajuste**: con el sol rasante
+el haz directo atraviesa mucha más atmósfera y pierde fuerza mientras el cielo
+sigue alumbrando igual, así que la sombra de un amanecer es de verdad menos
+profunda que la de mediodía. Por debajo del ocaso la razón se dispara porque ya
+no hay sol que proyecte sombra: lo que queda no es una sombra profunda, es de
+noche. Y a las 2:00 el valle queda negro, que es lo que tiene que pasar —el
+suelo de noche no deja una luz azul flotando sin origen—.
+
+**El cielo pasa a ir con la altura del sol, no con el reloj.** Estaba en horas
+fijas —amanece a las 6, anochece a las 19— y el invierno cantábrico salía con
+cielo de mediodía sobre un valle ya a oscuras, porque el sol se pone a las 16:50
+y el cielo no se enteraba hasta las 17. Es el mismo error que `SolarPosition`
+vino a arreglar en la luz y que no se arregló de paso en el color. De camino, el
+color del horizonte no se tocaba en absoluto: la franja más ancha del cielo se
+quedaba en gris de día toda la noche. Ahora el ámbar es del horizonte y el cenit
+del amanecer es violeta, porque teñir los dos por igual daba una plancha naranja
+que no se parece a ningún amanecer.
+
+**Lo que queda como deuda, medido de paso.** La luz de relleno (`fill_energy`)
+no es que no llegue al render: es que **encenderla quita luz**. Con el ambiente
+en su sitio, hacer visible el `FillLight` a 0,3 y a 0,8 de energía deja el
+terreno en 0,0000 contra los 0,0133 que daba apagada. No se ha buscado la causa
+—queda fuera del cierre de la slice— y por eso el arreglo va por el ambiente y
+`fill_energy` se queda a cero. Apuntado además un efecto vecino que costó una
+medida entera: cambiar `ambient_light_source` a color y devolverlo al cielo deja
+la radiancia del cielo sin rehornear, y el terreno se queda negro a partir de
+ahí. Cualquier prueba que toque el ambiente debe hacerlo por contribución y
+energía, nunca por la fuente.
+
 ---
 
 ## 7. Fases, con criterio de aceptación

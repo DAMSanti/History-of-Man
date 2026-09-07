@@ -258,6 +258,20 @@ func work_summary() -> Array[Dictionary]:
 ## Pasos seguidos que se han quedado en nada por tener algo delante.
 var blocked_steps: int = 0
 
+## Cuántas veces se ha vuelto a trazar el camino a ESTE destino sin conseguir
+## avanzar. Ver `SettlementSim.BLOCKED_REPLANS`: replanificar la misma ruta
+## contra la misma pared no la abre, sólo repite el intento.
+var blocked_replans: int = 0
+
+## Los sitios a los que HOY se ha intentado llegar y no se ha podido.
+##
+## Va aparte de `unreachable` porque son dos memorias distintas: aquélla es del
+## trazador de caminos y se borra en cuanto encuentra una ruta a cualquier otro
+## sitio, y ésta es de la persona —«por ahí no se pasa»— y tiene que durar la
+## jornada. Sin ella se vuelve a elegir el mismo cotarro detrás del mismo
+## cortado en cuanto se queda uno libre. Ver `SettlementSim._give_up_on`.
+var given_up: Array[Vector3] = []
+
 var stuck_hours: float = 0.0
 var stuck_where: Vector3 = Vector3.ZERO
 
@@ -471,12 +485,60 @@ var carrying: float = 0.0
 
 ## Recipientes que lleva. Deciden cuántos kilos puede traer de una jornada, y
 ## por eso deciden cuánto rinde de verdad la recolección.
+##
+## Son PIEZAS DEL TALLER, no materia prima del almacén: un odre es una piel
+## raspada, cosida y engrasada, y un cesto son tres de fibra trenzada. Se
+## miraba si había piel y fibra en bruto en el abrigo, que es como decir que
+## cualquiera lleva agua encima porque en casa hay un pellejo sin curtir.
+## Ver `SettlementSim._hand_out_containers`.
 var has_basket: bool = false
 var has_waterskin: bool = false
+
+## Horas de agua que le quedan encima.
+##
+## Se llena al beber -junto al agua o en el abrigo- y baja mientras se anda y
+## se trabaja lejos de ella. A cero hay que ir a beber, y eso parte la jornada
+## por la mitad: es lo que hace que el odre valga para algo y no sea un número
+## más de capacidad de carga.
+var water_left: float = 0.0
 
 ## Horas que lleva buscando en el paraje actual. Prospectar cuesta tiempo:
 ## encontrar un avellanar bueno no es instantáneo.
 var search_hours: float = 0.0
+
+## --- El vivac ------------------------------------------------------------
+##
+## Dormir fuera no es sólo comer de la mochila. Hace falta una piel para armar
+## una tienda pequeña y leña para la hoguera, y quien no las lleva pasa la noche
+## a la intemperie. Ver `SettlementSim._bivouac`.
+
+## Última jornada en la que se pagó el vivac. La noche se cobra UNA vez, no en
+## cada tick.
+var bivouac_day: int = -1
+
+## De cuántas de las dos cosas se durmió sin, anoche.
+var bivouac_lack: int = 0
+
+## Si anoche armó mal el vivac. Es SABER, no material: se puede llevar la piel
+## y la leña y aun así montar algo que no aguanta la noche. Lo decide el saber
+## del hogar —ver `SettlementSim._camps_well`—, y se paga a la mañana
+## siguiente en cansancio.
+var bivouac_botched: bool = false
+
+## Lo que se sacó DEL ALMACÉN para esta salida: víveres, la piel de la tienda,
+## la leña de la hoguera.
+##
+## Existe para no contarlo dos veces. Al volver, todo lo que trae encima se
+## apunta como producción de la banda, y la mitad de lo que traía un explorador
+## era lo que se había llevado de casa sin gastar: la despensa decía que la
+## banda producía comida que sólo había ido y vuelto en una mochila.
+var carried_out: Dictionary = {}
+
+
+## Si esta noche hay hoguera encendida donde acampa. Lo pone la simulación al
+## cobrar la noche y lo dibuja [BivouacFires]: la leña se gastaba y no se veía,
+## así que dormir con fuego y dormir sin él eran el mismo punto en la oscuridad.
+var bivouac_fire: bool = false
 
 ## Destreza por actividad, 0-1. Sube con la practica: es el saber tacito.
 var skill: Dictionary = {}
@@ -678,11 +740,20 @@ func effectiveness() -> float:
 
 
 ## Lo que come al dia, en jornadas-persona. Un nino come menos.
+## Lo que come al dia, en RACIONES.
+##
+## Dos para un adulto, y no una: una racion es media jornada -lo que se come en
+## cada una de las dos comidas del dia, ver [Materia.KCAL_RACION]-. Antes un
+## adulto figuraba con una racion diaria y a la vez comia dos veces, asi que la
+## despensa decia el doble de dias de los que aguantaba.
+##
+## Los factores de edad no cambian: un crio come el 60 % de lo que come un
+## adulto y un anciano el 85 %.
 func daily_food() -> float:
 	match age_group:
-		Age.NINO: return 0.6
-		Age.ANCIANO: return 0.85
-		_: return 1.0
+		Age.NINO: return 2.0 * 0.6
+		Age.ANCIANO: return 2.0 * 0.85
+		_: return 2.0
 
 
 func age_name() -> String:
@@ -690,6 +761,20 @@ func age_name() -> String:
 		Age.NINO: return "niño"
 		Age.ANCIANO: return "anciano"
 		_: return "adulto"
+
+
+## El nombre de un estado cualquiera, sin necesitar la persona. Lo usa el
+## parte de atascos, que guarda el estado como numero.
+static func new_state_name(value: int) -> String:
+	match value:
+		State.DURMIENDO: return "durmiendo"
+		State.YENDO: return "de camino"
+		State.BUSCANDO: return "buscando"
+		State.TRABAJANDO: return "trabajando"
+		State.VOLVIENDO: return "volviendo"
+		State.COMIENDO: return "comiendo"
+		State.RECONOCIENDO: return "reconociendo"
+		_: return "ocioso"
 
 
 func state_name() -> String:
@@ -730,6 +815,30 @@ func load_fraction() -> float:
 
 func add_load(kind: Materia.Kind, units: float) -> void:
 	load[kind] = float(load.get(kind, 0.0)) + units
+
+
+## Apunta que esto salió del almacén y no del monte. Ver `carried_out`.
+func note_from_store(kind: Materia.Kind, units: float) -> void:
+	if units <= 0.0:
+		return
+	carried_out[kind] = float(carried_out.get(kind, 0.0)) + units
+
+
+## Cuánto de lo que lleva encima de esto salió del almacén.
+func brought_from_store(kind: Materia.Kind) -> float:
+	return float(carried_out.get(kind, 0.0))
+
+
+## Saca de la mochila lo que se pueda, y dice cuánto salió de verdad.
+func take_load(kind: Materia.Kind, units: float) -> float:
+	var have: float = float(load.get(kind, 0.0))
+	var taken := minf(have, units)
+	if taken <= 0.0:
+		return 0.0
+	load[kind] = have - taken
+	if load[kind] <= 0.0001:
+		load.erase(kind)
+	return taken
 
 
 func summary() -> String:

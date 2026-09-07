@@ -31,6 +31,12 @@ var _marker: Node3D
 var mouth_radius: float = 7.0
 
 var _mouth_position: Vector3
+
+## Hacia dónde mira la boca, en el plano. Ladera abajo, que es por donde se
+## entra y por donde se sale. Lo usa la banda: ver `inside_point` y
+## `forecourt_point`.
+var _facing := Vector3(0.0, 0.0, 1.0)
+
 var _rng := RandomNumberGenerator.new()
 
 
@@ -60,6 +66,8 @@ func build(terrain: TerrainGenerator, world: Vector3, data: Dictionary) -> void:
 	# El eje -Z del nodo mira ladera abajo; con eso las piezas se colocan en
 	# coordenadas locales sin volver a pensar en la orientación
 	look_at_from_position(world, world + facing, Vector3.UP)
+
+	_facing = facing
 
 	_build_darkness()
 	_build_fallen_blocks(terrain, world, facing)
@@ -195,6 +203,35 @@ func discover() -> void:
 
 
 ## Punto por el que se pincha, y radio de acierto en metros
+## Un sitio DENTRO de la cueva, metido en la galería.
+##
+## Existe porque la banda dormía encima del abrigo, no dentro: la posición de
+## casa era el punto del emplazamiento y ahí se apilaban los quince a la
+## intemperie. Una cueva se ocupa por dentro, que es para lo que se ocupa.
+func inside_point(spread: float = 0.0, angle: float = 0.0) -> Vector3:
+	var deep := _mouth_position - _facing * (mouth_radius * 0.9)
+	if spread > 0.001:
+		deep += Vector3(cos(angle), 0.0, sin(angle)) * spread
+	return deep
+
+
+## Y un sitio DELANTE, en la campa de la boca.
+##
+## Es donde se hace todo lo que no es dormir: comer, contar, tallar al sol,
+## esperar a que vuelva la partida de caza. Una cueva del Paleolítico se habita
+## sobre todo en su puerta, que es donde da la luz.
+func forecourt_point(spread: float = 0.0, angle: float = 0.0) -> Vector3:
+	var out := _mouth_position + _facing * (mouth_radius * 1.6)
+	if spread > 0.001:
+		out += Vector3(cos(angle), 0.0, sin(angle)) * spread
+	return out
+
+
+## Hacia dónde mira la boca.
+func facing() -> Vector3:
+	return _facing
+
+
 func pick_position() -> Vector3:
 	return _mouth_position + Vector3(0.0, mouth_radius * 0.4, 0.0)
 

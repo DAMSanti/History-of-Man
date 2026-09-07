@@ -67,6 +67,12 @@ var trails: TrailView = null
 var markers: ParajeMarkers = null
 var people_source: Node = null
 
+## El censo de lo pintado y la cámara a la que lleva. Los pone la escena; sin
+## ellos la pestaña de Entidades lo dice y no hace nada, que es mejor que
+## romperse. Ver [EntityCensus].
+var census: EntityCensus = null
+var camera: OrbitalCamera = null
+
 var _live: Array[Dictionary] = []
 var _building: String = ""
 
@@ -75,6 +81,13 @@ var _building: String = ""
 ## la misma mancha, con su ficha ya abierta, no la vuelva a abrir sin más:
 ## ver `DemoMain._unhandled_input`.
 var shown_paraje: Paraje = null
+
+## La persona cuya ficha esta abierta, para poder repintarla.
+##
+## Sin esto la ficha era la foto del instante en que se pincho: no estaba en
+## la lista de ventanas que se repintan solas, asi que se podia tener delante
+## a alguien «de camino» que llevaba media jornada trabajando.
+var shown_person: Inhabitant = null
 
 ## La cumbre cuya ficha está abierta, y lo que ha contestado el último
 ## «intentar cima»: sin guardarlo, el aviso se perdía al repintar la ficha
@@ -157,10 +170,23 @@ func _process(_delta: float) -> void:
 			"trabajos": show_jobs()
 			"banda": show_band()
 			"tecnicas": show_tech()
+			"oficios": show_professions()
 			"territorio": show_territory()
 			"cronica": show_lore()
 			"parajes": show_places()
 			"rastros": show_trails()
+			"entidades": show_census()
+			# La ficha de una entidad se repinta SIN volver a mover la cámara.
+			# Mover la cámara es lo que hace la flecha, no el repintado: con el
+			# foco puesto aquí, la vista se enganchaba a la entidad y el
+			# jugador no podía apartarse a mirar el alrededor, que es la mitad
+			# de para qué sirve esto.
+			"persona":
+				if shown_person != null:
+					show_person(shown_person)
+			"entidad":
+				if not _census_group.is_empty():
+					show_entity(_census_group, _census_index, false)
 			"paraje":
 				# La ficha de UN paraje concreto: lo que descubre una batida
 				# -materiales nuevos, el % conocido- tiene que verse aquí sin
@@ -179,11 +205,19 @@ func _process(_delta: float) -> void:
 ## con datos que no le importan a nadie. Lo que sí hace falta en esa esquina
 ## es la fecha: la jornada manda sobre todo lo demás —a qué hora sale la
 ## gente, cuándo vuelve— y la estación decide lo que rinde cada trabajo.
+## La barra de arriba, DE LADO A LADO.
+##
+## Era una caja apilada en la esquina: cuatro filas una debajo de otra que
+## crecian hacia abajo y se comian el valle. La informacion que se mira sin
+## dejar de jugar -que hora es, como esta la banda, como va el invierno- cabe
+## en una linea a lo ancho, y a lo ancho hay sitio de sobra.
 func _build_clock() -> void:
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	margin.add_theme_constant_override("margin_top", 12)
-	margin.add_theme_constant_override("margin_left", 12)
+	# Pegada arriba y estirada a los dos lados: es una BARRA, no un cartel.
+	margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	margin.add_theme_constant_override("margin_top", 0)
+	margin.add_theme_constant_override("margin_left", 0)
+	margin.add_theme_constant_override("margin_right", 0)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(margin)
 
@@ -192,18 +226,338 @@ func _build_clock() -> void:
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(frame)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 4)
-	frame.add_child(column)
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", 18)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(strip)
 
 	_clock = Label.new()
 	_clock.add_theme_font_size_override("font_size", 14)
 	_clock.add_theme_color_override("font_color", UISkin.INK)
+	_clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(_clock)
+	strip.add_child(_clock)
 
-	_build_speed_buttons(column)
+	_build_band_gauge(strip)
+	_build_winter_gauge(strip)
+	# Los botones de velocidad al final, empujados a la derecha.
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(gap)
+	_build_speed_buttons(strip)
 	_update_clock()
+
+## --- El momento, la tarjeta que interrumpe -----------------------------
+##
+## Ver [Moment] para el porqué. Aquí sólo se pinta: un titular, dos líneas y —si
+## el momento trae decisión— los botones. Va centrada arriba y por encima de
+## todo, porque su trabajo es que no se pueda seguir jugando sin verla.
+
+## Lo que queda por atender. Se encolan: en una jornada pueden bautizarse dos
+## parajes a la vez, y tragarse el segundo sería peor que no avisar de ninguno.
+var _moments: Array[Moment] = []
+var _moment_card: Control
+
+## La velocidad que llevaba la partida antes de parar por una decisión.
+var _speed_before_moment: float = -1.0
+
+
+## Engancha la simulación. Lo llama [DemoMain] al montar la escena.
+func watch_moments(simulation: SettlementSim) -> void:
+	if simulation.moment_raised.is_connected(_on_moment):
+		return
+	simulation.moment_raised.connect(_on_moment)
+
+
+func _on_moment(moment: Moment) -> void:
+	_moments.append(moment)
+	if _moment_card == null:
+		_show_next_moment()
+
+
+func _show_next_moment() -> void:
+	if _moment_card != null:
+		_moment_card.queue_free()
+		_moment_card = null
+	if _moments.is_empty():
+		# Se devuelve la velocidad que había, no una fija: si el jugador estaba
+		# en pausa mirando algo, reanudarle la partida sería peor que no parar.
+		if _speed_before_moment >= 0.0 and sim != null:
+			sim.time_scale = _speed_before_moment
+			_speed_before_moment = -1.0
+		return
+
+	var moment: Moment = _moments.pop_front()
+	# Sólo una decisión para el reloj. Un hallazgo se enseña sin parar nada: si
+	# cada paraje bautizado congelara la partida, en dos estaciones el jugador
+	# aprendería a cerrar la tarjeta sin leerla.
+	if moment.is_decision() and sim != null and _speed_before_moment < 0.0:
+		_speed_before_moment = sim.time_scale
+		sim.time_scale = 0.0
+	_moment_card = _build_moment_card(moment)
+
+
+func _build_moment_card(moment: Moment) -> Control:
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	margin.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	margin.add_theme_constant_override("margin_top", 24)
+	add_child(margin)
+
+	var frame := PanelContainer.new()
+	frame.theme = _skin
+	frame.custom_minimum_size = Vector2(430, 0)
+	margin.add_child(frame)
+
+	var pad := MarginContainer.new()
+	for side: String in ["left", "right", "top", "bottom"]:
+		pad.add_theme_constant_override("margin_" + side, 12)
+	frame.add_child(pad)
+
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	pad.add_child(column)
+
+	var head := Label.new()
+	head.text = moment.title.to_upper()
+	head.add_theme_font_size_override("font_size", 13)
+	head.add_theme_color_override("font_color", _moment_tint(moment))
+	column.add_child(head)
+
+	var body := Label.new()
+	body.text = moment.text
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(406, 0)
+	body.add_theme_font_size_override("font_size", 12)
+	body.add_theme_color_override("font_color", UISkin.INK)
+	column.add_child(body)
+
+	# Quién, con nombre y edad. Es lo que hace que un percance duela.
+	if moment.who != null:
+		var who := Label.new()
+		who.text = _person_card_line(moment.who)
+		who.add_theme_font_size_override("font_size", 11)
+		who.add_theme_color_override("font_color", UISkin.INK_SOFT)
+		column.add_child(who)
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 6)
+	column.add_child(buttons)
+
+	if moment.has_place:
+		var look := Button.new()
+		look.text = "Verlo"
+		look.custom_minimum_size = Vector2(80, 26)
+		look.pressed.connect(func() -> void: _look_at_world(moment.where))
+		buttons.add_child(look)
+
+	for option: Dictionary in moment.options:
+		var pick := Button.new()
+		pick.text = String(option["label"])
+		pick.tooltip_text = String(option.get("hint", ""))
+		pick.custom_minimum_size = Vector2(0, 26)
+		pick.pressed.connect(func() -> void:
+			var act: Callable = option["on_pick"]
+			act.call()
+			_show_next_moment())
+		buttons.add_child(pick)
+
+	if moment.options.is_empty():
+		var seen := Button.new()
+		seen.text = "Seguir"
+		seen.custom_minimum_size = Vector2(80, 26)
+		seen.pressed.connect(func() -> void: _show_next_moment())
+		buttons.add_child(seen)
+
+	return margin
+
+
+## Una persona en dos líneas: quién es, no cuántos años de trabajo aporta.
+func _person_card_line(person: Inhabitant) -> String:
+	var parts: Array[String] = ["%d años" % person.age_years,
+		Profession.job_name(person.job as Profession.Job).to_lower()]
+	var best := _best_trait(person)
+	if not best.is_empty():
+		parts.append(best)
+	if person.hurt_days > 0:
+		parts.append("tocado %d días" % person.hurt_days)
+	return "%s · %s" % [person.given_name, " · ".join(parts)]
+
+
+## Nombres de las cualidades, para escribirlas en una ficha corta.
+const STAT_WORDS := {
+	Inhabitant.Stat.FUERZA: "fuerte",
+	Inhabitant.Stat.RESISTENCIA: "resistente",
+	Inhabitant.Stat.AGUDEZA: "espabilado",
+}
+
+
+## En qué destaca esta persona, dicho en una palabra. Vacío si en nada.
+##
+## Una sola, y sólo si de verdad destaca: una ficha que enumera las tres
+## cualidades de todo el mundo no distingue a nadie de nadie, que es justo lo
+## contrario de lo que se busca al ponerle cara a quien va a arriesgarse.
+func _best_trait(person: Inhabitant) -> String:
+	var best := ""
+	var best_value := 0.55
+	for stat: int in STAT_WORDS:
+		var value := person.stat_in(stat as Inhabitant.Stat)
+		if value > best_value:
+			best_value = value
+			best = String(STAT_WORDS[stat])
+	return best
+
+
+func _moment_tint(moment: Moment) -> Color:
+	match moment.kind:
+		Moment.Kind.PERCANCE: return UISkin.ALARM
+		Moment.Kind.BERREA: return UISkin.OCHRE
+		_: return UISkin.GREEN
+
+
+
+
+## Cuánto se lleva acumulado de cara al invierno, siempre a la vista.
+##
+## La tensión central de la época —SLICE_PALEOLITICO §3: el otoño decide si se
+## sobrevive al invierno— vivía repartida entre el almacén y la cabeza del
+## jugador. Un número dentro de un panel de gestión no da urgencia: hay que ir a
+## mirarlo, y se mira cuando ya se ha decidido. Esto va debajo del reloj, no se
+## Cómo está la banda, en la barra de arriba.
+##
+## El hambre y el cansancio medios son las dos cifras que deciden si hay que
+## mover gente HOY, y estaban escondidas una por una en quince fichas: para
+## saber si la banda aguantaba había que abrirlas todas y sumar de cabeza.
+##
+## Van con el reloj y el invierno porque son la misma pregunta —¿aguantamos?—
+## y se leen juntas: hambre alta con la despensa llena es un problema de
+## reparto, y hambre alta con la despensa vacía es otro muy distinto.
+func _build_band_gauge(strip: HBoxContainer) -> void:
+	_band_label = Label.new()
+	_band_label.add_theme_font_size_override("font_size", 11)
+	_band_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_band_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(_band_label)
+
+	# El hambre y el cansancio, como BARRAS. Un porcentaje escrito hay que
+	# leerlo y compararlo con el de hace un rato; una barra que sube o baja se
+	# ve sin leer, que es lo que se pide de algo que esta en pantalla todo el
+	# rato mientras se mira otra cosa.
+	_hunger_bar = _strip_gauge(strip, "Hambre")
+	_tired_bar = _strip_gauge(strip, "Cansancio")
+
+
+## Una barra con su rotulo, para la tira de arriba.
+func _strip_gauge(strip: HBoxContainer, caption: String) -> ProgressBar:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 1)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(box)
+
+	var label := Label.new()
+	label.text = caption
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", UISkin.INK_FAINT)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(label)
+
+	var meter := ProgressBar.new()
+	meter.min_value = 0.0
+	meter.max_value = 100.0
+	meter.custom_minimum_size = Vector2(150, 12)
+	meter.show_percentage = true
+	meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(meter)
+	return meter
+
+
+## Repinta el estado de la banda. Va con el reloj, no por fotograma.
+func _update_band_gauge() -> void:
+	if _band_label == null or sim == null or sim.people.is_empty():
+		return
+	var hunger := 0.0
+	var tired := 0.0
+	var hurt := 0
+	for person: Inhabitant in sim.people:
+		hunger += person.hunger
+		tired += person.fatigue
+		if person.hurt_days > 0:
+			hurt += 1
+	var mouths := float(sim.people.size())
+	hunger /= mouths
+	tired /= mouths
+	_band_label.text = "%d personas%s" % [sim.people.size(),
+		"  ·  %d tocados" % hurt if hurt > 0 else ""]
+	if _hunger_bar != null:
+		_hunger_bar.value = hunger
+		_paint_gauge(_hunger_bar, hunger)
+	if _tired_bar != null:
+		_tired_bar.value = tired
+		_paint_gauge(_tired_bar, tired)
+
+
+## El color de una barra segun lo alta que este: la barra dice CUANTO y el
+## color dice si hay que hacer algo.
+func _paint_gauge(meter: ProgressBar, value: float) -> void:
+	var tint := UISkin.GREEN
+	if value > 75.0:
+		tint = UISkin.ALARM
+	elif value > 50.0:
+		tint = UISkin.OCHRE
+	var box := StyleBoxFlat.new()
+	box.bg_color = tint
+	box.corner_radius_top_left = 2
+	box.corner_radius_top_right = 2
+	box.corner_radius_bottom_left = 2
+	box.corner_radius_bottom_right = 2
+	meter.add_theme_stylebox_override("fill", box)
+
+## puede cerrar, y en otoño se pone en ocre.
+func _build_winter_gauge(strip: HBoxContainer) -> void:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 1)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(row)
+
+	_winter_label = Label.new()
+	_winter_label.add_theme_font_size_override("font_size", 11)
+	_winter_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_winter_label)
+
+	_winter_bar = ProgressBar.new()
+	_winter_bar.custom_minimum_size = Vector2(220, 12)
+	_winter_bar.max_value = 1.0
+	_winter_bar.show_percentage = false
+	_winter_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_winter_bar)
+
+
+## Repinta el medidor del invierno. Se llama con el reloj, no por fotograma.
+func _update_winter_gauge() -> void:
+	if _winter_label == null or sim == null:
+		return
+	var stock: Dictionary = sim.winter_stock()
+	var share := float(stock["share"])
+	_winter_bar.value = minf(share, 1.0)
+
+	var season := GameState.season
+	var head := "De cara al invierno"
+	if season == Subsistence.Season.OTONO:
+		head = "BERREA · de cara al invierno"
+	elif season == Subsistence.Season.INVIERNO:
+		head = "Invierno · reserva"
+	_winter_label.text = "%s   %d de %d raciones  (%d %%)" % [
+		head, int(stock["have"]), int(stock["needed"]), int(share * 100.0)]
+
+	# Tres colores y no un degradado: lo que hace falta saber de un vistazo es
+	# si se llega, si va justo o si no se llega.
+	var tint := UISkin.INK_SOFT
+	if share < 0.45:
+		tint = UISkin.ALARM
+	elif share < 0.9:
+		tint = UISkin.OCHRE
+	_winter_label.add_theme_color_override("font_color", tint)
 
 
 ## Pausa y velocidades, debajo de la fecha.
@@ -212,10 +566,10 @@ func _build_clock() -> void:
 ## banda, así que acelerar descuadraba las dos cosas. Aquí son cuatro estados
 ## discretos y se ve cuál está puesto, que es lo que hace falta: nadie quiere
 ## afinar una velocidad, quiere pausar o correr.
-func _build_speed_buttons(column: VBoxContainer) -> void:
+func _build_speed_buttons(strip: HBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 3)
-	column.add_child(row)
+	strip.add_child(row)
 
 	_speed_buttons.clear()
 	for entry: Array in [
@@ -269,6 +623,15 @@ func _paint_speed_buttons() -> void:
 ## pisar el color del tema en CADA fotograma obliga al Label a repintarse
 ## siempre, y esto corre sesenta veces por segundo para un dato que cambia
 ## una vez por minuto de juego.
+## El estado de la banda en la barra de arriba: hambre y cansancio medios.
+var _band_label: Label
+
+## Las barras de hambre y cansancio de la tira de arriba.
+var _hunger_bar: ProgressBar
+var _tired_bar: ProgressBar
+
+var _winter_label: Label
+var _winter_bar: ProgressBar
 var _clock_minute: int = -1
 var _clock_night: bool = false
 var _clock_speed: float = 1.0
@@ -287,11 +650,14 @@ func _update_clock() -> void:
 	var stamp := hour * 60 + minute
 	if stamp != _clock_minute:
 		_clock_minute = stamp
-		_clock.text = "%02d:%02d  ·  día %d  ·  %s, %s, año %d  ·  %s" % [
+		_clock.text = "%02d:%02d  ·  día %d  ·  %s, %s, año %d  ·  %s%s" % [
 			hour, minute, sim.day,
 			Subsistence.month_name(GameState.season, sim.season_day).capitalize(),
 			Subsistence.season_name(GameState.season), GameState.year,
-			sim.weather.name_text().to_lower()]
+			sim.weather.name_text().to_lower(), _hearth_note()]
+
+		_update_winter_gauge()
+		_update_band_gauge()
 
 	# De noche el color baja: se ve de un vistazo si la banda está trabajando
 	# o durmiendo sin tener que leer la hora
@@ -317,6 +683,22 @@ func _update_clock() -> void:
 				UISkin.OCHRE if pending > 0 else UISkin.INK)
 
 
+## Lo que se dice del hogar en la barra de arriba.
+##
+## Sólo cuando algo va mal. Un aviso permanente de que el fuego está encendido
+## es ruido —lo normal es que lo esté— y a los dos minutos deja de leerse; lo
+## que hace falta es que se note el día que se apaga, sin tener que abrir la
+## crónica para enterarse.
+func _hearth_note() -> String:
+	if sim == null:
+		return ""
+	if not sim.camp_built.get(CampProjects.Kind.HOGAR, false):
+		return "  ·  sin hogar"
+	if not sim.hearth_lit:
+		return "  ·  EL HOGAR ESTÁ APAGADO"
+	return ""
+
+
 # ---------------------------------------------------------------- barra ---
 
 func _build_taskbar() -> void:
@@ -335,9 +717,10 @@ func _build_taskbar() -> void:
 
 	for entry: Array in [
 		["almacen", "Almacén"], ["trabajos", "Trabajos"], ["banda", "Banda"],
-		["tecnicas", "Técnicas"], ["territorio", "Territorio"],
+		["tecnicas", "Técnicas"], ["oficios", "Oficios"],
+		["territorio", "Territorio"],
 		["cronica", "Crónica"], ["parajes", "Parajes"], ["rastros", "Rastros"],
-		["controles", "Controles"],
+		["entidades", "Entidades"], ["controles", "Controles"],
 	]:
 		var button := Button.new()
 		button.text = entry[1]
@@ -415,7 +798,12 @@ func _window(id: String, title: String,
 		if id == "paraje":
 			if markers:
 				markers.hide_extent()
-			shown_paraje = null)
+			shown_paraje = null
+		# Y cerrar la ficha de una entidad apaga su rastro, por lo mismo: el
+		# rastro lo pinta la ficha y sin ficha no tiene quién lo mantenga al
+		# día, así que se quedaría congelado en el mapa para siempre.
+		elif id == "entidad":
+			_forget_entity())
 	header.add_child(close)
 
 	column.add_child(HSeparator.new())
@@ -504,6 +892,9 @@ func close_topmost() -> bool:
 	# que apagarla igual.
 	if markers and _windows.get("paraje", null) == best:
 		markers.hide_extent()
+	# Y la ficha de una entidad apaga su rastro, igual que al pulsar la cruz.
+	if _windows.get("entidad", null) == best:
+		_forget_entity()
 	return true
 
 
@@ -525,10 +916,12 @@ func _toggle(id: String) -> void:
 		"trabajos": show_jobs()
 		"banda": show_band()
 		"tecnicas": show_tech()
+		"oficios": show_professions()
 		"territorio": show_territory()
 		"cronica": show_lore()
 		"parajes": show_places()
 		"rastros": show_trails()
+		"entidades": show_census()
 
 
 func _clear(body: VBoxContainer) -> void:
@@ -583,7 +976,9 @@ func _heading(body: VBoxContainer, text: String) -> void:
 	body.add_child(label)
 
 
-func _text(body: VBoxContainer, content: String, dim: bool = false) -> void:
+## Devuelve el rótulo para que quien lo pinte pueda ATARLO y que se actualice
+## sin reconstruir la ventana. Ver `_bind`.
+func _text(body: VBoxContainer, content: String, dim: bool = false) -> Label:
 	var label := Label.new()
 	label.text = content
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -599,9 +994,12 @@ func _text(body: VBoxContainer, content: String, dim: bool = false) -> void:
 	label.add_theme_color_override("font_color",
 		UISkin.INK_SOFT if dim else UISkin.INK)
 	body.add_child(label)
+	return label
 
 
-func _bar(body: VBoxContainer, caption: String, value: float) -> void:
+## Devuelve la barra para que quien la pinte pueda ATARLA y que se mueva sola.
+## Ver `_bind`.
+func _bar(body: VBoxContainer, caption: String, value: float) -> ProgressBar:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	body.add_child(row)
@@ -619,6 +1017,7 @@ func _bar(body: VBoxContainer, caption: String, value: float) -> void:
 	meter.custom_minimum_size = Vector2(190, 16)
 	meter.show_percentage = true
 	row.add_child(meter)
+	return meter
 
 
 # ------------------------------------------------------------ controles ---
@@ -944,6 +1343,19 @@ func _show_toolkit(body: VBoxContainer) -> void:
 	# su sitio, y lo conserva.
 	kinds.sort_custom(func(a: int, b: int) -> bool: return a < b)
 
+	# Lo que todavía no se sabe hacer NO SE LISTA. El almacén enseñaba arpones,
+	# nasas y anzuelos desde la primera jornada, con su fila, su meta y sus
+	# botones, como si fueran cosas que se pueden pedir: y no se podían, porque
+	# la técnica no estaba. Aparecen al descubrirlas, que es la mitad del premio
+	# de descubrirlas. Lo que ya se tiene se lista igual, se sepa o no: si está
+	# en el abrigo, está.
+	var known_kinds: Array[int] = []
+	for kind: int in kinds:
+		if sim.knows_tool(kind as Tool.Kind) \
+			or sim.toolkit.count(kind as Tool.Kind) > 0:
+			known_kinds.append(kind)
+	kinds = known_kinds
+
 	_ledger_header(body)
 	var index := 0
 	for kind: int in kinds:
@@ -996,7 +1408,12 @@ func _ledger_header(body: VBoxContainer) -> void:
 	# GASTA es lo que la banda consume al mes y no lo decide el jugador; META
 	# es cuanto quiere tener guardado y lo decide el. Estaban vinculados —los
 	# dos salian de lo mismo— y por eso subir uno subia el otro.
-	var texts := ["", "HAY", "GASTA", "PRODUCE", "META"]
+	#
+	# Las dos del medio van EN EL MISMO PERIODO y se dice en la cabecera. GASTA
+	# iba por mes y PRODUCE por dia: leidas juntas -que es para lo que estan una
+	# al lado de otra- la banda parecia arruinarse siempre, por un factor de
+	# treinta. Ver `SettlementSim.production_of`.
+	var texts := ["", "HAY", "GASTA/MES", "PRODUCE/MES", "META"]
 	for i in range(5):
 		var cell := Label.new()
 		cell.text = texts[i]
@@ -1489,17 +1906,17 @@ func _recipe_text(kind: Tool.Kind) -> String:
 	return ", ".join(parts)
 
 
-## Lo que entra al día, dicho para que se lea.
+## Lo que entra en el periodo de consumo, dicho para que se lea.
 ##
-## Con un decimal por debajo de diez: la mitad de los materiales entran a
-## medio y a cuarto por jornada, y redondeando a entero la columna entera
-## salía a cero y parecía que la banda no producía nada.
-func _makes_text(per_day: float) -> String:
-	if per_day <= 0.005:
+## Con un decimal por debajo de diez: aun por mes hay materiales que entran a
+## medio y a cuarto, y redondeando a entero esas filas salian a cero y parecia
+## que la banda no producia nada de ellas.
+func _makes_text(per_period: float) -> String:
+	if per_period <= 0.005:
 		return "—"
-	if per_day < 10.0:
-		return "%.1f" % per_day
-	return "%.0f" % per_day
+	if per_period < 10.0:
+		return "%.1f" % per_period
+	return "%.0f" % per_period
 
 
 ## Cuántas raciones da una unidad de esto. Lo que no se come va en unidades
@@ -1873,36 +2290,78 @@ func show_peak(peak: Dictionary) -> void:
 	_bar(body, "Dureza", hardness)
 	_text(body, _peak_hardness_text(hardness), true)
 
-	# Quién de la banda se atreve, dicho antes de pulsar nada: el botón que
-	# falla sin avisar no informa, castiga.
-	_heading(body, "QUIÉN PUEDE")
-	var climber := sim.climber_for(peak)
+	# Quién de la banda se atreve, con nombre y cara y no como una cifra.
+	#
+	# Antes esto era una línea —«el mejor la ve al 62 %»— y un botón que mandaba
+	# a quien la máquina eligiera. Perder «al mejor» en un percance no duele:
+	# perder a Jara, de cuarenta y un años, que es la que sabe curtir, sí. Y el
+	# botón que falla sin avisar no informa, castiga: por eso los que no se
+	# atreven salen igual, apagados y diciendo por qué.
+	_heading(body, "QUIÉN SUBE")
 	if Ascent.needs_gear(hardness):
 		_text(body, "Nadie: esto no es cuestión de pericia. Pide equipo que "
 			+ "todavía no se sabe hacer.", true)
-	elif climber == null:
-		_text(body, "Nadie de la banda tiene la pericia que pide.", true)
 	else:
-		var task := Profession.task_id(Profession.Job.EXPLORACION,
-			Profession.Speciality.ASCENSION)
-		_text(body, "%s, con %d%% de ascensión, es quien mejor la ve."
-			% [climber.given_name, int(climber.skill_in(task) * 100.0)], true)
-
-	_heading(body, "QUÉ SE HACE")
-	var attempt := Button.new()
-	attempt.text = "Intentar cima"
-	attempt.custom_minimum_size = Vector2(140, 26)
-	attempt.pressed.connect(func() -> void:
-		var problem := sim.order_ascent(peak)
-		_peak_notice = problem if not problem.is_empty() else ""
-		_peak_ordered = problem.is_empty()
-		show_peak(peak))
-	body.add_child(attempt)
+		var daring := sim.climbers_for(peak)
+		if daring.is_empty():
+			_text(body, "Nadie de la banda tiene la pericia que pide.", true)
+		for person: Inhabitant in daring:
+			_climber_row(body, person, peak)
+		_shy_climbers(body, peak, daring)
 
 	if _peak_ordered and _peak_notice.is_empty():
 		_notice(body, "Orden dada: alguien sale a por ella.", UISkin.OCHRE)
 	elif not _peak_notice.is_empty():
 		_notice(body, _peak_notice, UISkin.ALARM)
+
+
+## Una fila por candidato: quién es, qué se le da bien y el botón de mandarlo.
+func _climber_row(body: VBoxContainer, person: Inhabitant,
+		peak: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	body.add_child(row)
+
+	var send := Button.new()
+	send.text = "Que suba"
+	send.custom_minimum_size = Vector2(92, 24)
+	send.add_theme_font_size_override("font_size", 11)
+	send.pressed.connect(func() -> void:
+		var problem := sim.order_ascent(peak, person)
+		_peak_notice = problem
+		_peak_ordered = problem.is_empty()
+		show_peak(peak))
+	row.add_child(send)
+
+	var task := Profession.task_id(Profession.Job.EXPLORACION,
+		Profession.Speciality.ASCENSION)
+	var label := Label.new()
+	label.text = "%s · %d%% de ascensión" % [
+		_person_card_line(person), int(person.skill_in(task) * 100.0)]
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", UISkin.INK)
+	row.add_child(label)
+
+
+## Y los que NO se atreven, dichos también.
+##
+## Un panel que sólo enseña a los que valen deja al jugador sin saber si le
+## faltan manos o le falta pericia, que son dos problemas con dos remedios muy
+## distintos.
+func _shy_climbers(body: VBoxContainer, peak: Dictionary,
+		daring: Array[Inhabitant]) -> void:
+	var task := Profession.task_id(Profession.Job.EXPLORACION,
+		Profession.Speciality.ASCENSION)
+	var shy: Array[String] = []
+	for person: Inhabitant in sim.people:
+		if daring.has(person) or not Profession.can_do(
+				Profession.Job.EXPLORACION, person):
+			continue
+		shy.append("%s (%d%%)" % [person.given_name,
+			int(person.skill_in(task) * 100.0)])
+	if shy.is_empty():
+		return
+	_text(body, "No se atreven: " + ", ".join(shy), true)
 
 
 ## En palabras, que es como se decide de verdad si se manda a alguien.
@@ -3131,6 +3590,32 @@ func _speciality_picker(body: VBoxContainer, job: Profession.Job) -> void:
 				Profession.speciality_name(speciality as Profession.Speciality).to_lower()])
 		if not parts.is_empty():
 			_text(body, "   hoy: " + ", ".join(parts), true)
+
+	_who_goes(body, job)
+
+
+## Quiénes van, por su nombre, en los oficios que salen del abrigo.
+##
+## «Asignar 2 a expedición» es una cifra, y una cifra no se pierde. Lo que se
+## pierde en un percance es Jara, de cuarenta y un años. El dato estaba desde
+## siempre en `Inhabitant`; lo que faltaba era enseñarlo donde se decide. Sólo
+## en exploración y caza: son los dos oficios de los que se puede no volver.
+func _who_goes(body: VBoxContainer, job: Profession.Job) -> void:
+	if job != Profession.Job.EXPLORACION and job != Profession.Job.CAZA:
+		return
+	var going: Array[Inhabitant] = []
+	for person: Inhabitant in sim.people:
+		if person.job == job:
+			going.append(person)
+	if going.is_empty():
+		_text(body, "   no sale nadie", true)
+		return
+	for person: Inhabitant in going:
+		var line := "   %s — %s" % [
+			Profession.speciality_name(
+				person.current_speciality as Profession.Speciality).to_lower(),
+			_person_card_line(person)]
+		_text(body, line, person.hurt_days <= 0)
 func show_band() -> void:
 	var body := _window("banda", "La banda")
 	_clear(body)
@@ -3201,6 +3686,104 @@ func _band_person_row(body: VBoxContainer, person: Inhabitant) -> void:
 
 # -------------------------------------------------------------- técnicas --
 
+## El árbol de oficios: qué sabe hacer la banda y en qué se puede repartir.
+##
+## Va aparte de «Trabajos» y no es lo mismo. Aquélla es la mesa de mando —cuánta
+## gente en qué, con sus prioridades— y ésta es el mapa: qué oficios hay, en qué
+## especialidades se abre cada uno, qué hace falta para cada especialidad y
+## quién la ejerce hoy. Sin esto, la única forma de saber que la pesca de altura
+## existe y pide embarcación era leer el código.
+func show_professions() -> void:
+	var body := _window("oficios", "Oficios")
+	_clear(body)
+	if sim == null:
+		_text(body, "Sin asentamiento.")
+		return
+
+	_text(body, "Un oficio es cómo se organiza la banda; una especialidad es "
+		+ "qué parte del monte se toca. Casi nadie vive de un solo trabajo: en "
+		+ "una banda de quince, la especialización es la recompensa de haber "
+		+ "crecido.", true)
+
+	var counts := _job_headcount()
+	for job: int in Profession.Job.values():
+		if job == Profession.Job.OCIOSO:
+			continue
+		body.add_child(HSeparator.new())
+		var here: int = counts.get(job, 0)
+		_heading(body, "%s · %d %s" % [
+			Profession.job_name(job as Profession.Job).to_upper(), here,
+			"persona" if here == 1 else "personas"])
+		_text(body, Profession.job_desc(job as Profession.Job), true)
+		_text(body, "   pueden: %s" % _who_can(job as Profession.Job), true)
+
+		var specialities := Profession.specialities_of(job as Profession.Job)
+		if specialities.is_empty():
+			_text(body, "   no se reparte en especialidades", true)
+			continue
+		for speciality: int in specialities:
+			_speciality_line(body, job as Profession.Job,
+				speciality as Profession.Speciality)
+
+
+## Cuánta gente hay hoy en cada oficio.
+func _job_headcount() -> Dictionary:
+	var counts: Dictionary = {}
+	for person: Inhabitant in sim.people:
+		counts[person.job] = int(counts.get(person.job, 0)) + 1
+	return counts
+
+
+## Quién puede con un oficio, dicho en una línea.
+func _who_can(job: Profession.Job) -> String:
+	var entry: Dictionary = Profession.CATALOGUE[job]
+	var parts: Array[String] = ["de %d a %d años" % [
+		int(entry["min_age"]), int(entry["max_age"])]]
+	if bool(entry["mobile"]):
+		parts.append("adultos, y no quien esté criando")
+	var able := 0
+	for person: Inhabitant in sim.people:
+		if Profession.can_do(job, person):
+			able += 1
+	parts.append("%d de los %d de la banda" % [able, sim.people.size()])
+	return " · ".join(parts)
+
+
+## Una especialidad: qué es, qué le hace falta y quién la ejerce hoy.
+func _speciality_line(body: VBoxContainer, job: Profession.Job,
+		speciality: Profession.Speciality) -> void:
+	var doing: Array[String] = []
+	for person: Inhabitant in sim.people:
+		if person.job == job and person.current_speciality == speciality:
+			doing.append(person.given_name)
+
+	var blocked := _speciality_blocked(speciality)
+	var mark := "·" if not blocked.is_empty() else ("◆" if not doing.is_empty() else "▸")
+	_text(body, "   %s %s" % [mark,
+		Profession.speciality_name(speciality)], blocked.is_empty() == false)
+	_text(body, "       %s" % Profession.speciality_desc(speciality), true)
+	if not blocked.is_empty():
+		_text(body, "       falta: %s" % blocked, true)
+	elif not doing.is_empty():
+		_text(body, "       hoy: %s" % ", ".join(doing), true)
+
+
+## Qué le falta a una especialidad para poder ejercerse, o "" si nada.
+##
+## Es la pregunta que no tenía respuesta en pantalla: por qué la pesca de altura
+## sale en la tabla y no se puede elegir, o por qué el ahumado no hace nada.
+func _speciality_blocked(speciality: Profession.Speciality) -> String:
+	match speciality:
+		Profession.Speciality.ALTURA:
+			return "embarcación, y todavía no se sabe hacer"
+
+	return ""
+
+
+## Qué oficio se está mirando en la ventana de técnicas.
+var _tech_tab: int = Profession.Job.MANUFACTURA
+
+
 func show_tech() -> void:
 	var body := _window("tecnicas", "Técnicas")
 	_clear(body)
@@ -3209,49 +3792,107 @@ func show_tech() -> void:
 		return
 
 	_text(body, "En el Paleolítico nadie investiga: se aprende haciendo. Cada "
-		+ "técnica sale de acumular jornadas en la actividad que la produce.", true)
-	body.add_child(HSeparator.new())
+		+ "técnica sale de acumular jornadas en la actividad que la produce, y "
+		+ "de gastar material aprendiendo: se estropean nódulos aprendiendo a "
+		+ "tallarlos. Pon el ratón encima de una para ver qué pide.", true)
+	_text(body, "verde: dominada    ocre: las jornadas están, falta el "
+		+ "material    gris: falta lo de antes", true)
 
+	# Una pestaña por oficio, y dentro el árbol dibujado. Ver [TechGraph].
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 4)
+	body.add_child(tabs)
+	for job: int in TechTree.BRANCHES:
+		var button := Button.new()
+		button.text = Profession.job_name(job as Profession.Job)
+		button.add_theme_font_size_override("font_size", 11)
+		button.custom_minimum_size = Vector2(0, 24)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if job == _tech_tab:
+			button.add_theme_stylebox_override("normal",
+				UISkin.button_box("pressed"))
+			button.add_theme_color_override("font_color", UISkin.OCHRE)
+		button.pressed.connect(func() -> void:
+			_tech_tab = job
+			show_tech())
+		tabs.add_child(button)
+
+	if not TechTree.BRANCHES.has(_tech_tab):
+		_tech_tab = int(TechTree.BRANCHES.keys()[0])
+
+	# El árbol es más ancho que la ventana: se desplaza en horizontal, que es
+	# como se mira un árbol de progreso.
+	var scroll := ScrollContainer.new()
+	# Alto justo: la rama del hogar tiene UNA técnica y con un alto fijo la
+	# ventana dejaba doscientos píxeles de negro debajo.
+	scroll.custom_minimum_size = Vector2(0, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	body.add_child(scroll)
+	var graph := TechGraph.new()
+	scroll.add_child(graph)
+	graph.build(tech, _tech_tab)
+	# Más doce de la barra de desplazamiento horizontal, que si no tapa la
+	# fila de abajo.
+	scroll.custom_minimum_size = Vector2(0, graph.custom_minimum_size.y + 12.0)
+
+	body.add_child(HSeparator.new())
+	_heading(body, "EL HOGAR")
+	_text(body, "No son técnicas que se aprendan: son obras que se levantan en "
+		+ "el abrigo, con su material y sus jornadas.", true)
+	for kind: int in CampProjects.all():
+		_camp_row(body, kind as CampProjects.Kind)
+
+	body.add_child(HSeparator.new())
 	_fishing_block(body)
 	_hunting_block(body)
 
-	_heading(body, "DOMINADAS")
-	var any := false
-	for t: int in TechTree.CATALOGUE.keys():
-		if tech.has(t as TechTree.Tech):
-			any = true
-			_text(body, "◆ " + TechTree.tech_name(t as TechTree.Tech))
-	if not any:
-		_text(body, "Ninguna todavía.", true)
 
-	body.add_child(HSeparator.new())
-	_heading(body, "AL ALCANCE")
-	for t: int in TechTree.CATALOGUE.keys():
-		var candidate := t as TechTree.Tech
-		if not tech.is_available(candidate):
-			continue
-		var entry: Dictionary = TechTree.CATALOGUE[candidate]
-		var activity: int = entry["practice"]
-		_bar(body, TechTree.tech_name(candidate), tech.progress(candidate))
-		if activity >= 0:
-			_text(body, "   %s · %d de %d jornadas" % [
-				Subsistence.activity_name(activity as Subsistence.Activity),
-				int(tech.days_in(activity as Subsistence.Activity)),
-				int(entry["days"])], true)
-		_text(body, "   " + TechTree.tech_desc(candidate), true)
+## Una obra del abrigo: qué es, qué cuesta y en qué punto está.
+func _camp_row(body: VBoxContainer, kind: CampProjects.Kind) -> void:
+	if sim == null:
+		return
+	var name_text := CampProjects.project_name(kind)
+	if sim.camp_built.get(kind, false):
+		var state := ""
+		if kind == CampProjects.Kind.HOGAR:
+			state = " · encendido" if sim.hearth_lit else " · APAGADO"
+		_text(body, "◆ %s%s" % [name_text, state])
+		return
 
-	body.add_child(HSeparator.new())
-	_heading(body, "FUERA DE ALCANCE")
-	for t: int in TechTree.CATALOGUE.keys():
-		var far := t as TechTree.Tech
-		if tech.has(far) or tech.is_available(far):
-			continue
-		var missing: Array[String] = []
-		for need: int in (TechTree.CATALOGUE[far]["needs"] as Array):
-			if not tech.has(need as TechTree.Tech):
-				missing.append(TechTree.tech_name(need as TechTree.Tech))
-		_text(body, "· %s — falta: %s" % [
-			TechTree.tech_name(far), ", ".join(missing)], true)
+	var needs := CampProjects.requires(kind)
+	if needs >= 0 and not sim.camp_built.get(needs, false):
+		_text(body, "· %s — falta %s" % [name_text,
+			CampProjects.project_name(needs as CampProjects.Kind).to_lower()], true)
+		return
+
+	if sim.camp_queue == kind:
+		_bar(body, "▸ %s" % name_text,
+			sim.camp_progress / maxf(CampProjects.labor_days(kind), 0.01))
+	else:
+		_text(body, "▸ %s" % name_text)
+	_text(body, "     %s" % CampProjects.project_desc(kind), true)
+	_text(body, "     %s · %.0f jornadas de hogar" % [
+		_materials_line(CampProjects.materials(kind)),
+		CampProjects.labor_days(kind)], true)
+
+
+## Lo que pide una receta, con lo que hay al lado.
+##
+## «6 piedra, 3 leña» no dice si se puede hacer o no; «6 piedra (hay 14), 3 leña
+## (hay 1)» sí, y de un vistazo. Es la mitad de lo que había que adivinar.
+func _materials_line(recipe: Dictionary) -> String:
+	if sim == null or recipe.is_empty():
+		return "sin material"
+	var parts: Array[String] = []
+	for material: int in recipe:
+		var wanted := float(recipe[material])
+		var have := sim.store.amount(material as Materia.Kind)
+		var mark := "" if have >= wanted else "  ¡faltan %.0f!" % (wanted - have)
+		parts.append("%.0f %s (hay %.0f)%s" % [wanted,
+			Materia.material_name(material as Materia.Kind).to_lower(),
+			have, mark])
+	return " · ".join(parts)
 
 
 ## Cómo caza la banda hoy: las tres ramas, lo que rinde cada una y la línea
@@ -3714,6 +4355,7 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 ## haciendo ahora mismo, qué lleva encima y por qué puede o no puede hacer
 ## ciertos trabajos.
 func show_person(person: Inhabitant) -> void:
+	shown_person = person
 	var body := _window("persona", "Persona")
 	_clear(body)
 
@@ -3725,12 +4367,31 @@ func show_person(person: Inhabitant) -> void:
 
 	body.add_child(HSeparator.new())
 	_heading(body, "AHORA MISMO")
-	_text(body, "Está %s." % person.state_name())
-	if person.has_task:
+	var state_line := _text(body, "Está %s." % person.state_name())
+	_bind(state_line, func() -> void:
+		state_line.text = "Está %s." % person.state_name())
+	# El oficio, no `has_task`: esa bandera dice si hay TAJO EN EL MAPA, y el
+	# hogar no lo tiene -no se cuida el fuego en un paraje-. Preguntandole a
+	# ella, quien estaba levantando el hogar salia como «sin tarea asignada»
+	# mientras lo levantaba. Sin oficio es `Job.OCIOSO`, y esos si lo estan.
+	if person.job != Profession.Job.OCIOSO:
 		_text(body, "Oficio: %s" % Profession.job_name(person.job as Profession.Job), true)
 	else:
 		_text(body, "Sin tarea asignada.", true)
 
+	# El hogar y el taller trabajan EN el abrigo, asi que su «trabajando» no
+	# lleva paraje ni camino detras y se queda en una palabra sola. Se dice
+	# que estan levantando o tallando, que es lo que se ve por la ventana.
+	if sim and sim._works_at_camp(person) \
+		and person.state == Inhabitant.State.TRABAJANDO:
+		var piece: Dictionary = sim.crafting_now(person)
+		if not piece.is_empty():
+			_text(body, "Talla %s: %.0f %% de la pieza." % [
+				Tool.kind_name(int(piece["tool"]) as Tool.Kind).to_lower(),
+				float(piece["progress"]) * 100.0], true)
+		elif sim.camp_queue >= 0:
+			_text(body, "Levantando %s." % CampProjects.project_name(
+				sim.camp_queue as CampProjects.Kind).to_lower(), true)
 	if person.state == Inhabitant.State.BUSCANDO:
 		_text(body, "Lleva %.1f horas batiendo el paraje. No conoce este sitio, "
 			% person.search_hours
@@ -3738,8 +4399,15 @@ func show_person(person: Inhabitant) -> void:
 
 	body.add_child(HSeparator.new())
 	_heading(body, "CÓMO ESTÁ")
-	_bar(body, "Hambre", person.hunger / 100.0)
-	_bar(body, "Fatiga", person.fatigue / 100.0)
+	# Atadas, no pintadas y ya: el hambre y el cansancio cambian a cada rato y
+	# el repintado de la ventana se salta cuando el ratón está dentro —que es
+	# justo cuando se está leyendo la ficha—. Ver `_bind`.
+	var hunger_bar := _bar(body, "Hambre", person.hunger / 100.0)
+	_bind(hunger_bar, func() -> void:
+		hunger_bar.value = clampf(person.hunger / 100.0, 0.0, 1.0))
+	var tired_bar := _bar(body, "Fatiga", person.fatigue / 100.0)
+	_bind(tired_bar, func() -> void:
+		tired_bar.value = clampf(person.fatigue / 100.0, 0.0, 1.0))
 	if person.hurt_days > 0:
 		_notice(body, "Tocado: le quedan %d jornadas andando mal."
 			% person.hurt_days, UISkin.ALARM)
@@ -3798,17 +4466,48 @@ func show_person(person: Inhabitant) -> void:
 				float(person.load[kind]), Materia.unit_name(k),
 				Materia.material_name(k).to_lower()], true)
 
-	var recipientes: Array[String] = []
+	# Y el resto del petate, que no va en `load` y por eso no se veía: el
+	# apero con el que trabaja, los recipientes y el agua. «Qué lleva» decía
+	# sólo lo recogido, o sea que un cazador con azagaya, cesto y odre lleno
+	# salía con «las manos vacías» de vuelta a casa.
+	body.add_child(HSeparator.new())
+	_heading(body, "EL PETATE")
+	# Quien sale al monte lleva apero; el del abrigo y el que no tiene oficio,
+	# no. `_tool_for` cae en la azagaya cuando la actividad no esta definida, y
+	# eso ponia una azagaya en las manos de un crio sin tarea.
+	var sale: bool = sim != null and not sim._works_at_camp(person) \
+		and person.job != Profession.Job.OCIOSO
+	if sim and sale:
+		var apero: int = sim._tool_for(person)
+		# El cesto y el odre se cuentan abajo como lo que son. Salen aquí
+		# también porque son el «apero» de recolectar y de traer agua, y
+		# repetirlos hacía que la ficha dijera «Cesto» y dos líneas más abajo
+		# «sin recipientes».
+		if apero == Tool.Kind.CESTO or apero == Tool.Kind.ODRE:
+			apero = -1
+		if apero >= 0 and sim.toolkit.count(apero as Tool.Kind) > 0:
+			_text(body, "  · %s, para %s" % [
+				Tool.kind_name(apero as Tool.Kind),
+				Subsistence.activity_name(person.activity).to_lower()], true)
+		elif apero >= 0:
+			_text(body, "  · sin %s: el taller no ha hecho ninguna todavía" %
+				Tool.kind_name(apero as Tool.Kind).to_lower(), true)
 	if person.has_basket:
-		recipientes.append("cesto")
+		_text(body, "  · cesto", true)
 	if person.has_waterskin:
-		recipientes.append("odre")
-	if recipientes.is_empty():
-		_text(body, "Sin recipientes: va a brazadas, y eso limita la jornada "
-			+ "más que el tiempo.", true)
-	else:
-		_text(body, "Lleva: " + ", ".join(recipientes), true)
-
+		_text(body, "  · odre, con agua para %.1f h" % person.water_left, true)
+	# El agua sólo se cuenta a quien sale: en el abrigo se bebe del río, que es
+	# por lo que el abrigo está donde está.
+	if sale and not person.has_waterskin:
+		if sim and sim._at_shelter(person):
+			_text(body, "  · sin odre: mientras no se aleje del abrigo da igual, "
+				+ "pero no puede pasar la jornada fuera", true)
+		else:
+			_text(body, "  · sin odre: le quedan %.1f h antes de tener que ir a "
+				% person.water_left + "beber", true)
+	if sale and not person.has_basket:
+		_text(body, "Sin cesto va a brazadas, y eso limita la jornada más que "
+			+ "el tiempo.", true)
 	body.add_child(HSeparator.new())
 	_heading(body, "QUÉ PUEDE HACER")
 	for job_key: int in Profession.CATALOGUE.keys():
@@ -3913,3 +4612,330 @@ func _actions_for(feature_class: Site.Feature) -> Array:
 				"Comprobar si mana todo el año."]]
 		_:
 			return [["explorar", "Reconocer el sitio", "Acercarse a ver qué hay."]]
+
+
+# ---------------------------------------------------------------- censo ---
+
+## Qué silueta se está recorriendo, cuál de sus fichas, y qué pieza era.
+##
+## Los tres, y no sólo el número. Las listas se vuelven a pedir en cada
+## repintado y una silueta puede perder piezas por el camino —los props se
+## descargan cuando la cámara se aleja de su bloque—, así que con el número
+## solo la ficha «7/40» acababa enseñando otra cosa sin avisar. Con la
+## identidad se sigue enseñando LA MISMA pieza mientras exista.
+var _census_group := ""
+var _census_index := 0
+var _census_id := ""
+
+## Desde dónde se midió «de más cerca a más lejos» al abrir esta silueta.
+##
+## Se congela al entrar y no se vuelve a tomar, y ahí está la gracia. La ficha
+## lleva la cámara a la pieza, así que midiendo desde la cámara VIVA la pieza
+## que estás mirando vuelve a ser la número uno en cada repintado y la lista se
+## reordena bajo los pies: pulsabas ▶ ocho veces y podías volver al mismo sitio
+## sin haber salido del uno. Congelado, las doscientas fichas son siempre las
+## doscientas más cercanas a donde estabas cuando entraste, y ▶ se aleja.
+var _census_anchor := Vector3.ZERO
+
+## Anchos de la lista de siluetas, medidos contra los 520 útiles de la ventana.
+const CENSUS_NAME := 210
+const CENSUS_COUNT := 64
+
+
+## La lista de lo que hay pintado en el mundo, por familias.
+##
+## Es la puerta de la herramienta: primero se ve QUÉ hay y cuánto, y sólo
+## después se entra a mirar una pieza concreta. Al revés —una ficha suelta a la
+## que se llega pinchando en el mundo— ya existe y no resuelve lo mismo: para
+## pinchar algo en el mundo hay que haberlo encontrado antes, y encontrarlo es
+## justamente lo que aquí se está intentando.
+func show_census() -> void:
+	var body := _window("entidades", "Entidades pintadas")
+	_clear(body)
+	if census == null:
+		_text(body, "No hay mundo montado todavía.")
+		return
+
+	var groups := census.groups()
+	if groups.is_empty():
+		_text(body, "No hay nada pintado.")
+		return
+
+	_text(body, "Lo que el juego tiene puesto en el mundo ahora mismo. Pincha "
+		+ "una silueta para recorrer sus piezas una a una: la cámara va a cada "
+		+ "una y, si es algo que anda, se le pinta el rastro por donde ha "
+		+ "pasado.", true)
+
+	var family := ""
+	for group: Dictionary in groups:
+		if String(group["family"]) != family:
+			family = String(group["family"])
+			_heading(body, family.to_upper())
+		_census_row(body, group)
+
+
+## Una silueta: cómo se llama, cuántas hay y qué significa ese cuántas.
+##
+## La coletilla de la derecha no es decoración. «Sembrados en todo el valle» y
+## «pintados alrededor de la cámara» son dos cifras que no se pueden comparar,
+## y sin decirlo la lista invita a compararlas: doscientas yescas parecerían
+## poquísimo al lado de ciento ochenta mil pinos cuando son cosas distintas.
+func _census_row(body: VBoxContainer, group: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	body.add_child(row)
+
+	var key := String(group["key"])
+	var button := Button.new()
+	button.text = String(group["label"])
+	button.custom_minimum_size = Vector2(CENSUS_NAME, 24)
+	button.add_theme_font_size_override("font_size", 12)
+	button.tooltip_text = "Recorrer las piezas de %s una a una" % group["label"]
+	if _census_group == key:
+		button.add_theme_stylebox_override("normal",
+			UISkin.button_box("pressed"))
+		button.add_theme_color_override("font_color", UISkin.OCHRE)
+	button.pressed.connect(func() -> void:
+		_census_id = ""
+		show_entity(key, 0))
+	row.add_child(button)
+
+	var count := Label.new()
+	count.text = "%d" % int(group["count"])
+	count.custom_minimum_size = Vector2(CENSUS_COUNT, 0)
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	count.add_theme_font_size_override("font_size", 13)
+	count.add_theme_color_override("font_color", UISkin.OCHRE)
+	row.add_child(count)
+
+	var note := Label.new()
+	note.text = String(group["note"])
+	note.add_theme_font_size_override("font_size", 10)
+	note.add_theme_color_override("font_color", UISkin.INK_FAINT)
+	row.add_child(note)
+
+
+## La ficha de una pieza concreta, con las flechas para pasar a la siguiente.
+##
+## `focus` distingue las dos formas de llegar aquí, que no quieren lo mismo.
+## Pulsando una flecha se quiere ir a ver la pieza, así que la cámara salta.
+## En el repintado automático NO: enganchar la vista a la entidad cada medio
+## segundo impide apartarse a mirar el alrededor, que es media herramienta —lo
+## que se suele querer saber de un uro es qué tiene alrededor, no el uro—.
+func show_entity(key: String, index: int, focus: bool = true) -> void:
+	var body := _window("entidad", "Ficha")
+	_clear(body)
+	if key != _census_group:
+		_census_group = key
+		_census_anchor = _looking_at()
+	if census == null:
+		_text(body, "No hay mundo montado todavía.")
+		return
+
+	var entries := census.entries(key, _census_anchor)
+	if entries.is_empty():
+		_census_id = ""
+		if trails:
+			trails.stop_following()
+		_text(body, "No queda ninguna a la vista.")
+		_text(body, "Los props y los árboles de malla se descargan cuando la "
+			+ "cámara se aleja de su bloque: acércate a donde deberían estar y "
+			+ "vuelve a entrar.", true)
+		_census_back(body)
+		return
+
+	# Por IDENTIDAD antes que por número: ver `_census_id`. Quien quiere
+	# cambiar de pieza —las flechas, la lista— lo dice borrando la identidad,
+	# y entonces manda el número.
+	var wanted := index
+	if not _census_id.is_empty():
+		for i in range(entries.size()):
+			if String(entries[i].get("id", "")) == _census_id:
+				wanted = i
+				break
+	_census_index = clampi(wanted, 0, entries.size() - 1)
+	var entry: Dictionary = entries[_census_index]
+	_census_id = String(entry.get("id", ""))
+
+	# El título de la ventana es el de la pieza, así que la barra de arriba ya
+	# dice a quién se está mirando sin gastar una línea del cuerpo.
+	_window("entidad", String(entry["title"]))
+
+	_census_nav(body, key, _census_index, entries.size())
+	_census_scope(body, key, entries.size())
+
+	for line: String in (entry["lines"] as Array[String]):
+		_text(body, line)
+
+	# La distancia se calcula AQUÍ y no en el censo, contra la cámara de ahora
+	# mismo y no contra el punto desde el que se ordenó la lista —ver
+	# `_census_anchor`—. Son dos cosas distintas en cuanto el jugador se mueve,
+	# y la que sirve para ir a ver algo es la de ahora.
+	var spot: Vector3 = entry["pos"]
+	var eye := _looking_at()
+	_text(body, "En (%.0f, %.0f), a %.0f m de altura, a %.0f m de la cámara."
+		% [spot.x, spot.z, spot.y,
+			Vector2(spot.x - eye.x, spot.z - eye.z).length()], true)
+
+	_census_trail(body, entry)
+
+	var go := Button.new()
+	go.text = "Llevar la cámara aquí"
+	go.pressed.connect(func() -> void:
+		_look_at_world(spot))
+	body.add_child(go)
+
+	if focus:
+		_look_at_world(spot)
+
+
+## Las flechas y el «3 / 14», que es lo que convierte la ficha en un recorrido.
+func _census_nav(body: VBoxContainer, key: String, shown: int,
+		total: int) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	body.add_child(row)
+
+	# Dan la vuelta al llegar al final. Una lista de piezas iguales no tiene
+	# principio ni final que signifiquen nada, y un botón que se apaga en el
+	# borde sólo obliga a desandar el camino.
+	var back := Button.new()
+	back.text = "◀"
+	back.custom_minimum_size = Vector2(34, 24)
+	back.disabled = total <= 1
+	back.pressed.connect(func() -> void:
+		_census_id = ""
+		show_entity(key, (shown - 1 + total) % total))
+	row.add_child(back)
+
+	var counter := Label.new()
+	counter.text = "%d / %d" % [shown + 1, total]
+	counter.custom_minimum_size = Vector2(84, 0)
+	counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	counter.add_theme_font_size_override("font_size", 14)
+	counter.add_theme_color_override("font_color", UISkin.OCHRE)
+	row.add_child(counter)
+
+	var next := Button.new()
+	next.text = "▶"
+	next.custom_minimum_size = Vector2(34, 24)
+	next.disabled = total <= 1
+	next.pressed.connect(func() -> void:
+		_census_id = ""
+		show_entity(key, (shown + 1) % total))
+	row.add_child(next)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
+
+	var list := Button.new()
+	list.text = "Ver la lista"
+	list.custom_minimum_size = Vector2(94, 24)
+	list.add_theme_font_size_override("font_size", 11)
+	list.pressed.connect(show_census)
+	row.add_child(list)
+
+
+## De cuántas de cuántas: el total de la silueta y qué parte se puede recorrer.
+##
+## Van los dos números porque casi nunca son el mismo. De un pinar se pueden
+## recorrer doscientos árboles de ciento ochenta mil, y enseñar sólo el «1/200»
+## haría creer que el valle tiene doscientos pinos, que es la lectura opuesta
+## a la verdadera.
+func _census_scope(body: VBoxContainer, key: String, shown: int) -> void:
+	var whole := shown
+	var note := ""
+	if census != null:
+		for group: Dictionary in census.groups():
+			if String(group["key"]) == key:
+				whole = int(group["count"])
+				note = String(group["note"])
+	if whole > shown:
+		_text(body, "Se pueden recorrer %d. Hay %d %s." % [shown, whole, note],
+			true)
+	else:
+		_text(body, "Hay %d, %s." % [whole, note], true)
+
+
+## El rastro: se enciende solo con la ficha, y se dice cuando no hay ninguno.
+##
+## Decirlo importa. Sin la línea, una yesca sin rastro y un uro cuyo rastro no
+## se está pintando por un fallo se ven exactamente igual —el mapa sin líneas—,
+## y son dos cosas muy distintas.
+func _census_trail(body: VBoxContainer, entry: Dictionary) -> void:
+	if trails == null:
+		return
+	var trail: Callable = entry.get("trail", Callable())
+	if not trail.is_valid():
+		trails.stop_following()
+		_text(body, "Esto no anda: no hay rastro que pintar.", true)
+		return
+
+	var tint: Color = entry.get("tint", Color.WHITE)
+	trails.follow(trail, tint, sim.terrain() if sim else null,
+		String(entry["title"]))
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	body.add_child(row)
+
+	# La pastilla del color de la línea, para emparejar la ficha con el rastro
+	# del mapa sin tener que contar rastros. Es lo mismo que hace la pestaña de
+	# Rastros con cada persona.
+	var chip := ColorRect.new()
+	chip.color = tint
+	chip.custom_minimum_size = Vector2(14, 14)
+	row.add_child(chip)
+
+	var caption := Label.new()
+	caption.text = "Su rastro está pintado en el terreno."
+	caption.add_theme_font_size_override("font_size", 12)
+	caption.add_theme_color_override("font_color", UISkin.INK_SOFT)
+	row.add_child(caption)
+
+
+func _census_back(body: VBoxContainer) -> void:
+	var list := Button.new()
+	list.text = "Ver la lista"
+	list.pressed.connect(show_census)
+	body.add_child(list)
+
+
+## Suelta la pieza que se estaba mirando y apaga su rastro.
+func _forget_entity() -> void:
+	_census_group = ""
+	_census_id = ""
+	_census_index = 0
+	if trails:
+		trails.stop_following()
+
+
+## Desde dónde se mide «cerca».
+##
+## Es el punto que MIRA la cámara, no dónde está la cámara. Con la vista alta
+## los dos quedan a cientos de metros uno del otro, y lo que el jugador tiene
+## delante es el primero: ordenar por el segundo pone las primeras fichas
+## detrás del hombro.
+func _looking_at() -> Vector3:
+	if camera != null:
+		return camera.target_position
+	if sim != null:
+		return sim.home_position
+	return Vector3.ZERO
+
+
+## Lleva la cámara a un punto, y se acerca sólo si estaba lejos.
+##
+## Sólo si estaba lejos porque el zoom es del jugador: si ya está mirando de
+## cerca, reencuadrarle en cada flecha le quita el encuadre que había elegido.
+## Y el tope de acercamiento es el de la cámara del juego —`min_distance`, ver
+## `OrbitalCamera.set_distance_limits`—, no un número puesto aquí: más cerca no
+## se puede ir, ni con este botón ni con la rueda.
+func _look_at_world(point: Vector3) -> void:
+	if camera == null:
+		return
+	camera.set_target(point)
+	var close_enough := camera.min_distance * 1.6
+	if camera.orbit_distance > close_enough:
+		camera.set_distance(close_enough)

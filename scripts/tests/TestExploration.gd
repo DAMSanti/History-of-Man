@@ -527,7 +527,6 @@ func test_quien_no_puede_volver_a_casa_duerme_igual() -> void:
 	# veinte y se pasaba las otras veinte despierto en mitad del monte.
 	var sim := _sim_on_fake()
 	sim.store = Storehouse.new()
-	sim._bodies.append(Node3D.new())
 	sim.time_scale = 1.0
 	sim.hour = 23.0
 
@@ -946,7 +945,6 @@ func test_no_sale_de_expedicion_si_esta_muy_cansado() -> void:
 	var sim := _sim_on_fake()
 	sim.store = Storehouse.new()
 	sim.store.add(Materia.Kind.CARNE_SECA, 50.0)
-	sim._bodies.append(Node3D.new())
 	sim.time_scale = 1.0
 	sim.hour = 8.0
 

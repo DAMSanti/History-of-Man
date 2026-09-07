@@ -16,12 +16,21 @@ extends SceneTree
 const SITE_ID := 56
 const ROUNDS := 3
 
-## nombre · warp · macro
+## nombre · warp · macro · hex
+##
+## El hex-tiling entra como tercera columna porque es de otra naturaleza que las
+## dos anteriores. `warp` y `macro` DISIMULAN la repetición -deshacen la
+## alineación y modulan el color- pero el patrón sigue estando ahí; el hex la
+## QUITA, porque cada parche de textura es un trozo distinto del original.
+## Interesa el precio de cada cosa por separado y el de las tres juntas.
 const CASES := [
-	["sin nada", 0.0, 0.0],
-	["solo desplazamiento", 2.6, 0.0],
-	["solo escala grande", 0.0, 0.85],
-	["las dos", 2.6, 0.85],
+	["sin nada", 0.0, 0.0, false],
+	["solo desplazamiento", 2.6, 0.0, false],
+	["solo escala grande", 0.0, 0.85, false],
+	["desplazamiento y escala", 2.6, 0.85, false],
+	["solo hex-tiling", 0.0, 0.0, true],
+	["hex y escala grande", 0.0, 0.85, true],
+	["todo", 2.6, 0.85, true],
 ]
 
 
@@ -69,6 +78,14 @@ func _init() -> void:
 	camera.look_at(home, Vector3.UP)
 	camera.make_current()
 
+	# A MEDIODÍA. La partida arranca a las seis y en pausa, y el día 80 el sol
+	# sale a las 6:02: sin esto las capturas salen en penumbra ámbar y la
+	# cuadrícula de la textura no se ve ni estando.
+	if "sim" in demo and demo.sim != null:
+		demo.sim.hour = 12.0
+		for i in range(6):
+			await process_frame
+
 	var vp := root.get_viewport_rid()
 	RenderingServer.viewport_set_measure_render_time(vp, true)
 
@@ -77,10 +94,16 @@ func _init() -> void:
 		for case: Array in CASES:
 			material.set_shader_parameter("warp_amount", case[1])
 			material.set_shader_parameter("macro_break", case[2])
+			material.set_shader_parameter("use_hex_tiling", case[3])
 			var gpu := await _sample(vp)
 			var label: String = case[0]
 			if not best.has(label) or gpu < best[label]:
 				best[label] = gpu
+			# Una captura de cada caso en la primera vuelta: el coste se lee en
+			# la tabla, pero si la cuadrícula se ve o no sólo se juzga mirando.
+			if round_index == 0:
+				var shot := root.get_texture().get_image()
+				shot.save_png("user://tesela_%d.png" % CASES.find(case))
 
 	print("")
 	print("=== ANTI-TESELADO (GPU de render, mínimo de %d vueltas) ===" % ROUNDS)
@@ -89,6 +112,8 @@ func _init() -> void:
 		var label: String = case[0]
 		print("%-22s %5.1f ms   %s" % [label, best[label],
 			"referencia" if label == "sin nada" else "%+.1f ms" % (best[label] - reference)])
+	print("capturas tesela_0..%d en %s" % [CASES.size() - 1,
+		ProjectSettings.globalize_path("user://")])
 	quit()
 
 

@@ -17,7 +17,12 @@ const INFO := {
 		"desc": "Fogata delimitada con piedras, como en Cueva Morín o El "
 			+ "Esquilleu. La comida cocinada rinde más: se digiere mejor y se "
 			+ "aprovecha más de lo que se come.",
-		"labor_days": 2.0,
+		# Una jornada, y ni una más. Delimitar una fogata con piedras es acarrear
+		# cantos del río y ponerlos en corro: es trabajo de una mañana larga,
+		# no una obra. Estaba en dos jornadas y con el rendimiento de la gente
+		# por medio salían tres o cuatro días de partida en los que la banda
+		# comía crudo por una fogata.
+		"labor_days": 1.0,
 		"materials": {Materia.Kind.PIEDRA: 6.0, Materia.Kind.LENA: 3.0},
 		"requires": -1,
 	},

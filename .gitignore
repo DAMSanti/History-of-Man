@@ -38,13 +38,14 @@ desktop.ini
 *.bak
 *.backup
 
-# Cachés de terreno: las regenera el propio juego al abrir un emplazamiento
-# -TerrainGenerator las escribe, y son 558 MB-. Lo que NO se regenera es el
-# MDT de origen, que va aparte.
-data/dem/**/*_mesh_r*.res
-data/dem/**/*_surround*.res
-# Teselas descargadas del servicio de mapas
-data/dem/tiles/
+# El relieve: no se versiona NADA de data/dem, y son 667 MB. Se reconstruye
+# entero por capas, cada una con su script:
+#  - las teselas Terrarium las baja `DEMImporter` de AWS Terrain Tiles, que no
+#    pide clave;
+#  - el MDT de la región sale de esas teselas, y el recorte de cada
+#    emplazamiento lo escribe `RegionMap` la primera vez que se abre;
+#  - las mallas cacheadas las escribe `TerrainGenerator`.
+data/dem/
 
 # Texturas PBR del terreno: las trae y las empaqueta
 # scripts/tools/TerrainTextureIngest.gd desde ambientCG (CC0). Son 34 MB que
@@ -58,3 +59,12 @@ models/props/
 # Modelos que se sueltan a mano para la ingesta (asta, concha...). Se
 # versiona el catalogo que los declara, no el binario.
 models/props/source/
+
+# La banda: el FBX de origen (CC0, Quaternius) y la textura de vertice
+# horneada por scripts/tools/BandaAtlas.gd. Se reconstruyen solos, asi que
+# se versiona el horneador y no 32 MB de animacion horneada.
+models/people/
+
+# La fauna: los FBX/GLB de origen (CC0, Quaternius/gobkit) y la textura de
+# vertice horneada por scripts/tools/FaunaAtlas.gd. Mismo motivo.
+models/animals/

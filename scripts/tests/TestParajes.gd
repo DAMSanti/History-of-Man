@@ -1114,3 +1114,78 @@ func test_hay_menos_cantizales_que_de_lo_demas() -> void:
 			Materia.Kind.ASTA]:
 		assert_true(int(tally.get(int(kind), 0)) > cuarcita,
 			"%s sale mas que la cuarcita" % Materia.material_name(kind))
+
+# --- cada cosa en su suelo -----------------------------------------------
+#
+# «No encontraremos corteza en un paraje en el agua». `fill_contents` recorria
+# las cinco actividades y metia lo que pasara el umbral de cada una sin mirar
+# el suelo de debajo. Medido en el sitio 56 con `scripts/tests/ParajeProbe.gd`:
+# los 41 parajes que caen en agua llevaban material de tierra -272 entradas de
+# corteza, bellota, resina y ocre EN EL RIO- y 103 de tierra llevaban pescado.
+# Despues: cero y cero.
+
+func test_en_el_agua_no_hay_corteza_ni_lena() -> void:
+	var hondo := Hydrography.FORD_IMPASSABLE
+	for kind: int in [Materia.Kind.CORTEZA, Materia.Kind.LENA,
+		Materia.Kind.BELLOTA, Materia.Kind.OCRE, Materia.Kind.RESINA]:
+		assert_false(Parajes.material_fits(kind as Materia.Kind, hondo),
+			"%s no sale del fondo de un rio" % Materia.material_name(
+				kind as Materia.Kind).to_lower())
+
+
+func test_en_seco_no_hay_pescado_ni_marisco() -> void:
+	for kind: int in [Materia.Kind.PESCADO, Materia.Kind.MARISCO,
+		Materia.Kind.CONCHA]:
+		assert_false(Parajes.material_fits(kind as Materia.Kind, 0.0),
+			"%s no sale de un canchal" % Materia.material_name(
+				kind as Materia.Kind).to_lower())
+
+
+func test_la_piedra_sale_de_los_dos_sitios() -> void:
+	# Peticion literal: un paraje de pescadores tiene pescado y CANTOS RODADOS.
+	# El hueso, la piel y la pluma igual: salen de un animal, que puede haber
+	# caido en cualquier parte.
+	for kind: int in [Materia.Kind.PIEDRA, Materia.Kind.HUESO,
+		Materia.Kind.PIEL, Materia.Kind.PLUMA]:
+		assert_true(Parajes.material_fits(kind as Materia.Kind, 0.0),
+			"en tierra si")
+		assert_true(Parajes.material_fits(kind as Materia.Kind,
+			Hydrography.FORD_IMPASSABLE), "y en el agua tambien")
+
+
+func test_la_orilla_somera_tampoco_da_plantas() -> void:
+	# Los dos umbrales no son el mismo: se vadea hasta 0,35 pero una planta se
+	# ahoga mucho antes. Con un umbral solo quedaban 113 entradas de corteza y
+	# resina en puntos de vadeo 0,32.
+	var somero := Parajes.EN_EL_AGUA - 0.03
+	assert_lt(somero, Hydrography.FORD_WADEABLE, "es agua que se vadea")
+	assert_false(Parajes.material_fits(Materia.Kind.CORTEZA, somero),
+		"pero sigue siendo agua, y ahi no hay arbol que descortezar")
+
+
+func test_el_pescador_quiere_agua_y_el_recolector_suelo() -> void:
+	assert_true(Parajes.activity_fits(Subsistence.Activity.PESCA, 0.5),
+		"la pesca es en el agua")
+	assert_false(Parajes.activity_fits(Subsistence.Activity.PESCA, 0.0),
+		"y no en un prado seco")
+	assert_true(Parajes.activity_fits(Subsistence.Activity.RECOLECCION, 0.0),
+		"la recoleccion es en tierra")
+	assert_false(Parajes.activity_fits(Subsistence.Activity.RECOLECCION, 0.5),
+		"y no en el cauce")
+
+
+func test_la_mancha_de_una_pesquera_ES_el_rio() -> void:
+	# Se rechazaba TODO lo que no se pudiera cruzar a pie, incluso para la
+	# pesca: la mancha salia con el cauce recortado por dentro, un agujero
+	# justo donde estan los peces.
+	var markers := ParajeMarkers.new()
+	var terrain := FakeTerrain.new()
+	var paraje := _paraje(10, 20, Materia.Kind.PESCADO,
+		Subsistence.Activity.PESCA)
+	var cauce := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
+	assert_true(markers._fits_terrain(paraje, cauce, terrain),
+		"el rio ES la pesquera")
+	var ladera := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z + 400.0)
+	assert_false(markers._fits_terrain(paraje, ladera, terrain),
+		"y la ladera de enfrente no")
+	markers.free()

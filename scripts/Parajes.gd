@@ -254,6 +254,13 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				# donde se hacen tres cosas, no tres parajes pisándose -«el
 				# pasto del recodo», «el raizal del recodo» y «el desmogadero
 				# del recodo» eran el mismo trozo de monte tres veces.
+				# Y en el agua no se bautizan avellanares. Se mira ANTES de buscarle
+				# sitio: si el suelo no da para esta actividad, no hay paraje que abrir
+				# ni al que sumarsela.
+				if terrain and not activity_fits(activity,
+					terrain.crossing_difficulty_at(centre)):
+					continue
+
 				var host := at_site(centre, same_patch)
 				if host != null:
 					host.add_activity(activity)
@@ -264,6 +271,10 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 
 				var kind := _kind_for(activity, centre, GameState.season)
 				var paraje := Paraje.create(x, z, activity, kind, centre, day)
+				# El suelo de debajo, que decide QUE puede haber aqui. Ver
+				# `Parajes.material_fits`.
+				if terrain:
+					paraje.ford = terrain.crossing_difficulty_at(centre)
 				# Se rellena lo que hay ahi al bautizarlo, aunque casi todo
 				# quede como incognita: la lista de lo que FALTA por saber es
 				# la que le da sentido a volver
@@ -540,7 +551,81 @@ const MATERIA_PRIMA_POOL := [
 ## Lo que ADEMÁS puede haber en un paraje de esta actividad, aparte de lo que
 ## le da nombre. No decide el nombre: solo dice qué más se encontraría
 ## pasando por ahí, para que un paraje no sea un único material repetido
-## siempre igual.
+## De donde sale cada material: del agua, de tierra firme, o de cualquiera.
+##
+## Es la regla que faltaba. `Paraje.fill_contents` recorre las CINCO
+## actividades y mete lo que pase el umbral de cada una sin mirar el suelo que
+## hay debajo, asi que una celda del cauce que llegue al umbral de recoleccion
+## sale con corteza, bellota, resina y ocre EN MEDIO DEL RIO. Medido en el
+## sitio 56 con `scripts/tests/ParajeProbe.gd`: los 41 parajes que caen en agua
+## llevaban material de tierra, 272 entradas en total, y 103 parajes de tierra
+## llevaban pescado o marisco.
+##
+## Lo que NO esta en ninguna de las dos listas vale en los dos sitios, y eso es
+## deliberado: la piedra de un vado son cantos rodados -que es justo lo que se
+## coge de un rio- y el hueso, la piel o la pluma salen de un animal, que puede
+## haber caido en cualquier parte.
+const SOLO_DE_AGUA := [Materia.Kind.PESCADO, Materia.Kind.MARISCO,
+	Materia.Kind.CONCHA, Materia.Kind.AGUA]
+
+const SOLO_DE_TIERRA := [Materia.Kind.CORTEZA, Materia.Kind.BELLOTA,
+	Materia.Kind.FRUTO_SECO, Materia.Kind.RAIZ, Materia.Kind.SETA,
+	Materia.Kind.MIEL, Materia.Kind.BAYA, Materia.Kind.LENA, Materia.Kind.YESCA,
+	Materia.Kind.RESINA, Materia.Kind.ASTA, Materia.Kind.OCRE,
+	Materia.Kind.FIBRA]
+
+## Los dos umbrales de mojado, que NO son el mismo y por eso hay dos.
+##
+## [EN_EL_AGUA] es donde se deja de cruzar sin mojarse -el mismo
+## [Hydrography.FORD_WADEABLE] con el que anda la banda-. Sirve para decidir si
+## se puede TRABAJAR ahi: se vadea, se marisquea con los pies dentro.
+##
+## [SUELO_SECO] es donde deja de haber agua, y va mucho mas abajo: es el mismo
+## 0,15 con el que `SettlementSim._water_beside` dice «aqui hay agua». Sirve
+## para decidir si CRECE algo: una planta no distingue entre agua que te llega
+## al tobillo y agua que te llega a la cintura, en las dos se ahoga.
+##
+## Con un umbral solo -el de vadear- quedaban 113 entradas de corteza, resina y
+## ocre en puntos de vadeo 0,32: agua somera, por debajo del limite de cruzar,
+## donde no hay arbol que descortezar.
+const EN_EL_AGUA := Hydrography.FORD_WADEABLE
+const SUELO_SECO := 0.15
+
+
+## Si este material puede salir de un punto con este vadeo.
+static func material_fits(kind: Materia.Kind, ford: float) -> bool:
+	if ford > SUELO_SECO and SOLO_DE_TIERRA.has(kind):
+		return false
+	# Y en seco no hay pescado. La orilla SI cuenta como agua para esto: se
+	# marisquea con los pies en el borde, no nadando.
+	if ford <= 0.05 and SOLO_DE_AGUA.has(kind):
+		return false
+	return true
+
+
+## Si esta actividad se puede hacer en un punto con este vadeo.
+##
+## Un paraje de pescadores cubre el rio y su orilla y no se estira ladera
+## arriba; uno de recoleccion no se mete en el cauce. Sin esto, un mismo punto
+## del rio se bautizaba como avellanar, como cotarro de caza y como pesquera a
+## la vez, y las tres cosas eran mentira menos una.
+static func activity_fits(activity: Subsistence.Activity, ford: float) -> bool:
+	match activity:
+		Subsistence.Activity.PESCA, Subsistence.Activity.MARISQUEO:
+			# Hace falta agua, aunque sea la del borde.
+			return ford > 0.05
+		Subsistence.Activity.RECOLECCION, Subsistence.Activity.CAZA:
+			# Y aqui hace falta suelo que pisar.
+			return ford <= EN_EL_AGUA
+		_:
+			# La materia prima sale de los dos: cantos del vado y cuarcita del
+			# canchal son la misma columna del almacen.
+			return true
+
+
+## Lo que ADEMAS se encuentra en un sitio de cada actividad, aparte de lo que
+## lo bautiza. El surtido teorico: es el mismo en cualquier partida, y lo que
+## de verdad sale en ESTE valle lo dice `materials_on_map`.
 const EXTRAS_BY_ACTIVITY := {
 	Subsistence.Activity.RECOLECCION: [Materia.Kind.SETA, Materia.Kind.MIEL,
 		Materia.Kind.CARACOL, Materia.Kind.HUEVO, Materia.Kind.CORTEZA,

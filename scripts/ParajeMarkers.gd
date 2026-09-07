@@ -21,6 +21,14 @@ const HEIGHT := 7.0
 
 ## A partir de esta distancia el rótulo estorba más que informa: se queda el
 ## icono solo.
+## Lo que mide un pixel de la chapa en metros del mundo.
+##
+## Va aqui y no escrito en cada sitio porque lo usan TRES: el tamaño de la
+## chapa y los dos radios de pinchado. Al subirlo de 0,07 a 0,14 -el doble,
+## por peticion- los radios de pinchado se quedaron con el numero viejo y el
+## alfiler pasaba a responder solo en su mitad de abajo.
+const PIN_PIXEL := 0.14
+
 const LABEL_RANGE := 900.0
 
 var _icons: Dictionary = {}
@@ -149,7 +157,7 @@ func pick_peak(peaks: Array, origin: Vector3, direction: Vector3) -> Dictionary:
 		var holder: Node3D = _peaks.get(_peak_key(peak["pos"] as Vector3))
 		if holder == null:
 			continue
-		var reach := float(PIN_HEIGHT) * 0.5 * 0.07 * holder.scale.y
+		var reach := float(PIN_HEIGHT) * 0.5 * PIN_PIXEL * holder.scale.y
 		var centre := holder.global_position + Vector3(0.0, reach, 0.0)
 		var along := (centre - origin).dot(direction)
 		if along <= 0.0:
@@ -219,8 +227,10 @@ func _build(paraje: Paraje, terrain: TerrainGenerator) -> Node3D:
 	# gigante. Con escala explicita el tamano es una cuenta que se puede
 	# leer y acotar.
 	#
-	# Subido de 0,04 a 0,07 -peticion explicita de marcador mas grande-.
-	chapa.pixel_size = 0.07
+	# De 0,04 a 0,07 y de ahi a 0,14: dos peticiones seguidas de marcador mas
+	# grande. Cabe hacerlo el doble justo porque ya no lleva el nombre escrito
+	# debajo -ver abajo-: la chapa sola ocupa la mitad que la chapa con rotulo.
+	chapa.pixel_size = PIN_PIXEL
 	# La PUNTA del alfiler es la que señala el sitio, así que la chapa cuelga
 	# hacia arriba desde el origen del soporte en vez de centrarse en él. Sin
 	# esto el alfiler queda clavado por la mitad y señala metros más arriba
@@ -233,20 +243,11 @@ func _build(paraje: Paraje, terrain: TerrainGenerator) -> Node3D:
 	chapa.shaded = false
 	holder.add_child(chapa)
 
-	var label := Label3D.new()
-	label.name = "Nombre"
-	label.text = paraje.name_text
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.font_size = 48
-	label.pixel_size = 0.014
-	label.no_depth_test = true
-	label.render_priority = 3
-	# Bajo la punta del alfiler, no bajo su cabeza
-	label.position = Vector3(0.0, -4.0, 0.0)
-	label.outline_size = 14
-	label.modulate = UISkin.INK
-	label.outline_modulate = Color(0.0, 0.0, 0.0, 0.75)
-	holder.add_child(label)
+	# SIN nombre escrito. El rotulo estaba debajo de cada alfiler y con quince
+	# parajes a la vista el valle era una sopa de letras: se leia el mapa a
+	# traves del texto en vez de a traves del terreno. El icono ya dice de que
+	# es el sitio, y el nombre esta a un raton de distancia -el aviso emergente
+	# y la ficha-, que es donde hace falta.
 
 	_paint(holder, paraje)
 	return holder
@@ -256,22 +257,18 @@ func _build(paraje: Paraje, terrain: TerrainGenerator) -> Node3D:
 ## apagado lo que está en barbecho, normal el resto.
 func _paint(holder: Node3D, paraje: Paraje) -> void:
 	var chapa := holder.get_node_or_null("Icono") as Sprite3D
-	var label := holder.get_node_or_null("Nombre") as Label3D
-	if chapa == null or label == null:
+	if chapa == null:
 		return
 
 	if paraje.chosen:
 		chapa.modulate = Color(1.0, 1.0, 1.0, 1.0)
 		chapa.scale = Vector3.ONE * 1.35
-		label.modulate = UISkin.OCHRE
 	elif paraje.resting:
 		chapa.modulate = Color(1.0, 1.0, 1.0, 0.35)
 		chapa.scale = Vector3.ONE
-		label.modulate = UISkin.INK_FAINT
 	else:
 		chapa.modulate = Color(1.0, 1.0, 1.0, 0.8)
 		chapa.scale = Vector3.ONE
-		label.modulate = UISkin.INK_SOFT
 
 
 ## Oculta el rótulo de los que quedan lejos: con veinte parajes a la vista, el
@@ -296,12 +293,9 @@ func _process(_delta: float) -> void:
 		if wanted != (_beacon != null) 				or (wanted and _beacon.position.distance_to(_sim.scout_order) > 1.0):
 			set_scout_beacon(_sim.scout_order, wanted, _terrain)
 
-	var eye := _camera.global_position
-	for id: String in _markers:
-		var holder: Node3D = _markers[id]
-		var label := holder.get_node_or_null("Nombre") as Label3D
-		if label:
-			label.visible = eye.distance_to(holder.global_position) < LABEL_RANGE
+	# Los alfileres ya no llevan rotulo fijo: lo enseña el que se señala, y uno
+	# solo. Ver `_show_hovered_name`.
+	_show_hovered_name()
 
 
 ## Tamaño de la chapa en píxeles. Alta y estrecha porque es un alfiler, no
@@ -440,7 +434,7 @@ func pick(parajes: Parajes, origin: Vector3, direction: Vector3) -> Paraje:
 		# encima, así que se pincha contra el centro del cuerpo y con un
 		# radio que crece con la chapa: si no, el clic solo entraba en la
 		# punta y el alfiler entero parecía no responder.
-		var reach := float(PIN_HEIGHT) * 0.5 * 0.07 * holder.scale.y
+		var reach := float(PIN_HEIGHT) * 0.5 * PIN_PIXEL * holder.scale.y
 		var centre := holder.global_position + Vector3(0.0, reach, 0.0)
 		var to_marker := centre - origin
 		var along := to_marker.dot(direction)
@@ -456,7 +450,58 @@ func pick(parajes: Parajes, origin: Vector3, direction: Vector3) -> Paraje:
 	return best
 
 
-## La linea del camino que lleva alguien, dibujada sobre el terreno.
+## El nombre del paraje que el ratón está señalando, y sólo ése.
+##
+## Los rótulos estaban clavados bajo cada alfiler y con quince parajes a la
+## vista el valle era una sopa de letras: se leía el mapa a través del texto en
+## vez de a través del terreno. Quitarlos deja el mapa limpio, pero no puede
+## dejar el nombre a un clic de distancia y nada más —hay que poder recorrer el
+## valle con el ratón y saber qué es cada cosa sin abrir ventanas—.
+##
+## Uno solo y compartido: no son quince rótulos apagados, es un rótulo que se
+## muda al alfiler que toca.
+var _hover_label: Label3D
+var _hovered: String = ""
+
+
+func _show_hovered_name() -> void:
+	if _camera == null or _sim == null or _sim.parajes == null:
+		return
+	var mouse := _camera.get_viewport().get_mouse_position()
+	var found := pick(_sim.parajes, _camera.project_ray_origin(mouse),
+		_camera.project_ray_normal(mouse))
+	var id := found.id() if found != null else ""
+	if id == _hovered:
+		return
+	_hovered = id
+	if found == null:
+		if _hover_label != null:
+			_hover_label.visible = false
+		return
+	if _hover_label == null:
+		_hover_label = Label3D.new()
+		_hover_label.name = "NombreSenalado"
+		_hover_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_hover_label.font_size = 48
+		_hover_label.pixel_size = 0.02
+		_hover_label.no_depth_test = true
+		_hover_label.render_priority = 4
+		_hover_label.outline_size = 14
+		_hover_label.modulate = UISkin.INK
+		_hover_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.8)
+		add_child(_hover_label)
+	var holder: Node3D = _markers.get(id)
+	if holder == null:
+		_hover_label.visible = false
+		return
+	# Debajo de la punta, que es donde estaba el rótulo de antes.
+	_hover_label.global_position = holder.global_position + Vector3(0.0, -4.0, 0.0)
+	_hover_label.text = found.name_text
+	_hover_label.modulate = UISkin.OCHRE if found.chosen else UISkin.INK
+	_hover_label.visible = true
+
+
+## La linea del camino que lleva alguien, dibujada sobre el terreno.## La linea del camino que lleva alguien, dibujada sobre el terreno.
 ##
 ## Es lo que hace visible que la banda RODEA en vez de ir en recta: sin verla,
 ## el trabajo del trazado no existe para el jugador. Se levanta un poco del
@@ -611,7 +656,14 @@ func _footprint(paraje: Paraje, terrain: TerrainGenerator,
 	var reach := int(paraje.extent / FOOTPRINT_CELL) + 2
 	var side := reach * 2 + 1
 	var raw := _candidate_cells(paraje, field, reach, side, terrain)
-	var grown := _grow(raw, side)
+	# Ensanchar une los trozos sueltos... y se comia el terreno que no toca.
+	#
+	# `_grow` abre una celdilla en todas direcciones SIN volver a mirar el suelo,
+	# asi que el borde de una pesquera se subia a la ladera: medido, habia trozos
+	# secos de un paraje de pesca sin agua a menos de ciento treinta metros. Se
+	# vuelve a pasar el filtro despues de crecer: crecer sirve para saltar huecos
+	# de RECURSO, no para saltar el terreno.
+	var grown := _mask_terrain(_grow(raw, side), paraje, reach, side, terrain)
 	var body := _keep_centre_blob(grown, side, reach)
 	_fill_holes(body, side)
 
@@ -707,6 +759,21 @@ func _fits_terrain(paraje: Paraje, centre: Vector3, terrain: TerrainGenerator) -
 		return true
 
 	var ford := terrain.crossing_difficulty_at(centre)
+
+	# El agua es LO QUE ES EL SITIO para unos y una pared para otros.
+	#
+	# Un paraje de pesca ES el rio y su orilla: hay que dejarlo entrar, y hasta
+	# exigirlo. Se rechazaba todo lo que no se pudiera cruzar a pie, con lo que
+	# la mancha de un pescador salia con el cauce recortado por dentro -un
+	# agujero justo donde estan los peces- y se iba ladera arriba buscando suelo
+	# pisable, que es lo contrario de lo que es una pesquera.
+	if paraje.activity == Subsistence.Activity.PESCA \
+			or paraje.activity == Subsistence.Activity.MARISQUEO:
+		return ford > 0.05
+
+	# Para todo lo demas el rio es el BORDE del sitio, y sigue siendolo aunque
+	# el material salga del cauce: un avellanar no cruza el rio para seguir
+	# siendo el mismo avellanar, y una veta de cuarcita tampoco.
 	if not Hydrography.can_cross(ford, false, false):
 		return false
 
@@ -717,7 +784,23 @@ func _fits_terrain(paraje: Paraje, centre: Vector3, terrain: TerrainGenerator) -
 	return absf(slope) <= Traversal.CLIMB_LIMIT
 
 
-## Ensancha la mancha una celdilla en todas direcciones.
+## Vuelve a pasar el filtro de terreno sobre una mascara ya crecida.
+func _mask_terrain(mask: Array[bool], paraje: Paraje, reach: int, side: int,
+	terrain: TerrainGenerator) -> Array[bool]:
+	if terrain == null:
+		return mask
+	for dz in range(-reach, reach + 1):
+		for dx in range(-reach, reach + 1):
+			var index := (dz + reach) * side + (dx + reach)
+			if not mask[index]:
+				continue
+			var centre := paraje.position + Vector3(
+				float(dx) * FOOTPRINT_CELL, 0.0, float(dz) * FOOTPRINT_CELL)
+			mask[index] = _fits_terrain(paraje, centre, terrain)
+	return mask
+
+
+## Ensancha la mancha una celdilla en todas direcciones.## Ensancha la mancha una celdilla en todas direcciones.
 ##
 ## Es lo que ABSORBE las islas cercanas: dos trozos separados por un hueco de
 ## una o dos celdillas se tocan y pasan a ser el mismo sitio, que es lo que de

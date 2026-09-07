@@ -18,7 +18,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-TimeManager="*res://scripts/TimeManager.gd"
 
 [display]
 
