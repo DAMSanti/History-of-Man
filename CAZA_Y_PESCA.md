@@ -279,25 +279,30 @@ técnicas dadas y seis azagayas hechas.
 
 | | |
 |---|---|
-| Cacerías levantadas | 170 |
-| Cobradas | 46 (27 %) |
-| Piezas | 12 corzos, 12 caballos, 16 perdices, 3 ciervos, 3 uros |
-| Raciones por jornada-persona, caza mayor | 2,73 |
-| Raciones por jornada-persona, caza menor | 3,46 |
+| Cacerías levantadas | 85 |
+| Cobradas | 54 (64 %) |
+| Piezas | 19 caballos, 12 corzos, 16 perdices, 7 ciervos |
+| Raciones por jornada-persona, caza mayor | 7,33 |
+| Raciones por jornada-persona, caza menor | 5,35 |
 
 Y **por qué se acaba cada una**, que es lo que permitió afinarla sin adivinar:
 
 | | |
 |---|---|
-| Lance fallado | 232 |
-| Acecho: se enfrió el rastro | 109 |
-| Cobrada | 46 |
-| Acecho: se fue de vista | 12 |
-| Carrera: sin fuelle | 2 |
+| Lance fallado | 257 |
+| Cobrada | 54 |
+| Acecho: se enfrió el rastro | 21 |
+| Carrera: se fue de vista | 5 |
+| Acecho: se fue de vista | 4 |
+| Carrera: sin fuelle | 1 |
 
-Un 27 % de cacerías cobradas es mucho fallo, y es lo que tiene que ser: la
-frase estaba ya escrita en `Hunting.gd` mucho antes de esto —«cazar es
-fallar»— y ahora se cumple donde se ve en vez de dentro de una multiplicación.
+Doscientos cincuenta y siete lances fallados para cincuenta y cuatro piezas: se
+falla cuatro de cada cinco veces que se tira, que es lo que dice `Hunting.gd`
+desde mucho antes de esto —«cazar es fallar»— y ahora se cumple donde se ve en
+vez de dentro de una multiplicación. Lo que sí se cobra es la mayoría de las
+CACERÍAS, y también es lo suyo: una cuadrilla que ya tiene la pieza delante
+insiste, y la unidad de cuenta de una jornada de caza es la cacería, no el
+tiro.
 
 **La cifra que hay que seguir mirando:** un recolector saca entre quince y
 diecisiete raciones por jornada-persona en ese mismo sitio. La caza sigue por
@@ -307,12 +312,12 @@ encargo—. El equilibrio entre carne y avellana es una decisión de balanceo qu
 queda abierta; lo que se ha cerrado es que la caza sea una conducta y no una
 tabla.
 
-### 7.2 Tres fallos que sólo salieron jugando
+### 7.2 Cinco fallos que sólo salieron jugando
 
-Los tres se descubrieron con el sondeo en partida real, no con las pruebas, y
-los tres daban **cero piezas** con toda la máquina de fases funcionando y las
-pruebas en verde. Quedan escritos porque los tres son la misma clase de error
-—un número puesto a ojo en un sistema con reloj— y volverá a pasar.
+Ninguno se descubrió con las pruebas: los cinco aparecieron corriendo la
+partida de verdad, con toda la máquina de fases funcionando y las setecientas
+pruebas en verde. Quedan escritos porque comparten raíz —un número o una regla
+puestos a ojo dentro de un sistema con reloj y con terreno— y volverá a pasar.
 
 **1. El rastreo estaba dentro del acecho.** Hasta cumplir las horas de rastreo
 no se podía llegar a tiro por muy encima que se estuviera de la pieza. En una
@@ -338,10 +343,48 @@ segundo neta. Los últimos noventa metros no se cerraban nunca y el acecho morí
 por reloj. Con 0,55 gana terreno al doble de lo que la pieza deriva y sigue
 leyéndose medio paso más lento que quien vuelve a casa.
 
-Y una cuarta que no era de la caza: **la ronda de nasas se comía la jornada del
-pescador**. `_creel_round` se llama en cada tick, así que quien tenía una nasa
-sin cebo se pasaba el día cebándola. La pesca de orilla cayó de 7,68 raciones
-por jornada-persona a 3,22; con la ronda limitada a una al día vuelve a 7,74.
+**4. Los cazadores se metían en el río.** Éste no salió contando sino MIRANDO,
+que es la única forma en que podía salir: `CaceriaVistaProbe` fotografió a un
+cazador plantado en mitad del cauce, con su chapa encima, siguiendo a un ánade.
+
+La cacería va en línea recta detrás del animal —una persecución no rodea el
+canchal— y esa línea se salta la rejilla de navegación, que mide celdas de
+cuarenta metros y da por transitable un río más estrecho que eso. Andando por
+rutas de la rejilla da igual, porque se va de centro a centro y el trazado ya
+rodea; derecho, no.
+
+Ahora se tantea el suelo cada doce metros entre el cazador y su pieza: si hay
+cauce de por medio se le pide camino a la rejilla —una vez, no en cada tick— y
+la pieza que se echa al agua se da por perdida, que es lo que pasa. Y no se
+levanta cacería contra nada que esté en el agua: del ánade se encarga la red de
+aves en el bebedero.
+
+**Y arregló la caza entera de propina.** Los cazadores se pasaban la partida
+detrás de patos irrealizables:
+
+| | antes | después |
+|---|---|---|
+| Cacerías levantadas | 170 | 85 |
+| Cobradas | 46 (27 %) | 54 (64 %) |
+| «Se enfrió el rastro» | 109 | 21 |
+| Raciones por jornada-persona, caza mayor | 2,73 | 7,33 |
+
+La mitad de las cacerías eran ánades que nunca se iban a cobrar, y cada una se
+llevaba un rastreo entero.
+
+Y dos que no eran de la caza:
+
+**5. La ronda de nasas se comía la jornada del pescador.** `_creel_round` se
+llama en cada tick, así que quien tenía una nasa sin cebo se pasaba el día
+cebándola. La pesca de orilla cayó de 7,68 raciones por jornada-persona a 3,22;
+con la ronda limitada a una al día vuelve a 7,74.
+
+**6. Quien levantaba una nasa no la volvía a cebar.** También salió mirando: una
+nasa en la orilla con el rótulo «sin cebo» encima y cuarenta caracoles en el
+abrigo. Levantar y cebar eran dos visitas distintas, y con una nasa dando pieza
+todos los días el pescador iba siempre a ésa mientras las demás se quedaban sin
+cebo para siempre. Es una sola visita —se levanta el cesto, se saca el pez, se
+le echa cebo y se cala otra vez—, que además es lo que se hace.
 
 ### 7.3 El secadero salva lo que la caza trae
 
@@ -350,8 +393,14 @@ contra la misma sin ellos:
 
 | | sin secadero | con secadero |
 |---|---|---|
-| Raciones ahumadas en 120 jornadas | 0 | 128 |
-| Raciones perdidas por podredumbre | 833 | 175 |
+| Raciones ahumadas en 120 jornadas | 0 | 278 |
+| Raciones perdidas por podredumbre | 833 | 461 |
+
+Que sigan perdiéndose cuatrocientas sesenta y una con el secadero puesto no es
+un fallo del secadero: es que en esa partida **el hogar se apagó**, y sin brasas
+no se ahúma. Es exactamente lo que el sistema tiene que decir, y ahora lo dice
+—en el parte diario, con nombre y motivo— en vez de dejar que el jugador vea un
+montón que no crece.
 
 Ochocientas treinta y tres raciones tiradas en cuatro meses es lo que cuesta
 cazar bien y no tener dónde guardarlo, y hasta ahora eso pasaba **en silencio**.

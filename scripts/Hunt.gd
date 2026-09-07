@@ -190,6 +190,14 @@ var days_out: float = 0.0
 ## Con qué se le entró, para poder contarlo. -1 si a mano.
 var weapon: int = -1
 
+## Desde dónde se trazó el último camino a la pieza, cuando hubo que trazarlo.
+##
+## Sólo se usa cuando la línea recta no vale —hay agua de por medio— y sirve
+## para no pedirle un camino nuevo a la rejilla en cada tick: se vuelve a
+## trazar cuando la pieza se ha movido de verdad. Ver
+## `SettlementSim._follow_quarry`.
+var routed_to: Vector3 = Vector3.INF
+
 ## Si llegó a tiro sin que lo vieran. Decide el lance y además es la mitad de
 ## la historia que se cuenta luego junto al fuego.
 var unseen: bool = true

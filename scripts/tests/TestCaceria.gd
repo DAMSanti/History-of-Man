@@ -329,6 +329,40 @@ func test_el_peligro_se_corre_en_el_lance() -> void:
 	assert_true(herido, "tirarle cuatrocientas veces a un uro se paga alguna")
 
 
+func test_la_pieza_que_se_echa_al_agua_se_da_por_perdida() -> void:
+	# Salió mirando, no probando: un cazador plantado en mitad del río con la
+	# chapa encima, siguiendo a un ánade. La línea recta de la cacería se salta
+	# la rejilla —que mide celdas de cuarenta metros y da por transitable un río
+	# más estrecho que eso— y metía a la persona en el cauce.
+	#
+	# Sin terreno montado la comprobación de suelo dice que sí a todo, que es lo
+	# que corresponde: lo que se comprueba aquí es que la fase existe y que la
+	# cacería sabe acabarse por ese motivo.
+	var sim := _sim()
+	var person := _cazador(sim)
+	sim.wildlife.place_for_test("ciervo", Vector3(30.0, 0.0, 0.0))
+	var hunt := sim._open_hunt(person)
+	hunt.phase = Hunt.Phase.PERSECUCION
+	assert_true(sim._dry_footing(Vector3.ZERO),
+		"sin terreno, se puede pisar en cualquier parte")
+
+	# Y la línea recta se tantea de verdad: entre dos puntos se mira el suelo
+	# cada pocos metros, no sólo los extremos.
+	assert_lt(SettlementSim.TANTEO_DEL_PASO, 20.0,
+		"el tanteo tiene que ser más fino que el cauce más estrecho del valle")
+	assert_true(sim._straight_line_holds(Vector3.ZERO, Vector3(200.0, 0.0, 0.0)),
+		"sin terreno, la recta vale")
+
+
+func test_no_se_levanta_caceria_contra_lo_que_esta_en_el_agua() -> void:
+	# El ánade se caza con red en el bebedero, no metiéndose en el río detrás
+	# de él. Ver [Trap.Kind.RED_AVES].
+	assert_true(Trap.catches(Trap.Kind.RED_AVES).has("anade"),
+		"del ánade se encarga la red de aves")
+	assert_true(WildlifeHerds.WATERSIDE_SPECIES.has("anade"),
+		"y el ánade vive en el agua, que es de donde viene el problema")
+
+
 # --- el tiempo de la cacería sale de lo que ya estaba medido --------------
 
 func test_rastrear_cuesta_lo_que_dice_la_cifra_de_siempre() -> void:

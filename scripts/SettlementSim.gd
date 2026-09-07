@@ -8503,6 +8503,11 @@ func _pick_quarry(person: Inhabitant, species: Array) -> Dictionary:
 	var best_score := 0.0
 	for animal: Dictionary in candidates:
 		var one := String(animal["species"])
+		# Lo que está en el agua no se caza a pie. El ánade se caza con red en
+		# el bebedero -ver [Trap.Kind.RED_AVES]-, no metiéndose en el río
+		# detrás de él.
+		if not _dry_footing(animal["position"]):
+			continue
 		var distance: float = maxf(
 			person.position.distance_to(animal["position"]), 1.0)
 		# Las raciones mandan y la distancia sólo desempata: el exponente la
@@ -8633,7 +8638,7 @@ func _stalk(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 	# Se ANDA hasta tenerla cerca y se acecha desde ahí. Nadie cruza dos
 	# kilómetros agachado, y además a un tercio del paso no daba el día para
 	# llegar. Ver [Hunt.ACECHO_DESDE].
-	_walk_at(person, quarry,
+	_follow_quarry(person, hunt, quarry,
 		PASO_DE_ACECHO if distance < Hunt.ACECHO_DESDE else 1.0)
 	person.log_deed(person.current_task(), hunt.doing_text(), false)
 
@@ -8682,7 +8687,19 @@ func _stalk(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 func _chase(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 	hunt.chased += hours
 	var quarry := hunt.where()
-	_walk_at(person, quarry, 1.0)
+
+	# La pieza que se echa al agua se ha ido, y punto. Un ciervo cruza un río a
+	# nado y una banda sin piragua no; forzarlo era lo que metía al cazador
+	# dentro del cauce detrás de un ánade.
+	if not _dry_footing(quarry):
+		hunt.phase = Hunt.Phase.FALLIDA
+		_note_ending("carrera: se echó al agua")
+		person.log_deed(person.current_task(),
+			"se le fue al agua %s"
+				% Fauna.species_name(hunt.species).to_lower(), false)
+		return
+
+	_follow_quarry(person, hunt, quarry, 1.0)
 	person.log_deed(person.current_task(), hunt.doing_text(), false)
 
 	var distance := person.position.distance_to(quarry)
@@ -8870,16 +8887,70 @@ func _close_hunt(hunt: Hunt) -> void:
 	hunts.erase(hunt)
 
 
-## Andar hacia un punto sin pedir camino a la rejilla.
+## Si en este punto se puede plantar un pie de verdad.
 ##
-## Una persecución es en línea recta por definición: quien corre detrás de un
-## ciervo no rodea el canchal, va por donde va el ciervo. Y pedir ruta cada
-## tick a una pieza que se mueve sería trazar un camino nuevo sesenta veces por
-## segundo.
+## Mira el TERRENO y no la rejilla, al revés que [_can_step_into], y la
+## diferencia importa: la rejilla mide celdas de cuarenta metros y un río más
+## estrecho que eso le sale transitable. Andando por rutas de la rejilla da
+## igual —se va de centro a centro, y el trazado ya rodea— pero una cacería va
+## en línea recta detrás del animal, y en línea recta se cruza el cauce por
+## donde no hay vado.
 ##
-## La ruta de un solo hito es lo que evita que el bloque de movimiento vuelva a
-## pedir camino solo: con `route_step` por debajo del tamaño, `next_waypoint`
-## devuelve el hito y no entra en el replanteo.
+## Comprobado mirando, que es como salió: un cazador plantado en mitad del río
+## con su chapa encima, siguiendo a un ánade. Ver `CaceriaVistaProbe`.
+func _dry_footing(point: Vector3) -> bool:
+	if _terrain == null:
+		return true
+	return _terrain.crossing_difficulty_at(point) <= Hydrography.FORD_WADEABLE
+
+
+## Cada cuántos metros se comprueba el suelo entre el cazador y su pieza.
+##
+## Doce: menos que el ancho del cauce más estrecho que hay en el valle, que es
+## lo único que esto tiene que detectar.
+const TANTEO_DEL_PASO := 12.0
+
+## Cuánto tiene que moverse la pieza para volver a pedirle camino a la rejilla.
+const REPLANTEO_DE_CAZA := 30.0
+
+
+## Si de aquí a allá se puede ir derecho, sin meterse en el agua.
+func _straight_line_holds(from_point: Vector3, to_point: Vector3) -> bool:
+	var span := from_point.distance_to(to_point)
+	var steps := int(span / TANTEO_DEL_PASO)
+	for i in range(1, steps + 1):
+		var along := from_point.lerp(to_point, float(i) / float(steps + 1))
+		if not _dry_footing(along):
+			return false
+	return _dry_footing(to_point)
+
+
+## Ir hacia la pieza: derecho si se puede, y rodeando si hay agua de por medio.
+##
+## Derecho es lo normal y es lo que se quiere: quien corre detrás de un ciervo
+## no rodea el canchal, va por donde va el ciervo, y pedir ruta cada tick a algo
+## que se mueve sería trazar un camino nuevo sesenta veces por segundo. La ruta
+## de un solo hito es lo que evita además que el bloque de movimiento vuelva a
+## pedir camino por su cuenta.
+##
+## Pero cuando entre los dos hay cauce, la línea recta mete a la persona en el
+## agua —comprobado mirando—, así que ahí SÍ se le pide camino a la rejilla, y
+## se le pide una vez y no en cada tick: hasta que la pieza se mueva de verdad.
+func _follow_quarry(person: Inhabitant, hunt: Hunt, point: Vector3,
+		pace: float) -> void:
+	if _straight_line_holds(person.position, point):
+		hunt.routed_to = Vector3.INF
+		_walk_at(person, point, pace)
+		return
+
+	person.hunt_pace = pace
+	if hunt.routed_to == Vector3.INF \
+			or hunt.routed_to.distance_to(point) > REPLANTEO_DE_CAZA:
+		hunt.routed_to = point
+		_send_to(person, point)
+
+
+## Andar derecho hacia un punto, sin pedir camino a la rejilla.
 func _walk_at(person: Inhabitant, point: Vector3, pace: float) -> void:
 	person.target = point
 	person.route = PackedVector3Array([point])
@@ -9082,6 +9153,14 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 	if full != null:
 		var pieces := full.collect()
 		if pieces > 0:
+			# Y SE VUELVE A CEBAR ANTES DE SOLTARLA, que es lo que se hace: se
+			# levanta el cesto, se saca el pez, se le echa cebo nuevo y se cala
+			# otra vez. Separarlo en dos visitas parecía más ordenado y era
+			# falso, y además se veía: con una nasa dando pieza todos los días,
+			# el pescador iba siempre a ésa y las demás se quedaban sin cebo
+			# para siempre. Comprobado mirando, en la orilla, con el rótulo
+			# «sin cebo» encima y cuarenta caracoles en el abrigo.
+			_rebait(full)
 			var rations := float(pieces) * Nasa.RACIONES_POR_PIEZA
 			var units := rations / maxf(
 				Materia.nutrition(Materia.Kind.PESCADO), 0.001)
@@ -9099,16 +9178,12 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 	# 2. Reponer el cebo de la que lo haya perdido. Sin esto la línea entera
 	#    acaba cogiendo al cuarenta por ciento sin que nadie se entere.
 	var hungry := _nasa_to_rebait(person.position, ALCANCE_NASA)
-	if hungry != null:
-		var bait := Nasa.bait_at_hand(store)
-		if bait >= 0:
-			store.take(bait as Materia.Kind, Nasa.CEBO_POR_CALADA)
-			hungry.rebait(bait)
-			person.log_deed(person.current_task(),
-				"cebó la nasa con %s" % Materia.material_name(
-					bait as Materia.Kind).to_lower(), false)
-			person.creel_day = day
-			return _spend(hours, Nasa.JORNADA_DE_REVISAR)
+	if hungry != null and _rebait(hungry):
+		person.log_deed(person.current_task(),
+			"cebó la nasa con %s" % Materia.material_name(
+				hungry.bait_kind as Materia.Kind).to_lower(), false)
+		person.creel_day = day
+		return _spend(hours, Nasa.JORNADA_DE_REVISAR)
 
 	# 3. Y si no hay nada que atender, se alarga la línea.
 	if not can_set_nasas() or not _room_for_nasa(person.position):
@@ -9118,10 +9193,7 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 	if piece == null:
 		return hours
 	var placed := Nasa.create(person.position, day, piece, person.given_name)
-	var bait_now := Nasa.bait_at_hand(store)
-	if bait_now >= 0:
-		store.take(bait_now as Materia.Kind, Nasa.CEBO_POR_CALADA)
-		placed.rebait(bait_now)
+	_rebait(placed)
 	nasas.append(placed)
 	nasas_set_today.append(placed)
 	person.creel_day = day
@@ -9131,6 +9203,22 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 			% [person.given_name,
 				parajes.place_name(placed.position, home_position)], 1)
 	return _spend(hours, Nasa.JORNADA_DE_CALAR)
+
+
+## Le echa cebo del abrigo si hay y le hace falta. Devuelve si se cebó.
+##
+## En un solo sitio porque se ceba en tres momentos —al calarla, al levantarla
+## y al pasar a repasar la línea— y con tres copias del mismo bloque una de
+## ellas acabaría olvidándose de descontar el caracol.
+func _rebait(nasa: Nasa) -> bool:
+	if nasa.is_baited():
+		return false
+	var bait := Nasa.bait_at_hand(store)
+	if bait < 0:
+		return false
+	store.take(bait as Materia.Kind, Nasa.CEBO_POR_CALADA)
+	nasa.rebait(bait)
+	return true
 
 
 ## Lo que queda de un rato de jornada después de gastarle una fracción.
