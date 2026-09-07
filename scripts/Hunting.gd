@@ -69,9 +69,10 @@ const MEJORAS := {
 ## «malo para la caza mayor», es exactamente 1,4 raciones por pieza, y esa
 ## cifra ya ordena bien la lista sin inventarse ningún factor.
 static func rations_at(speciality: Profession.Speciality, position: Vector3,
-		season: Subsistence.Season, techs: TechTree) -> float:
+		season: Subsistence.Season, techs: TechTree,
+		toolkit: Toolkit = null) -> float:
 	var total := 0.0
-	var yields := yields_at(speciality, position, season, techs)
+	var yields := yields_at(speciality, position, season, techs, toolkit)
 	for kind: int in yields:
 		if Materia.is_food(kind as Materia.Kind):
 			total += float(yields[kind]) * Materia.nutrition(kind as Materia.Kind)
@@ -165,7 +166,8 @@ static func porte_of(speciality: Profession.Speciality) -> int:
 ## Si en ese punto no hay nada de su porte, la rama devuelve lo justo: algo
 ## se topa uno siempre, pero poco, y de lo más humilde que haya.
 static func yields_at(speciality: Profession.Speciality, position: Vector3,
-		season: Subsistence.Season, techs: TechTree) -> Dictionary:
+		season: Subsistence.Season, techs: TechTree,
+		toolkit: Toolkit = null) -> Dictionary:
 	var pieces := pieces_per_day(speciality, techs)
 	if pieces <= 0.0:
 		return {}
@@ -180,11 +182,24 @@ static func yields_at(speciality: Profession.Speciality, position: Vector3,
 	# NADA de lo suyo. Medido: 1,8 raciones de jornada perfecta contra las
 	# 14,2 de un recolector, o sea que cazar era el peor oficio de la banda
 	# por un detalle de clasificacion.
+	#
+	# Y ademas se caza lo que se PUEDE cazar. A un uro no se le entra con las
+	# manos vacias, asi que un cotarro de uros sin una azagaya en el abrigo no
+	# es un mal sitio de caza: es ningun sitio de caza. La puerta esta en
+	# [Fauna.huntable_with] y no aqui porque es una propiedad del animal -de lo
+	# que hace falta para matarlo-, no de quien sale a por el.
+	#
+	# Va como FILTRO y no como penalizacion a proposito: media pieza de uro sin
+	# azagaya no es media pieza, es una cuadrilla que vuelve corriendo. Y ver
+	# `SettlementSim._trapline`, que se lo salta: un foso coge un jabali sin que
+	# nadie le tenga que entrar, y esa es la razon de ser del foso.
 	var porte := porte_of(speciality)
 	var species: Array[String] = []
 	var best_porte := -1
 	for one: String in Fauna.species_at(position, season):
 		if Fauna.porte_of(one) > porte:
+			continue
+		if not Fauna.huntable_with(one, toolkit):
 			continue
 		species.append(one)
 		best_porte = maxi(best_porte, Fauna.porte_of(one))
@@ -210,6 +225,32 @@ static func yields_at(speciality: Profession.Speciality, position: Vector3,
 	return out
 
 
+## Lo que anda por este sitio y esta rama NO puede cobrar por falta de arma.
+##
+## Es la mitad que faltaba de la puerta: cerrarla sin decirlo deja al jugador
+## con una cuadrilla que vuelve de vacio de un cotarro lleno de ciervos y
+## ninguna forma de saber por que. Cada entrada trae la especie y que falta.
+static func out_of_reach(speciality: Profession.Speciality, position: Vector3,
+		season: Subsistence.Season, toolkit: Toolkit) -> Array[Dictionary]:
+	return Fauna.out_of_reach_at(position, season,
+		porte_of(speciality) as Fauna.Porte, toolkit)
+
+
+## Dicho para leerlo: «el ciervo pasa y no hay azagaya». "" si no falta nada.
+static func out_of_reach_text(speciality: Profession.Speciality,
+		position: Vector3, season: Subsistence.Season,
+		toolkit: Toolkit) -> String:
+	var blocked := out_of_reach(speciality, position, season, toolkit)
+	if blocked.is_empty():
+		return ""
+	var parts: Array[String] = []
+	for entry: Dictionary in blocked:
+		parts.append("%s (%s)" % [
+			Fauna.species_name(String(entry["species"])).to_lower(),
+			String(entry["missing"])])
+	return "se deja pasar: %s" % ", ".join(parts)
+
+
 ## El riesgo medio de una jornada de esta rama en este sitio: lo que puede
 ## costarle a quien la hace. Un uro no es un conejo.
 ##
@@ -220,11 +261,18 @@ static func yields_at(speciality: Profession.Speciality, position: Vector3,
 ## caza, el otro CUÁNTO CUESTA, y son preguntas distintas aunque compartan
 ## el mismo número de gente.
 static func risk_at(speciality: Profession.Speciality, position: Vector3,
-		season: Subsistence.Season, crew_size: int = 1) -> float:
+		season: Subsistence.Season, crew_size: int = 1,
+		toolkit: Toolkit = null) -> float:
+	# Lo que no se caza no cuesta. Sin azagaya no se le entra al uro, asi que
+	# tampoco se corre su riesgo: la cuadrilla lo ve pasar. Sin esto, una banda
+	# desarmada se llevaba las cornadas de una caza que no estaba haciendo.
 	var species: Array[String] = []
 	for one: String in Fauna.species_at(position, season):
-		if Fauna.porte_of(one) <= porte_of(speciality):
-			species.append(one)
+		if Fauna.porte_of(one) > porte_of(speciality):
+			continue
+		if not Fauna.huntable_with(one, toolkit):
+			continue
+		species.append(one)
 	if species.is_empty():
 		return 0.0
 	var total := 0.0

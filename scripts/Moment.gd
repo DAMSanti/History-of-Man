@@ -26,6 +26,7 @@ enum Kind {
 	CUMBRE,     ## Un pico coronado: media comarca de golpe
 	PERCANCE,   ## Algo ha salido mal ahí fuera
 	BERREA,     ## Empieza el otoño, y con él la caza que decide el invierno
+	RELATO,     ## Lo que se cuenta al volver, y que se puede dejar en la pared
 }
 
 var kind: Kind = Kind.HALLAZGO

@@ -362,6 +362,11 @@ func _find_waterholes() -> void:
 ## las manadas no se amontonen todas en el mismo prado.
 func _pick_grounds(count: int) -> Array[Vector3]:
 	var candidates: Array[Dictionary] = []
+	# Sin campo de recursos no hay querencias que elegir. Pasa en las pruebas,
+	# que montan la fauna a mano para poder cazarla sin levantar un valle
+	# entero; quien llama ya sabe qué hacer con una lista vacía.
+	if _field == null:
+		return []
 	for z in range(_field.height):
 		for x in range(_field.width):
 			var value := _field.abundance_cell(Subsistence.Activity.CAZA, x, z)
@@ -449,6 +454,23 @@ func _think(animal: Dictionary, config: Dictionary, delta: float) -> void:
 	animal["thirst"] = minf(100.0, float(animal["thirst"]) + delta * 0.9)
 	if animal["state"] != State.CAZANDO:
 		animal["hunger"] = minf(100.0, float(animal["hunger"]) + delta * 0.6)
+
+	# El susto que le ha dado una PERSONA. Va antes que todo lo demás y con
+	# reloj propio, y ninguna de las dos cosas es un capricho:
+	#
+	#  - antes, porque si no el bloque de abajo lo devuelve a VAGANDO en el
+	#    tick siguiente -«si no hay lobo cerca, deja de huir»- y la pieza que
+	#    acaba de arrancar delante del cazador se para en seco a pastar;
+	#  - con reloj, porque un animal levantado no se calma al perder de vista
+	#    a quien lo levantó: sigue corriendo un rato. Sin eso no hay
+	#    persecución que perseguir. Ver [Hunt].
+	var spooked := float(animal.get("spooked", 0.0)) - delta
+	if spooked > 0.0:
+		animal["spooked"] = spooked
+		animal["state"] = State.HUYENDO
+		return
+	if animal.has("spooked"):
+		animal["spooked"] = 0.0
 
 	if diet == "herbivoro":
 		var predator: Dictionary = _nearest_predator(animal)
@@ -645,7 +667,8 @@ func _catch(prey: Dictionary) -> void:
 		_rng.randf_range(-HOME_RANGE_M, HOME_RANGE_M) * 0.4, 0.0,
 		_rng.randf_range(-HOME_RANGE_M, HOME_RANGE_M) * 0.4)
 	var start := _clamped(anchor + offset)
-	start.y = _terrain.get_height_at(start)
+	if _terrain != null:
+		start.y = _terrain.get_height_at(start)
 	prey["position"] = start
 	prey["target"] = start
 	prey["hunger"] = 0.0
@@ -708,6 +731,109 @@ func positions() -> Array[Vector3]:
 ## segundo para no tocar nada sería trabajo tirado. Quien la reciba sólo mira.
 func animals() -> Array[Dictionary]:
 	return _animals
+
+
+# --- lo que la banda le pide a la fauna ----------------------------------
+#
+# Tres cosas, y las tres son de la caza de verdad: encontrar una pieza, darle
+# un susto y cobrarla. Ver [Hunt] y `SettlementSim._hunt_step`.
+
+## Cuánto dura el susto que da una persona, en segundos de juego.
+##
+## Corto: lo que tarda en dejar de verla y volver a bajar la cabeza. Si durara
+## mucho, un cazador levantaría el valle entero de paso hacia su tajo.
+const SUSTO_SEGUNDOS := 9.0
+
+## Cuánto se aleja de un tirón cuando la levantan.
+const SUSTO_M := 90.0
+
+
+## Pone un animal donde se le diga, sin dibujarlo.
+##
+## Es para las PRUEBAS, y se dice: montar el valle entero —terreno, campo de
+## recursos, mallas horneadas— para comprobar que un cazador acecha bien es
+## desproporcionado, y sin poder comprobarlo la cacería sería el único sistema
+## grande del juego sin una sola prueba detrás.
+##
+## No tiene hueco en ningún `MultiMesh` -`slot` a -1-, así que `_draw` no lo
+## toca: existe para la simulación y no para la pantalla.
+func place_for_test(species: String, at: Vector3) -> Dictionary:
+	var animal := {
+		"species": species, "slot": -1, "position": at, "target": at,
+		"anchor": at, "timer": 0.0, "state": State.VAGANDO, "heading": 0.0,
+		"hunger": 0.0, "thirst": 0.0, "trail": PackedVector3Array([at]),
+	}
+	_animals.append(animal)
+	return animal
+
+
+## Las piezas vivas al alcance de un punto, de entre unas especies dadas.
+##
+## Devuelve los diccionarios DE VERDAD de los animales, no copias: quien los
+## reciba va a seguir a uno mientras se mueve, y con una copia estaría
+## persiguiendo el sitio donde estaba hace un rato.
+##
+## Es una LISTA y no la más cercana, y eso es lo que arregló la cacería: quien
+## elige tiene que poder mirar qué pieza es, no sólo a qué distancia está.
+## Medido con `CaceriaProbe`, con la versión que devolvía la más cercana: once
+## piezas cobradas en ciento veinte jornadas y las once ánades, porque la pieza
+## menuda es la más numerosa del valle y siempre hay una más cerca que el
+## ciervo. Una cuadrilla de caza mayor acechando patos no es una cuadrilla de
+## caza mayor.
+func quarries_near(point: Vector3, radius: float,
+		species: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for animal: Dictionary in _animals:
+		if not species.has(animal["species"]):
+			continue
+		if point.distance_to(animal["position"]) < radius:
+			out.append(animal)
+	return out
+
+
+## La pieza viva más cercana a un punto. Se conserva porque es lo que quiere
+## quien sólo pregunta «¿hay algo ahí?», y no todo el que pregunta elige.
+func quarry_near(point: Vector3, radius: float, species: Array) -> Dictionary:
+	var best: Dictionary = {}
+	var best_dist := radius
+	for animal: Dictionary in quarries_near(point, radius, species):
+		var dist: float = point.distance_to(animal["position"])
+		if dist < best_dist:
+			best_dist = dist
+			best = animal
+	return best
+
+
+## Levantarla: arranca en dirección contraria a quien la ha visto.
+func spook(animal: Dictionary, from_point: Vector3) -> void:
+	if animal.is_empty():
+		return
+	animal["spooked"] = SUSTO_SEGUNDOS
+	animal["state"] = State.HUYENDO
+	var away: Vector3 = animal["position"] - from_point
+	away.y = 0.0
+	if away.length() < 0.5:
+		away = Vector3(1.0, 0.0, 0.0)
+	animal["target"] = _clamped(animal["position"] + away.normalized() * SUSTO_M)
+	animal["timer"] = 2.0
+
+
+## Si está levantada y corriendo.
+func is_spooked(animal: Dictionary) -> bool:
+	return float(animal.get("spooked", 0.0)) > 0.0
+
+
+## Se la ha llevado la banda.
+##
+## Lo mismo que hace [_catch] con la que se lleva un lobo, y por el mismo
+## motivo: el hueco de su `MultiMesh` no lo ocupa nadie, así que la pieza no
+## desaparece del valle —reaparece en otra querencia de su especie, que es lo
+## que pasa de verdad con una manada—.
+func taken_by_band(animal: Dictionary) -> void:
+	if animal.is_empty():
+		return
+	animal["spooked"] = 0.0
+	_catch(animal)
 
 
 ## Cuántos hay de cada especie. Es lo que rellena la lista del censo sin tener

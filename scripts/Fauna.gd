@@ -17,6 +17,22 @@ extends RefCounted
 ## - `despiece`: unidades de cada material por pieza. Sin piel en las aves,
 ##   sin asta en la hembra ni en el jabalí, tendón solo en lo grande.
 ## - `riesgo`: lo que puede costar. Un uro no es un conejo.
+## - `arma`: con qué se le puede entrar. Vacío quiere decir que con las manos,
+##   una vara o una piedra basta; con algo dentro, hace falta tener EN EL
+##   ABRIGO una de esas piezas o la cuadrilla no sale a por ella.
+##
+## Lo del arma es la petición literal —«no vamos a cazar un bisonte o un lobo
+## con las manos vacías»— y es además la línea que separa la caza de la
+## recolección de carne. Un conejo se coge con un lazo y un palo; a un uro de
+## mil kilos no se le entra sin un asta enmangada, y una banda que lo intentara
+## no traería un uro: traería un muerto. Por eso NO es un factor de rendimiento
+## sino una puerta: sin la pieza, esa especie no está en la lista de lo que se
+## puede cobrar hoy, y la cuadrilla se va a otro sitio.
+##
+## La trampa se salta esto a propósito y no es un descuido: un foso coge un
+## jabalí sin que nadie le tenga que entrar con nada, y ÉSA es exactamente la
+## razón de ser del foso. Ver `SettlementSim._trapline`, que despieza por su
+## cuenta sin pasar por [huntable_with].
 
 ## Porte de la pieza. No es tamaño por tamaño: es CÓMO se caza.
 enum Porte {
@@ -38,10 +54,12 @@ const SPECIES := {
 		"name": "Liebre", "porte": Porte.MENUDA, "raciones": 2.6, "riesgo": 0.0,
 		"despiece": {Materia.Kind.PIEL: 0.5, Materia.Kind.HUESO: 0.3,
 			Materia.Kind.TENDON: 0.1},
+		"arma": [],
 	},
 	"conejo": {
 		"name": "Conejo", "porte": Porte.MENUDA, "raciones": 1.4, "riesgo": 0.0,
 		"despiece": {Materia.Kind.PIEL: 0.35, Materia.Kind.HUESO: 0.2},
+		"arma": [],
 	},
 	"urogallo": {
 		# Un ave no da piel: da PLUMA. Es la peticion literal, y ademas es lo
@@ -51,28 +69,36 @@ const SPECIES := {
 		"name": "Urogallo", "porte": Porte.MENOR, "raciones": 3.2, "riesgo": 0.0,
 		"despiece": {Materia.Kind.PLUMA: 2.4, Materia.Kind.HUESO: 0.25,
 			Materia.Kind.GRASA: 0.2},
+		"arma": [],
 	},
 	"perdiz": {
 		"name": "Perdiz", "porte": Porte.MENUDA, "raciones": 1.1, "riesgo": 0.0,
 		"despiece": {Materia.Kind.PLUMA: 1.1, Materia.Kind.HUESO: 0.1},
+		"arma": [],
 	},
 	"anade": {
 		"name": "Ánade", "porte": Porte.MENUDA, "raciones": 1.8, "riesgo": 0.0,
 		"despiece": {Materia.Kind.PLUMA: 1.8, Materia.Kind.HUESO: 0.15,
 			Materia.Kind.GRASA: 0.35},
+		"arma": [],
 	},
 
 	# --- pieza menor: al acecho ------------------------------------------
 	"corzo": {
+		# Una punta litica enmangada -una lanza de mano- basta para un corzo,
+		# y es lo que hubo mucho antes que la azagaya de asta. Por eso la
+		# pieza menor abre con PUNTA y no espera al Paleolitico superior.
 		"name": "Corzo", "porte": Porte.MENOR, "raciones": 14.0, "riesgo": 0.04,
 		"despiece": {Materia.Kind.PIEL: 1.0, Materia.Kind.HUESO: 1.1,
 			Materia.Kind.TENDON: 0.6, Materia.Kind.GRASA: 0.5,
 			Materia.Kind.ASTA: 0.25},
+		"arma": [Tool.Kind.AZAGAYA, Tool.Kind.PUNTA],
 	},
 	"rebeco": {
 		"name": "Rebeco", "porte": Porte.MENOR, "raciones": 11.0, "riesgo": 0.09,
 		"despiece": {Materia.Kind.PIEL: 0.9, Materia.Kind.HUESO: 0.9,
 			Materia.Kind.TENDON: 0.5, Materia.Kind.GRASA: 0.6},
+		"arma": [Tool.Kind.AZAGAYA, Tool.Kind.PUNTA],
 	},
 
 	# --- pieza mayor: la que cambia la semana ----------------------------
@@ -84,6 +110,7 @@ const SPECIES := {
 		"despiece": {Materia.Kind.PIEL: 1.8, Materia.Kind.HUESO: 5.4,
 			Materia.Kind.TENDON: 2.8, Materia.Kind.GRASA: 4.2,
 			Materia.Kind.ASTA: 0.9},
+		"arma": [Tool.Kind.AZAGAYA],
 	},
 	"jabali": {
 		# Sin asta, con mucha grasa y con el riesgo mas alto de todo lo que
@@ -92,16 +119,19 @@ const SPECIES := {
 		"name": "Jabalí", "porte": Porte.MAYOR, "raciones": 48.0, "riesgo": 0.16,
 		"despiece": {Materia.Kind.PIEL: 1.4, Materia.Kind.HUESO: 3.8,
 			Materia.Kind.TENDON: 1.6, Materia.Kind.GRASA: 6.0},
+		"arma": [Tool.Kind.AZAGAYA],
 	},
 	"caballo": {
 		"name": "Caballo", "porte": Porte.MAYOR, "raciones": 86.0, "riesgo": 0.08,
 		"despiece": {Materia.Kind.PIEL: 2.4, Materia.Kind.HUESO: 6.2,
 			Materia.Kind.TENDON: 3.4, Materia.Kind.GRASA: 5.0},
+		"arma": [Tool.Kind.AZAGAYA],
 	},
 	"uro": {
 		"name": "Uro", "porte": Porte.MAYOR, "raciones": 140.0, "riesgo": 0.22,
 		"despiece": {Materia.Kind.PIEL: 3.6, Materia.Kind.HUESO: 9.0,
 			Materia.Kind.TENDON: 5.0, Materia.Kind.GRASA: 8.0},
+		"arma": [Tool.Kind.AZAGAYA],
 	},
 	"lobo": {
 		# No se caza para comer: se caza por la piel y porque compite. La
@@ -109,6 +139,9 @@ const SPECIES := {
 		"name": "Lobo", "porte": Porte.MENOR, "raciones": 4.0, "riesgo": 0.18,
 		"despiece": {Materia.Kind.PIEL: 1.2, Materia.Kind.HUESO: 0.8,
 			Materia.Kind.TENDON: 0.4},
+		# La única pieza MENOR que pide azagaya y no admite lanza de mano. No
+		# es por tamaño: es que a un lobo no se le espera a corta distancia.
+		"arma": [Tool.Kind.AZAGAYA],
 	},
 }
 
@@ -167,6 +200,63 @@ static func risk_of(species: String) -> float:
 	return float(entry.get("riesgo", 0.0))
 
 
+# --- con qué se le entra a cada pieza ------------------------------------
+
+## Las piezas del utillaje que valen para cobrar esta especie. Vacío quiere
+## decir que con la mano, una vara o una piedra basta.
+static func armas_of(species: String) -> Array:
+	var entry: Dictionary = SPECIES.get(species, {})
+	return entry.get("arma", []) as Array
+
+
+## Si esta especie se puede cobrar con las manos vacías.
+static func unarmed(species: String) -> bool:
+	return armas_of(species).is_empty()
+
+
+## Con cuál del utillaje se le entra hoy, o -1 si con ninguna.
+##
+## Devuelve la PRIMERA de la lista que haya en el abrigo, y el orden de la
+## lista es el de mejor a peor: a un corzo se le entra con azagaya si la hay y
+## con lanza de mano si no.
+static func weapon_at_hand(species: String, toolkit: Toolkit) -> int:
+	var armas := armas_of(species)
+	if armas.is_empty():
+		return -1
+	if toolkit == null:
+		return -1
+	for kind: int in armas:
+		if toolkit.count(kind as Tool.Kind) > 0:
+			return kind
+	return -1
+
+
+## Si la banda puede salir hoy a por esta especie.
+##
+## Sin utillaje -las pruebas, o el rato antes de montarlo- se responde que sí
+## a todo: la puerta se abre sola cuando no hay nada con que cerrarla, que es
+## lo que hacían ya [Fishing.available] y [TechTree] con el árbol a null.
+static func huntable_with(species: String, toolkit: Toolkit) -> bool:
+	if unarmed(species):
+		return true
+	if toolkit == null:
+		return true
+	return weapon_at_hand(species, toolkit) >= 0
+
+
+## Qué falta para poder entrarle, dicho para leerlo. "" si no falta nada.
+static func weapon_missing(species: String) -> String:
+	var armas := armas_of(species)
+	if armas.is_empty():
+		return ""
+	var names: Array[String] = []
+	for kind: int in armas:
+		names.append(Tool.kind_name(kind as Tool.Kind).to_lower())
+	if names.size() == 1:
+		return "hace falta %s" % names[0]
+	return "hace falta %s" % " o ".join(names)
+
+
 ## Todas las especies de un porte, del catálogo entero.
 static func of_porte(porte: Porte) -> Array[String]:
 	var out: Array[String] = []
@@ -182,11 +272,32 @@ static func of_porte(porte: Porte) -> Array[String]:
 ## caza esta especialidad. Un trampero no trae un uro por mucho que haya uros
 ## en el prado, y un batidor no monta una cuadrilla por una perdiz.
 static func huntable_at(position: Vector3, season: Subsistence.Season,
-		porte: Porte) -> Array[String]:
+		porte: Porte, toolkit: Toolkit = null) -> Array[String]:
 	var out: Array[String] = []
 	for species: String in species_at(position, season):
-		if porte_of(species) == int(porte):
-			out.append(species)
+		if porte_of(species) != int(porte):
+			continue
+		if not huntable_with(species, toolkit):
+			continue
+		out.append(species)
+	return out
+
+
+## Lo que anda por aquí y NO se puede cobrar por falta de arma, con el motivo.
+##
+## Existe para poder DECIRLO. Una cuadrilla que vuelve de vacío de un cotarro
+## lleno de ciervos es exactamente igual, desde fuera, que una que ha ido a un
+## sitio pelado; la diferencia es que la primera tiene remedio y sólo se sabe
+## si alguien la cuenta. Cada entrada: {"species": String, "missing": String}.
+static func out_of_reach_at(position: Vector3, season: Subsistence.Season,
+		porte: Porte, toolkit: Toolkit) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for species: String in species_at(position, season):
+		if porte_of(species) > int(porte):
+			continue
+		if huntable_with(species, toolkit):
+			continue
+		out.append({"species": species, "missing": weapon_missing(species)})
 	return out
 
 

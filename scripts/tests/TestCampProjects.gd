@@ -126,6 +126,10 @@ func test_sin_hogar_no_se_alcanza_la_piragua() -> void:
 
 func _con_hogar(lena: float = 50.0) -> SettlementSim:
 	var sim := SettlementSim.new()
+	# La cronica NO es opcional aqui. Sin ella, `test_apagarse_deja_rastro`
+	# reventaba con «Invalid access to property 'entries' on Nil», el marco se
+	# comia el error y la prueba figuraba como pasada sin haber comprobado nada.
+	sim.chronicle = Chronicle.new()
 	sim.camp_built[CampProjects.Kind.HOGAR] = true
 	sim.hearth_lit = true
 	sim._hearth_tended = true

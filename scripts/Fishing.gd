@@ -82,8 +82,12 @@ const CATALOGUE := {
 			+ "cala por la tarde y se levanta por la mañana, así que pesca "
 			+ "mientras la banda está en otra cosa.",
 		"tech": TechTree.Tech.NASA, "tool": Tool.Kind.NASA, "party": 1,
+		# Estas cifras ya no las usa nadie para pescar: la nasa es PASIVA -ver
+		# [ACTIVAS] y [Nasa]- y lo que cobra sale de las jornadas que lleve
+		# calada. Se dejan porque la ficha sigue sirviendo para ENSENAR la
+		# manera en el arbol y en la ribera, con su nombre y su texto.
 		"yields": {Materia.Kind.PESCADO: 42.0},
-		"bait": [], "bait_per_day": 0.0,
+		"bait": Nasa.CEBOS, "bait_per_day": 0.0,
 	},
 	Method.SEDAL: {
 		"name": "Sedal y anzuelo",
@@ -121,6 +125,27 @@ const CATALOGUE := {
 ## se queda con la primera que se pueda usar hoy.
 const ORDER := [Method.MANO, Method.PESQUERA, Method.NASA, Method.SEDAL,
 	Method.RED, Method.ARPON]
+
+
+## Y las que de verdad son una JORNADA en el agua.
+##
+## La nasa no lo es, y ésa es la corrección: estaba en esta lista como una
+## manera más de plantarse en la orilla, con su tabla de rendimiento al lado
+## del arpón y del sedal, y una nasa no es eso. Una nasa es un objeto que se
+## cala y se deja. El pescador que la sabe hacer no se pasa el día con ella:
+## revisa la línea por la mañana —que le cuesta un rato— y el resto de la
+## jornada pesca ACTIVAMENTE con lo mejor que tenga de esta lista.
+##
+## O sea que la nasa no compite con el arpón: se suma. Ver [Nasa] y
+## `SettlementSim._creel_round`.
+const ACTIVAS := [Method.MANO, Method.PESQUERA, Method.SEDAL,
+	Method.RED, Method.ARPON]
+
+
+## Si esta manera de pescar es una jornada en el agua o un aparejo que se deja
+## puesto.
+static func is_passive(method: Method) -> bool:
+	return not ACTIVAS.has(method)
 
 
 static func method_name(method: Method) -> String:
@@ -182,10 +207,13 @@ static func bait_per_day(method: Method) -> float:
 ## y no hay cebo en el abrigo, se pesca con nasa. La banda no se queda parada
 ## porque le falte la pieza buena, baja un escalón —que es exactamente lo que
 ## se hace.
+## Se recorre [ACTIVAS] y no [ORDER]: la nasa queda fuera porque no es una
+## jornada de pesca, es un aparejo calado. La banda que sabe hacer nasas las
+## cala Y ADEMÁS pesca con lo mejor que tenga.
 static func best_for(techs: TechTree, toolkit: Toolkit, store: Storehouse,
 		workers: int = 1) -> Method:
-	for i in range(ORDER.size() - 1, -1, -1):
-		var method: Method = ORDER[i]
+	for i in range(ACTIVAS.size() - 1, -1, -1):
+		var method: Method = ACTIVAS[i]
 		if available(method, techs, toolkit, store, workers):
 			return method
 	return Method.MANO

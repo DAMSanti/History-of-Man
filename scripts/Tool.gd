@@ -26,6 +26,7 @@ enum Kind {
 	NASA,       ## Mimbre en embudo: pesca sola mientras se hace otra cosa
 	ANZUELO,    ## Bastoncillo de hueso apuntado por los dos cabos. Con cebo
 	RED,        ## Fibra trenzada entre dos orillas: lo que mas pescado da
+	LAMPARA,    ## Canto ahuecado con grasa y mecha: la unica luz de la cueva
 }
 
 ## De qué está hecha. Decide cuánto aguanta.
@@ -50,6 +51,7 @@ const KIND_NAMES := {
 	Kind.AGUJA: "Aguja", Kind.PUNZON: "Punzón", Kind.CESTO: "Cesto",
 	Kind.ODRE: "Odre", Kind.CUERDA: "Cuerda", Kind.NASA: "Nasa",
 	Kind.ANZUELO: "Anzuelo", Kind.RED: "Red",
+	Kind.LAMPARA: "Lámpara",
 }
 
 const STUFF_NAMES := {
@@ -92,6 +94,10 @@ const WEAR_PER_DAY := {
 	Kind.NASA: 1.1,
 	Kind.ANZUELO: 0.9,
 	Kind.RED: 1.4,
+	# La lampara no se gasta trabajando: es un canto ahuecado y lo unico que
+	# se consume es la grasa que arde dentro -eso lo cobra el pintado-. Lo que
+	# la rompe es que se caiga, y de eso hay poco en una cueva.
+	Kind.LAMPARA: 0.3,
 }
 
 
@@ -118,6 +124,8 @@ static func default_stuff(kind_value: Kind) -> Stuff:
 			return Stuff.PIEL
 		Kind.ANZUELO:
 			return Stuff.HUESO
+		Kind.LAMPARA:
+			return Stuff.CUARCITA
 		_:
 			return Stuff.FIBRA
 
@@ -195,6 +203,13 @@ static func recipe(kind_value: Kind) -> Dictionary:
 			return {Materia.Kind.FIBRA: 9.0}
 		Kind.CESTO:
 			return {Materia.Kind.FIBRA: 3.0}
+		Kind.LAMPARA:
+			# Un canto ahuecado y una mecha. La lampara de Lascaux es
+			# literalmente eso: arenisca vaciada a golpes con un cuenco para
+			# la grasa. La GRASA no va en la receta porque no es la lampara,
+			# es el combustible: se gasta cada vez que se enciende. Ver
+			# `SettlementSim.PINTURA_GRASA`.
+			return {Materia.Kind.PIEDRA: 1.0, Materia.Kind.FIBRA: 0.3}
 		Kind.ODRE:
 			return {Materia.Kind.PIEL: 1.0, Materia.Kind.FIBRA: 0.5}
 		_:

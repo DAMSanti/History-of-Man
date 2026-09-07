@@ -6,12 +6,19 @@ extends SceneTree
 
 func _init() -> void:
 	var bad := 0
+	var seen := 0
 	for path: String in _walk("res://scripts"):
-		var script: Resource = load(path)
-		if script == null:
+		seen += 1
+		# NO basta con mirar si `load` devuelve null, y esta sonda llevaba
+		# mintiendo desde que se escribio: un script que no compila se carga
+		# igual -devuelve el GDScript con el error dentro-, asi que decia
+		# «0 rotos» mientras la consola escupia el fallo de sintaxis. Lo que
+		# distingue a uno bueno es que se pueda INSTANCIAR.
+		var script: Script = load(path) as Script
+		if script == null or not script.can_instantiate():
 			print("NO COMPILA: %s" % path)
 			bad += 1
-	print("revisados, %d rotos" % bad)
+	print("revisados %d, %d rotos" % [seen, bad])
 	quit(1 if bad > 0 else 0)
 
 

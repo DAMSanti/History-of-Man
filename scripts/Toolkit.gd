@@ -42,6 +42,9 @@ const NO_TOOL_FLOOR := {
 	Tool.Kind.NASA: 0.35,
 	Tool.Kind.ANZUELO: 0.35,
 	Tool.Kind.RED: 0.35,
+	# La lampara SI es cero, y es de las pocas. Sin luz no se pinta una cueva
+	# despacio ni deprisa: no se pinta. Ver `SettlementSim._paint_wall`.
+	Tool.Kind.LAMPARA: 0.0,
 }
 
 
@@ -89,6 +92,20 @@ func pick(kind: Tool.Kind) -> Tool:
 			worst = tool.used
 			chosen = tool
 	return chosen
+
+
+## Saca una pieza del utillaje y la devuelve, o null si no queda ninguna.
+##
+## Distinto de [pick], que devuelve la pieza SIN sacarla para poder gastarla y
+## dejarla donde estaba. Esto es para lo que se lleva y se deja puesto: una
+## nasa calada en el río está en el río, no en el abrigo, y mientras esté allí
+## no la puede usar nadie ni cuenta para la cobertura del taller. Ver [Nasa].
+func detach(kind: Tool.Kind) -> Tool:
+	var tool := pick(kind)
+	if tool == null:
+		return null
+	pieces.erase(tool)
+	return tool
 
 
 ## Usa una pieza del tipo pedido. Devuelve si había alguna.

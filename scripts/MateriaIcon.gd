@@ -51,6 +51,7 @@ enum Glyph {
 	BURIL,      ## Barrita con bisel en la punta
 	RAEDERA,    ## Media luna: filo curvo y dorso recto
 	PUNTA,      ## Hoja triangular con nervio
+	LAMPARA,    ## Cuenco de piedra con la llama de la mecha encima
 	# Fauna de caza. Cada especie la suya: un corzo y un jabalí no se leen
 	# igual ni de lejos, y meterlos bajo el mismo tajo de carne es mentir
 	# sobre qué se ha visto de verdad.
@@ -120,6 +121,7 @@ const TOOL_LOOK := {
 	Tool.Kind.NASA: [Glyph.NASA, Color(0.62, 0.52, 0.30)],
 	Tool.Kind.ANZUELO: [Glyph.ANZUELO, Color(0.85, 0.83, 0.76)],
 	Tool.Kind.RED: [Glyph.RED, Color(0.46, 0.62, 0.55)],
+	Tool.Kind.LAMPARA: [Glyph.LAMPARA, Color(0.92, 0.72, 0.34)],
 }
 
 ## Forma y color de cada especie de caza. La clave es el nombre tal cual lo
@@ -359,6 +361,15 @@ func _draw() -> void:
 				var base := Vector2(0.62, 0.10).lerp(Vector2(0.34, 0.94), along)
 				_poly([base, base + Vector2(0.26, 0.02),
 					base + Vector2(0.06, 0.16)], s, dark)
+		Glyph.LAMPARA:
+			# Cuenco bajo y ancho -un canto ahuecado, no una vasija- y la
+			# llama saliendo de la mecha. La llama va en claro sobre el cuenco
+			# oscuro: es lo unico que se ve de una lampara en una cueva.
+			_poly([Vector2(0.14, 0.62), Vector2(0.86, 0.62),
+				Vector2(0.72, 0.90), Vector2(0.28, 0.90)], s, dark)
+			_line(Vector2(0.14, 0.62), Vector2(0.86, 0.62), s, tint, 0.07)
+			_poly([Vector2(0.50, 0.10), Vector2(0.66, 0.44),
+				Vector2(0.50, 0.60), Vector2(0.34, 0.44)], s, tint)
 		Glyph.NASA:
 			# Embudo tumbado, con la boca ancha a la izquierda y el trenzado
 			# marcado: es un cesto, pero echado y con entrada de embudo

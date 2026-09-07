@@ -458,6 +458,41 @@ func hurt_factor() -> float:
 ## piezas distintas sumarian una entera, que es justo lo que no pasa.
 var craft_progress: float = 0.0
 
+## Lo que multiplica su paso ahora mismo, de 0 a 1.
+##
+## Existe por el ACECHO. Acechar no es ir hacia el animal: es ir hacia el
+## animal sin que se entere, y eso se hace parando y agachándose. Sin un paso
+## propio, un cazador al acecho cruza el prado a la misma velocidad con la que
+## vuelve cargado a casa, y desde fuera acechar y andar se ven igual.
+##
+## Lo pone [SettlementSim._walk_at] cada tick de cacería y se devuelve a 1 al
+## empezar el siguiente, así que no se queda pegado: si mañana esta persona
+## está recogiendo avellanas, anda como todo el mundo. Ver [Hunt].
+var hunt_pace: float = 1.0
+
+## El relato que trae y todavía no ha contado.
+##
+## Se levanta DONDE PASA —al cobrar la pieza, que es donde están los hechos: la
+## especie, el sitio, si les vieron venir— y se cuenta AL LLEGAR, que es cuando
+## hay quien lo oiga. Las dos cosas en el mismo sitio darían una de las dos
+## mal: contarlo en el monte es hablarle a los árboles, y armarlo en la cueva
+## obligaría a arrastrar los hechos hasta allí. Ver [Tale].
+var pending_tale: Tale = null
+
+## Horas de jornada que le quedan de RASTREO antes de poder levantar otra
+## pieza. Ver `SettlementSim._tracking_hours`, que explica de dónde sale el
+## número y por qué va delante del acecho y no dentro.
+var hunt_cooldown: float = 0.0
+
+## Última jornada en la que revisó la línea de nasas.
+##
+## Existe porque la ronda es UNA VEZ AL DÍA y el bucle de la simulación entra
+## en `_creel_round` sesenta veces por segundo. Sin esta marca, el pescador que
+## tenía una nasa sin cebo se pasaba la jornada entera cebándola tick tras tick
+## y no llegaba a mojar el arpón: medido con `CaceriaProbe`, la pesca de orilla
+## cayó de 7,68 raciones por jornada-persona a 3,22.
+var creel_day: int = 0
+
 ## Especialidad que está ejerciendo AHORA. Con `speciality` fijada son la
 ## misma; con NINGUNA, esta la decide la simulación cada jornada.
 var current_speciality: int = Profession.Speciality.NINGUNA

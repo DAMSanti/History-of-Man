@@ -98,6 +98,106 @@ func _punto_con(species: String) -> Vector3:
 	return Vector3.INF
 
 
+# --- con qué se le entra a cada pieza -------------------------------------
+#
+# «No vamos a cazar un bisonte o un lobo con las manos vacías». Es una PUERTA
+# y no una penalización: media pieza de uro sin azagaya no es media pieza, es
+# una cuadrilla que vuelve corriendo.
+
+func _utillaje(kinds: Array) -> Toolkit:
+	var kit := Toolkit.new()
+	for kind: int in kinds:
+		kit.craft(kind as Tool.Kind, Tool.default_stuff(kind as Tool.Kind), 0.6)
+	return kit
+
+
+func test_la_pieza_menuda_se_coge_con_las_manos() -> void:
+	# Un conejo se coge con un lazo y un palo, y por eso la banda del primer
+	# día come algo en vez de nada.
+	for humilde: String in ["conejo", "liebre", "perdiz", "anade", "urogallo"]:
+		assert_true(Fauna.unarmed(humilde),
+			"%s no pide arma" % Fauna.species_name(humilde))
+		assert_true(Fauna.huntable_with(humilde, Toolkit.new()),
+			"%s se caza con el zurrón vacío" % Fauna.species_name(humilde))
+
+
+func test_al_uro_y_al_lobo_no_se_les_entra_con_las_manos_vacias() -> void:
+	# La petición, literal.
+	var pelado := Toolkit.new()
+	for grande: String in ["uro", "caballo", "ciervo", "jabali", "lobo"]:
+		assert_false(Fauna.huntable_with(grande, pelado),
+			"a %s no se le entra con las manos vacías"
+				% Fauna.species_name(grande))
+		assert_true(Fauna.huntable_with(grande,
+			_utillaje([Tool.Kind.AZAGAYA])),
+			"con azagaya sí" % [])
+
+
+func test_la_lanza_de_mano_vale_para_el_corzo_pero_no_para_el_uro() -> void:
+	# Una punta lítica enmangada es muchísimo más vieja que la azagaya de asta,
+	# y da para un corzo. No da para un uro.
+	var lanza := _utillaje([Tool.Kind.PUNTA])
+	assert_true(Fauna.huntable_with("corzo", lanza),
+		"al corzo se le entra con lanza de mano")
+	assert_false(Fauna.huntable_with("uro", lanza),
+		"al uro no")
+
+
+func test_sin_azagaya_el_cotarro_de_uros_no_rinde_nada() -> void:
+	var punto := _punto_con("uro")
+	assert_false(punto == Vector3.INF, "hay algún sitio con uro en otoño")
+	var techs := _techs([])
+
+	var pelado := Hunting.rations_at(Profession.Speciality.CAZA_MAYOR, punto,
+		Subsistence.Season.OTONO, techs, Toolkit.new())
+	var armado := Hunting.rations_at(Profession.Speciality.CAZA_MAYOR, punto,
+		Subsistence.Season.OTONO, techs, _utillaje([Tool.Kind.AZAGAYA]))
+	assert_gt(armado, pelado,
+		"el mismo sitio vale muchísimo más con azagaya en el abrigo")
+
+
+func test_lo_que_no_se_puede_cazar_no_cuesta_riesgo() -> void:
+	# Sin esto una banda desarmada se llevaba las cornadas de una caza que no
+	# estaba haciendo.
+	var punto := _punto_con("uro")
+	assert_false(punto == Vector3.INF, "hay algún sitio con uro en otoño")
+	var pelado := Hunting.risk_at(Profession.Speciality.CAZA_MAYOR, punto,
+		Subsistence.Season.OTONO, 1, Toolkit.new())
+	var armado := Hunting.risk_at(Profession.Speciality.CAZA_MAYOR, punto,
+		Subsistence.Season.OTONO, 1, _utillaje([Tool.Kind.AZAGAYA]))
+	assert_lt(pelado, armado,
+		"al uro que se ve pasar no te cornea")
+
+
+func test_se_dice_lo_que_se_ve_pasar_y_por_que() -> void:
+	# Cerrar la puerta en silencio es la peor versión de sí misma.
+	var punto := _punto_con("uro")
+	assert_false(punto == Vector3.INF, "hay algún sitio con uro en otoño")
+	var texto := Hunting.out_of_reach_text(Profession.Speciality.CAZA_MAYOR,
+		punto, Subsistence.Season.OTONO, Toolkit.new())
+	assert_true(texto.contains("uro"), "dice qué se escapa: %s" % texto)
+	assert_true(texto.contains("azagaya"), "y qué falta: %s" % texto)
+	assert_eq(Hunting.out_of_reach_text(Profession.Speciality.CAZA_MAYOR,
+		punto, Subsistence.Season.OTONO, _utillaje([Tool.Kind.AZAGAYA])), "",
+		"con la azagaya no hay nada que lamentar")
+
+
+func test_sin_utillaje_la_puerta_no_cierra() -> void:
+	# Las pruebas y el rato antes de montar el utillaje: se responde que sí a
+	# todo, igual que hacen ya Fishing y TechTree con el árbol a null.
+	assert_true(Fauna.huntable_with("uro", null),
+		"sin nada con que cerrarla, la puerta se queda abierta")
+
+
+func test_la_trampa_se_salta_la_puerta_del_arma() -> void:
+	# Un foso coge un jabalí sin que nadie le tenga que entrar, y ÉSA es su
+	# razón de ser. Si el foso pidiera azagaya, no serviría para nada.
+	assert_true(Trap.catches(Trap.Kind.FOSO).has("jabali"),
+		"el foso coge jabalí")
+	assert_false(Fauna.unarmed("jabali"),
+		"y al jabalí, a mano, no se le entra")
+
+
 # --- la técnica se nota ---------------------------------------------------
 
 func test_cada_tecnica_de_caza_sube_lo_que_se_cobra() -> void:

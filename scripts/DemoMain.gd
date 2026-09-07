@@ -90,6 +90,9 @@ var paraje_markers: ParajeMarkers
 var trail_view: TrailView
 var trap_markers: TrapMarkers
 
+## Las nasas caladas en la orilla. Ver [NasaMarkers].
+var nasa_markers: NasaMarkers
+
 ## La hoguera en la boca de la cueva. Ver [HearthFire].
 var hearth_fire: HearthFire
 
@@ -354,6 +357,12 @@ func _start_settlement() -> void:
 	trap_markers.name = "Trampas"
 	add_child(trap_markers)
 
+	# Y las nasas caladas, por lo mismo: son la otra cosa que la banda deja
+	# puesta en el mapa, y sin verlas la linea de nasas es otro numero.
+	nasa_markers = NasaMarkers.new()
+	nasa_markers.name = "Nasas"
+	add_child(nasa_markers)
+
 	# Y lo que está haciendo cada cual, encima de su cabeza: sin esto quien
 	# trabaja y quien da vueltas se ven exactamente igual.
 	craft_markers = WorkMarkers.new()
@@ -470,6 +479,12 @@ func _start_settlement() -> void:
 	# La fauna anda al compas de la partida: en pausa no se mueve. Ver
 	# `WildlifeHerds.sim`.
 	herds.sim = sim
+	# Y la banda caza LO QUE ANDA POR AHI, no una media. Sin esta linea la caza
+	# se resuelve con la tabla de [Hunting], que es lo que pasa en las pruebas
+	# headless; con ella, el cazador acecha a un ciervo de los que se ven. Ver
+	# [Hunt] y `SettlementSim._hunt_step`.
+	if sim:
+		sim.wildlife = herds
 
 	tech = TechTree.new()
 	# La simulacion consulta el arbol de verdad, no solo la ficha: con que se
@@ -770,6 +785,12 @@ func _on_day_passed(_day: int) -> void:
 		paraje_markers.refresh_peaks(sim.peaks(), terrain)
 	if trap_markers and sim:
 		trap_markers.refresh(sim.traps, terrain)
+	if nasa_markers and sim:
+		nasa_markers.refresh(sim.nasas, terrain)
+	# La baliza de exploracion colgaba del guardia de las TRAMPAS, que no pinta
+	# nada aqui: sin marcador de trampas no se veia adonde se habia mandado
+	# mirar. Va con las chapas de paraje, que es de lo que es.
+	if paraje_markers and sim:
 		paraje_markers.set_scout_beacon(sim.scout_order, sim.has_scout_order, terrain)
 
 	# Una temporada no se sabe hasta haberla trabajado. Se anota por la
@@ -793,6 +814,10 @@ func _on_day_passed(_day: int) -> void:
 					activity as Subsistence.Activity, float(worked[activity])):
 				var learned := gained as TechTree.Tech
 				print("Tecnica aprendida: %s" % TechTree.tech_name(learned))
+				# Aprender a hacer algo es un hito, y se cuenta como tal: con
+				# su relato y con la opcion de dejarlo en la pared. Ver [Tale].
+				if sim:
+					sim.tell_technique(learned)
 				# Las tecnicas de cruce no son un adorno de la ficha: abren
 				# territorio de verdad, porque la simulacion las consulta
 				if learned == TechTree.Tech.PIRAGUA:

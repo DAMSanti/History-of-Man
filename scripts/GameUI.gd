@@ -413,6 +413,9 @@ func _moment_tint(moment: Moment) -> Color:
 	match moment.kind:
 		Moment.Kind.PERCANCE: return UISkin.ALARM
 		Moment.Kind.BERREA: return UISkin.OCHRE
+		# El relato va en ocre, que es el color del pigmento con el que se
+		# pinta: es la tarjeta que ofrece dejarlo en la pared.
+		Moment.Kind.RELATO: return UISkin.OCHRE
 		_: return UISkin.GREEN
 
 
@@ -3846,6 +3849,7 @@ func show_tech() -> void:
 	body.add_child(HSeparator.new())
 	_fishing_block(body)
 	_hunting_block(body)
+	_paintings_block(body)
 
 
 ## Una obra del abrigo: qué es, qué cuesta y en qué punto está.
@@ -3940,6 +3944,18 @@ func _hunting_block(body: VBoxContainer) -> void:
 				% [TechTree.tech_name(pending as TechTree.Tech).to_lower(),
 					_improvement_factor(speciality, pending)], true)
 
+		# Y lo que anda por el coto y NO se puede cobrar por falta de arma. Es
+		# la otra mitad de la puerta de [Fauna.huntable_with]: cerrarla en
+		# silencio deja al jugador con una cuadrilla que vuelve de vacío de un
+		# cotarro lleno de ciervos y ninguna forma de saber por qué.
+		if speciality != Profession.Speciality.TRAMPAS:
+			var coto := sim.parajes.chosen_for(Subsistence.Activity.CAZA)
+			var donde := coto.position if coto != null else sim.home_position
+			var escapa := Hunting.out_of_reach_text(speciality, donde,
+				GameState.season as Subsistence.Season, sim.toolkit)
+			if not escapa.is_empty():
+				_text(body, "   %s" % escapa, true)
+
 	# Y la línea de trampas, una por una. Es lo único que la banda deja
 	# PLANTADO en el mapa, así que merece una lista y no un número.
 	if sim.traps.is_empty():
@@ -4009,7 +4025,14 @@ func _fishing_block(body: VBoxContainer) -> void:
 		row.add_child(name_label)
 
 		var note := Label.new()
-		note.text = "%.0f de pescado al día" % pescado if why == "" else why
+		# La nasa NO se mide en pescado al día: no es una jornada en el agua,
+		# es un aparejo calado. Enseñarla con la cifra del arpón al lado hacía
+		# creer que eran dos maneras de hacer lo mismo, y son dos cosas que se
+		# hacen a la vez. Ver [Nasa].
+		if Fishing.is_passive(method):
+			note.text = "se cala y pesca sola" if why == "" else why
+		else:
+			note.text = "%.0f de pescado al día" % pescado if why == "" else why
 		note.add_theme_font_size_override("font_size", 10)
 		note.add_theme_color_override("font_color",
 			UISkin.INK_SOFT if why == "" else UISkin.INK_FAINT)
@@ -4018,6 +4041,50 @@ func _fishing_block(body: VBoxContainer) -> void:
 	_text(body, "Se pesca siempre con lo mejor que se pueda HOY. Si se rompe "
 		+ "el último arpón o se acaba el cebo, se baja un escalón hasta que "
 		+ "el taller reponga.", true)
+
+	# Y la línea de nasas, una por una, igual que la de trampas: es lo otro que
+	# la banda deja plantado en el mapa.
+	if sim.techs != null and sim.techs.has(TechTree.Tech.NASA):
+		if sim.nasas.is_empty():
+			_text(body, "Sin una sola nasa calada. El pescador las revisa por "
+				+ "la mañana y luego pesca: no le quita la jornada.", true)
+		else:
+			for nasa: Nasa in sim.nasas:
+				_text(body, "   %s Nasa en %s — %.0f%% de vida, %d piezas  ·  %s"
+					% ["◆" if nasa.has_catch() else "·",
+						sim.parajes.place_name(nasa.position, sim.home_position),
+						nasa.condition() * 100.0, nasa.taken,
+						nasa.status_text()], not nasa.has_catch())
+	body.add_child(HSeparator.new())
+
+
+## Lo que hay pintado en la pared del fondo.
+##
+## Va con la caza y la pesca porque es de lo mismo: qué sabe hacer la banda y
+## qué cambia. Una pared no es un adorno de la ficha —sube el techo de lo que
+## se puede aprender de oídas sobre esa tarea, y lo sube para siempre— así que
+## el jugador tiene que poder ver qué hay puesto. Ver [Tale].
+func _paintings_block(body: VBoxContainer) -> void:
+	if sim == null:
+		return
+	if sim.techs == null or not sim.techs.has(TechTree.Tech.ARTE):
+		return
+	_heading(body, "LA PARED DEL FONDO")
+
+	if sim.painting_queue != null:
+		_text(body, "Pintando: %s (%.0f%%)" % [sim.painting_queue.title,
+			100.0 * sim.painting_progress / SettlementSim.PINTURA_JORNADAS])
+
+	if sim.paintings.is_empty():
+		var falta := sim.painting_blocked_by()
+		_text(body, "La pared está limpia. " + ("Lo que se cuenta dura lo que "
+			+ "dure quien lo cuente." if falta.is_empty()
+			else "Para pintar: %s." % falta), true)
+	else:
+		for tale: Tale in sim.paintings:
+			_text(body, "   · %s — %s" % [tale.title, tale.stamp()])
+		_text(body, "Lo que está en la pared se aprende aunque no quede nadie "
+			+ "que estuviera allí.", true)
 	body.add_child(HSeparator.new())
 
 

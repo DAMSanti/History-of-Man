@@ -52,14 +52,34 @@ func test_la_pesquera_no_pide_pieza_solo_saberla() -> void:
 # --- cada escalón pide su pieza -------------------------------------------
 
 func test_saber_la_nasa_sin_tenerla_no_sirve() -> void:
+	# La nasa sigue pidiendo las dos cosas -saberla y tenerla trenzada-, pero
+	# YA NO es un escalón de `best_for`: no es una jornada en el agua, es un
+	# aparejo que se cala y se deja. Ver [Fishing.ACTIVAS] y [Nasa].
 	var techs := _techs([TechTree.Tech.PESQUERA, TechTree.Tech.NASA])
-	assert_eq(Fishing.best_for(techs, Toolkit.new(), Storehouse.new()),
-		Fishing.Method.PESQUERA,
-		"sabida la nasa pero sin nasas hechas, se baja a la pesquera")
+	assert_false(Fishing.available(Fishing.Method.NASA, techs, Toolkit.new(),
+		Storehouse.new()), "sabida la nasa pero sin nasas hechas, no hay nasa")
 
 	var kit := _toolkit([Tool.Kind.NASA])
+	assert_true(Fishing.available(Fishing.Method.NASA, techs, kit,
+		Storehouse.new()), "con una nasa en el abrigo, ya sí")
+
+
+func test_la_nasa_no_compite_con_el_arpon_se_suma() -> void:
+	# La corrección de fondo: estando la nasa en la escalera, una banda con
+	# nasas y sin arpón «pescaba con nasa» —o sea se pasaba la jornada entera
+	# de pie en la orilla con una cesta— y una con arpón no calaba ninguna.
+	# Son dos cosas distintas y se hacen las dos.
+	assert_true(Fishing.is_passive(Fishing.Method.NASA),
+		"la nasa es un aparejo que se deja puesto")
+	for activa: Fishing.Method in Fishing.ACTIVAS:
+		assert_false(Fishing.is_passive(activa),
+			"%s es una jornada en el agua" % Fishing.method_name(activa))
+
+	var techs := _techs([TechTree.Tech.PESQUERA, TechTree.Tech.NASA])
+	var kit := _toolkit([Tool.Kind.NASA])
 	assert_eq(Fishing.best_for(techs, kit, Storehouse.new()),
-		Fishing.Method.NASA, "con una nasa en el abrigo, ya sí")
+		Fishing.Method.PESQUERA,
+		"con nasas caladas se pesca ADEMÁS con lo mejor que se tenga")
 
 
 func test_la_red_pide_tres_manos() -> void:
@@ -70,7 +90,7 @@ func test_la_red_pide_tres_manos() -> void:
 	var kit := _toolkit([Tool.Kind.NASA, Tool.Kind.RED])
 
 	assert_eq(Fishing.best_for(techs, kit, Storehouse.new(), 2),
-		Fishing.Method.NASA, "con dos manos no se cala una red")
+		Fishing.Method.PESQUERA, "con dos manos no se cala una red")
 	assert_eq(Fishing.best_for(techs, kit, Storehouse.new(), 3),
 		Fishing.Method.RED, "con tres sí")
 
@@ -83,8 +103,8 @@ func test_el_sedal_sin_cebo_no_es_sedal() -> void:
 	var kit := _toolkit([Tool.Kind.NASA, Tool.Kind.ANZUELO])
 
 	assert_eq(Fishing.best_for(techs, kit, Storehouse.new()),
-		Fishing.Method.NASA,
-		"con anzuelo y sin cebo se pesca con la nasa")
+		Fishing.Method.PESQUERA,
+		"con anzuelo y sin cebo se baja a la pesquera")
 
 	assert_eq(Fishing.best_for(techs, kit, _store(Materia.Kind.CARACOL, 20.0)),
 		Fishing.Method.SEDAL, "con caracol, sedal")
@@ -104,6 +124,82 @@ func test_de_cebo_vale_lo_que_haya() -> void:
 			"con %s se puede cebar" % Materia.material_name(kind))
 
 
+# --- la nasa calada: pesca sola -------------------------------------------
+#
+# Es la mitad nueva de la pesca, y la que la separa de todo lo demás: se cala,
+# se deja y trabaja mientras la banda está en otra cosa. Ver [Nasa].
+
+func _nasa(baited: bool = true) -> Nasa:
+	var piece := Tool.make(Tool.Kind.NASA, Tool.Stuff.FIBRA, 0.5)
+	var nasa := Nasa.create(Vector3.ZERO, 1, piece, "Beru")
+	if baited:
+		nasa.rebait(Materia.Kind.CARACOL)
+	return nasa
+
+
+func test_la_nasa_pesca_mientras_la_banda_hace_otra_cosa() -> void:
+	var nasa := _nasa()
+	assert_eq(nasa.collect(), 0, "recién calada no lleva nada")
+	for _dia in range(4):
+		nasa.soak(1.0)
+	assert_gt(float(nasa.collect()), 0.0,
+		"cuatro jornadas caladas y hay pieza dentro")
+	assert_gt(float(nasa.taken), 0.0, "y queda apuntado lo que ha dado")
+
+
+func test_sin_cebo_la_nasa_coge_pero_coge_poco() -> void:
+	# Ponerlo a cero convertiría el cebo en un interruptor y la nasa en una
+	# pieza inútil el día que se acaban los caracoles.
+	var cebada := _nasa(true)
+	var vacia := _nasa(false)
+	for _dia in range(8):
+		cebada.soak(1.0)
+		vacia.soak(1.0)
+	var con := cebada.collect()
+	var sin := vacia.collect()
+	assert_gt(float(sin), 0.0, "una nasa sin cebar coge lo que se mete solo")
+	assert_gt(float(con), float(sin), "pero la cebada coge bastante más")
+
+
+func test_el_cebo_se_pierde_en_el_agua() -> void:
+	var nasa := _nasa()
+	assert_true(nasa.is_baited(), "recién cebada")
+	for _dia in range(int(Nasa.DIAS_DE_CEBO) + 1):
+		nasa.soak(1.0)
+	assert_false(nasa.is_baited(),
+		"el cebo se deslíe y hay que reponerlo: es media faena de revisar")
+
+
+func test_la_nasa_se_pudre_en_el_agua_y_se_pierde() -> void:
+	# El mimbre en el río no dura. Y se pierde de verdad, porque la nasa ES la
+	# pieza del utillaje: no vuelve al abrigo.
+	var nasa := _nasa()
+	for _dia in range(200):
+		nasa.soak(1.0)
+	assert_true(nasa.is_spent(), "el mimbre calado acaba podrido")
+	assert_lt(nasa.condition(), 0.01, "y no queda nada que recuperar")
+
+
+func test_calar_una_nasa_la_saca_del_abrigo() -> void:
+	# Mientras esté en el río no la puede usar nadie ni cuenta para lo que el
+	# taller da por cubierto.
+	var kit := _toolkit([Tool.Kind.NASA])
+	assert_eq(kit.count(Tool.Kind.NASA), 1, "hay una trenzada")
+	var piece := kit.detach(Tool.Kind.NASA)
+	assert_true(piece != null, "se coge para calarla")
+	assert_eq(kit.count(Tool.Kind.NASA), 0, "y ya no está en el abrigo")
+
+
+func test_revisar_la_linea_no_se_come_la_jornada() -> void:
+	# Es lo que la separa de la línea de trampas, que sí se lleva el día
+	# entero: «coloca o revisa unas nasas y después el resto del tiempo le
+	# dedica a pescar activamente».
+	assert_lt(Nasa.JORNADA_DE_CALAR, 0.5,
+		"calar una nasa es un rato de la mañana")
+	assert_lt(Nasa.JORNADA_DE_REVISAR, Nasa.JORNADA_DE_CALAR,
+		"y revisarla, menos todavía")
+
+
 # --- se baja un escalón, no se para ---------------------------------------
 
 func test_al_romperse_el_arpon_se_baja_un_escalon() -> void:
@@ -120,9 +216,11 @@ func test_al_romperse_el_arpon_se_baja_un_escalon() -> void:
 	assert_eq(Fishing.best_for(techs, sin_arpon, Storehouse.new(), 3),
 		Fishing.Method.RED, "roto el arpón, la red")
 
+	# Y con la nasa fuera de la escalera, romper la red deja la pesquera: la
+	# nasa no salva la jornada porque la nasa no ES la jornada.
 	var solo_nasa := _toolkit([Tool.Kind.NASA])
 	assert_eq(Fishing.best_for(techs, solo_nasa, Storehouse.new(), 3),
-		Fishing.Method.NASA, "rota la red, la nasa")
+		Fishing.Method.PESQUERA, "rota la red, la pesquera")
 
 	assert_eq(Fishing.best_for(techs, Toolkit.new(), Storehouse.new(), 3),
 		Fishing.Method.PESQUERA, "y sin nada hecho, la pesquera, que es obra")

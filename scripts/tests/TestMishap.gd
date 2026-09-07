@@ -143,6 +143,9 @@ func test_falta_solo_la_hoguera() -> void:
 func test_la_mala_noche_deja_rastro_en_la_cronica() -> void:
 	# Si no se cuenta, el percance de manana llega sin explicacion.
 	var sim := SettlementSim.new()
+	# Sin montar la cronica esta prueba reventaba con «Invalid access to
+	# property 'entries' on Nil» y el marco la contaba como pasada.
+	sim.chronicle = Chronicle.new()
 	var person := _fuera(sim)
 	var antes := sim.chronicle.entries.size()
 	sim._bivouac(person)
