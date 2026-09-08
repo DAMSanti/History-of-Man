@@ -68,7 +68,13 @@ const IMPOSTOR_SHADER := "res://shaders/arbol_impostor.gdshader"
 ## Tres y no dos porque ahora hay DOS fotos por especie: de perfil y desde
 ## arriba. Las tres primeras celdas son los perfiles, en el orden de `KINDS`, y
 ## las tres siguientes las copas vistas de pájaro. Ver `TreeAtlas.gd`.
-const ATLAS_GRID := 3
+## Lado del atlas en celdas.
+##
+## CUATRO desde que el bosque tiene cinco especies: van los cinco perfiles y
+## las cinco copas cenitales, o sea diez celdas, y en una rejilla de tres sólo
+## caben nueve. Si se añade una sexta especie hay que subirlo otra vez y
+## rehornear con `TreeAtlas.gd`.
+const ATLAS_GRID := 4
 
 ## Los tipos de bosque, en el orden en que se fotografían para el atlas.
 ##
@@ -130,6 +136,29 @@ const KINDS: Array[Dictionary] = [
 		# CADUCO. Es la única de las tres, y por eso el bosque cambia de forma
 		# con el año en vez de sólo cambiar de color: en enero la vaguada se
 		# queda pelada y la ladera de pinos sigue verde. Ver [POR_ESTACION].
+		"caduco": true,
+	},
+	{
+		# EL ROBLEDAL, que es de donde sale la bellota. La banda llevaba
+		# recogiéndola —y desde el desamargado, comiéndola— de un árbol que no
+		# existía en el valle: sólo había pino, pino joven y abedul.
+		#
+		# Va en la ladera baja y soleada, que es donde está: el roble quiere más
+		# calor que el abedul de la vaguada y menos altura que el pinar.
+		"model": "roble", "cell": 3, "name": "Robledal",
+		"slope": Vector2(0.02, 0.42), "humidity": Vector2(0.34, 0.70),
+		"height": Vector2(0.02, 0.40), "chance": 0.55,
+		"caduco": true,
+	},
+	{
+		# Y EL AVELLANAR, que es de lo que vive la banda: seis mil raciones de
+		# fruto seco al año salían de un árbol que tampoco estaba.
+		#
+		# Va en el borde húmedo, que es donde crece el avellano cantábrico: en
+		# la orla del bosque y en la vaguada, en mata de varios pies.
+		"model": "avellano", "cell": 4, "name": "Avellanar",
+		"slope": Vector2(0.0, 0.34), "humidity": Vector2(0.46, 0.92),
+		"height": Vector2(0.0, 0.36), "chance": 0.60,
 		"caduco": true,
 	},
 	{

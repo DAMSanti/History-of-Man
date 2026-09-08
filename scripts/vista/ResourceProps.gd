@@ -124,6 +124,33 @@ var _model_info: Dictionary = {}
 func _catalogue() -> Array[Dictionary]:
 	return [
 		{
+			# EL BREZAL, que es lo que de verdad cubria el valle. Un valle
+			# cantabrico del Dryas no es bosque cerrado: es pinar en las
+			# umbrias y MATORRAL en el resto, y ese resto era casi todo. Sin
+			# el, entre arbol y arbol no habia mas que hierba.
+			#
+			# Va con la lena porque es lo que es: el brezo seco es el mejor
+			# encendedor que hay en el monte cantabrico.
+			"kind": Materia.Kind.LENA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "brezo",
+			"share": 0.30,
+			# Lo abierto y pobre: ladera, poca humedad y cualquier altura. Es
+			# justo donde NO hay bosque.
+			"habitat": {"slope": Vector2(0.03, 0.60), "humidity": Vector2(0.10, 0.55)},
+			"per_cell": 7, "sway": 0.30,
+		},
+		{
+			# Y el ENEBRO rastrero, el indicador de frio de los diagramas
+			# polinicos. Mas arriba y mas pelado que el brezo.
+			"kind": Materia.Kind.LENA,
+			"from": Subsistence.Activity.RECOLECCION,
+			"model": "enebro",
+			"share": 0.18,
+			"habitat": {"slope": Vector2(0.06, 0.75), "humidity": Vector2(0.05, 0.40)},
+			"per_cell": 4, "sway": 0.16,
+		},
+		{
 			"kind": Materia.Kind.FRUTO_SECO,
 			"from": Subsistence.Activity.RECOLECCION,
 			"model": "mata",

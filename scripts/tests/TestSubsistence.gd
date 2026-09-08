@@ -281,13 +281,33 @@ func test_el_abedul_amarillea_en_otono() -> void:
 	assert_gt(otono.g, otono.b * 2.0, "y no a rojo solo")
 
 
-func test_solo_el_abedul_es_caduco() -> void:
-	# Si algun dia entra otro caducifolio hay que darle su fila; esta prueba
-	# esta para que no se cuele uno sin ella.
-	var caducos := 0
+func test_las_coniferas_no_son_caducas_y_las_de_hoja_si() -> void:
+	# Es la unica regla que importa aqui, y esta escrita para que no se cuele
+	# una especie nueva sin decir a que lado cae. El pino se queda verde y el
+	# abedul, el roble y el avellano se pelan.
+	var caducos: Array[String] = []
 	for kind: Dictionary in Forest.KINDS:
+		var modelo := String(kind["model"])
 		if bool(kind.get("caduco", false)):
-			caducos += 1
-			assert_eq(String(kind["model"]), "abedul",
-				"el unico caducifolio del catalogo es el abedul")
-	assert_eq(caducos, 1, "y hay uno")
+			caducos.append(modelo)
+		else:
+			assert_true(modelo.begins_with("pino"),
+				"%s no es caduco, asi que tiene que ser conifera" % modelo)
+	for hoja: String in ["abedul", "roble", "avellano"]:
+		assert_true(caducos.has(hoja), "%s es de hoja caduca" % hoja)
+
+
+func test_cada_especie_tiene_su_celda_del_atlas() -> void:
+	# Dos especies en la misma celda serian dos arboles con la misma foto, y
+	# ademas el atlas tiene sitio contado: ver [Forest.ATLAS_GRID].
+	var celdas: Array[int] = []
+	for kind: Dictionary in Forest.KINDS:
+		var celda := int(kind["cell"])
+		assert_false(celdas.has(celda),
+			"la celda %d esta repetida" % celda)
+		celdas.append(celda)
+	# Perfiles y copas cenitales: el doble de especies tiene que caber.
+	assert_lt(float(Forest.KINDS.size() * 2),
+		float(Forest.ATLAS_GRID * Forest.ATLAS_GRID) + 1.0,
+		"las %d especies caben en un atlas de %d x %d" % [
+			Forest.KINDS.size(), Forest.ATLAS_GRID, Forest.ATLAS_GRID])

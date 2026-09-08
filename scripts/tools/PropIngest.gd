@@ -20,7 +20,23 @@ extends SceneTree
 ##     --script res://scripts/tools/PropIngest.gd
 
 const API := "https://api.polyhaven.com/files/%s"
-const WORK_DIR := "user://prop_ingest"
+## Donde se descarga y se descomprime antes de convertir.
+##
+## Por defecto `user://`, que en Windows cae en `AppData` -o sea en C:-. Un
+## arbol de Poly Haven con sus texturas son decenas de megas y `pine_tree_01`
+## son NOVECIENTOS TRECE: con el disco del sistema justo, la ingesta se queda a
+## medias y encima deja el disco a cero. `INGESTA_TMP` lo manda a donde se le
+## diga, que normalmente es el disco donde vive el proyecto.
+##
+##   INGESTA_TMP=D:/tmp/ingesta godot --headless --path . --script ...
+const WORK_DIR_POR_DEFECTO := "user://prop_ingest"
+
+static func _work_dir() -> String:
+	var fuera := OS.get_environment("INGESTA_TMP")
+	if fuera.is_empty():
+		return WORK_DIR_POR_DEFECTO
+	DirAccess.make_dir_recursive_absolute(fuera)
+	return fuera
 
 ## Igual que en la ingesta de texturas: en modo `--script` el módulo TLS del
 ## motor no se registra y cualquier https muere con «SSL module failed to
@@ -41,7 +57,7 @@ const MAX_BASE_TRIS := 24000
 
 
 func _init() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(WORK_DIR))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_work_dir()))
 	DirAccess.make_dir_recursive_absolute(
 		ProjectSettings.globalize_path("res://models/props"))
 
@@ -244,7 +260,7 @@ func _write_credits(library: PropLibrary) -> void:
 ## Descarga el glTF y todo lo que declare su mapa `include`, y devuelve la ruta
 ## del glTF ya en disco.
 func _fetch_model(slug: String) -> String:
-	var dir := "%s/%s" % [WORK_DIR, slug]
+	var dir := "%s/%s" % [_work_dir(), slug]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 
 	var listing := "%s/files.json" % dir

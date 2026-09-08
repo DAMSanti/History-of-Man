@@ -23,7 +23,8 @@ extends SceneTree
 # TUMBADOS. Son troncos caídos, no árboles muertos en pie, y un impostor de
 # un tronco tumbado girando para mirar a la cámara es de las cosas que peor
 # se ven. Su sitio es la leña, en `ResourceProps`.
-const PICKS: Array[String] = ["pino", "pino_joven", "abedul"]
+const PICKS: Array[String] = ["pino", "pino_joven", "abedul", "roble",
+	"avellano"]
 
 const CELL := 512
 ## Lado del atlas en celdas. Sale de [Forest], que es quien tiene que estar de

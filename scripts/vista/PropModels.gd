@@ -185,6 +185,46 @@ const CATALOGUE := {
 		"slug": "fir_sapling", "name": "Pino joven", "height_m": 4.0,
 		"tint": Color(0.86, 0.98, 0.82), "sat": 0.58,
 	},
+	# --- LA FLORA QUE FALTABA ------------------------------------------------
+	#
+	# El bosque tenia pino, pino joven y abedul, y con eso no se cubre la
+	# cornisa cantabrica del Magdaleniense. Los diagramas polinicos de El Miron,
+	# La Riera y Tito Bustillo dan pinar-abedular abierto con AVELLANO y ROBLE
+	# entrando en los interestadiales, y matorral de brezo y enebro en lo
+	# abierto, que era mucho.
+	#
+	# Y hay una razon de juego encima de la historica: la banda vive de la
+	# AVELLANA y desde el desamargado tambien de la BELLOTA, o sea que recogia
+	# el fruto de dos arboles que no existian en el valle. Eso ya no.
+	#
+	# Poly Haven no tiene ni avellano ni roble -ni sauce, ni aliso, ni enebro-,
+	# asi que van con lo unico de hoja que hay, igual que el abedul. A distancia
+	# de juego lo que se lee es la silueta, y estas tres son distintas entre si
+	# y distintas de la punta de la conifera. Queda anotado por si aparecen.
+	"roble": {
+		"slug": "island_tree_01", "name": "Roble", "height_m": 11.0,
+		# Verde hecho y algo oscuro: el roble no tiene la hoja clara del abedul.
+		"tint": Color(0.92, 1.02, 0.78), "sat": 0.52,
+	},
+	"avellano": {
+		# Mas arbusto que arbol -el avellano cantabrico va en mata de varios
+		# pies- y por eso queda bajo. Es el que da de comer a la banda.
+		"slug": "island_tree_02", "name": "Avellano", "height_m": 5.0,
+		"tint": Color(1.02, 1.08, 0.80), "sat": 0.54,
+	},
+	"brezo": {
+		# El matorral de lo abierto, que era casi todo. Un valle cantabrico del
+		# Dryas no es bosque cerrado: es pinar en las umbrias y brezal en el
+		# resto.
+		"slug": "shrub_01", "name": "Brezal", "height_m": 0.7,
+		"tint": Color(0.94, 0.92, 0.78), "sat": 0.48,
+	},
+	"enebro": {
+		# Enebro rastrero: el indicador de frio de los diagramas polinicos.
+		"slug": "shrub_03", "name": "Enebro", "height_m": 0.9,
+		"tint": Color(0.86, 0.94, 0.82), "sat": 0.50,
+	},
+
 	"abedul": {
 		# La hoja caduca del bosque de refugio. `tree_small_02` no es un abedul
 		# -Poly Haven no tiene ninguno- pero es el único árbol de HOJA que se
