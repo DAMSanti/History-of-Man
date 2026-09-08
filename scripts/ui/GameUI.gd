@@ -378,6 +378,14 @@ func _window(id: String, title: String,
 	frame.position = Vector2(24 + _next_offset * 26, 108 + _next_offset * 26)
 	_next_offset = (_next_offset + 1) % 5
 	add_child(frame)
+	# El grano del soporte, encima del fondo y debajo de todo lo demas: es lo
+	# que hace que la ventana parezca piel tensada y no un rectangulo. Ver
+	# [UISkin.grain_layer] y docs/INTERFAZ.md.
+	var grano := UISkin.grain_layer()
+	frame.add_child(grano)
+	# Detras de todo lo demas: el grano tiñe el soporte, no el texto escrito
+	# encima. En Godot el orden de hijos ES el orden de dibujo.
+	frame.move_child(grano, 0)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)

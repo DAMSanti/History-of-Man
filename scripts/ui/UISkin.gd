@@ -11,40 +11,92 @@ extends RefCounted
 ## pigmento que la banda recoge y usa. La piedra tira a azul frío para que el
 ## utillaje se distinga del alimento de un vistazo.
 
-const GROUND := Color(0.086, 0.078, 0.066)      ## Fondo de ventana
-const SURFACE := Color(0.129, 0.118, 0.102)     ## Fila, campo, cabecera
-const RAISED := Color(0.180, 0.165, 0.141)      ## Botón, fila alterna
-const RULE := Color(0.263, 0.239, 0.204)        ## Filetes y bordes
+## La era que se lleva puesta. Ver [PielDeEra].
+static var era: Site.Era = Site.Era.PALEOLITICO
 
-const INK := Color(0.914, 0.886, 0.835)         ## Texto normal
-const INK_SOFT := Color(0.655, 0.616, 0.549)    ## Texto secundario
-const INK_FAINT := Color(0.463, 0.435, 0.388)   ## Rótulos de columna
+# Los colores son `static var` y no `const` porque cambian al cambiar de era.
+# Se leen igual desde fuera -`UISkin.OCHRE`- asi que los ciento cuarenta y
+# cinco sitios que los usan no se enteran.
+static var GROUND := Color(0.106, 0.086, 0.067)   ## Piel curtida en sombra
+static var SURFACE := Color(0.153, 0.125, 0.098)  ## La misma piel, a la luz
+static var RAISED := Color(0.212, 0.176, 0.137)   ## Piel tensada de un boton
+static var RULE := Color(0.400, 0.318, 0.216)     ## Filete de ocre apagado
 
-const OCHRE := Color(0.851, 0.635, 0.325)       ## Acento
-const FLINT := Color(0.553, 0.655, 0.729)       ## Piedra y utillaje
-const GREEN := Color(0.478, 0.663, 0.435)       ## Bien
-const ALARM := Color(0.824, 0.408, 0.349)       ## Mal
+static var INK := Color(0.925, 0.894, 0.827)      ## Hueso
+static var INK_SOFT := Color(0.690, 0.639, 0.557) ## Ceniza
+static var INK_FAINT := Color(0.478, 0.435, 0.376)## Carbon frotado
+
+static var OCHRE := Color(0.851, 0.588, 0.267)    ## Ocre: el acento
+static var FLINT := Color(0.545, 0.647, 0.722)    ## Silex: piedra y utillaje
+static var GREEN := Color(0.514, 0.639, 0.400)    ## Liquen: bien
+static var ALARM := Color(0.769, 0.353, 0.286)    ## Hematites: mal
+
+
+## Viste la interfaz con los materiales de una era.
+##
+## Se llama UNA vez al montar la partida, con la era del emplazamiento. Toda la
+## interfaz cambia detras: los colores son `static var`, asi que quien ya los
+## leyo no se entera, pero todo lo que se pinte a partir de aqui sale con la
+## piel nueva. Por eso hay que llamarlo ANTES de construir las ventanas.
+static func vestir(nueva: Site.Era) -> void:
+	era = nueva
+	var p := PielDeEra.paleta(nueva)
+	GROUND = p["ground"]
+	SURFACE = p["surface"]
+	RAISED = p["raised"]
+	RULE = p["rule"]
+	INK = p["ink"]
+	INK_SOFT = p["ink_soft"]
+	INK_FAINT = p["ink_faint"]
+	OCHRE = p["accent"]
+	FLINT = p["cold"]
+	GREEN = p["good"]
+	ALARM = p["bad"]
 
 
 ## Caja de la ventana entera.
 static func window_box() -> StyleBoxFlat:
+	# Caja plana con borde; el GRANO del soporte va como capa aparte dentro de
+	# `GameUI._window`, porque una `StyleBoxTexture` no admite borde y el borde
+	# es justo lo que separa la ventana del terreno.
 	var box := StyleBoxFlat.new()
 	box.bg_color = GROUND
 	box.border_color = RULE
 	box.set_border_width_all(1)
-	box.set_corner_radius_all(6)
-	box.set_content_margin_all(10)
-	box.shadow_color = Color(0.0, 0.0, 0.0, 0.45)
-	box.shadow_size = 10
-	box.shadow_offset = Vector2(0, 3)
+	# Un filete mas grueso arriba: es donde se tensa la piel.
+	box.border_width_top = 2
+	box.set_corner_radius_all(PielDeEra.esquina_de(era))
+	box.set_content_margin_all(11)
+	box.shadow_color = Color(0.0, 0.0, 0.0, 0.55)
+	box.shadow_size = 12
+	box.shadow_offset = Vector2(0, 4)
 	return box
+
+
+## El grano del soporte, para colgarlo DENTRO de la ventana.
+##
+## Es lo que separa un rectangulo de color de algo que parece material: una
+## piel raspada tiene poro y veta. Va como capa propia y no como fondo porque
+## el fondo lleva el borde. Ver [PielDeEra.textura_de_grano].
+static func grain_layer() -> TextureRect:
+	var capa := TextureRect.new()
+	capa.texture = PielDeEra.textura_de_grano(era)
+	capa.stretch_mode = TextureRect.STRETCH_TILE
+	capa.set_anchors_preset(Control.PRESET_FULL_RECT)
+	capa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# En multiply: el grano oscurece y aclara lo que hay debajo en vez de
+	# taparlo, que es lo que hace un poro de verdad.
+	capa.material = CanvasItemMaterial.new()
+	(capa.material as CanvasItemMaterial).blend_mode = 		CanvasItemMaterial.BLEND_MODE_MUL
+	capa.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	return capa
 
 
 ## Caja de una fila o de un bloque dentro de la ventana.
 static func row_box(tint: Color = SURFACE) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
 	box.bg_color = tint
-	box.set_corner_radius_all(4)
+	box.set_corner_radius_all(PielDeEra.esquina_de(era))
 	box.content_margin_left = 6
 	box.content_margin_right = 6
 	box.content_margin_top = 4
@@ -69,7 +121,7 @@ static func button_box(state: String) -> StyleBoxFlat:
 			box.bg_color = RAISED
 			box.border_color = RULE
 	box.set_border_width_all(1)
-	box.set_corner_radius_all(4)
+	box.set_corner_radius_all(PielDeEra.esquina_de(era))
 	box.content_margin_left = 8
 	box.content_margin_right = 8
 	box.content_margin_top = 3
@@ -103,6 +155,8 @@ static func build_theme() -> Theme:
 	var rule := StyleBoxFlat.new()
 	rule.bg_color = RULE
 	rule.content_margin_top = 1
+	rule.content_margin_left = 2
+	rule.content_margin_right = 2
 	theme.set_stylebox("separator", "HSeparator", rule)
 	theme.set_constant("separation", "HSeparator", 8)
 

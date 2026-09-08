@@ -538,6 +538,11 @@ func _levantar_fauna_y_tecnica() -> void:
 
 ## La interfaz, el censo de lo pintado y las capas que van encima.
 func _levantar_interfaz() -> void:
+	# La interfaz se viste con los materiales de la era ANTES de construir
+	# nada: los colores son `static var` y quien ya los leyo no se entera.
+	# Ver [PielDeEra] y docs/INTERFAZ.md.
+	UISkin.vestir(Expedition.era if Expedition.is_active() else Site.Era.PALEOLITICO)
+
 	ui = GameUI.new()
 	ui.name = "GameUI"
 	ui.sim = sim
