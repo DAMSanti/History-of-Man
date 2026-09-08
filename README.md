@@ -64,7 +64,7 @@ del Paleolítico sale con la tipografía de serie.
 | [docs/PERRO_Y_BELLOTA.md](docs/PERRO_Y_BELLOTA.md) | dos mecánicas de época, listas para implementar |
 | [docs/SLICE_PALEOLITICO.md](docs/SLICE_PALEOLITICO.md) | qué tiene que demostrar la rebanada jugable |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | por dónde va y qué falta |
-| [docs/EPOCAS.md](docs/EPOCAS.md) | las diez épocas y el hito que cierra cada una |
+| [docs/EPOCAS.md](docs/EPOCAS.md) | las doce épocas y el hito que cierra cada una |
 | [docs/CAZA_Y_PESCA.md](docs/CAZA_Y_PESCA.md) | el modelo de subsistencia, con sus medidas |
 | [docs/REVAMP_GRAFICO.md](docs/REVAMP_GRAFICO.md) | el trabajo de imagen y su coste medido |
 | [docs/CIERRE_SLICE.md](docs/CIERRE_SLICE.md) | el cierre de la rebanada |

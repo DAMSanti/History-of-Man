@@ -1,6 +1,6 @@
 # Roadmap — CityBuilder cántabro (Godot 4.5.1)
 
-City builder del Paleolítico a la Edad Moderna sobre el relieve real de Cantabria.
+City builder del Paleolítico al siglo XX sobre el relieve real de Cantabria.
 
 Este documento se reescribió el **2026-09-02**, tras adoptar la arquitectura de
 dos escalas. La versión anterior planificaba un mundo único con streaming de
@@ -157,8 +157,8 @@ priorización sobre el árbol tecnológico, no una vía paralela que le compita.
 
 ## FASE D — Épocas
 
-Épocas con cultura material documentada en Cantabria, del Achelense a la Edad
-Moderna. Cada una es **datos**: materiales, procesos y edificios disponibles,
+Épocas con cultura material documentada en Cantabria, del Paleolítico al siglo
+XX. Cada una es **datos**: materiales, procesos y edificios disponibles,
 más las técnicas que hay que externalizar para cerrarla.
 
 Están escritas una a una en [EPOCAS.md](EPOCAS.md), con el hito que cierra cada
@@ -221,7 +221,7 @@ Sin orden fijo; se atiende cuando estorbe.
 
 ## Riesgos
 
-**El alcance.** Cuarenta mil años, diez épocas, procesos físicos, comercio y
+**El alcance.** Cuarenta mil años, doce épocas, procesos físicos, comercio y
 fidelidad histórica es más de lo que cabe en un proyecto personal. La FASE B3
 —una sola cadena completa y corta— existe justamente para comprobar pronto si
 el núcleo divierte, antes de construir contenido encima.

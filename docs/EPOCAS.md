@@ -104,7 +104,7 @@ cuarta a la vez, y no por poco:
 **La cuarta regla, la social, también repasa las fronteras que ya estaban**, y
 dos salen reforzadas: Hierro → Roma cambia la unidad del castro al Estado, y
 Neolítico → Calcolítico es la única que se sostiene *sin* ella (va por la
-tercera). Ninguna de las diez pasa sólo por la cuarta, y eso está bien: un
+tercera). Ninguna de las doce pasa sólo por la cuarta, y eso está bien: un
 cambio social que no deja huella material tampoco deja `Feature` en el mapa.
 
 Y las que descarté, por si prefieres cambiar el reparto:
@@ -114,7 +114,7 @@ Y las que descarté, por si prefieres cambiar el reparto:
   fábrica de cientos de personas y la provincia de 1778 sí cambian quién decide.
   Falla la tercera —el alto horno ya está en 1622—, así que entra sólo por lo
   social. **Si quieres cambiar una por otra, funde el Calcolítico en el Bronce y
-  parte la Moderna en dos**: sigue habiendo diez y el reparto queda mejor
+  parte la Moderna en dos**: sigue habiendo doce y el reparto queda mejor
   documentado, porque el XVIII cántabro está escrito y el Calcolítico no.
 - **Partir el Hierro** (primera / segunda Edad del Hierro). El registro cántabro
   de la primera es demasiado delgado para sostener una época jugable.
@@ -353,7 +353,7 @@ pide.
 
 ### 4. Calcolítico — la piedra que era metal
 
-La época más corta y la de registro más flojo de las diez, y hay que jugarla
+La época más corta y la de registro más flojo de las doce, y hay que jugarla
 como tal: pocas decisiones, una sola idea.
 
 **El registro cántabro.** Sigue el megalitismo, siguen las cuevas sepulcrales, y
@@ -595,20 +595,104 @@ casa y el calendario; la casona montañesa, y la emigración a Indias.
 | **El indiano** | Se va gente y vuelve capital. El valle depende de otro continente |
 | **La provincia** | Los Nueve Valles se dan gobierno común (1778): el mapa regional se cierra sobre sí mismo |
 
-**Sin cierre.** Es la última. El juego termina cuando el valle está enganchado a
-una economía que ya no cabe en el mapa: la partida acaba **por integración**, no
-por victoria.
+**Cierre: la tierra cambia de dueño.** Las desamortizaciones del XIX sacan a
+subasta lo del monasterio y lo del común. Es el hito más social de los doce y
+uno de los pocos que **quita** en vez de dar: el monte que el concejo llevaba
+gestionando desde la Alta Edad Media —§8, la institución más cántabra de todas—
+deja de ser del concejo. Sin ese cambio no hay obrero, porque quien tiene monte
+comunal no necesita jornal.
 
-**La trampa.** Seguir hasta la industria y el ferrocarril. El siglo XIX pide otro
-juego —capital, fábrica, sindicato— y meterlo aquí es abrir un frente que no se
-cierra. La Edad Moderna es el final, y conviene que se note desde el principio.
+**La trampa.** Que la Real Fábrica se juegue como un edificio más. Liérganes y
+La Cavada son el Estado instalando industria pesada en un valle ganadero: comen
+bosque a una velocidad que el monte no aguanta, y ese conflicto —carbón vegetal
+contra pasto y contra leña— es la época entera. Se resuelve solo con la escalera
+térmica y el bosque que ya están simulados.
+
+---
+
+### 11. El vapor — la fábrica y el ferrocarril
+
+Aquí la partida cambia de naturaleza, y conviene decirlo en voz alta: **desde
+esta época el valle deja de ser un sistema cerrado**. Lo que se produce, lo que
+vale y quién lo compra se decide fuera del mapa.
+
+**El registro cántabro.** El ferrocarril de Alar del Rey a Santander (1857–1866)
+y con él la harina de Castilla hacia Cuba; las minas de Cabárceno y el zinc de
+Reocín; los Altos Hornos de Nueva Montaña (1899); la emigración masiva a América
+y las casas de indianos que volvieron con ella; la explosión del *Cabo
+Machichaco* en el puerto (1893). **ATESTIGUADO**, y por primera vez la fuente no
+es arqueológica sino de archivo y prensa, que es un cambio de método a tener en
+cuenta en la enciclopedia de la FASE E4.
+
+| Hitos técnicos | |
+|---|---|
+| **El coque** | El alto horno se suelta del carbón vegetal: **la industria deja de estar limitada por el bosque**, que era el techo desde el Neolítico |
+| **La máquina de vapor** | La energía se desengancha del río y de la estación. El molino podía parar en agosto; esto no |
+| **El ferrocarril** | Alar–Santander: Castilla y el puerto en una jornada. El mapa regional se reordena entero alrededor de la vía |
+| **La mina a cielo abierto** | Cabárceno: el paisaje se altera a escala de mapa. Y esto **está en el DEM real** que el juego ya carga |
+| **La conserva y la salazón industrial** | La anchoa de Santoña con maestros italianos: el pescado deja de ser comida y pasa a ser producto |
+
+| Hitos sociales | |
+|---|---|
+| **El jornal** | El trabajo se vende por horas a alguien. Es el cambio de unidad de toda la época |
+| **La emigración masiva** | El valle exporta gente y le vuelve capital. El indiano deja de ser una excepción |
+| **La escuela y el cuartel** | El Estado llega a la aldea, y por primera vez cuenta a cada uno por su nombre |
+| **La huelga** | La única herramienta del que no tiene tierra ni herramienta |
+
+**Cierre: el capital de fuera.** Una fábrica que se levanta en el valle con
+dinero que no es del valle —Solvay en Barreda, 1908, con capital belga—. La
+decisión de qué se produce aquí deja de tomarse aquí, y eso es el siglo XX.
+
+**La trampa.** Que se convierta en un *tycoon*. El juego no es de construir la
+fábrica: es de **qué le pasa al valle cuando la fábrica llega**. Quién deja el
+ganado, quién se va a América, qué monte se vende y qué río se ensucia. Si el
+jugador acaba optimizando toneladas de mineral, se ha perdido lo que hacía
+distinto a este proyecto.
+
+---
+
+### 12. El siglo corto — hasta el mapa de hoy
+
+**El registro cántabro.** El Palacio de la Magdalena y el veraneo (1913); el
+frente del norte y la caída de Santander (1937); el incendio de Santander
+(1941); Sniace en Torrelavega (1941) y la química del Besaya; la emigración a
+Europa de los sesenta; el turismo de costa; la reconversión industrial de los
+ochenta, y el Estatuto de Autonomía (1981–82). **ATESTIGUADO**, con la misma
+advertencia de método que la época anterior.
+
+| Hitos técnicos | |
+|---|---|
+| **La electricidad** | La luz llega al valle. La jornada deja de acabarse con el sol, por primera vez desde la lámpara de grasa |
+| **El hormigón** | Se construye en cualquier sitio y con material que no es del sitio |
+| **El automóvil** | Y con él la carretera asfaltada: el pueblo de montaña deja de estar a un día de todo |
+| **La química** | Solvay y Sniace. Producen bien y **el río paga la factura**: el Besaya es un dato del juego, no una moraleja |
+| **El frigorífico** | Se acabó la conservación por humo, sal y estación. Cae la última mecánica que venía del Paleolítico |
+
+| Hitos sociales | |
+|---|---|
+| **El veraneante** | La playa y el verde valen dinero sin que nadie los trabaje. El paisaje se vuelve producto |
+| **La guerra** | 1937: el cuarto y último hito que le ocurre al jugador. No hay bando que jugar |
+| **El éxodo rural** | El pueblo se vacía hacia Torrelavega, Santander y Europa. Emplazamientos ocupados desde el Neolítico se quedan sin nadie |
+| **La reconversión** | Lo que trajo el jornal se lo lleva, y deja el edificio puesto |
+
+**Final: el mapa se cierra.** Cantabria se constituye en comunidad autónoma y el
+territorio de la partida pasa a coincidir **exactamente** con
+`data/boundaries/cantabria.json`: los 5304 km² con los que arrancó el juego. La
+partida termina cuando el mapa que has ido ocupando durante cuarenta mil años se
+convierte en el mapa que se te dio a elegir en la primera pantalla. No hay
+victoria; hay reconocimiento.
+
+**La trampa.** Dos, y las dos fáciles de pisar. Una, contar la contaminación y
+la reconversión como moraleja: son consecuencias medibles, y el juego mide.
+Dos, seguir hasta hoy. De 1982 en adelante no hay distancia suficiente para
+convertir nada en mecánica, y el registro deja de ser registro para ser opinión.
 
 ---
 
 ## 5. Las tres escaleras que cruzan todas las épocas
 
 **Ninguna es contenido nuevo**: las tres están ya escritas en el proyecto, y son
-el esqueleto que impide que las diez épocas sean diez listas sueltas. Además son
+el esqueleto que impide que las doce épocas sean doce listas sueltas. Además son
 las que llevan la progresión *dentro* de una época, que es justo lo que hace
 falta ahora que el Paleolítico es una sola.
 
@@ -620,7 +704,12 @@ el Neolítico**, que es lo que hace que las diez tengan ritmo:
 
 hogar ~700 °C (1–2) → horno de fosa ~900 (3) → cubeta con fuelle ~1100 (4) →
 horno mejorado ~1200 (5) → cuba baja ~1250 (6) → ferrería de monte (8) →
-ferrería hidráulica ~1350 (9) → alto horno ~1550 (10).
+ferrería hidráulica ~1350 (9) → alto horno ~1550 (10) → **coque y vapor (11)**.
+
+El último peldaño es distinto de los diez anteriores y por eso cierra la
+escalera: con el coque **el límite deja de ser una temperatura y pasa a ser el
+dinero**. Es la señal más limpia de que el juego ha cambiado de género, y de que
+conviene que ahí queden sólo dos épocas y no seis.
 
 ### La escalera del soporte
 
@@ -628,7 +717,7 @@ De la FASE C. Es la que decide **qué saber sobrevive al relevo generacional**:
 
 pared y mobiliar (1) → canto pintado (2) → cerámica (3) → molde y marca de
 propiedad (4–5) → estela (6) → escritura (7) → cartulario y fuero (8–9) →
-imprenta (10).
+imprenta (10) → prensa y fotografía (11) → radio (12).
 
 ### La escalera del alimento
 
@@ -636,7 +725,12 @@ Y con ella, cuánta gente cabe en el mismo sitio:
 
 recolección y caza (1) → marisqueo y costa (2) → siembra y rebaño (3) →
 excedente almacenable (4–6) → mercado y compra (7) → rotación y molino (8) →
-comercio de la villa (9) → maíz y ultramar (10).
+comercio de la villa (9) → maíz y ultramar (10) → mercado nacional por
+ferrocarril (11) → frío, conserva y salario (12).
+
+En la 12 se cierra el círculo entero: la comida deja de depender de la estación
+y del sitio, que es la restricción sobre la que está construido todo el juego
+desde la primera pantalla.
 
 ---
 
@@ -645,7 +739,7 @@ comercio de la villa (9) → maíz y ultramar (10).
 `Site.Era` se queda en cinco valores y **no hace falta tocarlo**: es lo que
 gobierna qué emplazamientos son ocupables y qué piel lleva la interfaz. La época
 concreta va aparte, porque son dos preguntas distintas —«qué cultura material
-tengo» y «qué clase de sitio puedo habitar»—. Con diez épocas sobre cinco
+tengo» y «qué clase de sitio puedo habitar»—. Con doce épocas sobre cinco
 `Site.Era` la correspondencia es la de la tabla del §2 y no hace falta más.
 
 ```gdscript
@@ -653,7 +747,7 @@ class_name Hito
 extends Resource
 
 @export var id: StringName             # "la_aleacion"
-@export var epoca: int                 # índice de las diez
+@export var epoca: int                 # índice de las doce
 @export var nombre: String
 @export var descripcion: String
 @export var cierra_epoca: bool = false # sólo uno por época
@@ -680,7 +774,7 @@ que se paga durante años.
 3. **El Neolítico**, que es el primer peldaño térmico propio y la primera vez
    que se construye en vez de ocupar.
 
-De ahí en adelante, de una en una y hacia delante. Las diez fichas son el
+De ahí en adelante, de una en una y hacia delante. Las doce fichas son el
 destino, no el plan de la semana.
 
 ---
@@ -692,13 +786,23 @@ ajuste excelente a un mundo nuevo, y el Neolítico cántabro llega tarde y a
 regañadientes. El juego no debe tener una flecha de progreso dibujada.
 
 **La proporción de PLAUSIBLE no es pareja.** El Calcolítico es la época con menos
-suelo documentado de las diez y el Paleolítico la que más tiene; en la Edad Media
+suelo documentado de las doce y el Paleolítico la que más tiene; en la Edad Media
 el problema es el contrario, que hay tanto que elegir qué contar ya es una
 interpretación. Lo que se garantiza no es acertar: es que **ninguna afirmación
 esté sin etiqueta** (FASE E4).
 
-**Diez épocas son más de lo que cabe.** Está dicho en los riesgos del ROADMAP y
-se repite aquí: esto es el mapa del destino, no un compromiso de llegar. Si hay
-que recortar, el orden es **fundir el Calcolítico con el Bronce** y luego juntar
-las dos mitades de la Edad Media; con eso se vuelve a ocho sin perder nada
-importante. Y si sólo se hacen tres, que sean tres enteras.
+**El método cambia en la 11, y hay que decirlo.** Hasta la Edad Media todo lo que
+afirma este documento se apoya en cultura material excavada; de la Edad Moderna
+en adelante se apoya en archivo, y en el XX en prensa y memoria. No es peor
+fuente, es **otra**, y la enciclopedia de la FASE E4 debería distinguirlas en vez
+de meter una estela discoidea y una acta de la Solvay bajo la misma etiqueta de
+ATESTIGUADO.
+
+**Doce épocas son mucho más de lo que cabe.** Está dicho en los riesgos del
+ROADMAP y se repite aquí: esto es el mapa del destino, no un compromiso de
+llegar. Si hay que recortar, el orden es al revés del de escritura: **primero se
+caen la 11 y la 12**, que son las que menos se apoyan en el motor que existe —el
+jornal y el capital de fuera no se simulan con jornadas y calorías—, luego se
+funde el Calcolítico con el Bronce, y luego se juntan las dos mitades de la Edad
+Media. Con eso se vuelve a ocho sin perder nada estructural. Y si sólo se hacen
+tres, que sean tres enteras.
