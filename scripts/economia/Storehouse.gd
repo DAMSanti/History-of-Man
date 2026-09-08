@@ -117,6 +117,17 @@ func add(kind: Materia.Kind, units: float) -> float:
 	return accepted
 
 
+## Lo que ha SALIDO hoy, material a material.
+##
+## Aquí y no en quien saca, porque `take` es la única puerta: por ella pasa lo
+## que se come, lo que se gasta en el taller, el cebo del sedal y el material
+## de una obra. Contarlo en cada sitio sería pedir que nadie se olvide nunca.
+##
+## Lo que NO cuenta es lo que se pudre: eso no lo ha gastado la banda, se ha
+## perdido, y va aparte en `SettlementSim.spoiled_today`.
+var spent_today: Dictionary = {}
+
+
 ## Saca material. Devuelve cuánto se pudo sacar.
 func take(kind: Materia.Kind, units: float) -> float:
 	var had := amount(kind)
@@ -127,6 +138,7 @@ func take(kind: Materia.Kind, units: float) -> float:
 	if contents[kind] <= 0.0001:
 		contents.erase(kind)
 		ages.erase(kind)
+	spent_today[int(kind)] = float(spent_today.get(int(kind), 0.0)) + taken
 	return taken
 
 

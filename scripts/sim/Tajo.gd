@@ -353,10 +353,16 @@ func _produced_in_period(key: int) -> float:
 	# El día en curso cuenta: sin él, la cifra no se mueve hasta mañana y el
 	# jugador que acaba de mandar a media banda a por leña no ve nada.
 	total += float(sim.taller.produced_today.get(key, 0.0))
-	var days := sim.taller.produced_days.size() + 1
-	if days >= SettlementSim.CONSUMO_DIAS:
-		return total
-	return total * float(SettlementSim.CONSUMO_DIAS) / float(days)
+	# SIN PROYECTAR. Esto multiplicaba por `CONSUMO_DIAS / dias jugados` cuando
+	# aun no habia mes entero, con la idea de que las dos columnas del almacen
+	# fueran comparables desde el primer dia. El resultado era mentir: el dia
+	# cinco, veinte de cuarcita recogida salian como «112 al mes» al lado de un
+	# «HAY 20», y no hay forma de leer eso.
+	#
+	# Lo que se enseña ahora es lo que ha pasado: la suma de lo que entro en los
+	# ultimos treinta dias, sean treinta o sean dos. Al principio las dos
+	# columnas son pequeñas, y eso es correcto y es honrado.
+	return total
 
 
 ## Cierra el día de producción y lo mete en el registro.
@@ -365,6 +371,14 @@ func _roll_production() -> void:
 	while sim.taller.produced_days.size() > SettlementSim.CONSUMO_DIAS:
 		sim.taller.produced_days.remove_at(0)
 	sim.taller.produced_today = {}
+
+	# Y el libro de lo que SALE, en la misma vuelta y con la misma ventana:
+	# las dos columnas del almacen tienen que medir lo mismo o no se pueden
+	# leer juntas. Ver [Taller.spent_days].
+	sim.taller.spent_days.append(sim.store.spent_today.duplicate())
+	while sim.taller.spent_days.size() > SettlementSim.CONSUMO_DIAS:
+		sim.taller.spent_days.remove_at(0)
+	sim.store.spent_today = {}
 
 ## Materiales que NO están en todas partes: solo salen del paraje que los
 ## tiene. Son los que dan nombre a un sitio por sí solos -una veta de

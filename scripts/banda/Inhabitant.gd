@@ -336,6 +336,19 @@ func note_step(metres: float, home: Vector3) -> void:
 	if journey.is_empty():
 		return
 	journey["metres"] = float(journey["metres"]) + metres
+	# LO ANDADO A LA IDA, aparte del total.
+	#
+	# Es lo que mejor predice lo que va a costar la vuelta, y hacia falta: la
+	# hora de emprender el regreso se calculaba con la distancia EN LINEA RECTA
+	# por un factor fijo -2,4-, y con un rio de por medio el rodeo real es
+	# mucho mayor. Medido en el sitio 56: un pescador durmiendo al raso a 150 m
+	# del abrigo despues de andar 1.284 m para llegar alli, o sea un rodeo de
+	# ocho veces y media. Se le decia de volver cuando ya no daba tiempo.
+	#
+	# Solo mientras se VA: el ir y venir de mata en mata mientras se trabaja no
+	# es camino de vuelta y no debe contar.
+	if state == State.YENDO:
+		journey["ida"] = float(journey.get("ida", 0.0)) + metres
 	var reach := home.distance_to(position)
 	if reach > float(journey["farthest"]):
 		journey["farthest"] = reach

@@ -1317,3 +1317,40 @@ func test_libre_otra_vez_si_el_primero_ya_no_esta_alli() -> void:
 
 	assert_eq(sim._paraje_to_survey(segundo), paraje,
 		"libre en cuanto el primero ya no esta trabajando alli")
+
+
+func test_quien_puede_volver_vuelve_aunque_sea_de_noche() -> void:
+	# La otra mitad, y la que faltaba: «de noche no se anda» dejaba tirado en el
+	# monte a cualquiera al que se le hiciera tarde. Medido en el sitio 56:
+	# VEINTIUNA noches al raso en diez jornadas entre dos pescadores y un
+	# recolector, ninguno de los cuales puede acampar, con un caso durmiendo a
+	# CINCUENTA Y TRES METROS de la boca de la cueva.
+	#
+	# Peticion literal: «un habitante que no debe dormir fuera siempre intentara
+	# volver a la cueva, aunque llegue muy tarde».
+	var sim := _sim_on_fake()
+	sim.store = Storehouse.new()
+	sim.time_scale = 1.0
+	sim.hour = 23.0
+
+	var person := Inhabitant.create(0, Vector3.ZERO, sim._rng)
+	# En el mismo lado del rio que el abrigo, o sea con camino de vuelta.
+	person.position = sim.home_position + Vector3(260.0, 0.0, 0.0)
+	person.position.y = sim._terrain.get_height_at(person.position)
+	person.job = Profession.Job.RIBERA
+	person.state = Inhabitant.State.VOLVIENDO
+	person.has_task = true
+	sim.people = [person]
+	assert_true(sim.marcha._navgrid().connected(person.position,
+		sim.home_position), "de verdad puede volver")
+
+	sim._tick_person(person, 0, 0.5, 0.5)
+	assert_false(person.state == Inhabitant.State.DURMIENDO,
+		"no se acuesta en el monte teniendo camino a casa")
+
+
+func test_volver_de_noche_cansa_mas_que_volver_de_dia() -> void:
+	# El precio de llegar tarde. Lo otro -dormir menos- se cobra solo, porque
+	# el descanso va por horas dormidas.
+	assert_gt(SettlementSim.CANSA_DE_NOCHE, 0.0,
+		"andar de noche cansa: se ve peor y no se para a descansar")

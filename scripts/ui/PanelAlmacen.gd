@@ -304,11 +304,22 @@ func _ledger_header(body: VBoxContainer) -> void:
 	# es cuanto quiere tener guardado y lo decide el. Estaban vinculados —los
 	# dos salian de lo mismo— y por eso subir uno subia el otro.
 	#
-	# Las dos del medio van EN EL MISMO PERIODO y se dice en la cabecera. GASTA
-	# iba por mes y PRODUCE por dia: leidas juntas -que es para lo que estan una
-	# al lado de otra- la banda parecia arruinarse siempre, por un factor de
-	# treinta. Ver `SettlementSim.production_of`.
-	var texts := ["", "HAY", "GASTA/MES", "PRODUCE/MES", "META"]
+	# Las dos del medio van EN EL MISMO PERIODO y con la MISMA regla: la suma
+	# de lo que ha entrado y lo que ha salido en los ultimos treinta dias. Ni
+	# una proyecta ni la otra pronostica.
+	#
+	# Las dos lo hacian, cada una a su manera, y las dos engañaban:
+	#
+	#   GASTA era `material_needed`, o sea «lo que la banda gastaria en un
+	#   mes». El dia dos declaraba 762 raciones de comida sin que se hubiera
+	#   comido casi nada: proyectaba treinta dias de bocas.
+	#
+	#   PRODUCE multiplicaba lo recogido por «mes entero / dias jugados». El dia
+	#   cinco, veinte de cuarcita salian como 112 al lado de un «HAY 20».
+	#
+	# Ahora las dos son libros: se apunta lo que pasa y se suma. Al principio de
+	# partida las dos salen pequeñas, y eso es lo correcto.
+	var texts := ["", "HAY", "GASTADO/30d", "PRODUCE/30d", "META"]
 	for i in range(5):
 		var cell := Label.new()
 		cell.text = texts[i]

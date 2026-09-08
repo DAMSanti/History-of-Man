@@ -53,6 +53,7 @@ func _init() -> void:
 		# En CADA cuadro, no solo a mediodia: cruzar el rio dura unos segundos
 		# y mirando una vez al dia no se ve nunca.
 		mojados += _pisadas_en_lo_hondo(sim)
+		_apuntar_noche(sim)
 		if sim.day == visto or sim.hour < 14.0 or sim.hour > 15.0:
 			continue
 		visto = sim.day
@@ -62,6 +63,15 @@ func _init() -> void:
 	print("")
 	print("--- Y AL CABO ---")
 	print("pisadas en agua que no se vadea: %d" % mojados)
+	print("")
+	print("--- QUIEN DUERME FUERA, Y CUANTO ANDUVO ---")
+	if _fuera.is_empty():
+		print("   nadie")
+	for clave: String in _fuera:
+		var f: Dictionary = _fuera[clave]
+		print("   %-9s %-12s %d noches · el peor dia a %4.0f m del abrigo, "
+			% [clave, String(f["oficio"]), int(f["noches"]), float(f["lejos"])]
+			+ "habiendo andado %4.0f m para llegar" % float(f["andado"])) 
 	print("parajes conocidos: %d" % sim.parajes.list.size())
 	for paraje: Paraje in sim.parajes.list:
 		print("   %-26s %-14s a %4.0f m · sabido %.0f %%" % [
@@ -189,3 +199,41 @@ func _total_en_despensa(sim: Node) -> float:
 	for kind: int in Materia.Kind.values():
 		total += sim.store.amount(kind as Materia.Kind)
 	return total
+
+
+## Quien ha pasado la noche lejos del abrigo, y por que.
+##
+## Un pescador NO puede acampar -[Despensa._camps_out] solo deja a exploradores
+## y a caza mayor- asi que si duerme fuera es que NO LLEGO. Lo que interesa
+## saber es cuanto anduvo de ida: si el camino real fue mucho mas largo que la
+## linea recta, la hora de emprender la vuelta se calculo corta.
+var _fuera: Dictionary = {}
+
+
+func _apuntar_noche(sim: Node) -> void:
+	if sim.hour < 22.0 or sim.hour > 23.0:
+		return
+	for person: Inhabitant in sim.people:
+		var lejos: float = sim.home_position.distance_to(person.position)
+		if lejos <= sim.arrive_radius * 4.0:
+			continue
+		if person.job == Profession.Job.EXPLORACION 				or person.job == Profession.Job.CAZA:
+			continue
+		# DURMIENDO, no «andando de noche». Desde que quien no puede acampar
+		# vuelve siempre, a las diez de la noche hay gente todavia de camino, y
+		# esa no esta durmiendo fuera: esta volviendo.
+		if person.state != Inhabitant.State.DURMIENDO:
+			continue
+		var clave := person.given_name.substr(0, 9)
+		if not _fuera.has(clave):
+			_fuera[clave] = {"oficio": Profession.job_name(
+				person.job as Profession.Job), "noches": 0, "lejos": 0.0,
+				"andado": 0.0, "dia": -1}
+		var f: Dictionary = _fuera[clave]
+		if int(f["dia"]) != sim.day:
+			f["dia"] = sim.day
+
+			f["noches"] = int(f["noches"]) + 1
+		if lejos > float(f["lejos"]):
+			f["lejos"] = lejos
+			f["andado"] = float(person.journey.get("metres", 0.0))

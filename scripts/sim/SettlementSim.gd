@@ -109,6 +109,22 @@ const HAMBRE_POR_HORA := 100.0 / 24.0
 ## cambia cual gana.
 const RODEO_DE_VUELTA := 2.4
 
+## Cuanto cansa andar de noche, por hora, para quien vuelve tarde.
+##
+## QUIEN NO PUEDE ACAMPAR VUELVE SIEMPRE, llegue cuando llegue: no se acuesta en
+## el monte porque se le haya hecho tarde. Peticion literal: «un habitante que
+## no debe dormir fuera siempre intentara volver a la cueva, aunque llegue muy
+## tarde; lo que hara sera dormir menos y por consiguiente peor, y empezar la
+## jornada fatigado».
+##
+## Lo de dormir menos se cobra SOLO, sin regla nueva: el descanso va por horas
+## dormidas -`fatigue -= hours * 9`- asi que quien entra a las dos de la manana
+## descansa cuatro horas en vez de nueve y amanece cansado.
+##
+## Lo unico que hay que anadir es que andar de noche cansa MAS que andar de dia:
+## se ve peor, se tropieza y no se para a descansar.
+const CANSA_DE_NOCHE := 1.6
+
 
 ## Horas utiles de trabajo en una jornada, descontando la parada
 const HORAS_UTILES := (HORA_REGRESO - HORA_SALIDA) - (HORA_FIN_MEDIODIA - HORA_MEDIODIA)
@@ -1068,8 +1084,24 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 	#
 	# Ahora se cuenta lo que se tarda en llegar y se sale con esa antelacion.
 	# Ver [hours_to_walk], que se queda corta a proposito.
-	var walk_home := marcha.hours_to_walk(person.position.distance_to(home_position))
-	var winding_down := hour + walk_home * RODEO_DE_VUELTA >= HORA_REGRESO \
+	# Y el rodeo se MIDE, no se supone.
+	#
+	# Era la linea recta por un factor fijo -[RODEO_DE_VUELTA], 2,4-, que vale
+	# para monte abierto y se queda cortisimo con un rio de por medio: medido en
+	# el sitio 56, un pescador dormia al raso A 150 M DEL ABRIGO despues de
+	# haber andado 1.284 m para llegar alli. Rodeo real, ocho veces y media. Se
+	# le decia de volver cuando ya no daba tiempo, y la noche le cogia a dos
+	# minutos de casa.
+	#
+	# Lo que costo la IDA es la mejor prevision de lo que costara la vuelta, y
+	# ya esta apuntado: ver [Inhabitant.note_step]. Se coge lo mayor de las dos
+	# cuentas, que es lo prudente: equivocarse volviendo pronto cuesta un rato
+	# de trabajo, y equivocarse volviendo tarde cuesta la noche a la intemperie.
+	var derecho := person.position.distance_to(home_position)
+	var vuelta_m := maxf(derecho * RODEO_DE_VUELTA,
+		float(person.journey.get("ida", 0.0)))
+	var walk_home := marcha.hours_to_walk(derecho)
+	var winding_down := hour + marcha.hours_to_walk(vuelta_m) >= HORA_REGRESO \
 		and hour < HORA_DORMIR
 	var morning := hour >= HORA_DESPERTAR and hour < HORA_SALIDA
 
@@ -1223,11 +1255,40 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 			# Y se cena de lo que se lleva
 			despensa._eat_from_pack(person, hours)
 		else:
-			# De noche NO SE ANDA. Se trazaba camino a casa cada tick y se seguia
-			# andando en la oscuridad: medido antes, a las nueve -la hora de
-			# dormir- quedaban dos personas por el monte, y a las tres de la
-			# madrugada media. A quien no ha llegado le coge la noche donde este,
-			# que es lo que le pasa a cualquiera que calcula mal la vuelta.
+			# QUIEN NO PUEDE ACAMPAR SIGUE ANDANDO, sea la hora que sea.
+			#
+			# «De noche no se anda» dejaba tirado en el monte a cualquiera al
+			# que se le hiciera tarde, y medido en el sitio 56 eso eran
+			# VEINTIUNA NOCHES al raso en diez jornadas entre dos pescadores y
+			# un recolector, ninguno de los cuales puede acampar -ver
+			# [Despensa._camps_out]-, con un caso durmiendo A CINCUENTA Y TRES
+			# METROS DE LA BOCA DE LA CUEVA.
+			#
+			# Ahora se vuelve SIEMPRE y se paga en sueño: se entra a la hora que
+			# sea y se duerme lo que quede de noche. Ver [CANSA_DE_NOCHE].
+			if not _home_reached(person):
+				marcha._send_to(person, home_position)
+				if not person.route.is_empty():
+					person.state = Inhabitant.State.VOLVIENDO
+					person.fatigue = clampf(person.fatigue
+						+ hours * CANSA_DE_NOCHE, 0.0, 100.0)
+					return
+				# Y SI NO HAY CAMINO, se duerme donde se este. No es lo mismo
+				# «se me ha hecho tarde» que «estoy al otro lado del rio»: al
+				# primero se le manda seguir andando, al segundo no hay nada
+				# que mandarle. Sin esta salida, quien queda aislado se pasa
+				# la noche entera intentando trazar una ruta que no existe y
+				# amanece a cien de fatiga; medido antes, el explorador dejaba
+				# de salir el dia veinte y se pasaba los otros veinte despierto
+				# en mitad del monte.
+				person.state = Inhabitant.State.DURMIENDO
+				despensa._bivouac(person)
+				var suelto := 1.0 if person.bivouac_botched else 0.0
+				var raso := 6.0 - (float(person.bivouac_lack) + suelto) * VIVAC_REST_LOSS
+				person.fatigue = maxf(
+					person.fatigue - hours * maxf(raso, 0.0), 0.0)
+				despensa._eat_from_pack(person, hours)
+				return
 			if _home_reached(person):
 				# Lo primero al llegar es descargar, y llegar de noche tambien es
 				# llegar. Sin esto se dormia con el cesto puesto y la cosecha del dia
@@ -1549,8 +1610,29 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 		person.work_centre = home_position
 		person.forage_target = home_position
 		person.state = Inhabitant.State.TRABAJANDO
-	elif person.has_task and hour >= HORA_SALIDA and hour < HORA_REGRESO:
+	elif person.has_task and hour >= HORA_SALIDA and hour < _ultima_salida(person):
 		_send_to_work(person)
+
+
+## Hasta que hora se puede mandar a alguien a trabajar fuera.
+##
+## No hasta [HORA_REGRESO]: hasta que quede dia para IR Y VOLVER. Mandar a
+## alguien a las siete de la tarde a un tajo de seiscientos metros es mandarle a
+## dormir al monte, y eso es lo que estaba pasando. Medido en el sitio 56, diez
+## jornadas: dos pescadores y un recolector pasaban entre cuatro y ocho noches
+## al raso sin ser ni exploradores ni cazadores mayores, que son los unicos que
+## pueden acampar -ver [Despensa._camps_out]-.
+##
+## Se mira el ULTIMO tajo que trabajo, que es la mejor pista de a que distancia
+## se le va a mandar hoy. Sin ninguna, vale la hora de siempre.
+func _ultima_salida(person: Inhabitant) -> float:
+	if not work_sites.has(person.activity):
+		return HORA_REGRESO
+	var lejos: float = home_position.distance_to(work_sites[person.activity])
+	var ida_y_vuelta := marcha.hours_to_walk(lejos * RODEO_DE_VUELTA) * 2.0
+	# Y algo de margen para que la salida sirva de algo: llegar, dar dos golpes
+	# y darse la vuelta no es una jornada.
+	return maxf(HORA_SALIDA, HORA_REGRESO - ida_y_vuelta - 0.5)
 
 
 ## Levanta un momento: algo que hay que enseñar o decidir ahora. Ver [Moment].

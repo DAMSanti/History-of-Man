@@ -201,42 +201,66 @@ func test_una_persona_come_dos_raciones_al_dia() -> void:
 		"la racion es media jornada")
 
 
-func test_lo_que_gasta_el_almacen_es_lo_que_come_la_banda() -> void:
-	# La suma de la columna GASTA/MES tiene que ser exactamente lo que come la
-	# banda en un mes, ni mas ni menos. Sumaba tres veces y media de mas: el
-	# consumo se repartia entre los alimentos EN DESPENSA pero se le cobraba a
-	# todos los del catalogo, incluidos los que estaban a cero.
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
+func test_gastado_es_lo_que_de_verdad_ha_salido_del_almacen() -> void:
+	# LA COLUMNA GASTADO/30d ES UN LIBRO, NO UN PRONOSTICO.
+	#
+	# Era `material_needed`, o sea «lo que la banda gastaria en un mes»: treinta
+	# dias de bocas proyectados. El dia dos de partida declaraba 762 raciones de
+	# comida sin que se hubiera comido casi nada, y eso, leido al lado de «HAY»,
+	# engaña.
 	var sim := SettlementSim.new()
-	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
-	sim.apply_priorities()
-	for kind: int in [Materia.Kind.CARNE, Materia.Kind.BAYA,
-			Materia.Kind.FRUTO_SECO, Materia.Kind.PESCADO]:
-		sim.store.add(kind as Materia.Kind, 40.0)
+	sim.store.add(Materia.Kind.CARNE, 40.0)
+	assert_eq(sim.taller.material_needed(Materia.Kind.CARNE), 0.0,
+		"sin haber sacado nada, no hay nada gastado")
 
-	var gasta := 0.0
-	for kind: int in Materia.Kind.values():
-		var k := kind as Materia.Kind
-		if Materia.is_food(k):
-			gasta += sim.taller.material_needed(k) * Materia.nutrition(k)
-
-	var bocas := 0.0
-	for person: Inhabitant in sim.people:
-		bocas += person.daily_food()
-
-	assert_near(gasta, bocas * float(sim.CONSUMO_DIAS), 0.5,
-		"la columna GASTA suma justo lo que se come al mes")
+	sim.store.take(Materia.Kind.CARNE, 7.0)
+	assert_near(sim.taller.material_needed(Materia.Kind.CARNE), 7.0, 0.001,
+		"lo gastado es lo que ha salido por la puerta")
 
 
-func test_no_se_gasta_lo_que_no_hay() -> void:
+func test_lo_gastado_se_acumula_por_jornadas_y_no_crece_sin_fin() -> void:
+	# Misma ventana rodante que la produccion: las dos columnas tienen que
+	# medir lo mismo o no se pueden leer juntas.
+	var sim := SettlementSim.new()
+	sim.store.add(Materia.Kind.LENA, 500.0)
+	for i in range(5):
+		sim.store.take(Materia.Kind.LENA, 2.0)
+		sim.tajo._roll_production()
+	assert_near(sim.taller.material_needed(Materia.Kind.LENA), 10.0, 0.001,
+		"cinco jornadas a dos son diez")
+
+	for i in range(SettlementSim.CONSUMO_DIAS * 2):
+		sim.store.take(Materia.Kind.LENA, 1.0)
+		sim.tajo._roll_production()
+	assert_eq(sim.taller.spent_days.size(), SettlementSim.CONSUMO_DIAS,
+		"el libro no crece sin fin")
+	assert_near(sim.taller.material_needed(Materia.Kind.LENA),
+		float(SettlementSim.CONSUMO_DIAS), 0.001,
+		"y lo que dice es el ultimo mes, no la partida entera")
+
+
+func test_lo_que_se_pudre_no_figura_como_gastado() -> void:
+	# No lo ha gastado la banda: se ha perdido. Va aparte, en
+	# `SettlementSim.spoiled_today`, y mezclarlo aqui haria que un mal invierno
+	# pareciera un mes de mucho comer.
+	var sim := SettlementSim.new()
+	sim.store.add(Materia.Kind.PESCADO, 30.0)
+	for i in range(int(Materia.shelf_life(Materia.Kind.PESCADO)) + 2):
+		sim.store.age(1)
+	assert_eq(sim.taller.material_needed(Materia.Kind.PESCADO), 0.0,
+		"lo podrido no es gasto")
+
+
+func test_el_pronostico_sigue_existiendo_para_el_taller() -> void:
+	# Se quito de la COLUMNA, no del juego: el taller decide cuanto conviene
+	# tener guardado mirando adelante, y para eso si hace falta una prevision.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8
 	var sim := SettlementSim.new()
 	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
 	sim.apply_priorities()
 	sim.store.add(Materia.Kind.CARNE, 40.0)
-	assert_gt(sim.taller.material_needed(Materia.Kind.CARNE), 0.0,
-		"de lo que hay si se come")
-	assert_eq(sim.taller.material_needed(Materia.Kind.SETA), 0.0,
-		"y de lo que no hay en la despensa, no")
+	assert_gt(sim.taller.material_forecast(Materia.Kind.CARNE), 0.0,
+		"de lo que hay en despensa si se preve comer")
+	assert_eq(sim.taller.material_forecast(Materia.Kind.SETA), 0.0,
+		"y de lo que no hay, no")

@@ -255,16 +255,35 @@ func test_produce_se_mide_en_el_mismo_periodo_que_el_gasto() -> void:
 		"el mes suma lo de los treinta dias, no la media de uno")
 
 
-func test_produce_se_proyecta_mientras_no_haya_mes_entero() -> void:
-	# Al tercer dia de partida no hay treinta jornadas que sumar. Sumando solo
-	# las que hay, la banda parecia arruinada siempre.
+func test_produce_NO_se_proyecta_es_la_suma() -> void:
+	# Estuvo proyectando: multiplicaba lo recogido por «mes entero / dias
+	# jugados» para que las dos columnas del almacen fueran comparables desde
+	# el primer dia. El resultado era mentir -el dia cinco, veinte de cuarcita
+	# recogida salian como «112 al mes» al lado de un «HAY 20»- y no hay forma
+	# de leer eso.
+	#
+	# Lo que se enseña es lo que ha pasado. Tres jornadas a dos son SEIS.
 	var sim := _sim()
 	sim.store = Storehouse.new()
 	for i in range(3):
 		sim.taller.note_production(Materia.Kind.LENA, 2.0)
 		sim.tajo._roll_production()
-	assert_gt(sim.taller.production_of(Materia.Kind.LENA), 40.0,
-		"tres dias a dos proyectan a mes, no se quedan en seis")
+	assert_near(sim.taller.production_of(Materia.Kind.LENA), 6.0, 0.001,
+		"tres jornadas a dos son seis, no un mes proyectado")
+
+
+func test_produce_nunca_pasa_de_lo_que_de_verdad_entro() -> void:
+	# La comprobacion que hace de guardia contra volver a proyectar: lo que
+	# dice la columna no puede ser mayor que lo que se ha apuntado.
+	var sim := _sim()
+	sim.store = Storehouse.new()
+	var entro := 0.0
+	for i in range(7):
+		sim.taller.note_production(Materia.Kind.PIEDRA, 3.0)
+		entro += 3.0
+		sim.tajo._roll_production()
+	assert_near(sim.taller.production_of(Materia.Kind.PIEDRA), entro, 0.001,
+		"lo que dice PRODUCE es lo que entro, ni mas ni menos")
 
 
 func test_el_registro_de_produccion_no_crece_sin_fin() -> void:

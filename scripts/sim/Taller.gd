@@ -27,6 +27,12 @@ func _note_breakage(person: Inhabitant, kind: Tool.Kind) -> void:
 	if sim.toolkit.broke_last_use.is_empty():
 		return
 
+	# Al libro de gasto, con clave NEGATIVA como en el de produccion: una pieza
+	# rota ES gasto, y es el unico que no pasa por `Storehouse.take`. Ver
+	# [spent_days].
+	var key := -1 - int(kind)
+	sim.store.spent_today[key] = float(sim.store.spent_today.get(key, 0.0)) + 1.0
+
 	var left := sim.toolkit.count(kind)
 	var doing := Subsistence.activity_name(person.activity).to_lower()
 	if left <= 0:
@@ -218,6 +224,34 @@ var produced_today: Dictionary = {}
 ## guardan los días de verdad y se suman.
 var produced_days: Array[Dictionary] = []
 
+## Y EL MISMO LIBRO PARA LO QUE SALE. Ventana rodante de [SettlementSim.CONSUMO_DIAS]
+## jornadas, igual que la de producción, para que las dos columnas del almacén
+## midan lo mismo y se puedan leer juntas.
+##
+## Sustituye a un PRONÓSTICO. `material_needed` decía «lo que la banda gastaría
+## en un mes» —treinta días de comida proyectados—, así que el día dos ponía 762
+## raciones de gasto sin que se hubiera comido casi nada. Eso no es un dato del
+## almacén, es una previsión, y en una columna que se lee al lado de «HAY»
+## engaña.
+var spent_days: Array[Dictionary] = []
+
+
+## Lo que de verdad ha salido del almacén en el periodo. SIN proyectar.
+func spent_in_period(kind: Materia.Kind) -> float:
+	var total := 0.0
+	for a_day: Dictionary in spent_days:
+		total += float(a_day.get(int(kind), 0.0))
+	return total + float(sim.store.spent_today.get(int(kind), 0.0))
+
+
+## Y lo mismo para una pieza de utillaje: lo que se ha roto de verdad.
+func tool_spent_in_period(kind: Tool.Kind) -> float:
+	var total := 0.0
+	var key := -1 - int(kind)
+	for a_day: Dictionary in spent_days:
+		total += float(a_day.get(key, 0.0))
+	return total
+
 
 ## Apunta lo que acaba de entrar en el almacén.
 func note_production(kind: Materia.Kind, units: float) -> void:
@@ -248,7 +282,25 @@ func tool_production_of(kind: Tool.Kind) -> float:
 	return sim.tajo._produced_in_period(-1 - int(kind))
 
 
+## Lo que se ha GASTADO de este material en el periodo.
+##
+## Antes era un PRONOSTICO -«lo que la banda gastaria en un mes»- y por eso el
+## dia dos declaraba setecientas sesenta y dos raciones de comida sin que se
+## hubiera comido casi nada: proyectaba treinta dias de bocas. En una columna
+## que se lee al lado de «HAY», eso engaña.
+##
+## Ahora es la suma del libro, sin proyectar, igual que PRODUCE. Ver
+## [spent_in_period], que es donde vive.
 func material_needed(kind: Materia.Kind) -> float:
+	return spent_in_period(kind)
+
+
+## El pronostico de gasto, que sigue haciendo falta para OTRA cosa.
+##
+## No para enseñarlo en el almacen -eso es `material_needed`- sino para que el
+## taller sepa cuanto conviene tener guardado de cada cosa. Ahi si se quiere
+## una prevision: lo que hay que reponer se decide mirando adelante, no atras.
+func material_forecast(kind: Materia.Kind) -> float:
 	var total := 0.0
 
 	# Lo que se COME, si alimenta y SI LO HAY. Es el gasto mas grande con
