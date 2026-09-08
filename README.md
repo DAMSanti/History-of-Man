@@ -1,94 +1,64 @@
-# CityBuilder - Godot 4.5.1 Project Roadmap & Starter Implementation
+# History of Man
 
-Breve: este repositorio contiene una implementación inicial siguiendo tu FASE 1-4, con scripts base y escenas de ejemplo. Usa Godot 4.5.1.
+Simulación de una banda paleolítica en la Cantabria del Magdaleniense, sobre
+relieve real. Godot 4.5.1, Forward+.
 
--**Setup rápido**
-- Abrir el proyecto en Godot 4.5.1.
-- El archivo `project.godot` incluye `TimeManager` como Autoload por defecto; si abres el proyecto manualmente, verifica en Project Settings > Autoload que `TimeManager.gd` esté registrado con el nombre `TimeManager`.
-- Agregar `scenes/WorldEnvironment.tscn` a la escena principal para activar SDFGI y Volumetric Fog.
+No se construye una ciudad: se lleva a quince personas a través de un año.
+Salen a recoger, a pescar y a cazar, aprenden técnicas, se hacen herramientas
+que se rompen, y el otoño decide si sobreviven al invierno.
 
-**Fase 1 — Arquitectura de Datos**
-- `scripts/RawMaterial.gd`:
-  - Recurso (Resource) con `@export` para `density`, `melting_point`, `hardness`, `conductivity` y `display_name`.
-  - Crea recursos en el inspector (New Resource > RawMaterial) y guárdalos como `.tres` (ej: `materials/iron.tres`).
-- `scripts/Chunk.gd`:
-  - Nodo `Chunk` que representa un fragmento de mapa y guarda recursos físicos en celdas (posicionadas por `cell_size`).
-  - Funciones: `add_resource_at(world_pos, material, amount)`, `get_resources_at(world_pos)`, `remove_resource_at(world_pos, index)`.
+## Cómo se juega
 
-**Fase 2 — Mundo Procedural**
-- `scripts/TerrainGenerator.gd`:
-  - Usa `FastNoiseLite` para 3 capas: altura/height, humedad/humidity y geología/geology.
-  - Geología es invisible por defecto: no lo pintes directamente; úsalo para spawn de recursos (menas).
-- `scenes/MultiMeshTrees.tscn` + `scripts/multimesh_trees.gd`:
-  - Ejemplo de `MultiMeshInstance3D` para colocar miles de instancias (árboles) sobre el terreno según humedad y pendiente.
-  - No uses nodos individuales para cada árbol.
+Dos capas. En la **regional** se ve Cantabria entera —869 emplazamientos
+derivados del MDT real y cruzados con el registro arqueológico— y se elige
+dónde fundar. En la **local** se juegan 4 km de valle alrededor del abrigo
+elegido.
 
-**Fase 3 — Construcción y Física**
-- `scripts/Architecto.gd`:
-  - Comprueba el material debajo (obtenido desde el `Chunk`) antes de colocar una construcción.
-  - Lógica simplificada: `if material.hardness < (building_weight / 100) -> no place`.
-  - Funciones: `can_place_at_world(world_pos, building_weight)`, `place_building(world_pos, weight, building_scene)`.
-- `scripts/TimeManager.gd` (Singleton):
-  - Gestiona ticks, días y años.
-  - Señales: `cambio_de_estacion(new_season)` y `tick_advance(...)` para que otros nodos escuchen y reaccionen.
+El jugador no da órdenes de tarea: reparte prioridades en la tabla de trabajos
+y cada mañana la banda se organiza sola con lo que puede hacer ese día.
 
-**Fase 4 — Gráficos y Shaders**
-- `scenes/WorldEnvironment.tscn` + `scripts/WorldEnvironmentSetup.gd`:
-  - Activa `SDFGI`, `Volumetric Fog`, y `Tone Mapping = ACES` al iniciar la escena.
-- `shaders/triplanar.gdshader`:
-  - Shader de terreno tri-planar para evitar estiramiento de textura en pendientes.
+## Arrancar
 
-**Roadmap detallado (por fases)**
+Abrir el proyecto en Godot 4.5.1 y darle a play. La escena principal es
+`scenes/region_map.tscn`.
 
-FASE 1 (2-4 días)
-- Crear `RawMaterial` y solo un par de `res://materials/` (ej: `materials/Iron.tres`, `materials/Stone.tres`, `materials/Straw.tres`).
-+
-+Ejemplo: Popular un `Chunk` con vetas de hierro usando `TerrainGenerator`: 
-+```gdscript
-+var terrain = $Terrain as TerrainGenerator
-+terrain.generate()
-+var chunk = $Chunk as Chunk
-+var iron = load("res://materials/Iron.tres") as RawMaterial
-+terrain.populate_chunk_resources(chunk, {"iron": iron}, 0.7)
-+```
-+Esto coloca depósitos de hierro en ubicaciones donde la capa de geología supera el umbral.
+La primera vez que se funda un emplazamiento se descarga su relieve del IGN
+(MDT05, LiDAR) y se hornea; a partir de ahí se lee de `data/dem/local/`.
 
-- Implementar `Chunk` y testear con una pequeña cuadrícula 8x8, colocando recursos a mano en `chunks`.
+## Las pruebas
 
-FASE 2 (3-6 días)
-- Implementar `TerrainGenerator` con parámetros visibles en Inspector y un sistema de preview para debug (visualizar height_map con planes o gizmos).
-- Crear sistema de distribución simple: si `geology(x,y) > 0.66` entonces vetas de hierro; < 0.33 carbón; mezclar con ruido.
-- Poblar vegetación con `MultiMeshInstance3D` (ese ejemplo ya proveído), y añadir LOD simple y `Frustum Culling`.
-
-FASE 3 (4-8 días)
-- `Architecto` para comprobar solidez de colocación (hardness vs weight). Añadir tests unitarios o GUT (opcional).
-- Añadir GridMap con `mesh_library`, y una función que calcula 'peso' de la estructura (sumar pesos por bloque). Si `material_abajo.dureza < peso_structure` entonces COLAPSO.
-- Crear el sistema de físicas estructurales simples: colapso en cascada si se retira soporte.
-
-FASE 4 (5-10 días)
-- Ajustar `WorldEnvironment` con presets SDFGI, Fog y ACES.
-- Implementar shader tri-planar y crear materiales de terreno (roca, grass, snow) con blending por altura y pendiente (slope).
-- Performance tuning: prueba en escenarios grandes, y transforma varios árboles/rocas con `MultiMesh`.
-
-Extensiones (Siguientes fases, opcional)
-- Sistema de recogida/colección física (entidades re-colectan recursos en chunks), almacenamiento físico con sacos, montones, etc.
-- Sistema de IA, NPCs y automatas que trabajan según estaciones.
-
-**Comandos útiles (Windows)**
-Abrir Godot con el proyecto (con Godot 4.5.1 instalado):
 ```
-godot --path "g:/Proyectos/CityBuilder"
+godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
-Recargar recursos (.tres) desde el Inspector para probar materiales creados.
 
-**Notas y recomendaciones**
-- Evita instanciar nodos por cada planta/árbol: usa `MultiMeshInstance3D`.
-- Guarda datos de materiales y chunk a disco si necesitas persistencia.
-- Prueba performance con herramientas de Godot (profiler) conforme vayas puliendo el mundo.
+716 pruebas, 5 171 comprobaciones. Tienen que estar todas en verde.
 
-Si quieres, puedo:
-- integrar un ejemplo de GridMap y un `building.tscn` demo
-- añadir sistema simple de minas (veins) basado en `geology`
-- preparar tests automatizados y ejemplos de uso para los scripts creados
+Aparte están las **sondas** (`scripts/tests/*Probe.gd`), que no pasan ni
+fallan: miden. El balanceo de este proyecto se ajusta midiendo.
 
-Dime cuál de los siguientes pasos quieres que implemente ahora: (a) Integrar Quick demo (escena principal) con todas las piezas, (b) añadir GridMap building demo, (c) mejorar la generación y mostrar vetas en escena.
+```
+DIAS=40 godot --path . --script res://scripts/tests/JornadaCazadorProbe.gd
+```
+
+## Datos
+
+`data/dem/`, `models/` y `textures/terrain/` no se versionan: son cientos de MB
+que se reconstruyen solos con las herramientas de `scripts/tools/`. La tabla de
+qué rehace cada cosa está en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) §7.
+
+Fuentes: MDT del IGN/CNIG, teselas Terrarium de AWS, OpenStreetMap, y modelos
+CC0 de Poly Haven y Quaternius. El detalle está en
+[docs/CREDITOS.md](docs/CREDITOS.md).
+
+## Documentación
+
+| | |
+|---|---|
+| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | **cómo está montado y cómo se escribe código aquí** |
+| [docs/SLICE_PALEOLITICO.md](docs/SLICE_PALEOLITICO.md) | qué tiene que demostrar la rebanada jugable |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | por dónde va y qué falta |
+| [docs/CAZA_Y_PESCA.md](docs/CAZA_Y_PESCA.md) | el modelo de subsistencia, con sus medidas |
+| [docs/REVAMP_GRAFICO.md](docs/REVAMP_GRAFICO.md) | el trabajo de imagen y su coste medido |
+| [docs/CIERRE_SLICE.md](docs/CIERRE_SLICE.md) | el cierre de la rebanada |
+| [docs/SPECS.md](docs/SPECS.md) | especificación de partida |
+| [docs/CREDITOS.md](docs/CREDITOS.md) | de dónde sale cada dato y cada modelo |
