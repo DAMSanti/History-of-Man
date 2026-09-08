@@ -66,6 +66,10 @@ var _overlay_activity: int = OVERLAY_OFF
 var _overlay_label: Label
 var _minimap_canvas: CanvasLayer
 
+
+## El minimapa, la niebla y las capas de encima. Ver [Minimapa].
+var minimapa: Minimapa = Minimapa.new(self)
+
 ## Textura del overlay de recursos sobre el terreno. Una sola imagen para todo
 ## el recuadro en vez de miles de nodos: ver `_refresh_resource_overlay`.
 var _overlay_image: Image
@@ -149,7 +153,7 @@ func _ready() -> void:
 
 	# Ahora si: el minimapa se pinta del relieve ya generado
 	if _minimap_canvas:
-		_phase_start(); _build_minimap(_minimap_canvas); _phase_end("_build_minimap")
+		_phase_start(); minimapa._build_minimap(_minimap_canvas); _phase_end("_build_minimap")
 
 	# Poblar recursos
 
@@ -557,7 +561,7 @@ func _levantar_interfaz() -> void:
 	if sim != null:
 		ui.watch_moments(sim)
 
-	_build_resource_overlay()
+	minimapa._build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
 	_check_discoveries()
 
@@ -1043,261 +1047,6 @@ func _on_terrain_generated() -> void:
 	# porte de verdad, y estas llamadas se quedaban colgando de un nodo nulo
 
 
-## Minimapa: sombreado del relieve del recuadro, con la gente encima.
-##
-## Se pinta del heightmap ya generado y no con una segunda camara: una
-## SubViewport cenital costaria un pase de render entero por frame para algo
-## que no cambia nunca.
-func _build_minimap(canvas: CanvasLayer) -> void:
-	if terrain == null:
-		return
-
-	# Mas resolucion: a 176 px sobre 4 km cada pixel eran 23 m y el relieve se
-	# perdia entero, que es por lo que salia como color plano.
-	var size := 256
-	var image := Image.create(size, size, false, Image.FORMAT_RGB8)
-	var span := terrain.get_height_range()
-	var range_h: float = maxf(span.y - span.x, 1.0)
-	var step: float = float(terrain_size.x) / float(size)
-
-	# Sombreado direccional de verdad: se ilumina desde el noroeste, que es la
-	# convencion cartografica, en vez de restar las dos derivadas. La suma de
-	# derivadas aplana las laderas perpendiculares a la diagonal, y por eso el
-	# relieve no se leia.
-	var sun := Vector3(-0.6, 0.62, -0.5).normalized()
-
-	for py in range(size):
-		for px in range(size):
-			var world := Vector3(
-				float(px) / float(size - 1) * float(terrain_size.x), 0.0,
-				float(py) / float(size - 1) * float(terrain_size.y))
-			var h: float = terrain.get_height_at(world)
-			var t: float = clampf((h - span.x) / range_h, 0.0, 1.0)
-
-			var dx: float = terrain.get_height_at(world + Vector3(step, 0, 0)) - h
-			var dz: float = terrain.get_height_at(world + Vector3(0, 0, step)) - h
-			var normal := Vector3(-dx, step, -dz).normalized()
-			var light: float = clampf(normal.dot(sun) * 1.35 + 0.22, 0.18, 1.35)
-			var slope: float = clampf(Vector2(dx, dz).length() / step, 0.0, 1.0)
-
-			var colour: Color
-			if terrain.is_underwater(world):
-				colour = Color(0.10, 0.20, 0.32)
-			elif terrain.crossing_difficulty_at(world) > 0.05:
-				# El agua corriente se pinta aparte: es la referencia que hace
-				# legible un mapa de valle
-				colour = Color(0.20, 0.38, 0.55)
-			else:
-				# Verde en el llano, ocre segun sube, gris de caliza donde la
-				# pendiente afloraria roca: los mismos criterios que el terreno
-				var ground := Color(0.30, 0.40, 0.22).lerp(Color(0.58, 0.52, 0.36), t)
-				colour = ground.lerp(Color(0.60, 0.58, 0.54), clampf(slope * 1.6, 0.0, 0.85))
-				colour *= light
-			image.set_pixel(px, py, colour)
-
-	# Se guardan dos: la limpia, que es el relieve tal cual, y la que se pinta,
-	# que es esa misma con la niebla de lo no explorado encima
-	_minimap_clear = image
-	_minimap_base = image.duplicate() as Image
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	margin.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	canvas.add_child(margin)
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 4)
-	margin.add_child(column)
-
-	var panel := PanelContainer.new()
-	column.add_child(panel)
-	_minimap = TextureRect.new()
-	_minimap.custom_minimum_size = Vector2(size, size)
-	_minimap.texture = ImageTexture.create_from_image(image)
-	panel.add_child(_minimap)
-
-	# Rotulo del overlay. Deja claro que lo que se pinta es lo que la banda
-	# CONOCE: al empezar esta casi en blanco, y esa es la informacion.
-	var label_panel := PanelContainer.new()
-	column.add_child(label_panel)
-	_overlay_label = Label.new()
-	_overlay_label.text = "[R] capas de recurso"
-	_overlay_label.add_theme_font_size_override("font_size", 11)
-	_overlay_label.custom_minimum_size = Vector2(size, 0)
-	_overlay_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label_panel.add_child(_overlay_label)
-
-	# El boton de volver al mapa regional. Va aqui, junto al minimapa, que es
-	# donde uno mira cuando piensa «quiero ver el mapa grande». Antes esto era
-	# ESC, y salirse del valle entero por pulsar ESC daba un susto cada vez.
-	var back := Button.new()
-	back.text = "Ver la comarca"
-	back.custom_minimum_size = Vector2(size, 26)
-	back.tooltip_text = "Vuelve al mapa regional de Cantabria"
-	if ui and ui._skin:
-		back.theme = ui._skin
-	back.pressed.connect(func() -> void:
-		if Expedition.is_active():
-			_return_to_region())
-	column.add_child(back)
-
-
-## Repinta gente y tajos sobre el relieve del minimapa
-func _update_minimap() -> void:
-	if _minimap == null or _minimap_base == null:
-		return
-
-	# Se reutiliza la misma imagen en vez de duplicar la base: son 256x256 y
-	# esto corre cuatro veces por segundo
-	if _minimap_frame == null:
-		_minimap_frame = _minimap_base.duplicate() as Image
-	else:
-		_minimap_frame.blit_rect(_minimap_base,
-			Rect2i(Vector2i.ZERO, _minimap_base.get_size()), Vector2i.ZERO)
-	var image := _minimap_frame
-
-	# El overlay de recursos ya NO se pinta aqui. Lo hacia recorriendo los
-	# 65.536 pixeles del minimapa y llamando a `believed_abundance` en cada
-	# uno, cuatro veces por segundo: era la mitad de los frames que se comian
-	# los overlays. Ahora esa capa la pinta el shader del terreno de una sola
-	# muestra, y el minimapa se dedica a lo suyo, que es orientar.
-	if herds and _overlay_activity == Subsistence.Activity.CAZA:
-		for position: Vector3 in herds.positions():
-			_plot(image, position, Color(0.95, 0.62, 0.30), 1)
-
-	if sim:
-		for a: int in sim.work_sites.keys():
-			_plot(image, sim.work_sites[a], Color(0.35, 0.9, 0.95), 2)
-		for person: Inhabitant in sim.people:
-			_plot(image, person.position, Color(1.0, 0.92, 0.55), 1)
-		_plot(image, sim.home_position, Color(1.0, 0.42, 0.35), 3)
-	if camera:
-		_draw_view_cone(image)
-		_plot(image, camera.target_position, Color(1.0, 1.0, 1.0), 2)
-
-	# Actualizar la textura existente en vez de crear una nueva cada vez: crear
-	# una ImageTexture reserva memoria de GPU, y hacerlo cuatro veces por
-	# segundo deja al recolector trabajando de balde
-	if _minimap.texture is ImageTexture:
-		(_minimap.texture as ImageTexture).update(image)
-	else:
-		_minimap.texture = ImageTexture.create_from_image(image)
-
-
-## Dibuja hacia donde mira la camara y hasta donde llega.
-##
-## Sin esto el minimapa no dice lo unico que hace falta para orientarse, que es
-## en que parte del valle esta uno y hacia donde apunta.
-func _draw_view_cone(image: Image) -> void:
-	var size := image.get_width()
-	var eye := camera.global_position
-	var target := camera.target_position
-
-	var forward := Vector2(target.x - eye.x, target.z - eye.z)
-	if forward.length() < 0.001:
-		return
-	forward = forward.normalized()
-
-	# Alcance proporcional a lo lejos que esta la camara: al alejarse se ve
-	# mas mapa, y el cono tiene que crecer con ello
-	var reach: float = clampf(eye.distance_to(target) * 1.5, 120.0, float(terrain_size.x))
-	var half_angle := deg_to_rad(camera.fov * 0.5)
-
-	var origin := Vector2(eye.x, eye.z)
-	for side in [-1.0, 1.0]:
-		var edge := forward.rotated(side * half_angle)
-		var steps := int(reach / 6.0)
-		for s in range(steps):
-			var point := origin + edge * (float(s) * 6.0)
-			var px := int(point.x / float(terrain_size.x) * float(size - 1))
-			var py := int(point.y / float(terrain_size.y) * float(size - 1))
-			if px < 0 or py < 0 or px >= size or py >= size:
-				continue
-			# Se mezcla en vez de pintar opaco: el cono es una guia, no debe
-			# tapar el relieve que hay debajo
-			image.set_pixel(px, py,
-				image.get_pixel(px, py).lerp(Color(1.0, 1.0, 1.0), 0.55))
-
-	# La posicion de la camara, que no es la misma que su objetivo
-	_plot(image, Vector3(eye.x, 0.0, eye.z), Color(0.95, 0.95, 1.0), 2)
-
-
-## Overlay de recursos sobre el terreno, en UNA textura.
-##
-## La primera version ponia un MeshInstance3D por celda y actividad: 64x64
-## celdas por cinco actividades son mas de veinte mil nodos, cada uno con su
-## material y su llamada de dibujado. Se comia los frames enteros.
-##
-## Ahora es una sola imagen que el shader del terreno muestrea y mezcla con el
-## albedo. Cuesta cero llamadas de dibujado y ademas queda pegado al relieve en
-## vez de flotando en discos por encima.
-func _build_resource_overlay() -> void:
-	if field == null:
-		return
-
-	_overlay_image = Image.create(field.width, field.height, false, Image.FORMAT_RGBA8)
-	_overlay_texture = ImageTexture.create_from_image(_overlay_image)
-
-	var material := terrain.get_terrain_material()
-	if material:
-		material.set_shader_parameter("overlay_tex", _overlay_texture)
-		material.set_shader_parameter("overlay_world_size",
-			Vector2(float(terrain_size.x), float(terrain_size.y)))
-		material.set_shader_parameter("use_overlay", false)
-
-
-## Repinta la capa activa. Se llama al cambiar de capa y de vez en cuando,
-## porque lo que muestra -lo conocido- crece segun anda la gente.
-func _refresh_resource_overlay() -> void:
-	if _overlay_image == null or terrain == null:
-		return
-
-	var material := terrain.get_terrain_material()
-	if material == null:
-		return
-
-	if _overlay_activity == OVERLAY_OFF:
-		material.set_shader_parameter("use_overlay", false)
-		return
-
-	var showing_known := _overlay_activity == OVERLAY_KNOWN
-	var activity := Subsistence.Activity.CAZA
-	var tint := Color(0.55, 0.80, 1.0)
-	if not showing_known:
-		activity = _overlay_activity as Subsistence.Activity
-		tint = _overlay_color(activity)
-
-	for z in range(field.height):
-		for x in range(field.width):
-			var centre := field.cell_center(x, z)
-			var strength := 0.0
-
-			if showing_known:
-				# Capa de territorio reconocido. Sale de `explored`, que es el
-				# mapa de lo que se ha VISTO, y no de la familiaridad con los
-				# recursos: se puede cruzar un valle entero sin aprender nada
-				# de su caza y aun asi conocer el camino.
-				if knowledge:
-					strength = knowledge.explored_at(centre)
-			else:
-				# Capa de un recurso: se pinta lo que la banda CREE que hay.
-				# Un mapa con los cotarros que nadie ha pisado seria el mapa
-				# del disenador, no el de la banda.
-				if knowledge:
-					strength = clampf(knowledge.believed_abundance(
-						field, activity, centre, GameState.season), 0.0, 1.0)
-				else:
-					strength = field.abundance_cell(activity, x, z)
-
-			_overlay_image.set_pixel(x, z,
-				Color(tint.r, tint.g, tint.b, clampf(strength, 0.0, 1.0)))
-
-	_overlay_texture.update(_overlay_image)
-	material.set_shader_parameter("use_overlay", true)
-
-
 ## Revisa qué cuevas ha encontrado ya la banda.
 ##
 ## Una cueva sin descubrir no se dibuja: no es que esté oculta, es que para el
@@ -1330,84 +1079,6 @@ func _check_discoveries() -> void:
 					GameState.year, Chronicle.Kind.HALLAZGO,
 					"La banda dio con %s, a %d m del abrigo." % [name_text, away],
 					2)
-
-
-## Oscurece en el minimapa lo que la banda no ha visto.
-##
-## Se rehace la imagen base entera y de tarde en tarde, no en cada refresco:
-## repintar 65.000 pixeles cuatro veces por segundo fue lo que se comio los
-## frames la vez anterior, y lo que muestra cambia por jornadas.
-func _refresh_minimap_fog() -> void:
-	if _minimap_base == null or knowledge == null or _minimap_clear == null:
-		return
-
-	var size := _minimap_base.get_width()
-	# Se muestrea a la resolucion del conocimiento y se rellena por bloques:
-	# la niebla no tiene mas detalle que eso, asi que pedirle mas es tirar
-	# trabajo
-	var block := maxi(size / knowledge.width, 1)
-
-	for by in range(0, size, block):
-		for bx in range(0, size, block):
-			var world := Vector3(
-				float(bx) / float(size - 1) * float(terrain_size.x), 0.0,
-				float(by) / float(size - 1) * float(terrain_size.y))
-			# Ni negro del todo: se deja adivinar la silueta del valle, que es
-			# lo que se ve desde lejos aunque no se haya estado
-			var light: float = 0.16 + 0.84 * clampf(
-				knowledge.explored_at(world), 0.0, 1.0)
-			for y in range(by, mini(by + block, size)):
-				for x in range(bx, mini(bx + block, size)):
-					_minimap_base.set_pixel(x, y,
-						_minimap_clear.get_pixel(x, y) * light)
-
-
-## Un color por actividad, para que el overlay se lea de un vistazo
-func _overlay_color(activity: Subsistence.Activity) -> Color:
-	match activity:
-		Subsistence.Activity.PESCA: return Color(0.35, 0.70, 0.95)
-		Subsistence.Activity.CAZA: return Color(0.95, 0.45, 0.30)
-		Subsistence.Activity.RECOLECCION: return Color(0.55, 0.85, 0.35)
-		Subsistence.Activity.MARISQUEO: return Color(0.85, 0.75, 0.40)
-		_: return Color(0.75, 0.70, 0.80)
-
-
-## Cambia de capa de recursos con la tecla R
-func _cycle_overlay() -> void:
-	# El territorio conocido va PRIMERO: es la capa que contesta la pregunta
-	# que se hace uno antes que ninguna otra, que es hasta donde ha llegado la
-	# banda. Las de recurso solo tienen sentido leidas sobre esa.
-	var order := [OVERLAY_OFF, OVERLAY_KNOWN,
-		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
-		Subsistence.Activity.RECOLECCION, Subsistence.Activity.MARISQUEO,
-		Subsistence.Activity.MATERIA_PRIMA]
-	var current := order.find(_overlay_activity)
-	_overlay_activity = order[(current + 1) % order.size()]
-	_refresh_resource_overlay()
-
-	if _overlay_label:
-		if _overlay_activity == OVERLAY_OFF:
-			_overlay_label.text = "[R] capas de recurso"
-		elif _overlay_activity == OVERLAY_KNOWN:
-			_overlay_label.text = "Territorio reconocido — lo que la banda ha pisado"
-		else:
-			var activity := _overlay_activity as Subsistence.Activity
-			var season_note := "temporada conocida" if knowledge != null \
-				and knowledge.knows_season(activity, GameState.season) else "temporada por descubrir"
-			_overlay_label.text = "%s — lo que la banda conoce (%s)" % [
-				Subsistence.activity_name(activity), season_note]
-
-
-func _plot(image: Image, world: Vector3, colour: Color, radius: int) -> void:
-	var size := image.get_width()
-	var px := int(world.x / float(terrain_size.x) * float(size - 1))
-	var py := int(world.z / float(terrain_size.y) * float(size - 1))
-	for dy in range(-radius, radius + 1):
-		for dx in range(-radius, radius + 1):
-			var x := px + dx
-			var y := py + dy
-			if x >= 0 and y >= 0 and x < size and y < size:
-				image.set_pixel(x, y, colour)
 
 
 ## Estado de la gente, uno a uno
@@ -1453,7 +1124,7 @@ func _process(_delta: float) -> void:
 	var frame := Engine.get_process_frames()
 	if frame % 15 == 0:
 		_update_band_panel()
-		_update_minimap()
+		minimapa._update_minimap()
 		_refresh_debug_label()
 		# El tiempo cambia por horas de juego, no por fotogramas: mirarlo
 		# cuatro veces por segundo va sobrado, y la capa corta sola si no ha
@@ -1464,12 +1135,12 @@ func _process(_delta: float) -> void:
 	# de frames. Recorre las 4.096 celdas del campo, asi que hacerlo seguido
 	# seria pagar cada segundo por un dato que cambia cada dia de juego.
 	if _overlay_activity != OVERLAY_OFF and frame % 180 == 0:
-		_refresh_resource_overlay()
+		minimapa._refresh_resource_overlay()
 	# Lo descubierto crece por jornadas, no por frames: revisarlo cuatro veces
 	# por segundo seria pagar todo el rato por un dato que casi nunca cambia
 	if frame % 90 == 0:
 		_check_discoveries()
-		_refresh_minimap_fog()
+		minimapa._refresh_minimap_fog()
 
 
 ## La ficha de depuración, leída de la FUENTE y no de un espejo.
@@ -1576,7 +1247,7 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 						Subsistence.Activity.MATERIA_PRIMA]:
 					for i in range(6):
 						knowledge.observe(activity as Subsistence.Activity, world, 1.0)
-				_refresh_resource_overlay()
+				minimapa._refresh_resource_overlay()
 			print("Banda: reconocido el entorno de %s" % label)
 		"taller":
 			print("Banda: %s pasa a usarse como taller de talla" % label)
@@ -1720,7 +1391,7 @@ func _tecla(event: InputEventKey) -> void:
 					sim.assign_all(acts[index] as Subsistence.Activity)
 					_update_band_panel()
 		KEY_R:
-			_cycle_overlay()
+			minimapa._cycle_overlay()
 		KEY_N:
 			# La capa de navegacion: rojo lo que no se pisa, naranja lo que
 			# se pisa pero no se alcanza desde el abrigo. Es la unica forma

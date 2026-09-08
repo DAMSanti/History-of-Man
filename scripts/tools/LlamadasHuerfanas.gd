@@ -20,6 +20,7 @@ const FACHADAS := {
 		"Reparto", "Tajo", "Taller", "Trampas"],
 	"res://scripts/ui/GameUI.gd": ["PanelAlmacen", "PanelRastros", "PanelTrabajos"],
 	"res://scripts/mundo/TerrainGenerator.gd": ["MallaDelTerreno"],
+	"res://scripts/DemoMain.gd": ["Minimapa"],
 }
 
 
