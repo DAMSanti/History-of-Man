@@ -490,8 +490,15 @@ func _update_band_gauge() -> void:
 	var mouths := float(sim.people.size())
 	hunger /= mouths
 	tired /= mouths
-	_band_label.text = "%d personas%s" % [sim.people.size(),
-		"  ·  %d tocados" % hurt if hurt > 0 else ""]
+	# Y lo que se echó a perder ayer. Estaba escrito -en la crónica y en una
+	# línea del almacén, dentro de la lista de perecederos- y aun así no se
+	# encontraba: es una cifra DIARIA y del día no se entera nadie leyendo una
+	# ficha. Aquí sale sola, y sólo cuando hay algo que decir.
+	var rot := ""
+	if sim.spoiled_rations_today > 0.05:
+		rot = "  ·  se pudrieron %.1f raciones" % sim.spoiled_rations_today
+	_band_label.text = "%d personas%s%s" % [sim.people.size(),
+		"  ·  %d tocados" % hurt if hurt > 0 else "", rot]
 	if _hunger_bar != null:
 		_hunger_bar.value = hunger
 		_paint_gauge(_hunger_bar, hunger)
@@ -1092,104 +1099,11 @@ func _key_row(body: VBoxContainer, keys: String, what: String) -> void:
 
 # -------------------------------------------------------------- almacén ---
 
-## Qué hay guardado, qué falta y qué se ha mandado tener.
-##
-## Todo va en UNA fila por material: icono, nombre, lo que hay, lo que hace
-## falta y el objetivo con sus botones. Antes el control de tope colgaba en
-## una segunda línea debajo, y con veinte materiales la pestaña era una
-## escalera imposible de leer.
-func show_store() -> void:
-	var body := _window("almacen", "Almacén")
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
-
-	var mouths := 0.0
-	for person: Inhabitant in sim.people:
-		mouths += person.daily_food()
-
-	var days := sim.store.days_of_food(mouths)
-
-	_heading(body, _autonomy_text(days))
-	_text(body, "%d personas comen %.1f raciones al día. Los críos y los "
-		% [sim.population(), mouths]
-		+ "ancianos comen menos, así que la cuenta no es una por cabeza.", true)
-
-	if days < 3.0:
-		_notice(body, "Hambre. Con menos de tres jornadas, cualquier temporal "
-			+ "deja a la banda sin nada.", UISkin.ALARM)
-	elif days < 10.0:
-		_text(body, "Sin margen: un mal mes acaba con las reservas.", true)
-
-	# --- el sitio ---------------------------------------------------------
-	_heading(body, "EL ABRIGO")
-	_bar(body, "Ocupación", sim.store.fullness())
-	_text(body, "%s de %s · quedan %s libres · pesa %s" % [
-		Materia.format_volume(sim.store.total_litres()),
-		Materia.format_volume(sim.store.capacity_litres),
-		Materia.format_volume(maxf(sim.store.free_litres(), 0.0)),
-		Materia.format_weight(sim.store.total_kg())], true)
-
-	if sim.store.fullness() > 0.92:
-		_notice(body, "El abrigo está lleno. Lo que traigan se queda fuera.",
-			UISkin.ALARM)
-
-	_show_camp(body)
-
-	# --- el desglose ------------------------------------------------------
-	_food_cap_row(body)
-
-	# En el orden del catálogo y SIEMPRE entero, no ordenado por lo que más
-	# abulte. Ordenarlo por volumen quería decir que las filas bailaban cada
-	# vez que la banda traía algo: ibas a por la leña donde estaba hace un
-	# momento y ahí había otra cosa. Cada material tiene su sitio, y lo
-	# conserva aunque hoy no quede nada de él.
-	var rows := sim.store.in_catalogue_order()
-	var index := 0
-	var food_done := false
-	_heading(body, "ALIMENTO · EN RACIONES")
-	_ledger_header(body)
-	for row: Dictionary in rows:
-		var kind := row["kind"] as Materia.Kind
-		if not Materia.is_provision(kind) and not food_done:
-			food_done = true
-			_heading(body, "MATERIA PRIMA · EN UNIDADES")
-			_ledger_header(body)
-			index = 0
-		_material_row(body, kind, float(row["units"]), index)
-		index += 1
-
-	_show_toolkit(body)
-
-	_heading(body, "CONSERVACIÓN")
-	var perishing: Array[String] = []
-	for row: Dictionary in rows:
-		var kind := row["kind"] as Materia.Kind
-		var life := Materia.shelf_life(kind)
-		if life <= 0 or life > 200:
-			continue
-		var aged := float(sim.store.ages.get(kind, 0.0))
-		var left := maxi(life - int(aged), 0)
-		# Y cuánto se ha ido AYER, que es la cifra que contesta «¿por qué no
-		# sube esto?». Un montón que no crece porque se pudre y un montón que
-		# no crece porque nadie lo trae se leen igual, y no son lo mismo.
-		var lost := float(sim.store.spoiled.get(kind, 0.0))
-		var tail := "" if lost < 0.05 else "  ·  ayer se echaron a perder %.1f" % lost
-		perishing.append("%s: %d días antes de echarse a perder%s"
-			% [Materia.material_name(kind), left, tail])
-	if perishing.is_empty():
-		_text(body, "Nada que se estropee de momento.", true)
-	else:
-		for line: String in perishing:
-			_text(body, "  · " + line, true)
-
-	if not sim.camp_built.get(CampProjects.Kind.SECADERO, false):
-		_notice(body, "Sin secadero, la carne dura cuatro días y el pescado "
-			+ "TRES. Ahumarlos los lleva a medio año: mientras no lo levantes, "
-			+ "una jornada buena de pesca se pudre antes de comérsela.",
-			UISkin.OCHRE)
-
+# --- lo que el almacen comparte con las demas ventanas --------------------
+#
+# Se quedan aqui y no en [PanelAlmacen] porque los usa mas de una: el
+# aviso en recuadro lo pintan tres ventanas, y las anchuras de columna
+# las lee tambien la rejilla de trabajos.
 
 ## Aviso en color, con su filete a la izquierda. Se lee de un vistazo sin
 ## tener que buscar el símbolo dentro de un párrafo.
@@ -1204,184 +1118,11 @@ func _notice(body: VBoxContainer, content: String, tint: Color) -> void:
 	var label := Label.new()
 	label.text = content
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(PANEL_WIDTH - 100, 0)
+	label.custom_minimum_size = Vector2(GameUI.PANEL_WIDTH - 100, 0)
 	label.add_theme_font_size_override("font_size", 12)
 	label.add_theme_color_override("font_color", tint)
 	frame.add_child(label)
 
-
-## No se construye una choza: se EQUIPA la cueva. Hogar y secadero son las
-## dos mejoras del abrigo, y el secadero exige el hogar porque ahumar sin
-## fuego no se hace.
-func _show_camp(body: VBoxContainer) -> void:
-	_heading(body, "CAMPAMENTO")
-
-	for kind: int in CampProjects.all():
-		var project := kind as CampProjects.Kind
-		var built: bool = sim.camp_built.get(project, false)
-		var working: bool = sim.camp_queue == project
-
-		var frame := PanelContainer.new()
-		frame.add_theme_stylebox_override("panel", UISkin.row_box(
-			UISkin.SURFACE if built else UISkin.GROUND.lightened(0.04)))
-		body.add_child(frame)
-
-		var column := VBoxContainer.new()
-		column.add_theme_constant_override("separation", 2)
-		frame.add_child(column)
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		column.add_child(row)
-
-		var mark := Label.new()
-		mark.text = "✓" if built else ("◐" if working else "○")
-		mark.custom_minimum_size = Vector2(16, 0)
-		mark.add_theme_color_override("font_color",
-			UISkin.GREEN if built else (UISkin.OCHRE if working else UISkin.INK_FAINT))
-		row.add_child(mark)
-
-		var label := Label.new()
-		label.text = CampProjects.project_name(project)
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.add_theme_color_override("font_color",
-			UISkin.INK if built or working else UISkin.INK_SOFT)
-		row.add_child(label)
-
-		if built:
-			var done := Label.new()
-			done.text = "en pie"
-			done.add_theme_font_size_override("font_size", 11)
-			done.add_theme_color_override("font_color", UISkin.GREEN)
-			row.add_child(done)
-		elif working:
-			var meter := ProgressBar.new()
-			meter.min_value = 0.0
-			meter.max_value = CampProjects.labor_days(project)
-			meter.value = clampf(sim.camp_progress, 0.0, meter.max_value)
-			meter.custom_minimum_size = Vector2(84, 14)
-			# El rótulo de serie va centrado DENTRO de la barra y en una tan
-			# estrecha se sale por el lado. Va aparte, a su derecha.
-			meter.show_percentage = false
-			row.add_child(meter)
-
-			var pct := Label.new()
-			pct.text = "%d%%" % int(meter.value / meter.max_value * 100.0)
-			pct.custom_minimum_size = Vector2(34, 0)
-			pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			pct.add_theme_font_size_override("font_size", 11)
-			pct.add_theme_color_override("font_color", UISkin.OCHRE)
-			row.add_child(pct)
-		else:
-			var needs := CampProjects.requires(project)
-			var blocked: bool = needs >= 0 and not sim.camp_built.get(needs, false)
-			var button := Button.new()
-			button.text = "levantar" if not blocked else "pide %s" \
-				% CampProjects.project_name(needs as CampProjects.Kind).to_lower()
-			button.disabled = blocked or sim.camp_queue >= 0
-			button.custom_minimum_size = Vector2(84, 22)
-			button.pressed.connect(func() -> void:
-				sim.queue_project(project)
-				show_store())
-			row.add_child(button)
-
-		var note := Label.new()
-		note.text = CampProjects.project_desc(project)
-		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		note.custom_minimum_size = Vector2(PANEL_WIDTH - 110, 0)
-		note.add_theme_font_size_override("font_size", 11)
-		note.add_theme_color_override("font_color", UISkin.INK_FAINT)
-		column.add_child(note)
-
-	if sim.camp_queue >= 0:
-		var pending: Array[String] = []
-		var recipe: Dictionary = CampProjects.materials(
-			sim.camp_queue as CampProjects.Kind)
-		for material: int in recipe:
-			var wanted: float = float(recipe[material])
-			var have := sim.store.amount(material as Materia.Kind)
-			if have < wanted:
-				pending.append("%s (%d de %d)" % [
-					Materia.material_name(material as Materia.Kind),
-					int(have), int(wanted)])
-		if not pending.is_empty():
-			_notice(body, "Esperando material: %s." % ", ".join(pending), UISkin.OCHRE)
-		var hands := 0
-		for person: Inhabitant in sim.people:
-			if person.job == Profession.Job.HOGAR:
-				hands += 1
-		if hands == 0:
-			_notice(body, "No hay nadie en el hogar: la obra no avanza sola.",
-				UISkin.ALARM)
-
-
-## Lo importante del utillaje no es el inventario sino la COBERTURA: doce
-## lascas no dicen nada, «doce lascas para siete manos» sí.
-func _show_toolkit(body: VBoxContainer) -> void:
-	_heading(body, "EL UTILLAJE")
-
-	var demand := sim.tool_demand()
-
-	# Se listan TODAS las piezas que la banda necesita, tenga o no ninguna. Lo
-	# que no existe es justo lo que hay que ver, y en una lista de lo que hay
-	# nunca aparece.
-	# TODAS las del catalogo, no solo las que hoy se piden o se tienen.
-	#
-	# Antes se listaba lo que tuviera demanda o existencias, y eso dejaba
-	# fuera el aparejo de pesca entero: la nasa, el anzuelo, la red y el
-	# arpon no se piden hasta que la banda sabe usarlos, asi que el jugador
-	# no los veia en ninguna parte y no habia forma de saber que existian ni
-	# que hacia falta para llegar a ellos. Lo que no se tiene es justo lo que
-	# hay que ver.
-	var kinds: Array[int] = []
-	for kind: int in Tool.Kind.values():
-		kinds.append(kind)
-
-	# En el orden del catálogo, SIN ordenar por cobertura.
-	#
-	# Ordenar por lo peor cubierto parecía buena idea —lo accionable arriba—
-	# hasta ver lo que hacía: la cobertura depende de la meta, así que pulsar
-	# «+» en una pieza la mandaba a otro sitio de la tabla y el botón que
-	# ibas a volver a pulsar ya no estaba debajo del cursor. Cada pieza tiene
-	# su sitio, y lo conserva.
-	kinds.sort_custom(func(a: int, b: int) -> bool: return a < b)
-
-	# Lo que todavía no se sabe hacer NO SE LISTA. El almacén enseñaba arpones,
-	# nasas y anzuelos desde la primera jornada, con su fila, su meta y sus
-	# botones, como si fueran cosas que se pueden pedir: y no se podían, porque
-	# la técnica no estaba. Aparecen al descubrirlas, que es la mitad del premio
-	# de descubrirlas. Lo que ya se tiene se lista igual, se sepa o no: si está
-	# en el abrigo, está.
-	var known_kinds: Array[int] = []
-	for kind: int in kinds:
-		if sim.knows_tool(kind as Tool.Kind) \
-			or sim.toolkit.count(kind as Tool.Kind) > 0:
-			known_kinds.append(kind)
-	kinds = known_kinds
-
-	_ledger_header(body)
-	var index := 0
-	for kind: int in kinds:
-		_tool_row(body, kind as Tool.Kind, int(demand.get(kind, 0)), index)
-		index += 1
-
-	if not sim.toolkit.broken_today.is_empty():
-		_text(body, "Hoy se ha roto: %s." % ", ".join(sim.toolkit.broken_today), true)
-
-	_text(body, "«Gasta» es lo que la banda consume en un mes: lo que come, lo "
-		+ "que rompe y lo que piden las obras. «Meta» es cuánto quieres tener "
-		+ "guardado — al llegar, dejan de traer más y se emplean en otra cosa.",
-		true)
-	_text(body, "Las piezas se gastan con el uso. El sílex da casi tres veces "
-		+ "más filo que la cuarcita, y ésa es la razón de mandar a alguien "
-		+ "lejos a buscarlo.", true)
-
-
-# ------------------------------------------------------------- el libro ---
-#
-# Almacén y utillaje comparten rejilla a propósito: son la misma pregunta
-# —qué tengo, qué me falta, cuánto quiero— sobre dos cosas distintas, y con
-# las columnas alineadas se leen las dos con la misma mirada.
 
 ## Anchos medidos CONTRA la ventana, no a ojo: 560 de panel menos 20 de
 ## margen y 12 de barra de desplazamiento dejan 508 útiles. La suma de todo
@@ -1393,710 +1134,46 @@ func _show_toolkit(body: VBoxContainer) -> void:
 ## urogallo»— no usa esta columna: su nombre se expande solo, ver
 ## `_content_row`.
 const COL_ICON := 20
+
+
 const COL_NAME := 130
+
+
 const COL_HAVE := 48
+
+
 const COL_NEED := 48
+
+
 const COL_GOAL := 42
+
+
 const COL_BUTTON := 20
 
 
-func _ledger_header(body: VBoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	body.add_child(row)
-
-	var widths := [COL_ICON + COL_NAME + 4, COL_HAVE, COL_NEED, COL_NEED, COL_GOAL]
-	# Cortos a propósito: «HACE FALTA» no cabe en su columna y se montaba
-	# encima de la siguiente
-	# GASTA es lo que la banda consume al mes y no lo decide el jugador; META
-	# es cuanto quiere tener guardado y lo decide el. Estaban vinculados —los
-	# dos salian de lo mismo— y por eso subir uno subia el otro.
-	#
-	# Las dos del medio van EN EL MISMO PERIODO y se dice en la cabecera. GASTA
-	# iba por mes y PRODUCE por dia: leidas juntas -que es para lo que estan una
-	# al lado de otra- la banda parecia arruinarse siempre, por un factor de
-	# treinta. Ver `SettlementSim.production_of`.
-	var texts := ["", "HAY", "GASTA/MES", "PRODUCE/MES", "META"]
-	for i in range(5):
-		var cell := Label.new()
-		cell.text = texts[i]
-		cell.custom_minimum_size = Vector2(widths[i], 0)
-		cell.add_theme_font_size_override("font_size", 9)
-		cell.add_theme_color_override("font_color", UISkin.INK_FAINT)
-		if i > 0:
-			cell.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(cell)
+## El almacen. Lo que se pinta dentro esta en [PanelAlmacen].
+func show_store() -> void:
+	_almacen_panel().show_store()
 
 
-## El armazón común de una fila. Devuelve la caja donde el llamante mete sus
-## botones, para que la parte fija —icono, nombre, cifras— se escriba una vez.
-func _ledger_row(body: VBoxContainer, icon: Control, name_text: String,
-		have_text: String, have_tint: Color, need_text: String,
-		goal_text: String, goal_tint: Color, index: int,
-		makes_text: String = "") -> HBoxContainer:
-	var frame := PanelContainer.new()
-	# Filas alternas: sin esto, con veinte materiales seguidos la vista se
-	# pierde de línea a mitad de tabla
-	frame.add_theme_stylebox_override("panel", UISkin.row_box(
-		UISkin.SURFACE if index % 2 == 0 else UISkin.GROUND.lightened(0.03)))
-	body.add_child(frame)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	frame.add_child(row)
-
-	icon.custom_minimum_size = Vector2(COL_ICON - 4, COL_ICON - 4)
-	row.add_child(icon)
-
-	var label := Label.new()
-	label.text = name_text
-	label.custom_minimum_size = Vector2(COL_NAME - 4, 0)
-	label.add_theme_font_size_override("font_size", 12)
-	label.clip_text = true
-	row.add_child(label)
-
-	var have := Label.new()
-	row.set_meta("have", have)
-	have.text = have_text
-	have.custom_minimum_size = Vector2(COL_HAVE, 0)
-	have.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	have.add_theme_font_size_override("font_size", 12)
-	have.add_theme_color_override("font_color", have_tint)
-	row.add_child(have)
-
-	var need := Label.new()
-	row.set_meta("need", need)
-	need.text = need_text
-	need.custom_minimum_size = Vector2(COL_NEED, 0)
-	need.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	need.add_theme_font_size_override("font_size", 12)
-	need.add_theme_color_override("font_color", UISkin.INK_SOFT)
-	row.add_child(need)
-
-	# PRODUCE va entre lo que se gasta y lo que se quiere tener: las tres se
-	# leen juntas -entra tanto, se va tanto, quiero tanto- y es la cuenta que
-	# de verdad decide si hace falta mover gente de oficio.
-	var makes := Label.new()
-	row.set_meta("makes", makes)
-	makes.text = makes_text
-	makes.custom_minimum_size = Vector2(COL_NEED, 0)
-	makes.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	makes.add_theme_font_size_override("font_size", 12)
-	makes.add_theme_color_override("font_color", UISkin.INK_SOFT)
-	row.add_child(makes)
-
-	var goal := Label.new()
-	goal.text = goal_text
-	goal.custom_minimum_size = Vector2(COL_GOAL, 0)
-	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	goal.add_theme_font_size_override("font_size", 12)
-	goal.add_theme_color_override("font_color", goal_tint)
-	row.add_child(goal)
-
-	return row
-
-
-## El tope de comida de toda la despensa, en una sola línea.
-##
-## Poner tope material a material es un trabajo que el jugador no debería
-## tener: no le importa tener treinta bayas o veinte raíces, le importa que la
-## banda tenga comida de sobra y que la gente se dedique a otra cosa cuando la
-## tenga. Aquí se dice una vez y vale para todo lo que se come.
-func _food_cap_row(body: VBoxContainer) -> void:
-	var have := sim.store.food_rations()
-	var capped := sim.food_is_capped()
-
-	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", UISkin.row_box(UISkin.SURFACE))
-	body.add_child(frame)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	frame.add_child(row)
-
-	var label := Label.new()
-	# Con la unidad puesta: esta fila cuenta RACIONES -lo que come una
-	# persona en un día- y la columna «hay» de abajo cuenta UNIDADES de cada
-	# material, que no es lo mismo. Una ración de miel no es una unidad de
-	# miel: la miel alimenta 1,6 y la seta 0,3. Sin decirlo, la fila parece
-	# la suma de la columna y no cuadra nunca.
-	label.text = "Tope de comida (raciones)"
-	label.custom_minimum_size = Vector2(COL_ICON + COL_NAME, 0)
-	label.add_theme_font_size_override("font_size", 12)
-	row.add_child(label)
-
-	var now := Label.new()
-	now.custom_minimum_size = Vector2(COL_HAVE, 0)
-	now.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	now.add_theme_font_size_override("font_size", 12)
-	row.add_child(now)
-	_bind(now, func() -> void:
-		var rations := sim.store.food_rations()
-		now.text = "%.0f" % rations
-		now.add_theme_color_override("font_color",
-			UISkin.OCHRE if sim.food_is_capped() else UISkin.INK))
-
-	var state := Label.new()
-	state.custom_minimum_size = Vector2(COL_NEED, 0)
-	state.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	state.add_theme_font_size_override("font_size", 10)
-	row.add_child(state)
-	_bind(state, func() -> void:
-		state.text = "lleno" if sim.food_is_capped() else ""
-		state.add_theme_color_override("font_color", UISkin.OCHRE))
-
-	var goal := Label.new()
-	goal.text = "%.0f" % sim.food_cap if sim.food_cap > 0.0 else "—"
-	goal.custom_minimum_size = Vector2(COL_GOAL, 0)
-	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	goal.add_theme_font_size_override("font_size", 12)
-	goal.add_theme_color_override("font_color",
-		UISkin.OCHRE if sim.food_cap > 0.0 else UISkin.INK_FAINT)
-	row.add_child(goal)
-
-	_goal_buttons(row,
-		func() -> void:
-			var base: float = sim.food_cap if sim.food_cap > 0.0 else have
-			sim.food_cap = maxf(base - _goal_step() * 10.0, 0.0)
-			sim.apply_priorities()
-			show_store(),
-		func() -> void:
-			var base: float = sim.food_cap if sim.food_cap > 0.0 else have
-			sim.food_cap = base + _goal_step() * 10.0
-			sim.apply_priorities()
-			show_store(),
-		func() -> void:
-			sim.food_cap = 0.0
-			sim.apply_priorities()
-			show_store(),
-		sim.food_cap > 0.0)
-
-	var days := sim.food_cap_days()
-	frame.tooltip_text = "Tope de comida para toda la despensa.\n\n"
-	if sim.food_cap > 0.0:
-		frame.tooltip_text += "%.0f raciones: unas %.0f jornadas para la banda entera.\n" % [
-			sim.food_cap, days]
-	frame.tooltip_text += "Al llegar al tope nadie sale a BUSCAR más comida: " \
-		+ "caza, pesca, marisqueo y recolección se quedan sin gente y esa " \
-		+ "gente se emplea en otra cosa.\n\n" \
-		+ "Lo que ya está empezado sí se termina: el que vuelve cargado " \
-		+ "entrega, y una pieza abatida se acaba de traer. Tirar carne para " \
-		+ "respetar un tope sería absurdo."
-
-	if capped:
-		_text(body, "Despensa al tope: nadie sale a buscar más comida. Lo que "
-			+ "haya pendiente de recoger sí se recoge.", true)
-
-
-## La ficha de una pieza de utillaje.
-##
-## Va aparte de la del material porque las preguntas son distintas: de un
-## material interesa cuánto hay y cuánto se gasta; de una pieza interesa
-## además con qué se hace, quién la saca y cómo está de filo, que es lo que
-## decide si hay que ponerse a tallar hoy o se puede esperar.
+## La ficha de una pieza del utillaje: como se hace y para que sirve.
 func show_tool(kind: Tool.Kind) -> void:
-	var body := _window("utensilio", Tool.kind_name(kind))
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
-
-	_heading(body, Tool.kind_name(kind).to_upper())
-
-	var have := sim.toolkit.count(kind)
-	var hands := int(sim.tool_natural_demand().get(int(kind), 0))
-	_text(body, "Hay %d para %d manos · filo medio al %.0f%%" % [
-		have, hands, sim.toolkit.condition(kind) * 100.0])
-
-	_heading(body, "CÓMO HA IDO")
-	var series := sim.tool_history_of(kind)
-	if series.size() < 2:
-		_text(body, "Todavía no hay historia: hace falta cerrar alguna "
-			+ "jornada para poder dibujar una curva.", true)
-	else:
-		body.add_child(_history_chart(series))
-		_text(body, _history_tale(series), true)
-		# Con el utillaje, la pendiente ES la noticia: las piezas no se
-		# estropean de golpe, se van rompiendo, y una cuenta que baja despacio
-		# avisa con tres semanas de antelación.
-		_text(body, "Las piezas se rompen con el uso. Si la línea baja y nadie "
-			+ "está tallando, la banda se queda sin filo antes de notarlo.",
-			true)
-
-	_heading(body, "CÓMO SE HACE")
-	_text(body, _how_and_what_for(kind), true)
-
-	if not sim.toolkit.broken_today.is_empty():
-		_text(body, "Hoy se ha roto: %s."
-			% ", ".join(sim.toolkit.broken_today), true)
+	_almacen_panel().show_tool(kind)
 
 
-## La ficha de un material: qué es, para qué sirve y cómo ha ido.
-##
-## La cifra de hoy no dice nada sola. «Cuarenta de fruto seco» puede ser una
-## despensa que se llena o una que se vacía, y son dos partidas distintas: en
-## una no hay que hacer nada y en la otra hay que mandar gente al monte antes
-## de que sea tarde. La curva lo dice de un vistazo y el número no.
+## La ficha de un material: de donde sale, en que se gasta y su historia.
 func show_material(kind: Materia.Kind) -> void:
-	var body := _window("material", Materia.material_name(kind))
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
+	_almacen_panel().show_material(kind)
 
-	_heading(body, Materia.material_name(kind).to_upper())
-	_text(body, Materia.describe(kind), true)
 
-	var have := sim.store.amount(kind)
-	var needed := sim.material_needed(kind)
-	_text(body, "Ahora hay %.0f · se gastan %.0f al mes · pesa %s y ocupa %s"
-		% [have, needed,
-			Materia.format_weight(have * Materia.kg_per_unit(kind)),
-			Materia.format_volume(have * Materia.litres_per_unit(kind))])
+func _almacen_panel() -> PanelAlmacen:
+	if _almacen == null:
+		_almacen = PanelAlmacen.new(self)
+	return _almacen
 
-	_heading(body, "CÓMO HA IDO")
-	var series := sim.history_of(kind)
-	if series.size() < 2:
-		_text(body, "Todavía no hay historia: hace falta cerrar alguna "
-			+ "jornada para poder dibujar una curva.", true)
-	else:
-		body.add_child(_history_chart(series))
-		_text(body, _history_tale(series), true)
 
-	_heading(body, "PARA QUÉ SIRVE")
-	_text(body, _uses_of(kind), true)
+var _almacen: PanelAlmacen = null
 
-	var life := Materia.shelf_life(kind)
-	if life > 0:
-		_heading(body, "CONSERVACIÓN")
-		_text(body, "Aguanta unas %d jornadas antes de echarse a perder." % life,
-			true)
-
-
-## La curva de existencias, dibujada a mano.
-##
-## Es un Control con `draw` propio y no una imagen: son treinta líneas, y
-## montar una textura para eso sería pagar memoria y un rebote por el disco
-## para dibujar lo que el propio panel puede pintar.
-func _history_chart(series: PackedFloat32Array) -> Control:
-	var chart := Control.new()
-	chart.custom_minimum_size = Vector2(PANEL_WIDTH - 60, 110)
-
-	var top := 1.0
-	for value: float in series:
-		top = maxf(top, value)
-
-	chart.draw.connect(func() -> void:
-		var box := chart.get_rect().size
-		chart.draw_rect(Rect2(Vector2.ZERO, box), UISkin.GROUND)
-
-		# Tres rayas de referencia: sin ellas la curva sube y baja sin escala
-		for i in range(1, 4):
-			var y := box.y * float(i) / 4.0
-			chart.draw_line(Vector2(0.0, y), Vector2(box.x, y),
-				UISkin.INK_FAINT * Color(1, 1, 1, 0.25), 1.0)
-
-		var points := PackedVector2Array()
-		for i in range(series.size()):
-			var x := box.x * float(i) / float(maxi(series.size() - 1, 1))
-			var y := box.y * (1.0 - series[i] / top)
-			points.append(Vector2(x, y))
-		if points.size() >= 2:
-			chart.draw_polyline(points, UISkin.OCHRE, 2.0, true)
-
-		# El techo de la escala, escrito: una curva sin numeros no se lee
-		var font := chart.get_theme_default_font()
-		if font:
-			chart.draw_string(font, Vector2(4.0, 12.0), "%.0f" % top,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UISkin.INK_SOFT)
-			chart.draw_string(font, Vector2(4.0, box.y - 4.0),
-				"hace %d jornadas" % series.size(),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UISkin.INK_FAINT))
-	return chart
-
-
-## Lo que cuenta la curva, dicho con palabras.
-##
-## Va debajo del dibujo y no en su lugar: la curva se lee de un vistazo y la
-## frase dice lo que hay que hacer, que no es lo mismo.
-func _history_tale(series: PackedFloat32Array) -> String:
-	var now := series[series.size() - 1]
-	var week := series[maxi(series.size() - 8, 0)]
-	var change := now - week
-
-	var trend := "se mantiene"
-	if change > maxf(now * 0.12, 1.0):
-		trend = "sube"
-	elif change < -maxf(now * 0.12, 1.0):
-		trend = "baja"
-
-	var top := 0.0
-	var low := INF
-	for value: float in series:
-		top = maxf(top, value)
-		low = minf(low, value)
-
-	return "En la última semana %s (%+.0f). En lo que se recuerda ha ido de %.0f a %.0f." % [
-		trend, change, low, top]
-
-
-## Para qué sirve un material: qué se hace con él y qué se come.
-##
-## Lo que decía el tooltip era qué ES el material, y eso sólo responde media
-## pregunta. La otra mitad —«¿y esto para qué lo quiero?»— es la que decide si
-## se le pone objetivo, y hasta ahora había que deducirla probando.
-func _uses_of(kind: Materia.Kind) -> String:
-	var uses: Array[String] = []
-
-	for tool_key: int in Tool.Kind.values():
-		var tool_kind := tool_key as Tool.Kind
-		if Tool.recipe(tool_kind).has(kind):
-			uses.append(Tool.kind_name(tool_kind).to_lower())
-
-	var works: Array[String] = []
-	for project_key: int in CampProjects.Kind.values():
-		var project := project_key as CampProjects.Kind
-		if CampProjects.materials(project).has(kind):
-			works.append(CampProjects.project_name(project).to_lower())
-
-	var lines: Array[String] = []
-	if Materia.is_food(kind):
-		lines.append("Se come: %.1f raciones por unidad."
-			% Materia.nutrition(kind))
-	if not uses.is_empty():
-		lines.append("Se gasta en: %s." % ", ".join(uses))
-	if not works.is_empty():
-		lines.append("Hace falta para: %s." % ", ".join(works))
-	if lines.is_empty():
-		lines.append("No se gasta en nada todavía: se guarda por si acaso.")
-	return "\n".join(lines)
-
-
-## Cómo se hace una pieza y para qué sirve.
-##
-## El tooltip decía cuántas hay y cómo están de filo, que es lo que ya se ve
-## en la fila. Lo que no estaba en ninguna parte es lo único que hace falta
-## para decidir: qué materia prima se lleva, qué herramienta hace falta para
-## hacerla, quién la hace y en qué se nota tenerla.
-func _how_and_what_for(kind: Tool.Kind) -> String:
-	var lines: Array[String] = []
-
-	var recipe := Tool.recipe(kind)
-	if recipe.is_empty():
-		lines.append("No se fabrica.")
-	else:
-		var parts: Array[String] = []
-		for material: int in recipe:
-			parts.append("%.1f de %s" % [float(recipe[material]),
-				Materia.material_name(material as Materia.Kind).to_lower()])
-		lines.append("Se hace con: %s." % ", ".join(parts))
-
-	# La herramienta previa. Sin buril no se ranura el asta: no es que se
-	# tarde más, es que no se hace.
-	var prerequisite := Tool.needs_tool(kind)
-	if prerequisite >= 0:
-		lines.append("Hace falta %s para hacerla."
-			% Tool.kind_name(prerequisite as Tool.Kind).to_lower())
-
-	# Y la tecnica, que en el aparejo de pesca es la mitad del asunto: se
-	# puede tener el asta y el buril y seguir sin saber hacer un arpon.
-	var needed_tech := _tech_behind(kind)
-	if needed_tech >= 0:
-		var got := tech != null and tech.has(needed_tech as TechTree.Tech)
-		lines.append("Pide saber %s%s." % [
-			TechTree.tech_name(needed_tech as TechTree.Tech).to_lower(),
-			"" if got else " — y todavia no se sabe"])
-
-	var who := _crafted_by(kind)
-	if not who.is_empty():
-		lines.append("La saca: %s." % who)
-
-	var uses := _tool_serves(kind)
-	if not uses.is_empty():
-		lines.append("Se usa para: %s." % uses)
-
-	lines.append("Aguanta %d jornadas de uso; en sílex, casi el triple que en "
-		% int(Tool.durability_of(kind)
-			/ maxf(Tool.wear_per_day(kind), 0.001))
-		+ "cuarcita.")
-	return "\n".join(lines)
-
-
-## Qué especialidad del taller saca esta pieza.
-func _crafted_by(kind: Tool.Kind) -> String:
-	for speciality: int in Profession.SPECIALITY_INFO:
-		var made: Array = SettlementSim.SPECIALITY_MAKES.get(speciality, [])
-		if made.has(int(kind)):
-			return Profession.speciality_name(
-				speciality as Profession.Speciality).to_lower()
-	return ""
-
-
-## En qué trabajo se nota tener esta pieza.
-func _tool_serves(kind: Tool.Kind) -> String:
-	var jobs: Array[String] = []
-	for activity: int in ALL_ACTIVITIES:
-		if sim.activity_tool(activity as Subsistence.Activity) == int(kind):
-			jobs.append(Subsistence.activity_name(
-				activity as Subsistence.Activity).to_lower())
-	if kind == Tool.Kind.LASCA:
-		jobs.append("despiezar lo cazado")
-	if kind == Tool.Kind.BURIL:
-		jobs.append("ranurar asta y hueso")
-	if kind == Tool.Kind.RAEDERA:
-		jobs.append("raspar pieles")
-	# El aparejo de pesca no sale de `activity_tool`: cual se usa depende de
-	# la manera de pescar que la banda pueda hoy -ver [Fishing].
-	for method_key: int in Fishing.ORDER:
-		var method := method_key as Fishing.Method
-		if Fishing.tool_of(method) == int(kind):
-			jobs.append("pescar de orilla (%s)"
-				% Fishing.method_name(method).to_lower())
-	return ", ".join(jobs)
-
-
-## La tecnica que hay que dominar para poder hacer esta pieza, o -1.
-func _tech_behind(kind: Tool.Kind) -> int:
-	for method_key: int in Fishing.ORDER:
-		var method := method_key as Fishing.Method
-		if Fishing.tool_of(method) == int(kind):
-			return Fishing.tech_of(method)
-	return -1
-
-
-## Cuánto mueve una pulsación el objetivo.
-##
-## De uno en uno, que es lo previsible, y de diez en diez con Mayúsculas para
-## las cantidades grandes. Se mira la tecla en el momento de pulsar porque la
-## señal `pressed` no trae el evento.
-func _goal_step() -> float:
-	return 10.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0
-
-
-## Los tres botones del objetivo, iguales en las dos tablas.
-func _goal_buttons(row: HBoxContainer, on_less: Callable, on_more: Callable,
-		on_clear: Callable, has_goal: bool) -> void:
-	for entry: Array in [["−", on_less], ["+", on_more]]:
-		var button := Button.new()
-		button.text = entry[0]
-		button.tooltip_text = "De uno en uno · con Mayúsculas, de diez en diez"
-		button.custom_minimum_size = Vector2(COL_BUTTON, 20)
-		button.pressed.connect(entry[1] as Callable)
-		row.add_child(button)
-
-	var clear := Button.new()
-	clear.text = "∞"
-	clear.tooltip_text = "Sin objetivo: que lo decida la banda"
-	clear.custom_minimum_size = Vector2(COL_BUTTON, 20)
-	clear.disabled = not has_goal
-	clear.pressed.connect(on_clear)
-	row.add_child(clear)
-
-
-## Una fila de material: lo que hay, lo que piden las obras y el utillaje, y
-## el tope que haya puesto el jugador.
-## De qué está hecha una pieza, con sus cantidades. Es lo que hay que tener
-## en el abrigo para que el taller pueda sacarla, y hasta ahora no se decía
-## en ninguna parte: el jugador veía «no se hacen azagayas» sin poder saber
-## que lo que faltaba era el asta.
-func _recipe_text(kind: Tool.Kind) -> String:
-	var parts: Array[String] = []
-	for material: int in Tool.recipe(kind):
-		parts.append("%.0f %s" % [float(Tool.recipe(kind)[material]),
-			Materia.material_name(material as Materia.Kind).to_lower()])
-	if parts.is_empty():
-		return "nada: se hace con las manos"
-	return ", ".join(parts)
-
-
-## Lo que entra en el periodo de consumo, dicho para que se lea.
-##
-## Con un decimal por debajo de diez: aun por mes hay materiales que entran a
-## medio y a cuarto, y redondeando a entero esas filas salian a cero y parecia
-## que la banda no producia nada de ellas.
-func _makes_text(per_period: float) -> String:
-	if per_period <= 0.005:
-		return "—"
-	if per_period < 10.0:
-		return "%.1f" % per_period
-	return "%.0f" % per_period
-
-
-## Cuántas raciones da una unidad de esto. Lo que no se come va en unidades
-## -una piel es una piel- y se queda a 1.
-func _ration_rate(kind: Materia.Kind) -> float:
-	if not Materia.is_food(kind):
-		return 1.0
-	return maxf(Materia.nutrition(kind), 0.01)
-
-
-func _material_row(body: VBoxContainer, kind: Materia.Kind,
-		units: float, index: int) -> void:
-	var needed := sim.material_needed(kind)
-	var has_goal: bool = sim.limits.has(kind)
-	var goal: float = float(sim.limits.get(kind, 0.0))
-
-	# El color compara lo que hay con lo que se GASTA: verde si da para mas de
-	# un mes, ocre si justo, rojo si no llega. La meta no pinta aqui: es un
-	# deseo del jugador, no una necesidad de la banda.
-	var have_tint := UISkin.INK
-	if needed > 0.0:
-		have_tint = UISkin.coverage_color(units / maxf(needed, 0.001))
-	elif has_goal and units >= goal:
-		have_tint = UISkin.GREEN
-
-	# Todo lo que se come se cuenta en RACIONES, no en unidades.
-	#
-	# Las dos cifras existían mezcladas y no cuadraban nunca: la despensa
-	# decía 303 y la columna sumaba 307, porque una unidad de miel alimenta
-	# 1,6 y una de seta 0,3. Con la ración como única medida, sumar la
-	# columna da el total de la despensa y «me quedan 40» significa lo mismo
-	# en todas partes: cuarenta días-persona de comida.
-	var rate := _ration_rate(kind)
-
-	var goal_text := "%.0f" % (goal * rate) if has_goal else "—"
-	var goal_tint := UISkin.OCHRE if has_goal else UISkin.INK_FAINT
-
-	var makes := sim.production_of(kind) * rate
-	var row := _ledger_row(body, MateriaIcon.for_materia(kind),
-		Materia.material_name(kind),
-		"%.0f" % (units * rate), have_tint,
-		"%.0f" % (needed * rate) if needed > 0.0 else "—",
-		goal_text, goal_tint, index,
-		_makes_text(makes))
-
-	# Lo que hay y lo que hace falta se mueven con la jornada: la banda trae
-	# leña, el taller gasta sílex. Atados, la cifra cambia con el panel
-	# abierto y bajo el ratón, que es donde el jugador la está mirando.
-	var have_label: Label = row.get_meta("have")
-	_bind(have_label, func() -> void:
-		var now := sim.store.amount(kind)
-		var want := sim.material_needed(kind)
-		var tint := UISkin.INK
-		if want > 0.0:
-			tint = UISkin.coverage_color(now / maxf(want, 0.001))
-		elif sim.limits.has(kind) and now >= float(sim.limits[kind]):
-			tint = UISkin.GREEN
-		have_label.text = "%.0f" % (now * rate)
-		have_label.add_theme_color_override("font_color", tint))
-
-	var need_label: Label = row.get_meta("need")
-	_bind(need_label, func() -> void:
-		var want := sim.material_needed(kind)
-		need_label.text = "%.0f" % (want * rate) if want > 0.0 else "—")
-
-	var makes_label: Label = row.get_meta("makes")
-	_bind(makes_label, func() -> void:
-		makes_label.text = _makes_text(sim.production_of(kind) * rate))
-
-	# El paso era el 25% de lo que hubiera guardado, así que cambiaba solo
-	# según lo que la banda trajera ese día: pulsabas «+» y subía 5, 12 o 30
-	# sin ninguna lógica visible. Ahora es de uno en uno, y de diez en diez
-	# con Mayúsculas para no tener que dar treinta clics.
-	# El paso se pulsa en RACIONES y se guarda en unidades, que es como lo
-	# entiende el almacén: si no, pedir «treinta» de miel y «treinta» de
-	# seta pediría cantidades de comida muy distintas con el mismo número.
-	_goal_buttons(row,
-		func() -> void:
-			var base: float = goal if has_goal else units
-			sim.limits[kind] = maxf(base - _goal_step() / rate, 0.0)
-			show_store(),
-		func() -> void:
-			var base: float = goal if has_goal else units
-			sim.limits[kind] = base + _goal_step() / rate
-			show_store(),
-		func() -> void:
-			sim.limits.erase(kind)
-			show_store(),
-		has_goal)
-
-	# Peso y volumen van al tooltip y no a la fila. Son la cifra que decide si
-	# cabe en el abrigo, pero se consultan de tarde en tarde, y metidos en
-	# línea empujaban la fila fuera de la ventana.
-	# La fila entera es un boton hacia su historia. No hay icono que lo diga
-	# porque la fila ya va cargada de cifras y botones; lo dice el tooltip, y
-	# el cursor cambia al pasar por encima.
-	var frame := row.get_parent() as PanelContainer
-	frame.mouse_filter = Control.MOUSE_FILTER_STOP
-	frame.gui_input.connect(func(event: InputEvent) -> void:
-		var click := event as InputEventMouseButton
-		if click and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-			show_material(kind))
-
-	row.get_parent().tooltip_text = "%s · %s · %s\n%s\n\n%s\n\nPincha para ver su historia." % [
-		Materia.material_name(kind),
-		Materia.format_weight(units * Materia.kg_per_unit(kind)),
-		Materia.format_volume(units * Materia.litres_per_unit(kind)),
-		Materia.describe(kind),
-		_uses_of(kind)]
-
-
-## Una fila de utillaje. «Hace falta» aquí es la demanda calculada a partir de
-## quién está trabajando en qué, y el objetivo la anula si el jugador lo pone.
-func _tool_row(body: VBoxContainer, kind: Tool.Kind,
-		needed: int, index: int) -> void:
-	var have := sim.toolkit.count(kind)
-	var has_order: bool = sim.tool_orders.has(kind)
-	var order: int = int(sim.tool_orders.get(kind, 0))
-
-	# GASTA es cuantas se rompen al mes, no cuantas quieres tener: si fuera lo
-	# segundo, subir la meta subiria el gasto y el numero no diria nada.
-	var broken := sim.tools_broken_per_month(kind)
-	var have_tint := UISkin.coverage_color(
-		float(have) / maxf(float(needed), 0.001)) if needed > 0 else UISkin.INK
-
-	var row := _ledger_row(body, MateriaIcon.for_tool(kind),
-		Tool.kind_name(kind),
-		"%d" % have, have_tint,
-		"%.1f" % broken if broken < 10.0 else "%.0f" % broken,
-		"%d" % order if has_order else "—",
-		UISkin.OCHRE if has_order else UISkin.INK_FAINT, index,
-		_makes_text(sim.tool_production_of(kind)))
-
-	_goal_buttons(row,
-		func() -> void:
-			var base := order if has_order else needed
-			sim.set_tool_order(kind, maxi(base - int(_goal_step()), 0))
-			show_store(),
-		func() -> void:
-			var base := order if has_order else needed
-			sim.set_tool_order(kind, base + int(_goal_step()))
-			show_store(),
-		func() -> void:
-			sim.set_tool_order(kind, 0)
-			show_store(),
-		has_order)
-
-	# La fila de utillaje tambien lleva a su historia. Es la misma pregunta que
-	# con un material -«¿esto sube o baja?»- y la respuesta importa mas aqui:
-	# el filo se gasta solo, asi que una cuenta que baja despacio es una crisis
-	# con tres semanas de aviso.
-	var tool_frame := row.get_parent() as PanelContainer
-	tool_frame.mouse_filter = Control.MOUSE_FILTER_STOP
-	tool_frame.gui_input.connect(func(event: InputEvent) -> void:
-		var click := event as InputEventMouseButton
-		if click and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-			show_tool(kind))
-
-	var condition := sim.toolkit.condition(kind)
-	row.get_parent().tooltip_text = "%s\n%s\n\n%s" % [
-		Tool.kind_name(kind),
-		"No hay ninguna." if have == 0
-			else "Filo medio al %.0f%%." % (condition * 100.0),
-		_how_and_what_for(kind)]
-
-
-
-
-
-func _autonomy_text(days: float) -> String:
-	if days < 1.0:
-		return "No hay para mañana"
-	if days < 2.0:
-		return "Para un día"
-	if days < 90.0:
-		return "Para %d días" % int(days)
-	return "Para más de una estación"
 
 
 # ------------------------------------------------------------- trabajos ---
@@ -2183,7 +1260,7 @@ func show_ground(world: Vector3, terrain: TerrainGenerator) -> void:
 	go.disabled = not passable
 	go.tooltip_text = "La partida sale hacia este punto en vez de elegir ella" 		if passable else "Ahí no se puede llegar a pie"
 	go.pressed.connect(func() -> void:
-		sim.scout_towards(world)
+		sim.reconocimiento.scout_towards(world)
 		show_ground(world, terrain))
 	row.add_child(go)
 
@@ -2192,7 +1269,7 @@ func show_ground(world: Vector3, terrain: TerrainGenerator) -> void:
 		stop.text = "Que decidan"
 		stop.custom_minimum_size = Vector2(110, 26)
 		stop.pressed.connect(func() -> void:
-			sim.clear_scout_order()
+			sim.reconocimiento.clear_scout_order()
 			show_ground(world, terrain))
 		row.add_child(stop)
 
@@ -2305,7 +1382,7 @@ func show_peak(peak: Dictionary) -> void:
 		_text(body, "Nadie: esto no es cuestión de pericia. Pide equipo que "
 			+ "todavía no se sabe hacer.", true)
 	else:
-		var daring := sim.climbers_for(peak)
+		var daring := sim.cumbres.climbers_for(peak)
 		if daring.is_empty():
 			_text(body, "Nadie de la banda tiene la pericia que pide.", true)
 		for person: Inhabitant in daring:
@@ -2330,7 +1407,7 @@ func _climber_row(body: VBoxContainer, person: Inhabitant,
 	send.custom_minimum_size = Vector2(92, 24)
 	send.add_theme_font_size_override("font_size", 11)
 	send.pressed.connect(func() -> void:
-		var problem := sim.order_ascent(peak, person)
+		var problem := sim.cumbres.order_ascent(peak, person)
 		_peak_notice = problem
 		_peak_ordered = problem.is_empty()
 		show_peak(peak))
@@ -2671,101 +1748,97 @@ func _abundance_word(amount: float) -> String:
 	return "cuatro cosas"
 
 
-## Reparto de la mano de obra, persona a persona.
+# --- vocabulario de la rejilla de trabajos --------------------------------
+#
+# Se quedan en el panel y no en [PanelTrabajos] porque las leen tambien
+# otras ventanas -la ficha de material lista actividades, la de tecnicas
+# dibuja columnas por oficio- y una sonda mide con ellas los anchos.
+
+## Las actividades que se aprenden, para poder listar lo que sabe cada cual.
+const ALL_ACTIVITIES := [
+	Subsistence.Activity.RECOLECCION, Subsistence.Activity.CAZA,
+	Subsistence.Activity.PESCA, Subsistence.Activity.MARISQUEO,
+	Subsistence.Activity.MATERIA_PRIMA,
+]
+
+## Los oficios de la rejilla, en orden. `OCIOSO` no: no es un destino, es lo
+## que queda cuando no hay ninguno marcado.
+const GRID_JOBS := [
+	Profession.Job.RECOLECCION, Profession.Job.CAZA, Profession.Job.RIBERA,
+	Profession.Job.MANUFACTURA,
+	Profession.Job.EXPLORACION, Profession.Job.HOGAR,
+]
+
+const JOB_SHORT := {
+	Profession.Job.RECOLECCION: "Rec", Profession.Job.CAZA: "Caz",
+	Profession.Job.RIBERA: "Rib",
+	Profession.Job.MANUFACTURA: "Man", Profession.Job.EXPLORACION: "Exp",
+	Profession.Job.HOGAR: "Hog",
+}
+
+## Los enums `Job` y `Speciality` empiezan los dos en cero, así que sus
+## valores chocan: en un solo diccionario unas claves pisaban a otras.
+const SPECIALITY_SHORT := {
+	Profession.Speciality.TALLA: "Tal", Profession.Speciality.ASTA: "Ast",
+	Profession.Speciality.PELETERIA: "Pel", Profession.Speciality.CORDELERIA: "Cor",
+	Profession.Speciality.BATIDA: "Bat", Profession.Speciality.EXPEDICION: "Exd",
+	Profession.Speciality.ASCENSION: "Asc",
+	Profession.Speciality.FORRAJEO: "For", Profession.Speciality.LENA_FIBRA: "Len",
+	Profession.Speciality.CANTERA: "Can",
+	Profession.Speciality.TRAMPAS: "Tra", Profession.Speciality.CAZA_MENOR: "Men",
+	Profession.Speciality.CAZA_MAYOR: "May",
+	Profession.Speciality.MARISQUEO: "Mar", Profession.Speciality.ORILLA: "Ori",
+	Profession.Speciality.ALTURA: "Alt",
+}
+
+## Anchos de la tabla de trabajos, medidos y no a ojo.
 ##
-## Es una REJILLA: una fila por persona, una columna por oficio, y en cada
-## casilla con cuántas ganas lo hace. Sustituye a los botones de más y menos,
-## que tenían tres problemas que fueron saliendo uno detrás de otro: sumar a
-## un oficio le robaba gente a otro sin avisar, no había forma de ver quién
-## podía hacer qué, y cuando el botón se apagaba no decía por qué.
+## Cada persona sale UNA vez, en su fila, con las doce tareas de la banda a lo
+## largo. Se probó a partirlo en una tabla por oficio y salió mucho peor: la
+## misma persona aparecía en cinco bloques, cada bloque dejaba medio panel en
+## blanco, y no había forma de comparar a dos personas de un vistazo, que es
+## justo para lo que sirve esta pestaña.
 ##
-## Aquí las tres cosas se ven de un vistazo. Un guion es «no lo hace»; una
-## casilla apagada es «no puede», y basta mirar la fila para saber por qué.
+## 92 de nombre + doce casillas de 34 + los huecos + la columna de «hoy» suman
+## 634, y de ahí sale el ancho de la ventana.
+const NAME_COL := 92
+
+const CELL_COL := 34
+
+const TODAY_COL := 44
+
+## Hueco entre casillas del mismo oficio, y entre un oficio y el siguiente.
+##
+## Son distintos a propósito: es lo único que agrupa las cuatro casillas de
+## manufactura y las separa de las tres de exploración sin dibujar una sola
+## línea. Con un hueco único la fila es una ristra de doce dígitos sueltos.
+const CELL_GAP := 2
+
+const GROUP_GAP := 10
+
+
+## La ficha corta de cada cual, en una tira. Lo pinta [PanelTrabajos].
+func show_band() -> void:
+	if _trabajos == null:
+		_trabajos = PanelTrabajos.new(self)
+	_trabajos.show_band()
+
+
+## Con que se trabaja cada actividad, en lineas sueltas. Lo arma [PanelTrabajos].
+func _materials_of(activity: Subsistence.Activity) -> Array[String]:
+	if _trabajos == null:
+		_trabajos = PanelTrabajos.new(self)
+	return _trabajos._materials_of(activity)
+
+
+## La ventana de Trabajos. Lo que se pinta dentro esta en [PanelTrabajos].
 func show_jobs() -> void:
-	var body := _window("trabajos", "Trabajos", JOBS_WIDTH)
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
-
-	_heading(body, "")
-	var tally: Label = body.get_child(body.get_child_count() - 1)
-	_bind(tally, func() -> void:
-		tally.text = "%d personas · %d sin oficio" % [
-			sim.population(), sim.idle_count()])
-	_legend(body)
-
-	_job_grid(body)
-
-	_text(body, "Cada cual hace lo que tiene MÁS ARRIBA de lo que puede. Si "
-		+ "alguien lleva recolección en 1 y exploración en 2, recolecta: para "
-		+ "que salga a explorar, súbele la exploración o bájale la otra.", true)
-	_text(body, "Dentro de un oficio, todas las especialidades al mismo nivel "
-		+ "es «lo que haga falta»: cada jornada se hace la que más falta haga. "
-		+ "Bajar una y subir otra es lo que convierte a alguien en artesano.",
-		true)
-
-	_heading(body, "CÓMO FUNCIONA")
-	_text(body, "Nadie «es» cazador: la banda reparte el trabajo cada mañana "
-		+ "según lo que cada cual esté dispuesto a hacer. Por eso un crío que "
-		+ "crece o alguien que deja de criar entran solos en los trabajos que "
-		+ "ya tenían marcados.", true)
-	_text(body, "El hogar es el único con mínimo: si nadie lo atiende, la banda "
-		+ "saca a quien menos ganas tenga de lo suyo y lo anota en la crónica. "
-		+ "Sin fuego no se cocina, no se seca la carne y no avanza ninguna obra.",
-		true)
+	if _trabajos == null:
+		_trabajos = PanelTrabajos.new(self)
+	_trabajos.show_jobs()
 
 
-## La leyenda de los numeros. Sin ella la rejilla es una cuadricula de digitos
-## sueltos: nadie adivina que 1 es mas que 3.
-func _legend(body: VBoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	body.add_child(row)
-
-	for entry: Array in [
-		["1", "antes que nada", UISkin.OCHRE],
-		["2", "si hace falta", UISkin.INK],
-		["3", "sólo si no hay otra", UISkin.INK_SOFT],
-		["—", "no lo hace", UISkin.INK_FAINT],
-	]:
-		var chip := Label.new()
-		chip.text = "%s · %s" % [entry[0], entry[1]]
-		chip.add_theme_font_size_override("font_size", 10)
-		chip.add_theme_color_override("font_color", entry[2] as Color)
-		row.add_child(chip)
-
-	_text(body, "Una fila por persona y una casilla por tarea. Pincha para "
-		+ "cambiar: se rueda por los tres niveles y vuelve a «no lo hace». Un "
-		+ "punto apagado es que esa persona NO puede con ese oficio —pásale el "
-		+ "ratón por encima y te dice por qué—. La última columna es lo que "
-		+ "está haciendo hoy, y cambia sola.", true)
-	_spec_legend(body)
-
-
-## Qué es cada abreviatura de la cabecera.
-##
-## Las columnas miden 34 px, que no dan para «Cordelería»; y esperar que el
-## jugador adivine qué es «Cor» es pedirle demasiado. Se traducen todas aquí,
-## una vez, agrupadas por oficio.
-func _spec_legend(body: VBoxContainer) -> void:
-	for job_key: int in GRID_JOBS:
-		var job := job_key as Profession.Job
-		var specialities := Profession.specialities_of(job)
-		if specialities.is_empty():
-			continue
-
-		var parts: Array[String] = []
-		for speciality: int in specialities:
-			parts.append("%s %s" % [
-				String(SPECIALITY_SHORT.get(speciality, "?")),
-				Profession.speciality_name(speciality as Profession.Speciality)])
-
-		var label := Label.new()
-		label.text = "%s:  %s" % [Profession.job_name(job), "   ".join(parts)]
-		label.add_theme_font_size_override("font_size", 10)
-		label.add_theme_color_override("font_color", UISkin.FLINT)
-		body.add_child(label)
+var _trabajos: PanelTrabajos = null
 
 
 # ------------------------------------------------------------ rastros ----
@@ -3068,625 +2141,6 @@ func parajes_name(point: Vector3) -> String:
 	return sim.parajes.place_name(point, sim.home_position)
 
 
-## Las actividades que se aprenden, para poder listar lo que sabe cada cual.
-const ALL_ACTIVITIES := [
-	Subsistence.Activity.RECOLECCION, Subsistence.Activity.CAZA,
-	Subsistence.Activity.PESCA, Subsistence.Activity.MARISQUEO,
-	Subsistence.Activity.MATERIA_PRIMA,
-]
-
-## Los oficios de la rejilla, en orden. `OCIOSO` no: no es un destino, es lo
-## que queda cuando no hay ninguno marcado.
-const GRID_JOBS := [
-	Profession.Job.RECOLECCION, Profession.Job.CAZA, Profession.Job.RIBERA,
-	Profession.Job.MANUFACTURA,
-	Profession.Job.EXPLORACION, Profession.Job.HOGAR,
-]
-
-const JOB_SHORT := {
-	Profession.Job.RECOLECCION: "Rec", Profession.Job.CAZA: "Caz",
-	Profession.Job.RIBERA: "Rib",
-	Profession.Job.MANUFACTURA: "Man", Profession.Job.EXPLORACION: "Exp",
-	Profession.Job.HOGAR: "Hog",
-}
-
-## Los enums `Job` y `Speciality` empiezan los dos en cero, así que sus
-## valores chocan: en un solo diccionario unas claves pisaban a otras.
-const SPECIALITY_SHORT := {
-	Profession.Speciality.TALLA: "Tal", Profession.Speciality.ASTA: "Ast",
-	Profession.Speciality.PELETERIA: "Pel", Profession.Speciality.CORDELERIA: "Cor",
-	Profession.Speciality.BATIDA: "Bat", Profession.Speciality.EXPEDICION: "Exd",
-	Profession.Speciality.ASCENSION: "Asc",
-	Profession.Speciality.FORRAJEO: "For", Profession.Speciality.LENA_FIBRA: "Len",
-	Profession.Speciality.CANTERA: "Can",
-	Profession.Speciality.TRAMPAS: "Tra", Profession.Speciality.CAZA_MENOR: "Men",
-	Profession.Speciality.CAZA_MAYOR: "May",
-	Profession.Speciality.MARISQUEO: "Mar", Profession.Speciality.ORILLA: "Ori",
-	Profession.Speciality.ALTURA: "Alt",
-}
-
-## Anchos de la tabla de trabajos, medidos y no a ojo.
-##
-## Cada persona sale UNA vez, en su fila, con las doce tareas de la banda a lo
-## largo. Se probó a partirlo en una tabla por oficio y salió mucho peor: la
-## misma persona aparecía en cinco bloques, cada bloque dejaba medio panel en
-## blanco, y no había forma de comparar a dos personas de un vistazo, que es
-## justo para lo que sirve esta pestaña.
-##
-## 92 de nombre + doce casillas de 34 + los huecos + la columna de «hoy» suman
-## 634, y de ahí sale el ancho de la ventana.
-const NAME_COL := 92
-const CELL_COL := 34
-const TODAY_COL := 44
-
-## Hueco entre casillas del mismo oficio, y entre un oficio y el siguiente.
-##
-## Son distintos a propósito: es lo único que agrupa las cuatro casillas de
-## manufactura y las separa de las tres de exploración sin dibujar una sola
-## línea. Con un hueco único la fila es una ristra de doce dígitos sueltos.
-const CELL_GAP := 2
-const GROUP_GAP := 10
-
-
-## Reparto de la mano de obra: una fila por persona, doce columnas de tarea.
-func _job_grid(body: VBoxContainer) -> void:
-	_job_head(body)
-
-	# Los críos no salen hasta que puedan hacer ALGO. Un renglón con las
-	# diecisiete casillas cerradas no es información: es una fila que no se
-	# puede tocar ocupando sitio, y con tres o cuatro niños en la banda la
-	# tabla se llena de gente a la que no se le puede mandar nada.
-	var index := 0
-	var hidden := 0
-	for person: Inhabitant in sim.people:
-		if not _can_work_at_all(person):
-			hidden += 1
-			continue
-		_person_row(body, person, index)
-		index += 1
-
-	if hidden > 0:
-		_text(body, "%d %s todavía demasiado pequeño%s para ningún oficio. %s en "
-			% [hidden, "crío" if hidden == 1 else "críos", "" if hidden == 1 else "s",
-				"Aparece" if hidden == 1 else "Aparecen"]
-			+ "la pestaña de la banda, y entrarán aquí solos al cumplir la edad.",
-			true)
-
-
-## Si esta persona puede hacer HOY algún oficio, el que sea.
-##
-## Un crío de cuatro años no puede ninguno -el hogar es el más blando y pide
-## cinco-, así que no tiene sentido enseñarle una fila de casillas cerradas.
-func _can_work_at_all(person: Inhabitant) -> bool:
-	for job_key: int in Profession.CATALOGUE:
-		if job_key == Profession.Job.OCIOSO:
-			continue
-		if Profession.can_do(job_key as Profession.Job, person):
-			return true
-	return false
-
-
-## Las dos filas de cabecera: el oficio arriba, sus especialidades debajo.
-func _job_head(body: VBoxContainer) -> void:
-	var doing := _task_counts()
-
-	# Fila de oficios. Cada rótulo mide lo que mide su grupo entero, así que
-	# «Manufactura» se lee encima de sus cuatro casillas y no encima de una.
-	var jobs_row := _grid_row(body)
-	for job_key: int in GRID_JOBS:
-		var job := job_key as Profession.Job
-		var tasks := Profession.tasks_of(job)
-		var width := _group_width(tasks.size())
-		var full := Profession.job_name(job)
-
-		var label := Label.new()
-		# El nombre entero si cabe en el grupo, y la forma corta si no —que la
-		# leyenda de arriba traduce—. Recortar «Recolección» a «Recolec…» no le
-		# sirve a nadie.
-		label.text = full if full.length() * 7 <= width \
-			else String(JOB_SHORT.get(job_key, "?"))
-		label.custom_minimum_size = Vector2(width, 0)
-		label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 11)
-		label.add_theme_color_override("font_color", UISkin.OCHRE)
-		label.tooltip_text = "%s\n%s" % [full, Profession.job_desc(job)]
-		jobs_row.add_child(label)
-	_grid_tail(jobs_row, "hoy", UISkin.OCHRE)
-
-	# Fila de especialidades
-	var spec_row := _grid_row(body)
-	for job_key: int in GRID_JOBS:
-		var job := job_key as Profession.Job
-		var group := _grid_group(spec_row)
-		for task: int in Profession.tasks_of(job):
-			var speciality := Profession.task_speciality(task)
-			var label := Label.new()
-			label.text = String(SPECIALITY_SHORT.get(speciality, "·")) \
-				if speciality != Profession.Speciality.NINGUNA else "·"
-			label.custom_minimum_size = Vector2(CELL_COL, 0)
-			label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			label.add_theme_font_size_override("font_size", 10)
-			label.add_theme_color_override("font_color", UISkin.FLINT)
-			label.tooltip_text = "%s · %d hoy\n%s" % [
-				Profession.task_name(task), int(doing.get(task, 0)),
-				Profession.task_desc(task)]
-			group.add_child(label)
-	_grid_tail(spec_row, "", UISkin.INK_FAINT)
-
-
-## Una persona: su nombre, sus doce casillas y lo que hace hoy.
-func _person_row(body: VBoxContainer, person: Inhabitant, index: int) -> void:
-	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", UISkin.row_box(
-		UISkin.SURFACE if index % 2 == 0 else UISkin.GROUND.lightened(0.03)))
-	body.add_child(frame)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GROUP_GAP)
-	frame.add_child(row)
-
-	var name_label := Label.new()
-	name_label.text = person.given_name
-	name_label.custom_minimum_size = Vector2(NAME_COL, 0)
-	name_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	name_label.add_theme_font_size_override("font_size", 12)
-	name_label.clip_text = true
-	name_label.tooltip_text = _skills_text(person)
-	row.add_child(name_label)
-	# En ocre mientras trabaje, apagado al quedarse ocioso. Va atado para que
-	# cambie solo, sin reconstruir la tabla entera.
-	_bind(name_label, func() -> void:
-		name_label.add_theme_color_override("font_color",
-			UISkin.INK if person.job == Profession.Job.OCIOSO else UISkin.OCHRE))
-
-	for job_key: int in GRID_JOBS:
-		var job := job_key as Profession.Job
-		var group := _grid_group(row)
-		var able := Profession.can_do(job, person)
-		for task: int in Profession.tasks_of(job):
-			group.add_child(_task_cell(person, task, able))
-
-	# Qué hace HOY. Es la columna que cambia sola: la banda reparte cada
-	# mañana, y sin esto había que cerrar y abrir el panel para enterarse.
-	var today := Label.new()
-	today.custom_minimum_size = Vector2(TODAY_COL, 0)
-	today.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	today.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	today.add_theme_font_size_override("font_size", 10)
-	row.add_child(today)
-	_bind(today, func() -> void:
-		if person.job == Profession.Job.OCIOSO:
-			today.text = "—"
-			today.add_theme_color_override("font_color", UISkin.INK_FAINT)
-			today.tooltip_text = "Sin oficio: no tiene marcado nada que pueda hacer."
-			return
-		var speciality := person.current_speciality as Profession.Speciality
-		today.text = String(SPECIALITY_SHORT.get(speciality, "")) \
-			if speciality != Profession.Speciality.NINGUNA \
-			else String(JOB_SHORT.get(person.job, "?"))
-		today.add_theme_color_override("font_color", UISkin.OCHRE)
-		today.tooltip_text = _doing_text(person))
-
-	# Y si lo que hace HOY no es lo que el jugador puso arriba, se dice por
-	# que. Antes se descartaba en silencio y desde fuera parecia que el panel
-	# no servia: alguien con la pesca de orilla en 1 aparecia poniendo
-	# trampas sin una palabra de explicacion.
-	var why := Label.new()
-	why.add_theme_font_size_override("font_size", 10)
-	why.add_theme_color_override("font_color", UISkin.ALARM)
-	why.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	why.clip_text = true
-	row.add_child(why)
-	_bind(why, func() -> void:
-		why.text = _demotion_text(person))
-
-
-## Por que esta persona no esta haciendo lo que tiene marcado mas arriba.
-## Cadena vacia si SI lo esta haciendo, que es lo normal.
-func _demotion_text(person: Inhabitant) -> String:
-	if sim == null:
-		return ""
-	var wanted := sim.top_choice(person)
-	if wanted < 0:
-		return ""
-	var doing := Profession.task_id(person.job as Profession.Job,
-		person.current_speciality as Profession.Speciality)
-	if doing == wanted:
-		return ""
-	var reason := sim.task_blocked_by(person, wanted)
-	if reason.is_empty():
-		# Empate: hay otra tarea al mismo nivel y hoy hacia mas falta. Eso no
-		# es que se le ignore, es lo que significa poner dos cosas iguales.
-		if person.priority_for(doing) == person.priority_for(wanted):
-			return ""
-		return ""
-	return "%s: %s" % [String(SPECIALITY_SHORT.get(
-		Profession.task_speciality(wanted), JOB_SHORT.get(
-			Profession.task_job(wanted), "?"))), reason]
-
-
-## Una fila de la rejilla con el hueco del nombre ya puesto, para que las
-## cabeceras caigan exactamente encima de las casillas.
-func _grid_row(body: VBoxContainer) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", GROUP_GAP)
-	body.add_child(row)
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(NAME_COL, 0)
-	spacer.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	row.add_child(spacer)
-	return row
-
-
-## El grupo de casillas de un oficio dentro de una fila.
-func _grid_group(row: HBoxContainer) -> HBoxContainer:
-	var group := HBoxContainer.new()
-	group.add_theme_constant_override("separation", CELL_GAP)
-	group.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	row.add_child(group)
-	return group
-
-
-## La columna de la derecha, la de «hoy».
-func _grid_tail(row: HBoxContainer, text: String, tint: Color) -> void:
-	var label := Label.new()
-	label.text = text
-	label.custom_minimum_size = Vector2(TODAY_COL, 0)
-	label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 10)
-	label.add_theme_color_override("font_color", tint)
-	row.add_child(label)
-
-
-## Lo que ocupa el grupo de un oficio: sus casillas más los huecos de dentro.
-func _group_width(cells: int) -> int:
-	return cells * CELL_COL + (cells - 1) * CELL_GAP
-
-
-## Una casilla de prioridad. TODAS miden lo mismo, siempre: una tabla con
-## botones de anchos distintos se lee torcida.
-##
-## Quien no puede con el oficio tiene casilla igual pero apagada y sin pulsar,
-## no un hueco. Un hueco descuadra la fila y además no dice por qué.
-func _task_cell(person: Inhabitant, task: int, able: bool) -> Control:
-	var speciality := Profession.task_speciality(task)
-	var job := Profession.task_job(task)
-
-	if not able:
-		var blocked := Label.new()
-		blocked.custom_minimum_size = Vector2(CELL_COL, 22)
-		blocked.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		blocked.text = "·"
-		blocked.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		blocked.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		blocked.add_theme_font_size_override("font_size", 11)
-		blocked.add_theme_color_override("font_color", UISkin.INK_FAINT)
-		blocked.mouse_filter = Control.MOUSE_FILTER_STOP
-		blocked.tooltip_text = "%s\n%s no puede: %s" % [
-			Profession.task_name(task), person.given_name, _who_cannot(job)]
-		return blocked
-
-	var level := person.priority_for(task)
-	var doing := person.job == job and person.current_speciality == speciality
-
-	var button := Button.new()
-	button.custom_minimum_size = Vector2(CELL_COL, 22)
-	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	button.add_theme_font_size_override("font_size", 11)
-	button.text = "—" if level <= 0 else str(level)
-	button.tooltip_text = "%s · %s\n%s" % [
-		Profession.task_name(task),
-		"no lo hace" if level <= 0 else _level_name(level),
-		Profession.task_desc(task)]
-
-	if doing:
-		button.add_theme_stylebox_override("normal", UISkin.button_box("pressed"))
-		button.add_theme_color_override("font_color", UISkin.OCHRE)
-	elif level <= 0:
-		button.add_theme_color_override("font_color", UISkin.INK_FAINT)
-
-	var next := (level + 1) % 4
-	button.pressed.connect(func() -> void:
-		person.set_priority(task, next)
-		sim.apply_priorities()
-		show_jobs())
-	return button
-
-
-## Por qué alguien no puede con un oficio.
-func _who_cannot(job: Profession.Job) -> String:
-	var entry: Dictionary = Profession.CATALOGUE[job]
-	if bool(entry["mobile"]):
-		return "pide adulto de %d a %d años que no esté criando" % [
-			int(entry["min_age"]), int(entry["max_age"])]
-	return "pide de %d a %d años" % [int(entry["min_age"]), int(entry["max_age"])]
-
-
-## Cuánta gente está HOY en cada tarea.
-func _task_counts() -> Dictionary:
-	var out := {}
-	for person: Inhabitant in sim.people:
-		if person.job == Profession.Job.OCIOSO:
-			continue
-		var task := Profession.task_id(person.job as Profession.Job,
-			person.current_speciality as Profession.Speciality)
-		out[task] = int(out.get(task, 0)) + 1
-	return out
-
-
-## Lo que esta persona ha aprendido haciendo. Va en el tooltip del nombre: no
-## es adorno, entra en el rendimiento, y es la razón por la que mover gente de
-## oficio constantemente sale caro.
-func _skills_text(person: Inhabitant) -> String:
-	var lines: Array[String] = [person.given_name + " sabe hacer:"]
-	var any := false
-	for activity: int in ALL_ACTIVITIES:
-		var value := person.skill_in(activity)
-		if value <= 0.505:
-			continue
-		any = true
-		lines.append("  %s · %s (%d%%)" % [
-			Subsistence.activity_name(activity as Subsistence.Activity),
-			person.skill_label(value), int(value * 100.0)])
-	if not any:
-		lines.append("  Todavía nada: es lo que se aprende trabajando.")
-	return "\n".join(lines)
-
-
-## Lo que hay que saber para repartirle trabajo: qué hace hoy y qué se le da
-## bien.
-func _person_note(person: Inhabitant) -> String:
-	var best_name := ""
-	var best_value := 0.55
-	for activity: int in ALL_ACTIVITIES:
-		var value := person.skill_in(activity)
-		if value > best_value:
-			best_value = value
-			best_name = Subsistence.activity_name(activity as Subsistence.Activity)
-
-	if person.nursing:
-		return "criando · %d años" % person.age_years
-	if person.job == Profession.Job.OCIOSO:
-		return "sin oficio · %d años" % person.age_years
-	if not best_name.is_empty():
-		return "%s · %s" % [_doing_text(person), best_name.to_lower()]
-	return "%s · %d años" % [_doing_text(person), person.age_years]
-
-
-## Qué está haciendo hoy: el oficio, o la especialidad si la tiene.
-func _doing_text(person: Inhabitant) -> String:
-	if person.current_speciality != Profession.Speciality.NINGUNA:
-		return Profession.speciality_name(
-			person.current_speciality as Profession.Speciality).to_lower()
-	return Profession.job_name(person.job as Profession.Job).to_lower()
-
-
-
-
-
-
-## Corto, porque va DENTRO del botón. La explicación entera está en la
-## leyenda, arriba del panel.
-func _level_name(level: int) -> String:
-	match level:
-		1: return "primero"
-		2: return "si hace falta"
-		_: return "último"
-
-
-## Por qué esta persona no puede con este oficio, en una línea.
-func _cannot_because(job: Profession.Job, person: Inhabitant) -> String:
-	var entry: Dictionary = Profession.CATALOGUE[job]
-	if person.age_years < int(entry["min_age"]):
-		return "es un crío (pide %d años)" % int(entry["min_age"])
-	if person.age_years > int(entry["max_age"]):
-		return "tiene años de más (tope %d)" % int(entry["max_age"])
-	if bool(entry["mobile"]) and person.age_group != Inhabitant.Age.ADULTO:
-		return "no está para jornadas lejos del campamento"
-	if bool(entry["mobile"]) and person.nursing:
-		return "está criando, y con un lactante no se sale el día entero"
-	return "no cumple lo que pide el oficio"
-
-
-
-
-## Qué materiales concretos hay en los parajes conocidos, y CUÁNTO QUEDA.
-##
-## Lo que importa es lo que sigue ahí fuera, no lo que ya está guardado: el
-## almacén tiene su propia pestaña. Aquí la pregunta es «¿me queda avellana en
-## el avellanar o lo hemos dejado seco?».
-##
-## Solo se listan los materiales que esa actividad da AHORA. El asta aparece
-## en invierno y no antes, porque es cuando el ciervo suelta la cuerna; la
-## bellota solo en otoño.
-func _materials_of(activity: Subsistence.Activity) -> Array[String]:
-	if sim == null:
-		return []
-
-	var person_days := sim.remaining_person_days(activity)
-	if person_days <= 0.0:
-		return []
-
-	var lines: Array[String] = []
-	var yields: Dictionary = sim._yield_materials(activity)
-	for kind: int in yields.keys():
-		var k := kind as Materia.Kind
-		var left := sim.remaining_units(activity, k)
-		if left < 0.5:
-			continue
-
-		# Del abrigo solo se dice si va bien o va justo: el detalle esta en su
-		# propia pestana, y aqui estorbaria
-		var stored := sim.store.amount(k)
-		var depot := "nada guardado"
-		if stored >= left * 0.5:
-			depot = "buena cantidad en el abrigo"
-		elif stored >= 1.0:
-			depot = "poco en el abrigo"
-		elif stored > 0.0:
-			depot = "casi nada en el abrigo"
-
-		lines.append("· %s — quedan ~%.0f %s · %s" % [
-			Materia.material_name(k), left, Materia.unit_name(k), depot])
-
-	lines.sort()
-
-	# Cuanto aguanta con la gente que hay puesta AHORA. Es la unica cifra que
-	# convierte el porcentaje en una decision.
-	var workers := 0
-	for person: Inhabitant in sim.people:
-		if person.has_task and person.activity == activity:
-			workers += 1
-	if workers > 0:
-		lines.append("· Con %d trabajando aguanta ~%d jornadas antes de agotarse."
-			% [workers, int(person_days / float(workers))])
-	else:
-		lines.append("· Sin nadie trabajando: %d jornadas-persona sin tocar."
-			% int(person_days))
-
-	return lines
-func _speciality_picker(body: VBoxContainer, job: Profession.Job) -> void:
-	if sim == null:
-		return
-
-	var current := Profession.Speciality.NINGUNA
-	for person: Inhabitant in sim.people:
-		if person.job == job:
-			current = person.speciality as Profession.Speciality
-			break
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	body.add_child(row)
-
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(14, 0)
-	row.add_child(spacer)
-
-	var options: Array = [Profession.Speciality.NINGUNA]
-	options.append_array(Profession.specialities_of(job))
-
-	for speciality: int in options:
-		var button := Button.new()
-		button.text = Profession.speciality_name(speciality as Profession.Speciality)
-		button.tooltip_text = Profession.speciality_desc(
-			speciality as Profession.Speciality)
-		button.toggle_mode = true
-		button.button_pressed = current == speciality
-		button.add_theme_font_size_override("font_size", 11)
-		button.pressed.connect(func() -> void:
-			sim.set_speciality(job, speciality as Profession.Speciality)
-			show_jobs())
-		row.add_child(button)
-
-	# Y qué está haciendo cada cual AHORA, que con rotación no es lo mismo que
-	# lo que se ha pedido
-	if current == Profession.Speciality.NINGUNA:
-		var counts: Dictionary = sim.speciality_counts(job)
-		var parts: Array[String] = []
-		for speciality: int in counts.keys():
-			parts.append("%d en %s" % [counts[speciality],
-				Profession.speciality_name(speciality as Profession.Speciality).to_lower()])
-		if not parts.is_empty():
-			_text(body, "   hoy: " + ", ".join(parts), true)
-
-	_who_goes(body, job)
-
-
-## Quiénes van, por su nombre, en los oficios que salen del abrigo.
-##
-## «Asignar 2 a expedición» es una cifra, y una cifra no se pierde. Lo que se
-## pierde en un percance es Jara, de cuarenta y un años. El dato estaba desde
-## siempre en `Inhabitant`; lo que faltaba era enseñarlo donde se decide. Sólo
-## en exploración y caza: son los dos oficios de los que se puede no volver.
-func _who_goes(body: VBoxContainer, job: Profession.Job) -> void:
-	if job != Profession.Job.EXPLORACION and job != Profession.Job.CAZA:
-		return
-	var going: Array[Inhabitant] = []
-	for person: Inhabitant in sim.people:
-		if person.job == job:
-			going.append(person)
-	if going.is_empty():
-		_text(body, "   no sale nadie", true)
-		return
-	for person: Inhabitant in going:
-		var line := "   %s — %s" % [
-			Profession.speciality_name(
-				person.current_speciality as Profession.Speciality).to_lower(),
-			_person_card_line(person)]
-		_text(body, line, person.hurt_days <= 0)
-func show_band() -> void:
-	var body := _window("banda", "La banda")
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
-
-	_heading(body, "%d personas · %s (%s) del año %d" % [
-		sim.population(), Subsistence.season_name(GameState.season),
-		Subsistence.month_name(GameState.season, sim.season_day), GameState.year])
-	_text(body, "Reservas: %.0f raciones" % sim.store.food_rations(), true)
-	body.add_child(HSeparator.new())
-
-	# Agrupadas por OFICIO, no por actividad. Por actividad se perdía media
-	# banda: quien no tiene oficio -los críos que aún no llegan a la edad de
-	# nada, y quien está en el hogar- lleva actividad -1, y `activity_name`
-	# no tiene nombre para el -1: los metía a todos bajo «Materia prima»,
-	# revueltos con los canteros de verdad. Beru y Caro estaban ahí, no
-	# desaparecidos. Por oficio cada uno cae donde le toca y los que no
-	# tienen ninguno salen juntos y con su nombre.
-	var by_job: Dictionary = {}
-	for person: Inhabitant in sim.people:
-		var list: Array = by_job.get(person.job, [])
-		list.append(person)
-		by_job[person.job] = list
-
-	for job: int in by_job.keys():
-		var list: Array = by_job[job]
-		_heading(body, "%s — %d" % [
-			Profession.job_name(job as Profession.Job), list.size()])
-		for person: Inhabitant in list:
-			_band_person_row(body, person)
-
-
-## Una fila de la banda que abre la ficha de esa persona al pinchar, igual
-## que si se le hubiera hecho clic directamente en el mundo.
-##
-## No se llama `_person_row` a secas: ese nombre ya lo tiene la fila -muy
-## distinta, con las doce casillas de oficio- del panel de Trabajos.
-func _band_person_row(body: VBoxContainer, person: Inhabitant) -> void:
-	var frame := PanelContainer.new()
-	frame.mouse_filter = Control.MOUSE_FILTER_STOP
-	body.add_child(frame)
-
-	# Hambre y fatiga son escalas 0-100, no fracciones; la pericia si es
-	# una fraccion, y va por actividad
-	var nota := " · criando" if person.nursing else ""
-	var label := Label.new()
-	label.text = "  %s (%s %s, %d)%s · %s · hambre %d · fatiga %d · pericia %d%%" % [
-		person.given_name,
-		"mujer" if person.sex == Inhabitant.Sex.MUJER else "hombre",
-		person.age_name(), person.age_years, nota,
-		person.state_name(), int(person.hunger), int(person.fatigue),
-		int(float(person.skill.get(person.activity, 0.5)) * 100.0)]
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(
-		maxf(body.custom_minimum_size.x - 45.0, 200.0), 0)
-	label.add_theme_font_size_override("font_size", 12)
-	label.add_theme_color_override("font_color", UISkin.INK_SOFT)
-	frame.add_child(label)
-
-	frame.gui_input.connect(func(event: InputEvent) -> void:
-		var click := event as InputEventMouseButton
-		if click and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-			show_person(person))
-	frame.tooltip_text = "Pincha para ver su ficha."
-
-
 # -------------------------------------------------------------- técnicas --
 
 ## El árbol de oficios: qué sabe hacer la banda y en qué se puede repartir.
@@ -3930,7 +2384,7 @@ func _hunting_block(body: VBoxContainer) -> void:
 		note.add_theme_color_override("font_color", UISkin.INK_SOFT)
 		if speciality == Profession.Speciality.TRAMPAS:
 			note.text = "%d trampas puestas de %d que se pueden atender" % [
-				sim.traps.size(), sim.trap_allowance()]
+				sim.trampas.traps.size(), sim.trampas.trap_allowance()]
 		else:
 			var known := Hunting.known_improvements(speciality, sim.techs)
 			note.text = "%.1f piezas por jornada%s" % [
@@ -3958,12 +2412,12 @@ func _hunting_block(body: VBoxContainer) -> void:
 
 	# Y la línea de trampas, una por una. Es lo único que la banda deja
 	# PLANTADO en el mapa, así que merece una lista y no un número.
-	if sim.traps.is_empty():
+	if sim.trampas.traps.is_empty():
 		_text(body, "Sin una sola trampa puesta. Pon a alguien en trampas: "
 			+ "es el único trabajo que rinde mientras la banda hace otra cosa.",
 			true)
 	else:
-		for trap: Trap in sim.traps:
+		for trap: Trap in sim.trampas.traps:
 			var ready := trap.soaking >= Trap.days_per_catch(trap.kind)
 			_text(body, "   %s %s en %s — %.0f%% de vida, %d piezas%s" % [
 				"◆" if ready else "·",
@@ -4045,11 +2499,11 @@ func _fishing_block(body: VBoxContainer) -> void:
 	# Y la línea de nasas, una por una, igual que la de trampas: es lo otro que
 	# la banda deja plantado en el mapa.
 	if sim.techs != null and sim.techs.has(TechTree.Tech.NASA):
-		if sim.nasas.is_empty():
+		if sim.nasas_line.nasas.is_empty():
 			_text(body, "Sin una sola nasa calada. El pescador las revisa por "
 				+ "la mañana y luego pesca: no le quita la jornada.", true)
 		else:
-			for nasa: Nasa in sim.nasas:
+			for nasa: Nasa in sim.nasas_line.nasas:
 				_text(body, "   %s Nasa en %s — %.0f%% de vida, %d piezas  ·  %s"
 					% ["◆" if nasa.has_catch() else "·",
 						sim.parajes.place_name(nasa.position, sim.home_position),
@@ -4400,7 +2854,10 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 		Materia.format_volume(Materia.litres_per_unit(kind))], true)
 
 	if Materia.is_food(kind):
-		_text(body, "Alimenta %.1f raciones por unidad." % Materia.nutrition(kind), true)
+		_text(body, "Alimenta %.2f raciones por %s: %.0f kcal de las %.0f que "
+			% [Materia.nutrition(kind), Materia.unit_name(kind),
+				Materia.kcal(kind), Materia.KCAL_DIA]
+			+ "come una persona al día.", true)
 	var life := Materia.shelf_life(kind)
 	if life <= 0:
 		_text(body, "No se estropea.", true)
@@ -4449,7 +2906,7 @@ func show_person(person: Inhabitant) -> void:
 	# El hogar y el taller trabajan EN el abrigo, asi que su «trabajando» no
 	# lleva paraje ni camino detras y se queda en una palabra sola. Se dice
 	# que estan levantando o tallando, que es lo que se ve por la ventana.
-	if sim and sim._works_at_camp(person) \
+	if sim and sim.hogar._works_at_camp(person) \
 		and person.state == Inhabitant.State.TRABAJANDO:
 		var piece: Dictionary = sim.crafting_now(person)
 		if not piece.is_empty():
@@ -4542,7 +2999,7 @@ func show_person(person: Inhabitant) -> void:
 	# Quien sale al monte lleva apero; el del abrigo y el que no tiene oficio,
 	# no. `_tool_for` cae en la azagaya cuando la actividad no esta definida, y
 	# eso ponia una azagaya en las manos de un crio sin tarea.
-	var sale: bool = sim != null and not sim._works_at_camp(person) \
+	var sale: bool = sim != null and not sim.hogar._works_at_camp(person) \
 		and person.job != Profession.Job.OCIOSO
 	if sim and sale:
 		var apero: int = sim._tool_for(person)

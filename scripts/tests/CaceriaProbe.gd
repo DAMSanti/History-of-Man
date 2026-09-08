@@ -170,7 +170,7 @@ func _run() -> void:
 	sim.apply_priorities()
 	print("=== REPARTO === %s" % JSON.stringify(reparto))
 	print("al hogar: %d" % al_hogar)
-	print("fauna en el valle: %d animales" % sim.wildlife.animals().size())
+	print("fauna en el valle: %d animales" % sim.caceria.wildlife.animals().size())
 
 	var pudrido := 0.0
 	var ahumado := 0.0
@@ -189,18 +189,18 @@ func _run() -> void:
 			# igual; y son ochocientos animales por llamada, que a cada tick son
 			# ciento treinta millones de cuentas y la sonda no termina nunca.
 			if _tick % FAUNA_CADA == 0:
-				sim.wildlife._process(step * float(FAUNA_CADA))
+				sim.caceria.wildlife._process(step * float(FAUNA_CADA))
 			_watch(sim)
 		for kind: int in sim.spoiled_today:
 			if Materia.is_food(kind as Materia.Kind):
 				pudrido += float(sim.spoiled_today[kind]) * Materia.nutrition(
 					kind as Materia.Kind)
-		for kind: int in sim.smoked_today:
-			ahumado += float(sim.smoked_today[kind]) * Materia.nutrition(
+		for kind: int in sim.hogar.smoked_today:
+			ahumado += float(sim.hogar.smoked_today[kind]) * Materia.nutrition(
 				kind as Materia.Kind)
 		if day % 30 == 0 or day == DAYS - 1:
 			print("dia %3d  caceria %d  nasas %d  carne %.0f  seca %.0f  pescado %.0f  seco %.0f  raciones %.0f" % [
-				sim.day, sim.hunts.size(), sim.nasas.size(),
+				sim.day, sim.caceria.hunts.size(), sim.nasas_line.nasas.size(),
 				sim.store.amount(Materia.Kind.CARNE),
 				sim.store.amount(Materia.Kind.CARNE_SECA),
 				sim.store.amount(Materia.Kind.PESCADO),
@@ -216,8 +216,8 @@ func _run() -> void:
 	for phase: int in _phases:
 		print("    %-14s %d" % [_phase_name(phase), int(_phases[phase])])
 	print("  por qué se acaba cada una:")
-	for why: String in sim.hunt_endings:
-		print("    %-26s %d" % [why, int(sim.hunt_endings[why])])
+	for why: String in sim.caceria.hunt_endings:
+		print("    %-26s %d" % [why, int(sim.caceria.hunt_endings[why])])
 	print("  piezas cobradas por especie:")
 	for species: String in _by_species:
 		print("    %-10s %d" % [Fauna.species_name(species),
@@ -248,8 +248,8 @@ func _run() -> void:
 
 	print("")
 	print("=== LA RIBERA ===")
-	print("  nasas caladas: %d" % sim.nasas.size())
-	for nasa: Nasa in sim.nasas:
+	print("  nasas caladas: %d" % sim.nasas_line.nasas.size())
+	for nasa: Nasa in sim.nasas_line.nasas:
 		print("    en %-26s  estado %3.0f%%  ha dado %d piezas  %s" % [
 			sim.parajes.place_name(nasa.position, sim.home_position),
 			nasa.condition() * 100.0, nasa.taken, nasa.status_text()])
@@ -276,7 +276,7 @@ func _run() -> void:
 ## una persecución no llega al minuto de juego. Mirando una vez al día se vería
 ## una foto vacía y se concluiría que no se caza.
 func _watch(sim: SettlementSim) -> void:
-	for hunt: Hunt in sim.hunts:
+	for hunt: Hunt in sim.caceria.hunts:
 		if not hunt.get_meta("vista", false):
 			hunt.set_meta("vista", true)
 			_opened += 1

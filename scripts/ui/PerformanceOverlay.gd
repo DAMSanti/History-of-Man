@@ -37,11 +37,18 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
+	# Abajo a la izquierda, que es la unica esquina libre. Estuvo arriba a la
+	# derecha y ahi TAPABA los botones de pausa, play y avance rapido: se
+	# dibuja en la capa 128, o sea por encima de la interfaz, asi que los
+	# botones seguian estando y respondiendo pero no se veian debajo de las
+	# letras rojas. Visto en una captura de `VistaProbe`, no razonado.
+	# Arriba a la derecha esta la barra de estado y abajo a la derecha la de
+	# ventanas -ver `GameUI._build_clock` y `GameUI._build_taskbar`-.
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	margin.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
+	margin.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	margin.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	margin.add_theme_constant_override("margin_bottom", 10)
+	margin.add_theme_constant_override("margin_left", 10)
 	add_child(margin)
 
 	var panel := PanelContainer.new()

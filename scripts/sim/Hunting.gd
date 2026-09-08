@@ -23,25 +23,52 @@ extends RefCounted
 ## cazador con propulsor no encuentra ciervos donde no los hay, cobra más de
 ## los que encuentra.
 
-## Cuántas piezas cobra una jornada entera y perfecta, por rama y sin
-## técnicas. Es el número que luego pasa por la cadena de penalizaciones de
-## `SettlementSim._harvest`, igual que todo lo demás.
+## Lo que da una jornada ENTERA Y PERFECTA de cada rama, EN RACIONES.
 ##
-## Parecen pocas y lo son: cazar es fallar. Media pieza mayor por jornada
-## perfecta significa, con las penalizaciones de verdad encima, que una
-## cuadrilla trae un ciervo cada varios días —que es exactamente lo que dice
-## la arqueología de un abrigo cantábrico.
-## Medido en el sitio 56, sesenta jornadas: con 1,30 y 0,55 la caza menor
-## traia 1,43 raciones por jornada-persona y la mayor 0,09, contra las 9,35
-## de la recoleccion. El encargo dice lo contrario -«debe dar mas raciones que
-## la recoleccion»- y ademas es lo cierto: una banda cantabrica del
-## Magdaleniense vivia de la carne, no de la avellana. Estas cifras la ponen
-## por encima sin hacerla gratis, porque el riesgo y el desperdicio siguen
-## ahi.
-const PIEZAS_POR_JORNADA := {
-	Profession.Speciality.CAZA_MENOR: 4.40,
-	Profession.Speciality.CAZA_MAYOR: 1.60,
+## Antes esto era una tabla de PIEZAS -1,60 al dia la caza mayor- y esa tabla
+## mentia, porque una pieza mayor no es una unidad: es un ciervo de 62
+## raciones o un uro de 140. Multiplicando salian 112 raciones de jornada
+## perfecta para un solo cazador, cuando la banda entera de quince come 25 al
+## dia. Las dos tablas -esta y la de [Fauna]- decian cosas distintas sobre lo
+## mismo, y las reconciliaba en silencio la cadena de penalizaciones.
+##
+## Ahora MANDA [Fauna]: lo que vale una pieza son sus raciones, y las piezas
+## por jornada SE DEDUCEN -ver `pieces_per_day`-. Cambiar el peso de un ciervo
+## cambia cuantos ciervos hacen falta, que es lo que tiene que pasar.
+##
+## Las dos cifras, y por que la mayor es la mas alta: la caza menor es el
+## sueldo -sale casi todos los dias, cerca de casa, y por eso se puede contar
+## con ella- y la mayor es la apuesta. Si la apuesta no pagara MAS en su mejor
+## dia, no habria razon para hacerla nunca.
+##
+## Pendiente de playtest, como el resto del balanceo: lo derivado de la medida
+## es la escala -[Caceria.ESCALA_DEL_RASTREO]-; esto es el reparto entre las
+## dos ramas, y es una decision de diseño.
+const RACIONES_POR_JORNADA_PERFECTA := {
+	Profession.Speciality.CAZA_MENOR: 24.0,
+	Profession.Speciality.CAZA_MAYOR: 36.0,
 }
+
+
+## Lo que vale de media una pieza de esta rama, en raciones, segun [Fauna].
+##
+## Se saca de las especies de SU porte y no de todas las que puede cazar: un
+## batidor de caza mayor remata el conejo que se le cruza, pero no sale a por
+## conejos, y meter el conejo en la media haria que la rama pareciera cuatro
+## veces mas pobre de lo que es. Quien elige pieza -`Caceria._pick_quarry`-
+## puntua por raciones justamente para eso.
+static func raciones_por_pieza(speciality: Profession.Speciality) -> float:
+	var porte := porte_of(speciality)
+	var total := 0.0
+	var count := 0
+	for species: String in Fauna.SPECIES:
+		if Fauna.porte_of(species) != porte:
+			continue
+		total += Fauna.rations_of(species)
+		count += 1
+	if count == 0:
+		return 0.0
+	return total / float(count)
 
 ## Lo que multiplica cada técnica, y a qué rama.
 ##
@@ -90,9 +117,15 @@ static func rations_at(speciality: Profession.Speciality, position: Vector3,
 ## se caza, no con qué.
 static func pieces_per_day(speciality: Profession.Speciality,
 		techs: TechTree) -> float:
-	var base: float = float(PIEZAS_POR_JORNADA.get(speciality, 0.0))
-	if base <= 0.0:
+	# DEDUCIDO de las raciones y ya no puesto a mano: las raciones por pieza
+	# son la verdad -ver [RACIONES_POR_JORNADA_PERFECTA]- y las piezas salen de
+	# dividir. Un uro de 140 raciones son pocas piezas al dia; una perdiz de
+	# 1,1, muchas. Es la misma jornada contada en la unidad que toca.
+	var rations: float = float(RACIONES_POR_JORNADA_PERFECTA.get(speciality, 0.0))
+	var per_piece := raciones_por_pieza(speciality)
+	if rations <= 0.0 or per_piece <= 0.0:
 		return 0.0
+	var base := rations / per_piece
 
 	for entry: Dictionary in (MEJORAS.get(speciality, []) as Array):
 		if techs != null and techs.has(entry["tech"] as TechTree.Tech):

@@ -114,7 +114,7 @@ func _init() -> void:
 			# que acampa con el recolector que se pasa el dia en un canchal
 			# seco, que es lo unico que se venia a mirar.
 			var working := person.state == Inhabitant.State.TRABAJANDO 				or person.state == Inhabitant.State.BUSCANDO 				or person.state == Inhabitant.State.YENDO
-			if sim._water_beside(person.position) or sim._at_shelter(person):
+			if sim.tajo._water_beside(person.position) or sim._at_shelter(person):
 				if float(away_hours.get(person.id, 0.0)) >= SettlementSim.HORAS_UTILES:
 					dry_days += 1
 					if person.has_waterskin:

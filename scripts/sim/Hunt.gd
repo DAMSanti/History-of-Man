@@ -76,6 +76,19 @@ const ACECHO_DESDE := 90.0
 ## hace de noche y a la mañana siguiente seguía tras un animal que se había ido
 ## al otro lado del valle. Medido con `CaceriaProbe`, 591.631 ticks en acecho
 ## contra 133 lances.
+##
+## MEDIDO DESPUES, y conviene saberlo antes de tocarlo: con este corte, en el
+## sitio 56 y ocho jornadas, salen TRES caceria en total -dos con el rastro
+## frio y una cobrada- y cuatro de las siete salidas de caza vuelven de vacio.
+## Descompuesto con `scripts/tests/RendimientoProbe.gd`, esas salidas de vacio
+## trabajan treinta y nueve ticks de media contra nueve las de recoleccion, y
+## con MEJORES factores: no es pericia ni es el sitio, es que el acecho se
+## corta antes de llegar al lance.
+##
+## No lo he tocado porque es una decision de diseño y no un fallo: la caza
+## PUEDE ser asi -la recoleccion es «la mitad callada de la dieta, la que menos
+## falla»-. Pero con un cazador cobrando una pieza cada ocho jornadas, el
+## oficio no compensa, y el mando para moverlo es este.
 const ACECHO_HORAS := 2.5
 
 ## Horas de carrera que aguanta una persecución antes de dejarlo.
@@ -89,7 +102,24 @@ const ACECHO_HORAS := 2.5
 ## `CaceriaProbe`, ochenta y tres cacerías levantadas y setenta y siete
 ## perdidas —una cobrada de ochenta y tres—. Hora y cuarto deja llegar a tiro a
 ## quien ya venía cerca cuando la pieza arrancó, que es de lo que va perseguir.
-const FUELLE_HORAS := 1.25
+##
+## De 1,25 a 3,5 al abrir la caceria a varias jornadas, que es lo pedido:
+## «seran capaces de perseguir a la presa durante mas tiempo».
+##
+## La medida que se uso para justificarlo -«el noventa y cinco por ciento de
+## las caceria acaban en un lance fallado»- ERA UNA CUENTA MAL HECHA; esta
+## contado en [LANCE_BASE]. Con la cuenta buena se cobran diez piezas de once
+## caceria, o sea que el fuelle corto no estaba matando nada.
+##
+## Se queda en 3,5 igual, porque perseguir mas tiempo es lo que se pedia y no
+## una correccion de un fallo. Pero que conste que la cifra NO esta respaldada
+## por la medida que dice respaldarla.
+##
+## Con tres horas y media caben dos o tres lances por pieza levantada, que es
+## lo que hace que la caza tenga sentido como oficio. Y ya no es un limite de
+## la JORNADA sino del dia: `Caceria._reset_del_dia` lo pone a cero al
+## amanecer, asi que una pieza seguida dos dias se sigue de verdad.
+const FUELLE_HORAS := 3.5
 
 ## Probabilidad por HORA de acecho de que la pieza levante la cabeza, PEGADO A
 ## ELLA. De lejos baja con la distancia, que es lo suyo.
@@ -130,6 +160,33 @@ const OJEO_SIGILO := 0.55
 ## Cazar es fallar, y esta cifra es la que lo dice. Con destreza media y una
 ## cuadrilla de cuatro sale algo por encima de la mitad; solo y torpe, uno de
 ## cada cuatro.
+##
+## MEDIDO CON LA ESCALERA DE TECNICA, y el resultado dice que el cuello de
+## botella de la caza esta AQUI y no en el alcance. Con
+## `scripts/tests/CazaEscalonProbe.gd`, seis jornadas y partida nueva por
+## escalon en el sitio 56:
+##
+##     a mano        8 caceria · 6 lances fallados · 1 cobrada
+##     azagaya      16 caceria · 12 fallados · 2 cobradas
+##     + propulsor  68 caceria · 65 fallados · 3 cobradas
+##     + ojeo       84 caceria · 81 fallados · 1 cobrada
+##
+## **ESA TABLA ESTABA MAL, Y CONVIENE SABER COMO.** Las columnas de «caceria»
+## y de «fallados» salian de `Caceria.hunt_endings`, y alli se apuntaba «lance
+## fallado» como si fuera un FINAL de caceria. No lo es: fallar devuelve a la
+## persecucion mientras quede fuelle, asi que una sola caceria bien seguida
+## apuntaba cuatro o siete «finales» y seguia viva. De ahi salia el «noventa y
+## cinco por ciento acaban en lance fallado», que no describia nada.
+##
+## Contado aparte -`Caceria.lances_fallados`- la misma medida dice lo
+## contrario: doce jornadas por escalon, DIEZ piezas cobradas de ONCE caceria
+## levantadas en los dos escalones armados. El lance no es el problema. Lo que
+## es raro es LEVANTAR la pieza, y eso se midio aparte con
+## `scripts/tests/JornadaCazadorProbe.gd`: ver [SettlementSim.VUELTA_QUE_NO_COMPENSA].
+##
+## Se queda en 0,42 y sin tocar, ahora por una razon distinta de la de antes:
+## la cuenta da entre 0,35 y 0,58 de acierto con la destreza de la banda, y con
+## eso se cobra lo que se levanta. No hay nada que arreglar aqui.
 const LANCE_BASE := 0.42
 
 ## Y lo que suma llegar a tiro SIN QUE TE VEAN, que es de lo que va el acecho.
@@ -174,8 +231,27 @@ var quarry: Dictionary = {}
 ## Quién anda en ella. La primera es la que la levantó.
 var crew: Array[Inhabitant] = []
 
-## Horas gastadas en la fase de ahora.
+## Horas de acecho gastadas hoy. Ver [ACECHO_HORAS].
 var spent: float = 0.0
+
+## Lo que se lleva abierto de la pieza, en jornadas de despiece.
+##
+## Aparte de [spent] a proposito, aunque las dos midan horas de la fase de
+## ahora. Estuvieron juntas y el despiece de una pieza grande que cruzaba la
+## noche se ponia a cero al amanecer con el presupuesto de acecho: la cuadrilla
+## abria el ciervo entero otra vez cada manana y no acarreaba nunca.
+var opened: float = 0.0
+
+## La jornada en la que se contaron esas horas.
+##
+## El presupuesto de acecho -[ACECHO_HORAS]- es POR JORNADA, no por caceria: si
+## fuera por caceria, una que dura dos dias se moriria de vieja a media manana
+## del segundo. Amanecer es rastro nuevo, y por eso la cuenta se pone a cero
+## cada dia que la caceria sigue viva. Ver `Caceria._reset_del_dia`.
+var counted_day: int = -1
+
+## Cuantas jornadas lleva abierta. Solo para poder contarlo.
+var days_open: int = 1
 
 ## Lo que se lleva corrido detrás de la pieza. Ver [FUELLE_HORAS].
 var chased: float = 0.0

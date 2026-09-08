@@ -112,7 +112,7 @@ func _run() -> void:
 			sim._process(step)
 		if day % 45 == 0 or day == DAYS - 1:
 			print("dia %2d  trampas puestas %d (chapas %d)  carne %.1f  piel %.1f  hueso %.1f  tendon %.1f  pluma %.1f  asta %.1f" % [
-				sim.day, sim.traps.size(), markers.count(),
+				sim.day, sim.trampas.traps.size(), markers.count(),
 				sim.store.amount(Materia.Kind.CARNE),
 				sim.store.amount(Materia.Kind.PIEL),
 				sim.store.amount(Materia.Kind.HUESO),
@@ -121,7 +121,7 @@ func _run() -> void:
 				sim.store.amount(Materia.Kind.ASTA)])
 
 	print("=== LAS TRAMPAS PUESTAS ===")
-	for trap: Trap in sim.traps:
+	for trap: Trap in sim.trampas.traps:
 		print("  %-14s de %-6s en %-28s  estado %3.0f%%  ha dado %d piezas  cala %s" % [
 			Trap.trap_name(trap.kind), trap.maker,
 			sim.parajes.place_name(trap.position, sim.home_position),

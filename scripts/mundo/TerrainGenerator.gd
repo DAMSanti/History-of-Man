@@ -5,7 +5,6 @@ extends Node3D
 ## Genera altura, humedad y geología para el mundo.
 
 signal generation_complete()
-signal chunk_populated(chunk: Chunk)
 
 ## Tamaño del terreno en unidades
 @export var terrain_size: Vector2i = Vector2i(128, 128):
@@ -929,7 +928,7 @@ func _create_terrain_mesh() -> void:
 func _apply_terrain_material() -> void:
 	if use_triplanar_shader and not Engine.is_editor_hint():
 		# Usar shader triplanar con texturas procedurales
-		var manager_script := load("res://scripts/TerrainMaterialManager.gd")
+		var manager_script := load("res://scripts/mundo/TerrainMaterialManager.gd")
 		if manager_script:
 			_material_manager = manager_script.new()
 			var shader_material: ShaderMaterial = _material_manager.create_terrain_material()

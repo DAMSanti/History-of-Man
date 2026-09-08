@@ -107,7 +107,7 @@ func _init() -> void:
 	sim.time_scale = 1.0
 
 	print("nasas caladas: %d · cacerias en marcha: %d"
-		% [sim.nasas.size(), sim.hunts.size()])
+		% [sim.nasas_line.nasas.size(), sim.caceria.hunts.size()])
 
 	# La nasa y el abrigo se pueden fotografiar cuando sea; la cacería no. Hay
 	# que esperar a que a alguien le pille la cámara CERCA de su pieza, que es
@@ -149,10 +149,10 @@ func _reparto(sim: SettlementSim) -> void:
 
 ## Dónde hay una nasa que mirar, o el abrigo si no hay ninguna.
 func _nasa_spot(sim: SettlementSim) -> Vector3:
-	if sim.nasas.is_empty():
+	if sim.nasas_line.nasas.is_empty():
 		print("AVISO: ninguna nasa calada, la captura no dice nada")
 		return sim.home_forecourt
-	return (sim.nasas[0] as Nasa).position
+	return (sim.nasas_line.nasas[0] as Nasa).position
 
 
 ## Espera a que haya alguien pegado a su pieza y devuelve dónde está.
@@ -166,7 +166,7 @@ func _wait_for_a_close_hunt(sim: SettlementSim) -> Vector3:
 	for i in range(ESPERA_MAXIMA):
 		var best: Vector3 = Vector3.ZERO
 		var closest := INF
-		for hunt: Hunt in sim.hunts:
+		for hunt: Hunt in sim.caceria.hunts:
 			for person: Inhabitant in hunt.crew:
 				var distance := person.position.distance_to(hunt.where())
 				if distance < closest:

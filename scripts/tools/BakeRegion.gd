@@ -6,7 +6,7 @@ extends SceneTree
 ## cambia en tiempo de juego, asi que se calcula una vez y se guarda.
 ##
 ## Uso:
-##   godot --headless --path . --script res://scripts/BakeRegion.gd
+##   godot --headless --path . --script res://scripts/tools/BakeRegion.gd
 
 const LEVELS := [0.0, -60.0, -120.0]
 const DEM := "res://data/dem/cantabria_region.res"

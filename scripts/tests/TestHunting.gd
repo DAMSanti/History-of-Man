@@ -289,18 +289,18 @@ func test_la_trampa_se_acaba_echando_a_perder() -> void:
 	var sim := SettlementSim.new()
 	var trap := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "prueba")
 	trap.worn = Trap.lifespan(Trap.Kind.LAZO) - 0.5
-	sim.traps.append(trap)
+	sim.trampas.traps.append(trap)
 	sim.parajes = Parajes.new()
 	sim._age_traps()
-	assert_true(sim.traps.is_empty(), "la que se pasa de vida se retira")
-	assert_eq(sim.traps_lost_today.size(), 1, "y se cuenta como pérdida")
+	assert_true(sim.trampas.traps.is_empty(), "la que se pasa de vida se retira")
+	assert_eq(sim.trampas.traps_lost_today.size(), 1, "y se cuenta como pérdida")
 
 
 func test_las_trampas_cobran_mientras_la_banda_duerme() -> void:
 	var sim := SettlementSim.new()
 	sim.parajes = Parajes.new()
 	var trap := Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "prueba")
-	sim.traps.append(trap)
+	sim.trampas.traps.append(trap)
 	sim._age_traps()
 	assert_eq(trap.soaking, 1.0, "una jornada calada por cada jornada que pasa")
 	assert_eq(trap.worn, 1.0, "y una jornada de vida gastada")
@@ -310,10 +310,10 @@ func test_no_se_amontonan_las_trampas_en_el_mismo_claro() -> void:
 	# Una línea de trampas es una LÍNEA: amontonarlas no coge más, coge lo
 	# mismo repartido.
 	var sim := SettlementSim.new()
-	sim.traps.append(Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1))
-	assert_false(sim._room_for_trap(Vector3(10.0, 0.0, 10.0)),
+	sim.trampas.traps.append(Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1))
+	assert_false(sim.trampas._room_for_trap(Vector3(10.0, 0.0, 10.0)),
 		"pegada a otra, no")
-	assert_true(sim._room_for_trap(Vector3(400.0, 0.0, 400.0)),
+	assert_true(sim.trampas._room_for_trap(Vector3(400.0, 0.0, 400.0)),
 		"a cuatrocientos metros, sí")
 
 

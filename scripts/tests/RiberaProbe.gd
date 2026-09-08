@@ -99,7 +99,7 @@ func _init() -> void:
 			if person.state != Inhabitant.State.TRABAJANDO:
 				continue
 			working += 1
-			if sim._water_beside(person.position):
+			if sim.tajo._water_beside(person.position):
 				beside += 1
 		if sim.day == last_day:
 			continue
@@ -117,7 +117,7 @@ func _init() -> void:
 					person.current_speciality as Profession.Speciality),
 				person.state_name(),
 				person.position.distance_to(person.target),
-				"si" if sim._water_beside(person.position) else "NO",
+				"si" if sim.tajo._water_beside(person.position) else "NO",
 				_hours(person)])
 
 	print("")

@@ -112,7 +112,7 @@ func _init() -> void:
 		# no se enreda con las entregas: mi contador miraba la carga encima y
 		# la carga se vacia al entregar, asi que perdia media jornada.
 		# En RACIONES, no en unidades: la racion es la medida con la que se
-		# calibra la cosecha -ver `SettlementSim.HARVEST_SCALE`- y una unidad
+		# calibra la cosecha -ver `Tajo.HARVEST_SCALE`- y una unidad
 		# de miel y una de seta no valen lo mismo ni de lejos.
 		# En unidades Y en raciones: si caen las dos es la produccion, y si solo
 		# caen las raciones es la conversion.
@@ -143,7 +143,7 @@ func _init() -> void:
 		# la merma cae en la celda mas rica al alcance, y promediando noventa
 		# metros alrededor esa bajada no se ve.
 		var cell := field.best_cell(watched.activity, watched.position,
-			SettlementSim.ALCANCE_DEL_TAJO)
+			Tajo.ALCANCE_DEL_TAJO)
 		var left := field.stock_of_cell(watched.activity, cell)
 		if sim.hour >= 6.0 and sim.hour <= 22.0:
 			print("%05.2f  %-11s %7.2f    %5.0f %%       %5.0f %%       hambre %3.0f" % [

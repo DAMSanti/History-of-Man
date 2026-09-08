@@ -32,7 +32,7 @@ extends Resource
 ##
 ## Se lee de dentro del propio .glb —Sketchfab lo incrusta en `asset.extras`— y
 ## no se teclea a mano, así que la atribución no puede quedarse desfasada ni
-## salir mal escrita. De aquí sale CREDITOS.md.
+## salir mal escrita. De aquí sale docs/CREDITOS.md.
 @export var credits: Dictionary = {}
 
 

@@ -41,7 +41,7 @@ func test_el_secadero_ahuma_el_pescado() -> void:
 	# porque se pudría igual de rápido que entraba.
 	var sim := SettlementSim.new()
 	sim.store.add(Materia.Kind.PESCADO, 30.0)
-	sim._dry_meat(1.0, 1.0)
+	sim.hogar._dry_meat(1.0, 1.0)
 
 	assert_true(sim.store.amount(Materia.Kind.PESCADO_SECO) > 0.0,
 		"el pescado se ahúma")
@@ -56,7 +56,7 @@ func test_se_cura_antes_lo_que_antes_se_pudre() -> void:
 	var sim := SettlementSim.new()
 	sim.store.add(Materia.Kind.PESCADO, 100.0)
 	sim.store.add(Materia.Kind.CARNE, 100.0)
-	sim._dry_meat(1.0, 1.0)
+	sim.hogar._dry_meat(1.0, 1.0)
 
 	assert_true(Materia.shelf_life(Materia.Kind.PESCADO)
 		< Materia.shelf_life(Materia.Kind.CARNE),
@@ -81,7 +81,7 @@ func test_el_pescado_seco_aguanta_el_invierno() -> void:
 func test_el_secadero_da_para_un_remonte() -> void:
 	# Medido: tres personas en la orilla descargaban 53 raciones al día. Con
 	# los cuatro de antes, ahumar era un gesto simbólico.
-	assert_true(SettlementSim.DRY_PER_DAY >= 20.0,
+	assert_true(Hogar.DRY_PER_DAY >= 20.0,
 		"un bastidor sobre el hogar cura una jornada de pesca de verdad")
 
 
@@ -150,7 +150,7 @@ func test_levantar_el_hogar_lo_deja_prendido() -> void:
 	assert_false(sim.hearth_lit, "todavia no hay fuego")
 
 	for _i in range(20):
-		sim._work_on_project(person, 1.0)
+		sim.hogar._work_on_project(person, 1.0)
 	assert_true(sim.camp_built.get(CampProjects.Kind.HOGAR, false),
 		"la obra termina")
 	assert_true(sim.hearth_lit, "y queda prendido")
@@ -159,7 +159,7 @@ func test_levantar_el_hogar_lo_deja_prendido() -> void:
 func test_el_hogar_gasta_lena_cada_dia() -> void:
 	var sim := _con_hogar()
 	var antes := sim.store.amount(Materia.Kind.LENA)
-	sim._burn_hearth()
+	sim.hogar._burn_hearth()
 	assert_true(sim.hearth_lit, "con lena, sigue encendido")
 	assert_lt(sim.store.amount(Materia.Kind.LENA), antes,
 		"y se ha llevado su parte")
@@ -167,7 +167,7 @@ func test_el_hogar_gasta_lena_cada_dia() -> void:
 
 func test_sin_lena_el_hogar_se_apaga() -> void:
 	var sim := _con_hogar(0.0)
-	sim._burn_hearth()
+	sim.hogar._burn_hearth()
 	assert_false(sim.hearth_lit, "sin lena no hay fuego")
 
 
@@ -176,7 +176,7 @@ func test_sin_nadie_que_lo_cuide_el_hogar_se_apaga() -> void:
 	# se podia dejar el oficio vacio y no pasaba nada.
 	var sim := _con_hogar()
 	sim._hearth_tended = false
-	sim._burn_hearth()
+	sim.hogar._burn_hearth()
 	assert_false(sim.hearth_lit, "un hogar sin nadie encima se apaga solo")
 
 
@@ -184,7 +184,7 @@ func test_apagarse_deja_rastro_en_la_cronica() -> void:
 	# Un castigo invisible es la peor clase de castigo.
 	var sim := _con_hogar(0.0)
 	var antes := sim.chronicle.entries.size()
-	sim._burn_hearth()
+	sim.hogar._burn_hearth()
 	assert_gt(float(sim.chronicle.entries.size()), float(antes),
 		"que se apague el fuego se cuenta")
 
@@ -204,11 +204,11 @@ func test_reavivar_cuesta_jornada_y_lena() -> void:
 
 	var lena := sim.store.amount(Materia.Kind.LENA)
 	# Una fraccion corta de jornada no basta
-	sim._relight_hearth(person, 0.05)
+	sim.hogar._relight_hearth(person, 0.05)
 	assert_false(sim.hearth_lit, "con un rato no se levanta un hogar")
 
 	for _i in range(20):
-		sim._relight_hearth(person, 0.2)
+		sim.hogar._relight_hearth(person, 0.2)
 	assert_true(sim.hearth_lit, "con jornada, si")
 	assert_lt(sim.store.amount(Materia.Kind.LENA), lena, "y se gasta lena")
 
@@ -221,7 +221,7 @@ func test_sin_lena_no_se_puede_reavivar() -> void:
 	var person := Inhabitant.create(0, Vector3.ZERO, rng)
 	sim.people = [person]
 	for _i in range(20):
-		sim._relight_hearth(person, 0.5)
+		sim.hogar._relight_hearth(person, 0.5)
 	assert_false(sim.hearth_lit, "sin lena no se prende nada")
 
 
@@ -236,7 +236,7 @@ func test_apagado_no_se_ahuma() -> void:
 	var person := Inhabitant.create(0, Vector3.ZERO, rng)
 	sim.people = [person]
 
-	sim._tend_camp(person, SettlementSim.HORAS_UTILES)
+	sim.hogar._tend_camp(person, SettlementSim.HORAS_UTILES)
 	assert_eq(sim.store.amount(Materia.Kind.CARNE_SECA), 0.0,
 		"con el hogar frio no se ahuma nada")
 

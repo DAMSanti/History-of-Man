@@ -168,7 +168,7 @@ func test_reconocer_mueve_a_la_persona_por_la_zona() -> void:
 	person.route = PackedVector3Array([person.position])
 	person.route_step = 0
 
-	sim._next_survey_leg(person)
+	sim.reconocimiento._next_survey_leg(person)
 
 	var moved := person.forage_target.distance_to(person.work_centre)
 	assert_gt(moved, 50.0,
@@ -195,7 +195,7 @@ func test_la_batida_da_la_vuelta_al_punto() -> void:
 
 	var quadrants := {}
 	for leg in range(SettlementSim.SURVEY_LEGS):
-		sim._next_survey_leg(person)
+		sim.reconocimiento._next_survey_leg(person)
 		var away := person.forage_target - centre
 		quadrants[int(floor((atan2(away.z, away.x) + PI) / (PI * 0.5)))] = true
 		# Andar el tramo es VER el tramo: es lo que hace que el siguiente se
@@ -220,7 +220,7 @@ func test_dos_tramos_seguidos_no_caen_en_el_mismo_sitio() -> void:
 
 	var previous := centre
 	for leg in range(8):
-		sim._next_survey_leg(person)
+		sim.reconocimiento._next_survey_leg(person)
 		var moved := previous.distance_to(person.forage_target)
 		assert_gt(moved, 60.0,
 			"el tramo %d se va a otro sitio (%d m del anterior)"
@@ -285,7 +285,7 @@ func test_la_batida_va_a_lo_que_no_conoce() -> void:
 	var blind := 0.0
 	var tries := 40
 	for attempt in range(tries):
-		var pick := sim._least_known_around(centre, 120.0, 380.0, person)
+		var pick := sim.reconocimiento._least_known_around(centre, 120.0, 380.0, person)
 		chosen += sim.knowledge.explored_at(pick)
 
 		var angle := sim._rng.randf() * TAU
@@ -312,7 +312,7 @@ func test_los_batidores_no_salen_en_fila_india() -> void:
 
 	var picks := {}
 	for attempt in range(10):
-		var pick := sim._least_known_around(centre, 120.0, 380.0, person)
+		var pick := sim.reconocimiento._least_known_around(centre, 120.0, 380.0, person)
 		picks["%d_%d" % [int(pick.x / 60.0), int(pick.z / 60.0)]] = true
 
 	assert_gt(float(picks.size()), 3.0,
@@ -388,7 +388,7 @@ func test_las_cumbres_caen_en_la_cima_y_no_en_la_ladera() -> void:
 	# no busca cumbres: coge noventa y seis puntos cualesquiera y llama cumbre
 	# a la altura que tuvieran. Casi siempre caia en mitad de una ladera.
 	var sim := _sim_on_peaks()
-	var peaks := sim._find_peaks()
+	var peaks := sim.cumbres._find_peaks()
 	assert_eq(peaks.size(), PeakTerrain.SUMMITS.size(),
 		"encuentra las TRES cumbres, no %d" % peaks.size())
 
@@ -407,14 +407,14 @@ func test_las_cumbres_caen_en_la_cima_y_no_en_la_ladera() -> void:
 func test_una_cumbre_domina_lo_que_tiene_debajo() -> void:
 	# Es lo que separa un mirador de un reperecho en mitad de una ladera
 	var sim := _sim_on_peaks()
-	for peak: Dictionary in sim._find_peaks():
-		assert_gt(float(peak["command"]), SettlementSim.PEAK_MIN_COMMAND - 1.0,
+	for peak: Dictionary in sim.cumbres._find_peaks():
+		assert_gt(float(peak["command"]), Cumbres.PEAK_MIN_COMMAND - 1.0,
 			"se levanta %d m sobre lo que la rodea" % int(peak["command"]))
 
 
 func test_no_se_cuenta_dos_veces_la_misma_cumbre() -> void:
 	var sim := _sim_on_peaks()
-	var peaks := sim._find_peaks()
+	var peaks := sim.cumbres._find_peaks()
 	assert_lt(float(peaks.size()), float(PeakTerrain.SUMMITS.size()) + 1.0,
 		"tres montes dan como mucho tres cumbres, no %d" % peaks.size())
 
@@ -435,10 +435,10 @@ func test_sin_nadie_capaz_la_orden_de_cima_lo_dice() -> void:
 	# Una cumbre dura de verdad, pero por debajo del techo de equipo
 	var peak := {"pos": sim.home_position + Vector3(400.0, 0.0, 0.0),
 		"hard": 0.75, "rise": 500.0}
-	var problem := sim.order_ascent(peak)
+	var problem := sim.cumbres.order_ascent(peak)
 	assert_true(problem.contains("habilidad suficiente") 			or problem.contains("solitario"),
 		"se explica por que no se puede: «%s»" % problem)
-	assert_false(sim.has_peak_order, "y no queda orden puesta")
+	assert_false(sim.cumbres.has_peak_order, "y no queda orden puesta")
 
 
 func test_con_alguien_capaz_la_orden_sale() -> void:
@@ -452,8 +452,8 @@ func test_con_alguien_capaz_la_orden_sale() -> void:
 
 	var facil := {"pos": sim.home_position + Vector3(300.0, 0.0, 0.0),
 		"hard": 0.3, "rise": 200.0}
-	assert_eq(sim.order_ascent(facil), "", "con quien se atreva, la orden sale")
-	assert_true(sim.has_peak_order, "y queda señalada")
+	assert_eq(sim.cumbres.order_ascent(facil), "", "con quien se atreva, la orden sale")
+	assert_true(sim.cumbres.has_peak_order, "y queda señalada")
 
 
 func test_una_pared_que_pide_equipo_no_se_intenta() -> void:
@@ -467,17 +467,17 @@ func test_una_pared_que_pide_equipo_no_se_intenta() -> void:
 
 	var pared := {"pos": sim.home_position + Vector3(300.0, 0.0, 0.0),
 		"hard": 0.95, "rise": 900.0}
-	var problem := sim.order_ascent(pared)
+	var problem := sim.cumbres.order_ascent(pared)
 	assert_false(problem.is_empty(),
 		"una pared que pide equipo no se intenta ni con el mejor")
-	assert_false(sim.has_peak_order, "y no queda orden puesta")
+	assert_false(sim.cumbres.has_peak_order, "y no queda orden puesta")
 
 
 # --- las cumbres duras piden grupo -----------------------------------------
 
 func test_una_cumbre_facil_se_sube_en_solitario() -> void:
 	var sim := _sim_on_fake()
-	assert_true(sim._climbing_party_enough(0.2),
+	assert_true(sim.cumbres._climbing_party_enough(0.2),
 		"una cumbre por debajo del umbral no pide compania")
 
 
@@ -485,18 +485,18 @@ func test_una_cumbre_dura_no_se_sube_solo() -> void:
 	# Peticion explicita: "las ascensiones mas dificiles necesitaran mas de
 	# una persona"
 	var sim := _sim_on_fake()
-	assert_false(sim._climbing_party_enough(0.9),
+	assert_false(sim.cumbres._climbing_party_enough(0.9),
 		"una cumbre dura no se ataca en solitario")
 
 
 func test_una_cumbre_dura_si_se_sube_con_grupo_bastante() -> void:
 	var sim := _sim_on_fake()
-	for i in range(SettlementSim.MIN_CLIMBING_PARTY):
+	for i in range(Cumbres.MIN_CLIMBING_PARTY):
 		var p := Inhabitant.create(i, sim.home_position, sim._rng)
 		p.job = Profession.Job.EXPLORACION
 		p.current_speciality = Profession.Speciality.ASCENSION
 		sim.people.append(p)
-	assert_true(sim._climbing_party_enough(0.9),
+	assert_true(sim.cumbres._climbing_party_enough(0.9),
 		"con bastante gente puesta en ascension, si se ataca")
 
 
@@ -513,9 +513,9 @@ func test_peak_for_descarta_cumbres_duras_sin_grupo() -> void:
 		Profession.Speciality.ASCENSION)
 	persona.skill[task] = 0.95
 
-	var elegida := sim.peak_for(persona)
+	var elegida := sim.cumbres.peak_for(persona)
 	if not elegida.is_empty():
-		assert_lt(float(elegida["hard"]), SettlementSim.HARD_PEAK_PARTY_THRESHOLD,
+		assert_lt(float(elegida["hard"]), Cumbres.HARD_PEAK_PARTY_THRESHOLD,
 			"solo, no se elige una cumbre que pida grupo")
 
 
@@ -555,11 +555,11 @@ func test_la_exploracion_sigue_el_agua() -> void:
 	var dry := Vector3(700.0, 0.0, 700.0)
 	var bank := Vector3(700.0, 0.0, FakeTerrain.RIVER_Z + FakeTerrain.RIVER_HALF + 5.0)
 
-	assert_eq(sim._terrain_lure(dry), 0.0,
+	assert_eq(sim.reconocimiento._terrain_lure(dry), 0.0,
 		"en mitad de la meseta el terreno no tira de nadie")
-	assert_gt(sim._terrain_lure(bank), 0.0,
+	assert_gt(sim.reconocimiento._terrain_lure(bank), 0.0,
 		"y en la orilla si")
-	assert_lt(sim._terrain_lure(bank), 0.4,
+	assert_lt(sim.reconocimiento._terrain_lure(bank), 0.4,
 		"pero es una preferencia, no una obsesion")
 
 
@@ -568,7 +568,7 @@ func test_el_cauce_infranqueable_no_es_un_pasillo() -> void:
 	# guia, es una pared, y mandar alli a la gente es mandarla a mirar agua.
 	var sim := _sim_on_fake()
 	var midstream := Vector3(700.0, 0.0, FakeTerrain.RIVER_Z)
-	assert_eq(sim._terrain_lure(midstream), 0.0,
+	assert_eq(sim.reconocimiento._terrain_lure(midstream), 0.0,
 		"por el medio del rio no se explora")
 
 
@@ -633,7 +633,7 @@ func test_sin_destreza_una_batida_revela_como_mucho_un_material() -> void:
 	var paraje := _paraje_con_incognitas(sim, 6)
 	var person := _batidor(sim, paraje, 0.0)
 
-	sim._finish_survey(person)
+	sim.reconocimiento._finish_survey(person)
 
 	assert_eq(_revealed_count(paraje), 1,
 		"sin ojo entrenado, una sola incognita por tarde")
@@ -650,7 +650,7 @@ func test_con_destreza_alta_una_batida_suele_revelar_mas_de_un_material() -> voi
 		sim._rng.seed = 100 + i
 		var paraje := _paraje_con_incognitas(sim, 6)
 		var person := _batidor(sim, paraje, 0.9)
-		sim._finish_survey(person)
+		sim.reconocimiento._finish_survey(person)
 		total += _revealed_count(paraje)
 
 	var average := float(total) / float(trials)
@@ -670,7 +670,7 @@ func test_dar_con_un_material_sube_la_destreza_de_batida() -> void:
 		Profession.Speciality.BATIDA)
 	var before := person.skill_in(task)
 
-	sim._finish_survey(person)
+	sim.reconocimiento._finish_survey(person)
 
 	assert_gt(person.skill_in(task), before,
 		"encontrar algo deja poso, no solo las horas")
@@ -683,7 +683,7 @@ func test_resolver_una_incognita_de_un_paraje_conocido_no_es_un_paraje_nuevo() -
 	var paraje := _paraje_con_incognitas(sim, 3)
 	var person := _batidor(sim, paraje, 0.1)
 
-	sim._finish_survey(person)
+	sim.reconocimiento._finish_survey(person)
 
 	assert_eq(sim._new_ground_surveys_today.size(), 0,
 		"batir un sitio que ya tenia nombre no cuenta como monte nuevo")
@@ -697,16 +697,16 @@ func test_la_pura_repeticion_no_pasa_del_cincuenta() -> void:
 	person.current_speciality = Profession.Speciality.BATIDA
 	var task := Profession.task_id(Profession.Job.EXPLORACION,
 		Profession.Speciality.BATIDA)
-	person.skill[task] = SettlementSim.BATIDA_REPETITION_CEILING - 0.01
+	person.skill[task] = Reconocimiento.BATIDA_REPETITION_CEILING - 0.01
 
 	# Muchas horas de puro andar y mirar, sin _finish_survey -sin encontrar
 	# nada-, tienen que quedarse pegadas al techo de repeticion
 	for _i in range(500):
-		sim._survey(person, 1.0)
+		sim.reconocimiento._survey(person, 1.0)
 
 	assert_between(person.skill_in(task), 0.0,
-		SettlementSim.BATIDA_REPETITION_CEILING + 0.001,
-		"sin descubrir nada, la destreza no pasa del %.0f" 			% (SettlementSim.BATIDA_REPETITION_CEILING * 100.0))
+		Reconocimiento.BATIDA_REPETITION_CEILING + 0.001,
+		"sin descubrir nada, la destreza no pasa del %.0f" 			% (Reconocimiento.BATIDA_REPETITION_CEILING * 100.0))
 
 
 func test_descubrir_materiales_no_pasa_del_setenta_y_cinco() -> void:
@@ -723,11 +723,11 @@ func test_descubrir_materiales_no_pasa_del_setenta_y_cinco() -> void:
 	for _i in range(10):
 		if not paraje.has_unknowns():
 			break
-		sim._finish_survey(person)
+		sim.reconocimiento._finish_survey(person)
 
 	assert_between(person.skill_in(task), 0.0,
-		SettlementSim.BATIDA_MATERIAL_CEILING + 0.001,
-		"resolver incognitas de un paraje ya conocido no pasa del %.0f" 			% (SettlementSim.BATIDA_MATERIAL_CEILING * 100.0))
+		Reconocimiento.BATIDA_MATERIAL_CEILING + 0.001,
+		"resolver incognitas de un paraje ya conocido no pasa del %.0f" 			% (Reconocimiento.BATIDA_MATERIAL_CEILING * 100.0))
 
 
 func test_abrir_un_paraje_nuevo_si_puede_pasar_del_setenta_y_cinco() -> void:
@@ -738,7 +738,7 @@ func test_abrir_un_paraje_nuevo_si_puede_pasar_del_setenta_y_cinco() -> void:
 	person.current_speciality = Profession.Speciality.BATIDA
 	var task := Profession.task_id(Profession.Job.EXPLORACION,
 		Profession.Speciality.BATIDA)
-	person.skill[task] = SettlementSim.BATIDA_MATERIAL_CEILING
+	person.skill[task] = Reconocimiento.BATIDA_MATERIAL_CEILING
 
 	var spot := sim.home_position + Vector3(150.0, 0.0, 0.0)
 	sim._new_ground_surveys_today = [{"person": person, "position": spot,
@@ -746,9 +746,9 @@ func test_abrir_un_paraje_nuevo_si_puede_pasar_del_setenta_y_cinco() -> void:
 	var paraje := Paraje.create(1, 1, Subsistence.Activity.RECOLECCION,
 		Materia.Kind.FRUTO_SECO, spot, 1)
 
-	sim._credit_new_ground([paraje])
+	sim.reconocimiento._credit_new_ground([paraje])
 
-	assert_gt(person.skill_in(task), SettlementSim.BATIDA_MATERIAL_CEILING,
+	assert_gt(person.skill_in(task), Reconocimiento.BATIDA_MATERIAL_CEILING,
 		"abrir un paraje nuevo si rompe el techo de los 75")
 
 
@@ -766,7 +766,7 @@ func test_abrir_un_paraje_nuevo_premia_a_quien_lo_ha_batido() -> void:
 	var paraje := Paraje.create(1, 1, Subsistence.Activity.RECOLECCION,
 		Materia.Kind.FRUTO_SECO, spot, 1)
 
-	sim._credit_new_ground([paraje])
+	sim.reconocimiento._credit_new_ground([paraje])
 
 	assert_gt(person.skill_in(task), 0.2, "quien lo ha abierto aprende del hito")
 
@@ -785,7 +785,7 @@ func test_quien_no_ha_batido_cerca_no_se_lleva_el_hito() -> void:
 	var paraje := Paraje.create(1, 1, Subsistence.Activity.RECOLECCION,
 		Materia.Kind.FRUTO_SECO, sim.home_position + Vector3(150.0, 0.0, 0.0), 1)
 
-	sim._credit_new_ground([paraje])
+	sim.reconocimiento._credit_new_ground([paraje])
 
 	assert_eq(person.skill_in(task), 0.2,
 		"batir lejos de donde nace el paraje no cuenta como haberlo abierto")
@@ -1015,7 +1015,7 @@ func test_reconocer_ensena_el_sitio_no_solo_el_camino_hasta_el() -> void:
 
 	var antes := sim.knowledge.familiarity_at(
 		Subsistence.Activity.RECOLECCION, person.position)
-	sim._survey(person, 4.0)
+	sim.reconocimiento._survey(person, 4.0)
 	var despues := sim.knowledge.familiarity_at(
 		Subsistence.Activity.RECOLECCION, person.position)
 
@@ -1043,7 +1043,7 @@ func test_terminar_de_reconocer_terreno_nuevo_lo_deja_a_punto_de_nombrarse() -> 
 		person.work_centre = person.position
 		person.forage_target = person.position
 
-		sim._finish_survey(person)
+		sim.reconocimiento._finish_survey(person)
 
 		var conocido := sim.knowledge.familiarity_at(
 			Subsistence.Activity.RECOLECCION, person.work_centre)
@@ -1069,7 +1069,7 @@ func test_una_partida_corta_no_va_al_borde_del_mapa() -> void:
 	sim.has_scout_order = true
 	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
 
-	var destino := sim._scout_target(person)
+	var destino := sim.reconocimiento._scout_target(person)
 	assert_lt(destino.distance_to(sim.home_position), SettlementSim.REGIONAL_DISTANCE,
 		"solo, no se aventura tan lejos aunque el jugador lo señale")
 
@@ -1095,7 +1095,7 @@ func test_con_grupo_numeroso_si_se_va_lejos() -> void:
 	sim.has_scout_order = true
 	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
 
-	var destino := sim._scout_target(person)
+	var destino := sim.reconocimiento._scout_target(person)
 	assert_gt(destino.distance_to(sim.home_position), SettlementSim.REGIONAL_DISTANCE,
 		"con bastante gente puesta en ello, si se llega al rumbo lejano")
 
@@ -1179,7 +1179,7 @@ func test_coronar_sube_la_destreza_mas_que_solo_intentarlo() -> void:
 	var sim := _sim_on_peaks()
 	# La mas suave de las tres, para que la tirada de verdad tenga que fallar
 	# mucho para no coronar
-	var summit: Vector3 = sim._find_peaks()[-1]["pos"]
+	var summit: Vector3 = sim.cumbres._find_peaks()[-1]["pos"]
 	var person := Inhabitant.create(0, summit, sim._rng)
 	person.job = Profession.Job.EXPLORACION
 	person.current_speciality = Profession.Speciality.ASCENSION
@@ -1192,12 +1192,12 @@ func test_coronar_sube_la_destreza_mas_que_solo_intentarlo() -> void:
 	person.skill[task] = 0.5
 	person.fatigue = 0.0
 	var before := person.skill_in(task)
-	var ascents_before := sim.ascents
+	var ascents_before := sim.cumbres.ascents
 
-	sim._try_ascent(person)
+	sim.cumbres._try_ascent(person)
 
 	var practice: float = 0.035 * person.learn_rate()
-	if sim.ascents > ascents_before:
+	if sim.cumbres.ascents > ascents_before:
 		assert_near(person.skill_in(task) - before,
 			practice + SettlementSim.PEAK_MILESTONE * person.learn_rate(), 0.001,
 			"al coronar, la subida suma la practica Y el hito de la cumbre nueva")
@@ -1222,8 +1222,8 @@ func test_coronar_revela_familiaridad_no_solo_niebla_de_guerra() -> void:
 	# `_do_ascent` siempre llama a `see_from` justo antes: sin niebla ya
 	# levantada, ninguna celda pasa el corte de claridad y no hay nada que
 	# revelar. Se replica el mismo orden aqui.
-	sim.knowledge.see_from(cima, SettlementSim.ASCENT_SIGHT_RANGE)
-	sim._reveal_from_summit(cima)
+	sim.knowledge.see_from(cima, Cumbres.ASCENT_SIGHT_RANGE)
+	sim.cumbres._reveal_from_summit(cima)
 
 	assert_gt(sim.knowledge.familiarity_at(Subsistence.Activity.RECOLECCION, cima),
 		BandKnowledge.KNOWN_ENOUGH,
@@ -1232,7 +1232,7 @@ func test_coronar_revela_familiaridad_no_solo_niebla_de_guerra() -> void:
 		BandKnowledge.KNOWN_ENOUGH,
 		"y de mas de una actividad a la vez -mas disperso, no solo un sitio")
 
-	var lejos := cima + Vector3(SettlementSim.ASCENT_SIGHT_RANGE + 200.0, 0.0, 0.0)
+	var lejos := cima + Vector3(Cumbres.ASCENT_SIGHT_RANGE + 200.0, 0.0, 0.0)
 	assert_eq(sim.knowledge.familiarity_at(Subsistence.Activity.RECOLECCION, lejos), 0.0,
 		"mas alla del alcance de vista desde el pico, no se conoce nada")
 

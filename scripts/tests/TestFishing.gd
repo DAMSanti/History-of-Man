@@ -209,7 +209,7 @@ func test_levantar_una_nasa_la_deja_cebada_otra_vez() -> void:
 	sim.store.add(Materia.Kind.CARACOL, 20.0)
 	var nasa := _nasa(false)
 	assert_false(nasa.is_baited(), "empieza sin cebo")
-	assert_true(sim._rebait(nasa), "se ceba con lo que hay en el abrigo")
+	assert_true(sim.nasas_line._rebait(nasa), "se ceba con lo que hay en el abrigo")
 	assert_true(nasa.is_baited(), "y queda cebada")
 	assert_lt(sim.store.amount(Materia.Kind.CARACOL), 20.0,
 		"y el caracol se gasta")
@@ -218,7 +218,7 @@ func test_levantar_una_nasa_la_deja_cebada_otra_vez() -> void:
 func test_sin_cebo_en_el_abrigo_no_se_ceba_nada() -> void:
 	var sim := SettlementSim.new()
 	var nasa := _nasa(false)
-	assert_false(sim._rebait(nasa), "sin caracol ni carne no hay con qué")
+	assert_false(sim.nasas_line._rebait(nasa), "sin caracol ni carne no hay con qué")
 	assert_false(nasa.is_baited(), "y se queda como estaba")
 
 
@@ -226,7 +226,7 @@ func test_no_se_gasta_cebo_en_una_nasa_que_ya_lo_tiene() -> void:
 	var sim := SettlementSim.new()
 	sim.store.add(Materia.Kind.CARACOL, 20.0)
 	var nasa := _nasa(true)
-	assert_false(sim._rebait(nasa), "ya está cebada")
+	assert_false(sim.nasas_line._rebait(nasa), "ya está cebada")
 	assert_eq(sim.store.amount(Materia.Kind.CARACOL), 20.0,
 		"y no se tira el caracol")
 

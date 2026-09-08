@@ -61,7 +61,7 @@ func _initialize() -> void:
 	sim.apply_priorities()
 
 	var order := Vector3(900.0, 200.0, 900.0)
-	sim.scout_towards(order)
+	sim.reconocimiento.scout_towards(order)
 
 	print("=== EXPLORADOR ===")
 	print("   %s sale de %s hacia %s" % [scout.given_name,
@@ -233,7 +233,7 @@ func _initialize() -> void:
 			Profession.speciality_name(person.current_speciality as Profession.Speciality),
 			by_ten[0], by_ten[1], by_ten[2], by_ten[3], by_ten[4], by_ten[5], by_ten[6]])
 		print("       fatiga %.0f · hambre %.0f · %d cumbres coronadas · frontera %s" % [
-			person.fatigue, person.hunger, sim._climbed.size(),
+			person.fatigue, person.hunger, sim.cumbres._climbed.size(),
 			"agotada" if sim._comarca_known else "abierta"])
 
 	print("=== CRONICA ===")

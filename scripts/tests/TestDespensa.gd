@@ -35,7 +35,7 @@ func test_con_hogar_secadero_y_gente_se_ahuma_sin_pedirlo() -> void:
 	# la jornada en ello; `_smoke_the_larder` corre en el cierre del día.
 	var sim := _con_secadero()
 	sim.store.add(Materia.Kind.PESCADO, 30.0)
-	sim._smoke_the_larder()
+	sim.hogar._smoke_the_larder()
 	assert_gt(sim.store.amount(Materia.Kind.PESCADO_SECO), 0.0,
 		"el pescado sale curado sin que nadie se ponga a ello")
 	assert_lt(sim.store.amount(Materia.Kind.PESCADO), 30.0,
@@ -46,7 +46,7 @@ func test_sin_secadero_no_se_ahuma() -> void:
 	var sim := _con_secadero()
 	sim.camp_built.erase(CampProjects.Kind.SECADERO)
 	sim.store.add(Materia.Kind.PESCADO, 30.0)
-	sim._smoke_the_larder()
+	sim.hogar._smoke_the_larder()
 	assert_eq(sim.store.amount(Materia.Kind.PESCADO_SECO), 0.0,
 		"sin bastidor no hay donde colgar nada")
 
@@ -55,7 +55,7 @@ func test_con_el_hogar_apagado_no_se_ahuma() -> void:
 	var sim := _con_secadero()
 	sim.hearth_lit = false
 	sim.store.add(Materia.Kind.CARNE, 30.0)
-	sim._smoke_the_larder()
+	sim.hogar._smoke_the_larder()
 	assert_eq(sim.store.amount(Materia.Kind.CARNE_SECA), 0.0,
 		"sin brasas no hay humo")
 
@@ -65,7 +65,7 @@ func test_sin_nadie_al_hogar_no_se_ahuma() -> void:
 	# la despensa y no solo en el fuego.
 	var sim := _con_secadero(0)
 	sim.store.add(Materia.Kind.CARNE, 30.0)
-	sim._smoke_the_larder()
+	sim.hogar._smoke_the_larder()
 	assert_eq(sim.store.amount(Materia.Kind.CARNE_SECA), 0.0,
 		"un secadero sin nadie encima no cura nada")
 
@@ -75,11 +75,11 @@ func test_dos_manos_al_hogar_curan_mas_que_una() -> void:
 	# vigilada el doble.
 	var uno := _con_secadero(1)
 	uno.store.add(Materia.Kind.PESCADO, 200.0)
-	uno._smoke_the_larder()
+	uno.hogar._smoke_the_larder()
 
 	var dos := _con_secadero(2)
 	dos.store.add(Materia.Kind.PESCADO, 200.0)
-	dos._smoke_the_larder()
+	dos.hogar._smoke_the_larder()
 
 	assert_gt(dos.store.amount(Materia.Kind.PESCADO_SECO),
 		uno.store.amount(Materia.Kind.PESCADO_SECO),
@@ -92,7 +92,7 @@ func test_se_cura_antes_lo_que_antes_se_pudre() -> void:
 	var sim := _con_secadero()
 	sim.store.add(Materia.Kind.PESCADO, 200.0)
 	sim.store.add(Materia.Kind.CARNE, 200.0)
-	sim._smoke_the_larder()
+	sim.hogar._smoke_the_larder()
 	assert_gt(sim.store.amount(Materia.Kind.PESCADO_SECO), 0.0,
 		"el pescado, que es lo primero que se echa a perder")
 	assert_eq(sim.store.amount(Materia.Kind.CARNE_SECA), 0.0,
@@ -102,8 +102,8 @@ func test_se_cura_antes_lo_que_antes_se_pudre() -> void:
 func test_lo_ahumado_queda_apuntado_para_el_parte() -> void:
 	var sim := _con_secadero()
 	sim.store.add(Materia.Kind.PESCADO, 30.0)
-	sim._smoke_the_larder()
-	assert_gt(float(sim.smoked_today.get(int(Materia.Kind.PESCADO_SECO), 0.0)),
+	sim.hogar._smoke_the_larder()
+	assert_gt(float(sim.hogar.smoked_today.get(int(Materia.Kind.PESCADO_SECO), 0.0)),
 		0.0, "el parte sabe cuanto salio del secadero")
 
 
@@ -176,3 +176,67 @@ func test_perder_mucho_es_noticia_y_perder_poco_no() -> void:
 		"una merma pequena es rutina")
 	assert_eq(int(mucho.chronicle.entries[-1]["weight"]), 1,
 		"perder la despensa no se olvida")
+
+
+# --- que las cifras de comida cuadren entre si ----------------------------
+#
+# «El tooltip me pone que come 0,5 por racion y no concuerda con produce/mes
+# gasta/mes». Habia dos fallos detras y los dos se comprueban aqui.
+
+func test_ninguna_unidad_se_llama_racion() -> void:
+	# RACION es una medida -[Materia.KCAL_RACION], media jornada de una
+	# persona- y no puede ser ademas el nombre del bulto: llegaron a convivir
+	# «una ración» de seta que valia 0,06 raciones y «una ración» de fruto seco
+	# que valia 1,36.
+	for kind: int in Materia.Kind.values():
+		var k := kind as Materia.Kind
+		assert_false(Materia.unit_name(k).to_lower().begins_with("raci"),
+			"%s no mide en raciones" % Materia.material_name(k))
+
+
+func test_una_persona_come_dos_raciones_al_dia() -> void:
+	# Es la definicion, y la ficha del material la enseña: si esto cambia, hay
+	# que cambiar el texto de la ficha con ello.
+	assert_near(Materia.KCAL_DIA / Materia.KCAL_RACION, 2.0, 0.001,
+		"la racion es media jornada")
+
+
+func test_lo_que_gasta_el_almacen_es_lo_que_come_la_banda() -> void:
+	# La suma de la columna GASTA/MES tiene que ser exactamente lo que come la
+	# banda en un mes, ni mas ni menos. Sumaba tres veces y media de mas: el
+	# consumo se repartia entre los alimentos EN DESPENSA pero se le cobraba a
+	# todos los del catalogo, incluidos los que estaban a cero.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var sim := SettlementSim.new()
+	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
+	sim.apply_priorities()
+	for kind: int in [Materia.Kind.CARNE, Materia.Kind.BAYA,
+			Materia.Kind.FRUTO_SECO, Materia.Kind.PESCADO]:
+		sim.store.add(kind as Materia.Kind, 40.0)
+
+	var gasta := 0.0
+	for kind: int in Materia.Kind.values():
+		var k := kind as Materia.Kind
+		if Materia.is_food(k):
+			gasta += sim.material_needed(k) * Materia.nutrition(k)
+
+	var bocas := 0.0
+	for person: Inhabitant in sim.people:
+		bocas += person.daily_food()
+
+	assert_near(gasta, bocas * float(sim.CONSUMO_DIAS), 0.5,
+		"la columna GASTA suma justo lo que se come al mes")
+
+
+func test_no_se_gasta_lo_que_no_hay() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 8
+	var sim := SettlementSim.new()
+	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
+	sim.apply_priorities()
+	sim.store.add(Materia.Kind.CARNE, 40.0)
+	assert_gt(sim.material_needed(Materia.Kind.CARNE), 0.0,
+		"de lo que hay si se come")
+	assert_eq(sim.material_needed(Materia.Kind.SETA), 0.0,
+		"y de lo que no hay en la despensa, no")

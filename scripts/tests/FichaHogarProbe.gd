@@ -76,7 +76,7 @@ func _init() -> void:
 		ui.show_person(person)
 		opened += 1
 		var said := _panel_text(ui)
-		var camp: bool = sim._works_at_camp(person)
+		var camp: bool = sim.hogar._works_at_camp(person)
 		if camp and (said.contains("Talla ") or said.contains("Levantando ")):
 			told += 1
 		print("  %-6s %-12s %-12s | %s" % [

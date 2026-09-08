@@ -339,7 +339,7 @@ func test_un_paraje_lleno_se_descarta_para_el_siguiente() -> void:
 	var persona_de_mas := people[Subsistence.PEOPLE_PER_PARTY as int]
 	persona_de_mas.activity = Subsistence.Activity.RECOLECCION
 
-	var destino := sim._best_known_spot(persona_de_mas)
+	var destino := sim.tajo._best_known_spot(persona_de_mas)
 	assert_eq(destino, Vector3.ZERO,
 		"con una partida entera ya alli, no se manda ni una persona mas")
 
@@ -362,7 +362,7 @@ func test_por_debajo_del_tope_si_se_manda() -> void:
 	var otra_persona := people[1]
 	otra_persona.activity = Subsistence.Activity.RECOLECCION
 
-	var destino := sim._best_known_spot(otra_persona)
+	var destino := sim.tajo._best_known_spot(otra_persona)
 	# En plano: la Y viene del terreno de verdad -aqui siempre 200, la
 	# altura llana de FakeTerrain-, y compararla con el 0 del punto de
 	# prueba no dice nada del reparto, que es lo que mide esta prueba.

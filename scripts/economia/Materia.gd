@@ -53,8 +53,20 @@ enum Kind {
 
 ## Ficha de cada material.
 ##
-## `kg` y `litros` son POR UNIDAD. La unidad es la que tiene sentido para ese
-## material: una ración de comida, un haz de leña, una cuerna, una piel.
+## `kg` y `litros` son POR UNIDAD. La unidad es el BULTO que tiene sentido
+## para ese material: un puñado de bayas, una tajada de carne, un haz de leña,
+## una piel.
+##
+## **Ninguna unidad se llama ya «ración», y no es cosmetica.** Doce de estas
+## fichas tenian «ración» de unidad -de cuando la racion era una unidad de
+## cuenta puesta a mano- y desde que la comida se mide en CALORIAS la racion es
+## otra cosa: [KCAL_RACION], media jornada de una persona. O sea que algo
+## llamado «una ración» valia 0,54 raciones si era carne, 1,36 si era fruto
+## seco y 0,06 si era seta: veintitres veces de diferencia entre dos unidades
+## del mismo nombre. En la ficha se leia «se come 0,5 raciones por unidad» de
+## algo cuya unidad se llamaba ración, y no habia manera de cuadrarlo con las
+## columnas del almacen, que van en raciones. Ahora RACION significa una sola
+## cosa en todo el juego y la unidad es un bulto con su peso.
 ##
 ## `dias` es lo que aguanta antes de echarse a perder; 0 significa que no se
 ## estropea. `kcal` son CALORIAS POR UNIDAD, o 0 si no se come.
@@ -67,31 +79,31 @@ enum Kind {
 ## pescado, marisco y pescado seco valian 1,0 los cuatro.
 const CATALOGUE := {
 	Kind.FRUTO_SECO: {
-		"name": "Fruto seco", "unit": "ración", "kg": 0.55, "litros": 1.6,
+		"name": "Fruto seco", "unit": "puñado", "kg": 0.55, "litros": 1.6,
 		"dias": 360, "kcal": 1700,
 		"desc": "Avellana y bellota con cáscara. La cáscara abulta, pero es lo "
 			+ "que hace que aguante el año entero.",
 	},
 	Kind.BELLOTA: {
-		"name": "Bellota", "unit": "ración", "kg": 0.6, "litros": 1.4,
+		"name": "Bellota", "unit": "puñado", "kg": 0.6, "litros": 1.4,
 		"dias": 300, "kcal": 1300,
 		"desc": "Hay que desamargarla con agua antes de comerla, y eso pide "
 			+ "recipiente y varios días. A cambio aguanta el año.",
 	},
 	Kind.BAYA: {
-		"name": "Baya", "unit": "ración", "kg": 0.4, "litros": 0.55,
+		"name": "Baya", "unit": "puñado", "kg": 0.4, "litros": 0.55,
 		"dias": 8, "kcal": 200,
 		"desc": "Endrina, mora, madroño. Alimenta poco y se pasa enseguida, "
 			+ "pero es de lo poco fresco que hay en verano.",
 	},
 	Kind.RAIZ: {
-		"name": "Raíz", "unit": "ración", "kg": 0.7, "litros": 0.7,
+		"name": "Raíz", "unit": "manojo", "kg": 0.7, "litros": 0.7,
 		"dias": 60, "kcal": 630,
 		"desc": "Tubérculos y raíces. Es el colchón invisible de la dieta "
 			+ "forrajera: rinde poco, no falla casi nunca y hay todo el año.",
 	},
 	Kind.SETA: {
-		"name": "Seta", "unit": "ración", "kg": 0.3, "litros": 1.2,
+		"name": "Seta", "unit": "puñado", "kg": 0.3, "litros": 1.2,
 		"dias": 5, "kcal": 80,
 		"desc": "Poca energía y mucho riesgo. Interesa más por la yesca que "
 			+ "sale de los hongos de tronco que por lo que da de comer.",
@@ -103,13 +115,13 @@ const CATALOGUE := {
 			+ "hunde la del año siguiente.",
 	},
 	Kind.MIEL: {
-		"name": "Miel", "unit": "ración", "kg": 0.5, "litros": 0.35,
+		"name": "Miel", "unit": "panal", "kg": 0.5, "litros": 0.35,
 		"dias": 720, "kcal": 1520,
 		"desc": "Azúcar puro, valoradísimo en toda sociedad forrajera y con "
 			+ "riesgo de por medio. No se estropea nunca.",
 	},
 	Kind.CARACOL: {
-		"name": "Caracol", "unit": "ración", "kg": 1.1, "litros": 1.6,
+		"name": "Caracol", "unit": "puñado", "kg": 1.1, "litros": 1.6,
 		"dias": 3, "kcal": 350,
 		"desc": "Con concha, así que pesa para lo que da. Recolecta de críos, "
 			+ "y aparece en cantidad en algunos yacimientos.",
@@ -132,23 +144,23 @@ const CATALOGUE := {
 			+ "antes de saber curtir una piel.",
 	},
 	Kind.CARNE: {
-		"name": "Carne fresca", "unit": "ración", "kg": 0.45, "litros": 0.45,
+		"name": "Carne fresca", "unit": "tajada", "kg": 0.45, "litros": 0.45,
 		"dias": 4, "kcal": 680,
 		"desc": "Se pudre en días. Toda la caza es una carrera contra esto.",
 	},
 	Kind.CARNE_SECA: {
-		"name": "Carne seca", "unit": "ración", "kg": 0.18, "litros": 0.25,
+		"name": "Carne seca", "unit": "tira", "kg": 0.18, "litros": 0.25,
 		"dias": 180, "kcal": 680,
 		"desc": "Curada al humo. Pierde tres cuartos del peso y gana media año "
 			+ "de vida: es el mejor negocio del Paleolítico.",
 	},
 	Kind.PESCADO: {
-		"name": "Pescado", "unit": "ración", "kg": 0.5, "litros": 0.5,
+		"name": "Pescado", "unit": "pieza", "kg": 0.5, "litros": 0.5,
 		"dias": 3, "kcal": 600,
 		"desc": "Aún más perecedero que la carne.",
 	},
 	Kind.PESCADO_SECO: {
-		"name": "Pescado seco", "unit": "ración", "kg": 0.2, "litros": 0.2,
+		"name": "Pescado seco", "unit": "pieza", "kg": 0.2, "litros": 0.2,
 		"dias": 200, "kcal": 600,
 		"desc": "Abierto, sin espina y colgado sobre el humo. Un salmón "
 			+ "fresco dura tres días; ahumado, media vuelta al año. Es la "
@@ -156,7 +168,7 @@ const CATALOGUE := {
 			+ "no se pesca para comer hoy, se pesca para comer en enero.",
 	},
 	Kind.MARISCO: {
-		"name": "Marisco", "unit": "ración", "kg": 2.4, "litros": 3.2,
+		"name": "Marisco", "unit": "capazo", "kg": 2.4, "litros": 3.2,
 		"dias": 2, "kcal": 380,
 		"desc": "Con concha. Pesa cinco veces lo que la carne para la misma "
 			+ "comida, y por eso se come en la orilla y no se transporta.",

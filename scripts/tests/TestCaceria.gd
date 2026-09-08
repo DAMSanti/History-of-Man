@@ -24,7 +24,7 @@ func _sim(armas: Array = [Tool.Kind.AZAGAYA, Tool.Kind.LASCA]) -> SettlementSim:
 	var sim := SettlementSim.new()
 	sim.chronicle = Chronicle.new()
 	sim.techs = _techs([])
-	sim.wildlife = WildlifeHerds.new()
+	sim.caceria.wildlife = WildlifeHerds.new()
 	for kind: int in armas:
 		sim.toolkit.craft(kind as Tool.Kind,
 			Tool.default_stuff(kind as Tool.Kind), 0.6)
@@ -40,6 +40,9 @@ func _cazador(sim: SettlementSim,
 	person.job = Profession.Job.CAZA
 	person.current_speciality = rama
 	person.activity = Subsistence.Activity.CAZA
+	# Con tarea puesta: `SettlementSim.hunters_in` solo cuenta a quien la tiene,
+	# y sin esto una cuadrilla de tres contaba como uno.
+	person.has_task = true
 	person.state = Inhabitant.State.TRABAJANDO
 	person.position = donde
 	person.work_centre = donde
@@ -115,21 +118,21 @@ func test_sin_arma_no_se_levanta_caceria_contra_pieza_grande() -> void:
 	# quién se le va: con las manos vacías el ciervo ni se intenta.
 	var sim := _sim([])
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(40.0, 0.0, 0.0))
-	assert_true(sim._open_hunt(person) == null,
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(40.0, 0.0, 0.0))
+	assert_true(sim.caceria._open_hunt(person) == null,
 		"sin azagaya no se le va a un ciervo")
 
 	var armado := _sim()
 	var otro := _cazador(armado)
-	armado.wildlife.place_for_test("ciervo", Vector3(40.0, 0.0, 0.0))
-	assert_true(armado._open_hunt(otro) != null, "con azagaya sí")
+	armado.caceria.wildlife.place_for_test("ciervo", Vector3(40.0, 0.0, 0.0))
+	assert_true(armado.caceria._open_hunt(otro) != null, "con azagaya sí")
 
 
 func test_la_caceria_empieza_acechando() -> void:
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	assert_eq(hunt.phase, Hunt.Phase.ACECHO, "primero se acecha")
 	assert_eq(hunt.species, "ciervo", "y se acecha a la pieza que hay")
 	assert_true(hunt.unseen, "todavía no le ha visto")
@@ -140,16 +143,16 @@ func test_acechar_se_hace_despacio() -> void:
 	# fuera el mismo, desde fuera acechar y andar se verían igual.
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
-	sim._hunt_step(person, 0.1)
-	assert_lt(sim._hunt_pace(person), 1.0, "al acecho se anda despacio")
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
+	sim.caceria._hunt_step(person, 0.1)
+	assert_lt(sim.caceria._hunt_pace(person), 1.0, "al acecho se anda despacio")
 
 
 func test_el_paso_lento_no_se_le_queda_pegado_a_nadie() -> void:
 	var sim := _sim()
 	var person := _cazador(sim)
-	person.hunt_pace = SettlementSim.PASO_DE_ACECHO
-	assert_near(sim._hunt_pace(person), 1.0, 0.001,
+	person.hunt_pace = Caceria.PASO_DE_ACECHO
+	assert_near(sim.caceria._hunt_pace(person), 1.0, 0.001,
 		"sin cacería en marcha se anda como todo el mundo")
 
 
@@ -157,28 +160,28 @@ func test_la_cuadrilla_rodea_una_pieza_y_no_cuatro() -> void:
 	# Es lo que hace que la caza mayor se vea como lo que es. Sin esto, cuatro
 	# batidores acechaban cuatro ciervos cada uno por su lado.
 	var sim := _sim()
-	sim.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
-	sim.wildlife.place_for_test("ciervo", Vector3(-60.0, 0.0, 0.0))
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(60.0, 0.0, 0.0))
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(-60.0, 0.0, 0.0))
 	var uno := _cazador(sim)
 	var dos := _cazador(sim)
-	var primera := sim._open_hunt(uno)
-	var segunda := sim._open_hunt(dos)
+	var primera := sim.caceria._open_hunt(uno)
+	var segunda := sim.caceria._open_hunt(dos)
 	assert_true(primera == segunda, "el segundo se suma a la batida del primero")
 	assert_eq(primera.crew.size(), 2, "y la cuadrilla son dos")
-	assert_eq(sim.hunts.size(), 1, "una sola cacería en marcha")
+	assert_eq(sim.caceria.hunts.size(), 1, "una sola cacería en marcha")
 
 
 func test_al_acecho_solitario_no_se_suma_nadie() -> void:
 	# La caza menor se hace al acecho, solo o de a dos: una cuadrilla no acecha
 	# mejor. Ver [Hunting.CREW], que ya lo decía y no llegaba a la conducta.
 	var sim := _sim()
-	sim.wildlife.place_for_test("corzo", Vector3(50.0, 0.0, 0.0))
-	sim.wildlife.place_for_test("corzo", Vector3(-50.0, 0.0, 0.0))
+	sim.caceria.wildlife.place_for_test("corzo", Vector3(50.0, 0.0, 0.0))
+	sim.caceria.wildlife.place_for_test("corzo", Vector3(-50.0, 0.0, 0.0))
 	var uno := _cazador(sim, Profession.Speciality.CAZA_MENOR)
 	var dos := _cazador(sim, Profession.Speciality.CAZA_MENOR)
-	sim._open_hunt(uno)
-	sim._open_hunt(dos)
-	assert_eq(sim.hunts.size(), 2, "cada uno acecha lo suyo")
+	sim.caceria._open_hunt(uno)
+	sim.caceria._open_hunt(dos)
+	assert_eq(sim.caceria.hunts.size(), 2, "cada uno acecha lo suyo")
 
 
 func test_perseguir_se_acaba_por_fuelle() -> void:
@@ -186,35 +189,35 @@ func test_perseguir_se_acaba_por_fuelle() -> void:
 	# pieza. Y se pierden muchas, que es de lo que va cazar.
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(200.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(200.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	hunt.phase = Hunt.Phase.PERSECUCION
 	hunt.chased = Hunt.FUELLE_HORAS + 0.1
-	sim._hunt_step(person, 0.05)
+	sim.caceria._hunt_step(person, 0.05)
 	assert_eq(hunt.phase, Hunt.Phase.FALLIDA, "sin fuelle se deja")
 
 
 func test_perseguir_se_acaba_por_distancia() -> void:
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo",
+	sim.caceria.wildlife.place_for_test("ciervo",
 		Vector3(Hunt.PIERDE_M + 50.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	var hunt := sim.caceria._open_hunt(person)
 	assert_true(hunt == null, "tan lejos ni se ve")
 
-	sim.wildlife.place_for_test("ciervo", Vector3(100.0, 0.0, 0.0))
-	var cerca := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(100.0, 0.0, 0.0))
+	var cerca := sim.caceria._open_hunt(person)
 	cerca.phase = Hunt.Phase.PERSECUCION
 	cerca.quarry["position"] = Vector3(Hunt.PIERDE_M + 100.0, 0.0, 0.0)
-	sim._hunt_step(person, 0.05)
+	sim.caceria._hunt_step(person, 0.05)
 	assert_eq(cerca.phase, Hunt.Phase.FALLIDA, "se le fue de vista")
 
 
 func test_cobrar_una_pieza_grande_manda_a_despiezar() -> void:
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(5.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(5.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	hunt.phase = Hunt.Phase.LANCE
 	# Se tira hasta que entra: lo que se comprueba es qué pasa al acertar, no
 	# la probabilidad, que ya la gobierna `Hunt.LANCE_BASE`.
@@ -223,7 +226,7 @@ func test_cobrar_una_pieza_grande_manda_a_despiezar() -> void:
 			break
 		hunt.phase = Hunt.Phase.LANCE
 		hunt.chased = 0.0
-		sim._throw(person, hunt)
+		sim.caceria._throw(person, hunt)
 	assert_eq(hunt.phase, Hunt.Phase.DESPIECE,
 		"un ciervo se abre donde cae")
 	assert_gt(hunt.spoils_kg(), 0.0, "y queda la res en el suelo")
@@ -232,14 +235,14 @@ func test_cobrar_una_pieza_grande_manda_a_despiezar() -> void:
 func test_cobrar_una_pieza_pequena_se_carga_directamente() -> void:
 	var sim := _sim()
 	var person := _cazador(sim, Profession.Speciality.CAZA_MENOR)
-	sim.wildlife.place_for_test("conejo", Vector3(2.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("conejo", Vector3(2.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	for _intento in range(200):
 		if hunt.phase == Hunt.Phase.ACARREO:
 			break
 		hunt.phase = Hunt.Phase.LANCE
 		hunt.chased = 0.0
-		sim._throw(person, hunt)
+		sim.caceria._throw(person, hunt)
 	assert_eq(hunt.phase, Hunt.Phase.ACARREO,
 		"un conejo se echa al hombro sin abrirlo")
 
@@ -253,9 +256,9 @@ func test_lo_que_no_cabe_se_queda_en_el_monte() -> void:
 	hunt.spoils = Hunt.spoils_of("uro")
 	hunt.kill_site = person.position
 	hunt.crew = [person]
-	sim.hunts.append(hunt)
+	sim.caceria.hunts.append(hunt)
 
-	sim._load_up(person, hunt)
+	sim.caceria._load_up(person, hunt)
 	assert_gt(person.load_kg(), 0.0, "se carga lo que cabe")
 	assert_false(hunt.spoils.is_empty(),
 		"y un uro no cabe en una espalda: queda res en el monte")
@@ -271,8 +274,8 @@ func test_se_vuelve_a_por_lo_que_quedo_abierto() -> void:
 	hunt.phase = Hunt.Phase.ACARREO
 	hunt.spoils = Hunt.spoils_of("ciervo")
 	hunt.kill_site = Vector3(300.0, 0.0, 0.0)
-	sim.hunts.append(hunt)
-	var vuelta := sim.kill_to_fetch_near(person.position, 1200.0)
+	sim.caceria.hunts.append(hunt)
+	var vuelta := sim.caceria.kill_to_fetch_near(person.position, 1200.0)
 	assert_true(vuelta == hunt, "el cazador vuelve a por ella")
 
 
@@ -283,11 +286,11 @@ func test_lo_que_se_deja_demasiado_tiempo_se_pierde() -> void:
 	hunt.species = "ciervo"
 	hunt.phase = Hunt.Phase.ACARREO
 	hunt.spoils = Hunt.spoils_of("ciervo")
-	sim.hunts.append(hunt)
+	sim.caceria.hunts.append(hunt)
 
 	for _dia in range(int(Hunt.DIAS_EN_EL_SUELO) + 1):
-		sim._age_kills()
-	assert_eq(sim.hunts.size(), 0, "lo que nadie fue a buscar se pierde")
+		sim.caceria._age_kills()
+	assert_eq(sim.caceria.hunts.size(), 0, "lo que nadie fue a buscar se pierde")
 	assert_gt(float(sim.chronicle.entries.size()), 0.0, "y se cuenta")
 
 
@@ -313,8 +316,8 @@ func test_el_peligro_se_corre_en_el_lance() -> void:
 	# lo sigues.
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("uro", Vector3(5.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("uro", Vector3(5.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	assert_true(hunt != null, "hay uro al que entrarle")
 
 	var herido := false
@@ -322,7 +325,7 @@ func test_el_peligro_se_corre_en_el_lance() -> void:
 		hunt.phase = Hunt.Phase.LANCE
 		hunt.chased = 0.0
 		hunt.spoils.clear()
-		sim._throw(person, hunt)
+		sim.caceria._throw(person, hunt)
 		if person.hurt_days > 0:
 			herido = true
 			break
@@ -340,17 +343,17 @@ func test_la_pieza_que_se_echa_al_agua_se_da_por_perdida() -> void:
 	# cacería sabe acabarse por ese motivo.
 	var sim := _sim()
 	var person := _cazador(sim)
-	sim.wildlife.place_for_test("ciervo", Vector3(30.0, 0.0, 0.0))
-	var hunt := sim._open_hunt(person)
+	sim.caceria.wildlife.place_for_test("ciervo", Vector3(30.0, 0.0, 0.0))
+	var hunt := sim.caceria._open_hunt(person)
 	hunt.phase = Hunt.Phase.PERSECUCION
-	assert_true(sim._dry_footing(Vector3.ZERO),
+	assert_true(sim.caceria._dry_footing(Vector3.ZERO),
 		"sin terreno, se puede pisar en cualquier parte")
 
 	# Y la línea recta se tantea de verdad: entre dos puntos se mira el suelo
 	# cada pocos metros, no sólo los extremos.
-	assert_lt(SettlementSim.TANTEO_DEL_PASO, 20.0,
+	assert_lt(Caceria.TANTEO_DEL_PASO, 20.0,
 		"el tanteo tiene que ser más fino que el cauce más estrecho del valle")
-	assert_true(sim._straight_line_holds(Vector3.ZERO, Vector3(200.0, 0.0, 0.0)),
+	assert_true(sim.caceria._straight_line_holds(Vector3.ZERO, Vector3(200.0, 0.0, 0.0)),
 		"sin terreno, la recta vale")
 
 
@@ -372,7 +375,7 @@ func test_rastrear_cuesta_lo_que_dice_la_cifra_de_siempre() -> void:
 	var sim := _sim()
 	var menor := _cazador(sim, Profession.Speciality.CAZA_MENOR)
 	var mayor := _cazador(sim, Profession.Speciality.CAZA_MAYOR)
-	assert_lt(sim._tracking_hours(menor), sim._tracking_hours(mayor),
+	assert_lt(sim.caceria._tracking_hours(menor), sim.caceria._tracking_hours(mayor),
 		"dar con un conejo cuesta menos que dar con un ciervo")
 
 
@@ -381,7 +384,153 @@ func test_sin_fauna_dibujada_la_caza_sigue_funcionando() -> void:
 	# arranca la simulación y se puebla el valle: se cae a la tabla de
 	# [Hunting], que es lo que había antes.
 	var sim := _sim()
-	sim.wildlife = null
+	sim.caceria.wildlife = null
 	var person := _cazador(sim)
-	sim._hunt_step(person, 1.0)
-	assert_eq(sim.hunts.size(), 0, "sin fauna no hay cacería que levantar")
+	sim.caceria._hunt_step(person, 1.0)
+	assert_eq(sim.caceria.hunts.size(), 0, "sin fauna no hay cacería que levantar")
+
+# --- la caceria de varios dias -------------------------------------------
+#
+# Una pieza grande no se cobra entre el desayuno y la cena. Antes la caza era
+# de jornada y se notaba: medido con `CazaEscalonProbe`, ochenta y cuatro
+# caceria levantadas en seis dias y una sola cobrada.
+
+func test_el_cazador_con_pieza_levantada_duerme_fuera() -> void:
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	sim.caceria.wildlife = WildlifeHerds.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.job = Profession.Job.CAZA
+	person.position = Vector3(900.0, 0.0, 900.0)
+	sim.people = [person]
+
+	assert_false(sim._camps_out(person, false),
+		"sin pieza levantada no hay por que dormir fuera")
+
+	var hunt := Hunt.new()
+	hunt.crew = [person]
+	sim.caceria.hunts.append(hunt)
+	assert_true(sim._camps_out(person, false),
+		"con la pieza levantada se sigue el rastro y se duerme al raso")
+	sim.free()
+
+
+func test_el_de_casa_no_acampa_por_muy_cazador_que_sea() -> void:
+	# Las tres condiciones son las mismas para todos, y la primera es estar
+	# LEJOS: dormir fuera a doscientos metros del abrigo es dormir mal por gusto.
+	var sim := SettlementSim.new()
+	sim.home_position = Vector3.ZERO
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.job = Profession.Job.CAZA
+	person.position = Vector3(10.0, 0.0, 10.0)
+	sim.people = [person]
+	var hunt := Hunt.new()
+	hunt.crew = [person]
+	sim.caceria.hunts.append(hunt)
+	assert_false(sim._camps_out(person, false),
+		"en la puerta de casa no se acampa")
+	sim.free()
+
+
+func test_amanecer_es_rastro_nuevo() -> void:
+	# El presupuesto de acecho es POR JORNADA. Si fuera por caceria, una que
+	# dura dos dias llegaria al segundo con las dos horas y media ya gastadas y
+	# se moriria de vieja: las caceria de varios dias serian imposibles por
+	# construccion, no por dificiles.
+	var sim := SettlementSim.new()
+	var hunt := Hunt.new()
+	hunt.spent = Hunt.ACECHO_HORAS
+	hunt.chased = Hunt.FUELLE_HORAS
+	hunt.counted_day = 1
+	sim.day = 2
+	sim.caceria._reset_del_dia(hunt)
+	assert_eq(hunt.spent, 0.0, "el acecho empieza de cero")
+	assert_eq(hunt.chased, 0.0, "y el fuelle tambien")
+	assert_eq(hunt.days_open, 2, "y se apunta que lleva dos jornadas")
+
+	# Y en el mismo dia NO se reinicia, o el acecho no acabaria nunca.
+	hunt.spent = 1.0
+	sim.caceria._reset_del_dia(hunt)
+	assert_eq(hunt.spent, 1.0, "dentro del mismo dia la cuenta sigue")
+	sim.free()
+
+
+func test_el_fuelle_da_para_mas_de_un_lance() -> void:
+	# El noventa y cinco por ciento de las caceria acababan en un lance
+	# fallado, y no por punteria: un fallo pasaba a persecucion y el fuelle se
+	# acababa antes del segundo tiro.
+	assert_gt(Hunt.FUELLE_HORAS, Hunt.ACECHO_HORAS * 0.5,
+		"perseguir tiene que dar para volver a ponerse a tiro")
+
+
+# --- lo que la banda decide antes de salir --------------------------------
+#
+# «La poblacion no es tonta, y saben si tienen alguna posibilidad de cazar algo
+# rentable»: nadie se va cinco jornadas detras de un uro con las manos vacias.
+
+func test_las_piezas_por_jornada_salen_de_las_raciones() -> void:
+	# Las raciones de la pieza MANDAN -[Fauna]- y las piezas se deducen. La
+	# comprobacion es que multiplicar una por otra devuelva la jornada
+	# perfecta: si alguien vuelve a poner las piezas a mano, esto se cae.
+	for rama: int in [Profession.Speciality.CAZA_MAYOR,
+			Profession.Speciality.CAZA_MENOR]:
+		var speciality := rama as Profession.Speciality
+		var piezas := Hunting.pieces_per_day(speciality, null)
+		var por_pieza := Hunting.raciones_por_pieza(speciality)
+		assert_near(piezas * por_pieza,
+			float(Hunting.RACIONES_POR_JORNADA_PERFECTA[rama]), 0.01,
+			"piezas x raciones por pieza = la jornada perfecta")
+
+
+func test_una_pieza_mayor_vale_mas_que_una_menor() -> void:
+	# Y por eso son menos piezas al dia: es la misma jornada contada en la
+	# unidad que toca.
+	var mayor := Hunting.raciones_por_pieza(Profession.Speciality.CAZA_MAYOR)
+	var menor := Hunting.raciones_por_pieza(Profession.Speciality.CAZA_MENOR)
+	assert_gt(mayor, menor, "una pieza mayor da mas raciones")
+	assert_lt(Hunting.pieces_per_day(Profession.Speciality.CAZA_MAYOR, null),
+		Hunting.pieces_per_day(Profession.Speciality.CAZA_MENOR, null),
+		"y por eso se cobran menos piezas mayores al dia")
+
+
+func test_sin_arma_no_se_espera_nada_de_la_pieza_grande() -> void:
+	# A un uro no se le entra con las manos vacias: `Fauna.huntable_with` cierra
+	# la puerta y la cuenta tiene que verlo, no estimar por encima.
+	var sim := _sim([Tool.Kind.LASCA])
+	var person := _cazador(sim)
+	assert_eq(sim.caceria.raciones_esperadas(person,
+		Profession.Speciality.CAZA_MAYOR), 0.0,
+		"sin azagaya, la caza mayor no promete nada")
+	assert_false(sim._worth_sleeping_out(person),
+		"y por eso no se duerme fuera")
+
+
+func test_con_azagaya_la_pieza_grande_ya_promete() -> void:
+	var sim := _sim([Tool.Kind.AZAGAYA, Tool.Kind.LASCA])
+	var person := _cazador(sim)
+	assert_gt(sim.caceria.raciones_esperadas(person,
+		Profession.Speciality.CAZA_MAYOR), 0.0,
+		"con azagaya en el abrigo si hay algo que esperar")
+
+
+func test_la_cuadrilla_sube_lo_que_se_espera_de_la_pieza_grande() -> void:
+	# «Con azagayas y 3 personas igual si que les renta intentarlo». La
+	# cuadrilla entra por `Hunting.crew_factor`, que es donde ya estaba.
+	var solo := _sim([Tool.Kind.AZAGAYA, Tool.Kind.LASCA])
+	var uno := _cazador(solo)
+	var solitario := solo.caceria.raciones_esperadas(uno,
+		Profession.Speciality.CAZA_MAYOR)
+
+	var grupo := _sim([Tool.Kind.AZAGAYA, Tool.Kind.LASCA])
+	var primero := _cazador(grupo)
+	_cazador(grupo)
+	_cazador(grupo)
+	var acompanado := grupo.caceria.raciones_esperadas(primero,
+		Profession.Speciality.CAZA_MAYOR)
+
+	assert_gt(acompanado, solitario,
+		"tres manos esperan mas que una de la misma pieza")

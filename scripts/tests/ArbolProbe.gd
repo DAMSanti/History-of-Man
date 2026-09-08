@@ -176,6 +176,32 @@ func _init() -> void:
 
 	# La barra de arriba: reloj, banda e invierno juntos.
 	print("")
+	# Se mete carne y pescado fresco A PROPOSITO: en una partida normal la banda
+	# se lo come segun entra, y sin nada perecedero en el abrigo no hay merma
+	# que enseñar. Lo que se viene a comprobar es que la cifra LLEGA a la barra.
+	sim.store.add(Materia.Kind.CARNE, 60.0)
+	sim.store.add(Materia.Kind.PESCADO, 60.0)
+	sim.time_scale = 20.0
+	for i in range(700):
+		await process_frame
+	sim.time_scale = 0.0
+	for i in range(20):
+		await process_frame
+	print("se pudrio ayer: %.2f raciones · %s" % [
+		sim.spoiled_rations_today, str(sim.spoiled_today)])
+	print("perecedero en el abrigo: carne %.1f · pescado %.1f · baya %.1f" % [
+		sim.store.amount(Materia.Kind.CARNE), sim.store.amount(Materia.Kind.PESCADO),
+		sim.store.amount(Materia.Kind.BAYA)])
+	# Y el camino del dato, que es lo que se viene a comprobar: en esta partida
+	# la banda se come lo perecedero antes de que se pudra -no sobra nada-, asi
+	# que la cifra se pone a mano y se mira si la barra la recoge.
+	sim.spoiled_rations_today = 3.7
+	ui._update_band_gauge()
+	print("con merma puesta a mano: %s" % ui._band_label.text)
+	sim.spoiled_rations_today = 0.0
+	ui._update_band_gauge()
+	print("y sin ella:              %s" % ui._band_label.text)
+
 	print("=== LA BARRA DE ARRIBA ===")
 	for line: String in _hud_lines(ui):
 		print("   %s" % line)

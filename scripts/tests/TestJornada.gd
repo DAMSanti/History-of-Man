@@ -41,7 +41,7 @@ func test_de_dia_se_trabaja_este_donde_este() -> void:
 	var sim := _sim()
 	var person := _person(sim, Vector3(900.0, 0.0, 900.0))
 	sim.hour = 12.0
-	assert_true(sim._can_work_at_night(person), "a mediodia se trabaja")
+	assert_true(sim.hogar._can_work_at_night(person), "a mediodia se trabaja")
 
 
 func test_anochecido_se_trabaja_en_el_abrigo_con_el_hogar_encendido() -> void:
@@ -49,7 +49,7 @@ func test_anochecido_se_trabaja_en_el_abrigo_con_el_hogar_encendido() -> void:
 	var person := _person(sim)
 	sim.hour = SettlementSim.HORA_REGRESO + 0.5
 	sim.hearth_lit = true
-	assert_true(sim._can_work_at_night(person),
+	assert_true(sim.hogar._can_work_at_night(person),
 		"al fuego y en casa se sigue trabajando de noche")
 
 
@@ -58,7 +58,7 @@ func test_anochecido_sin_hogar_no_se_trabaja() -> void:
 	var person := _person(sim)
 	sim.hour = SettlementSim.HORA_REGRESO + 0.5
 	sim.hearth_lit = false
-	assert_false(sim._can_work_at_night(person),
+	assert_false(sim.hogar._can_work_at_night(person),
 		"sin fuego no hay luz con la que trabajar")
 
 
@@ -67,7 +67,7 @@ func test_anochecido_fuera_de_casa_no_se_trabaja() -> void:
 	var person := _person(sim, Vector3(900.0, 0.0, 900.0))
 	sim.hour = SettlementSim.HORA_REGRESO + 0.5
 	sim.hearth_lit = true
-	assert_false(sim._can_work_at_night(person),
+	assert_false(sim.hogar._can_work_at_night(person),
 		"el fuego del abrigo no alumbra a un kilometro")
 
 
@@ -77,7 +77,7 @@ func test_a_la_hora_de_dormir_se_acaba_para_todos() -> void:
 	var person := _person(sim)
 	sim.hour = SettlementSim.HORA_DORMIR
 	sim.hearth_lit = true
-	assert_false(sim._can_work_at_night(person),
+	assert_false(sim.hogar._can_work_at_night(person),
 		"a la hora de dormir se acaba, haya fuego o no")
 
 
@@ -233,7 +233,7 @@ func test_con_trampas_puestas_se_sale_aunque_no_haya_material() -> void:
 	# Levantar lo que ya esta armado es la mitad del oficio y no cuesta nada.
 	var sim := _sim()
 	sim.store = Storehouse.new()
-	sim.traps.append(Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "Beru"))
+	sim.trampas.traps.append(Trap.create(Trap.Kind.LAZO, Vector3.ZERO, 1, "Beru"))
 	assert_true(sim._speciality_can_work(Profession.Speciality.TRAMPAS),
 		"a recorrer la linea se sale igual")
 
@@ -249,7 +249,7 @@ func test_produce_se_mide_en_el_mismo_periodo_que_el_gasto() -> void:
 	# Un mes entero produciendo dos al dia.
 	for i in range(SettlementSim.CONSUMO_DIAS):
 		sim.note_production(Materia.Kind.LENA, 2.0)
-		sim._roll_production()
+		sim.tajo._roll_production()
 	assert_near(sim.production_of(Materia.Kind.LENA),
 		2.0 * float(SettlementSim.CONSUMO_DIAS), 2.5,
 		"el mes suma lo de los treinta dias, no la media de uno")
@@ -262,7 +262,7 @@ func test_produce_se_proyecta_mientras_no_haya_mes_entero() -> void:
 	sim.store = Storehouse.new()
 	for i in range(3):
 		sim.note_production(Materia.Kind.LENA, 2.0)
-		sim._roll_production()
+		sim.tajo._roll_production()
 	assert_gt(sim.production_of(Materia.Kind.LENA), 40.0,
 		"tres dias a dos proyectan a mes, no se quedan en seis")
 
@@ -272,7 +272,7 @@ func test_el_registro_de_produccion_no_crece_sin_fin() -> void:
 	sim.store = Storehouse.new()
 	for i in range(SettlementSim.CONSUMO_DIAS * 3):
 		sim.note_production(Materia.Kind.LENA, 1.0)
-		sim._roll_production()
+		sim.tajo._roll_production()
 	assert_eq(sim.produced_days.size(), SettlementSim.CONSUMO_DIAS,
 		"solo se guardan los dias del periodo")
 
@@ -467,12 +467,12 @@ func test_el_recolector_no_trae_caza_ni_pesca() -> void:
 	# En las tablas ya no habia carne bajo recoleccion, pero eso era una
 	# propiedad de los DATOS: cualquier extra de temporada podia colar una
 	# pieza en el zurron de quien salio a por avellanas.
-	for kind: int in SettlementSim.SOLO_DE_CAZA_O_PESCA:
+	for kind: int in Tajo.SOLO_DE_CAZA_O_PESCA:
 		assert_true(Materia.is_food(kind as Materia.Kind),
 			"lo que se veta es comida de caza o pesca, no materia prima")
-	assert_false(SettlementSim.SOLO_DE_CAZA_O_PESCA.has(Materia.Kind.HUEVO),
+	assert_false(Tajo.SOLO_DE_CAZA_O_PESCA.has(Materia.Kind.HUEVO),
 		"el huevo se coge agachandose: eso es recoleccion")
-	assert_false(SettlementSim.SOLO_DE_CAZA_O_PESCA.has(Materia.Kind.CARACOL),
+	assert_false(Tajo.SOLO_DE_CAZA_O_PESCA.has(Materia.Kind.CARACOL),
 		"y el caracol tambien")
 
 

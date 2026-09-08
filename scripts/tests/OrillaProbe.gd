@@ -170,7 +170,7 @@ func _run() -> void:
 	for person: Inhabitant in elegidos:
 		if person.activity == Subsistence.Activity.PESCA:
 			print("  _best_known_spot(%s) = %v" % [person.given_name,
-				sim._best_known_spot(person)])
+				sim.tajo._best_known_spot(person)])
 
 	print("=== DONDE ESTAN Y QUE SACAN ===")
 	for person: Inhabitant in elegidos:

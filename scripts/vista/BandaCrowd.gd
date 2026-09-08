@@ -45,7 +45,7 @@ const CLIPS := {
 ## trae el nodo «Human Armature» del FBX. Es de origen, no un número puesto
 ## a ojo -ver `models/people/source/Animated Human.fbx`, hereda escala de
 ## exportar el rig en centímetros desde Blender-, y se corrige aquí a la
-## escala real del juego (`REVAMP_GRAFICO.md` §4: 1,70 m).
+## escala real del juego (`docs/REVAMP_GRAFICO.md` §4: 1,70 m).
 const _MEASURED_BAKE_HEIGHT_M := 5.535281
 const TARGET_HEIGHT_M := 1.70
 const HEIGHT_SCALE := TARGET_HEIGHT_M / _MEASURED_BAKE_HEIGHT_M
@@ -60,7 +60,7 @@ const AGE_SCALE := {
 }
 
 ## Qué estado de [Inhabitant] usa qué clip. `DURMIENDO` y `COMIENDO` caen en
-## reposo porque no hay clip propio todavía -ver REVAMP_GRAFICO.md, G6-;
+## reposo porque no hay clip propio todavía -ver docs/REVAMP_GRAFICO.md, G6-;
 ## cuando lo haya, sólo cambia esta tabla.
 const STATE_CLIP := {
 	0: "idle",  # DURMIENDO

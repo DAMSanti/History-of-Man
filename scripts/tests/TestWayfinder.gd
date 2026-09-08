@@ -654,7 +654,7 @@ func test_el_hogar_y_el_taller_cuentan_como_trabajo() -> void:
 		Profession.Job.MANUFACTURA]:
 		var person := Inhabitant.create(0, Vector3.ZERO, rng)
 		person.job = job
-		assert_true(sim._works_at_camp(person),
+		assert_true(sim.hogar._works_at_camp(person),
 			"%s trabaja en el abrigo" % Profession.job_name(job))
 
 
@@ -667,7 +667,7 @@ func test_el_de_monte_no_trabaja_en_el_abrigo() -> void:
 		Profession.Job.EXPLORACION]:
 		var person := Inhabitant.create(0, Vector3.ZERO, rng)
 		person.job = job
-		assert_false(sim._works_at_camp(person),
+		assert_false(sim.hogar._works_at_camp(person),
 			"%s tiene su tajo fuera" % Profession.job_name(job))
 
 
@@ -684,7 +684,7 @@ func test_el_taller_no_se_echa_a_andar_al_destino_viejo() -> void:
 	person.target = Vector3(900.0, 0.0, 900.0)
 	person.route = PackedVector3Array([person.target])
 	person.route_step = 0
-	sim._camp_work(person, 0.0)
+	sim.hogar._camp_work(person, 0.0)
 	assert_eq(person.target, person.position, "se le para el paso")
 	assert_eq(person.route.size(), 0, "y se le tira el camino viejo")
 

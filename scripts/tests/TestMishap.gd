@@ -157,7 +157,7 @@ func test_la_carencia_multiplica_el_riesgo_de_verdad() -> void:
 	assert_gt(SettlementSim.VIVAC_RIESGO, 1.5,
 		"si el multiplicador fuera flojo, llevar el vivac no cambiaria nada")
 	# Con las dos cosas de menos, el riesgo de la jornada se multiplica por el
-	# cuadrado: es la cuenta que hace `_check_mishaps`.
+	# cuadrado: es la cuenta que hace `Percances._check_mishaps`.
 	assert_gt(pow(SettlementSim.VIVAC_RIESGO, 2.0), 4.0,
 		"dormir al raso sin fuego y lejos de casa tiene que doler")
 
@@ -172,7 +172,7 @@ func test_un_percance_con_margen_pide_decision() -> void:
 	var caught: Array[Moment] = []
 	sim.moment_raised.connect(func(m: Moment) -> void: caught.append(m))
 
-	sim._offer_mishap_choice(person, Mishap.Kind.TORCEDURA, "en el canchal")
+	sim.percances._offer_mishap_choice(person, Mishap.Kind.TORCEDURA, "en el canchal")
 	assert_eq(caught.size(), 1, "salta el momento")
 	assert_true(caught[0].is_decision(), "y trae decision")
 	assert_eq(caught[0].who, person, "con nombre y cara, no una cifra")
@@ -184,7 +184,7 @@ func test_aguantar_sale_mas_caro_que_volver() -> void:
 	person.hurt_days = Mishap.SPRAIN_DAYS
 	var caught: Array[Moment] = []
 	sim.moment_raised.connect(func(m: Moment) -> void: caught.append(m))
-	sim._offer_mishap_choice(person, Mishap.Kind.TORCEDURA, "en el canchal")
+	sim.percances._offer_mishap_choice(person, Mishap.Kind.TORCEDURA, "en el canchal")
 
 	# La segunda opcion es aguantar y seguir
 	var aguantar: Callable = caught[0].options[1]["on_pick"]
