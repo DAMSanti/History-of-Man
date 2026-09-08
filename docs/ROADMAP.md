@@ -161,8 +161,8 @@ priorización sobre el árbol tecnológico, no una vía paralela que le compita.
 Moderna. Cada una es **datos**: materiales, procesos y edificios disponibles,
 más las técnicas que hay que externalizar para cerrarla.
 
-Están escritas una a una —salieron once, no diez— en
-[EPOCAS.md](EPOCAS.md), con el hito que cierra cada una.
+Están escritas una a una en [EPOCAS.md](EPOCAS.md), con el hito que cierra cada
+una y la regla que decide qué merece ser época y qué no.
 
 **El tiempo avanza por hitos, no por calendario.** El Paleolítico es el 99,4 %
 del intervalo real; si el tiempo de juego fuese proporcional, la partida entera

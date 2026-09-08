@@ -791,11 +791,14 @@ func test_quien_no_ha_batido_cerca_no_se_lleva_el_hito() -> void:
 		"batir lejos de donde nace el paraje no cuenta como haberlo abierto")
 
 
-func test_el_andador_y_la_rejilla_dicen_lo_mismo() -> void:
+func test_el_andador_y_la_rejilla_dicen_lo_mismo_EN_SECO() -> void:
 	# La raiz de los tres atascos: el andador miraba el punto bajo los pies y
 	# el planificador la celda entera con cinco muestras. Los dos tenian razon
 	# y no se ponian de acuerdo, asi que habia sitios donde una persona podia
 	# estar y que para la rejilla no existian.
+	#
+	# EN SECO siguen diciendo lo mismo, que es lo que arreglaba aquello. Donde
+	# ya no -y a proposito- es en el agua: ver la prueba de abajo.
 	var sim := _sim_on_fake()
 	var grid := sim.marcha._navgrid()
 
@@ -803,9 +806,46 @@ func test_el_andador_y_la_rejilla_dicen_lo_mismo() -> void:
 		var point := Vector3(
 			sim._rng.randf_range(60.0, 1980.0), 0.0,
 			sim._rng.randf_range(60.0, 1980.0))
+		if sim._terrain.crossing_difficulty_at(point) > 0.0:
+			continue
 		assert_eq(sim.marcha._can_step_into(point),
 			grid.cost[grid.cell_of(point)] > Navgrid.BLOCKED,
 			"en %s los dos dicen lo mismo" % point)
+
+
+func test_en_el_agua_el_andador_es_mas_estricto_que_la_rejilla() -> void:
+	# Y aqui SI se separan, que es el arreglo de «hay algun poblador que ha
+	# cruzado el rio y no se por donde».
+	#
+	# `Navgrid` abre una celda de cuarenta metros en cuanto encuentra una linea
+	# vadeable dentro. Es correcto para PLANEAR -por ahi se cruza- pero quien
+	# anda no va por esa linea: va por donde le lleve la ruta. Con la rejilla
+	# como unica autoridad, cruzaba por lo hondo dentro de una celda abierta
+	# por un vado que estaba tres metros mas alla.
+	var sim := _sim_on_fake()
+	var grid := sim.marcha._navgrid()
+
+	# Se barre la BANDA del rio, no solo su eje: las celdas abiertas con agua
+	# honda dentro estan en la ORILLA -donde la celda de cuarenta metros pilla
+	# tierra y agua a la vez- y no en mitad del cauce, que la rejilla cierra
+	# entero y con razon.
+	var abiertas_pero_hondas := 0
+	for x in range(80, 1980, 40):
+		for dz in range(-FakeTerrain.RIVER_HALF, FakeTerrain.RIVER_HALF, 8):
+			var point := Vector3(float(x), 0.0,
+				FakeTerrain.RIVER_Z + float(dz))
+			var calado: float = sim._terrain.crossing_difficulty_at(point)
+			if Hydrography.can_cross(calado, false, false):
+				continue
+			if grid.cost[grid.cell_of(point)] <= Navgrid.BLOCKED:
+				continue
+			abiertas_pero_hondas += 1
+			assert_false(sim.marcha._can_step_into(point),
+				"en %s la celda esta abierta pero el punto es hondo: no se pisa"
+					% point)
+	assert_gt(float(abiertas_pero_hondas), 0.0,
+		"y de verdad hay celdas abiertas con puntos hondos dentro, que es lo "
+		+ "que hacia falta demostrar")
 
 
 # ------------------ dias de avituallamiento, por especialidad y destreza --

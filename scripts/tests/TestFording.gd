@@ -206,3 +206,33 @@ func test_ni_el_puente_ni_la_barca_hacen_andar_sobre_el_agua() -> void:
 	# grandes: un puente de troncos no cruza una ria.
 	assert_false(Hydrography.can_cross(1.0, false, true),
 		"un puente de la epoca no salva cualquier anchura")
+
+
+# ------------------------------- por donde NO se cruza, no se cruza --
+
+func test_no_se_pisa_agua_honda_aunque_la_celda_este_abierta() -> void:
+	# LA QUEJA: «hay algun poblador que ha cruzado el rio y no se por donde».
+	#
+	# `Navgrid` abre una celda de cuarenta metros en cuanto encuentra una linea
+	# vadeable dentro, y eso es correcto para PLANEAR: por ahi se cruza. Pero
+	# quien anda no va por esa linea, va por donde le lleve la ruta, y con la
+	# rejilla como unica autoridad cruzaba por lo hondo dentro de una celda
+	# abierta por un vado que estaba tres metros mas alla.
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	var dentro := Vector3(200.0, 0.0, FakeTerrain.RIVER_Z)
+	var calado := sim._terrain.crossing_difficulty_at(dentro)
+	assert_false(Hydrography.can_cross(calado, false, false),
+		"el punto de prueba es agua que NO se vadea")
+	assert_false(sim.marcha._can_step_into(dentro),
+		"y por ahi no se pisa, diga lo que diga la celda")
+
+
+func test_el_vado_si_se_pisa() -> void:
+	# Y la otra mitad: cerrar el agua entera dejaria a la banda encerrada en su
+	# orilla. Lo que se vadea se pisa.
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	var seco := Vector3(200.0, 0.0, FakeTerrain.RIVER_Z + 300.0)
+	assert_true(sim.marcha._can_step_into(seco),
+		"por tierra firme se pisa")

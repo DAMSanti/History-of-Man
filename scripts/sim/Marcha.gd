@@ -371,7 +371,30 @@ func _can_step_into(world_position: Vector3) -> bool:
 	# exacto, con «aqui CERRADO, el andador pasa: si».
 	var grid := _navgrid()
 	if grid.is_ready():
-		return grid.cost[grid.cell_of(world_position)] > Navgrid.BLOCKED
+		if grid.cost[grid.cell_of(world_position)] <= Navgrid.BLOCKED:
+			return false
+		# Y EL AGUA, UNA VEZ MAS Y EN ESTE PUNTO. La rejilla contesta otra
+		# pregunta: si la CELDA de cuarenta metros tiene paso. La abre en
+		# cuanto encuentra una linea vadeable dentro -ver [Navgrid._has_ford]-
+		# y eso es correcto para PLANEAR, porque significa que por ahi se
+		# cruza.
+		#
+		# Pero quien anda no va por esa linea: va por donde le lleve la ruta. Y
+		# con la rejilla como unica autoridad, cruzaba el rio POR LO HONDO
+		# dentro de una celda abierta por un vado que estaba tres metros mas
+		# alla. Es la queja del jugador -«hay algun poblador que ha cruzado el
+		# rio y no se por donde»- y tambien por que la capa de la tecla N
+		# pintaba andable una casilla que al pincharla decia que no lo era: no
+		# se contradecian, contestaban a cosas distintas.
+		#
+		# Solo el AGUA, y no la pendiente: mirar tambien la pendiente punto a
+		# punto es lo que dejaba gente de pie en sitios que para la rejilla no
+		# existian, y de ahi salian los atascos. Ver el comentario de arriba.
+		# Si el paso se moja, `_tick_step` ya sabe apartarse a un lado y
+		# replantear: se arrima al vado en vez de meterse en la poza.
+		return Hydrography.can_cross(
+			sim._terrain.crossing_difficulty_at(world_position),
+			sim.has_boat, sim.has_bridge)
 
 	var slope := sim._terrain.get_slope_at(world_position)
 	return Traversal.is_passable(slope,

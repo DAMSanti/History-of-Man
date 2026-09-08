@@ -1434,8 +1434,12 @@ func _tecla(event: InputEventKey) -> void:
 			minimapa._cycle_overlay()
 		KEY_N:
 			# La capa de navegacion: rojo lo que no se pisa, naranja lo que
-			# se pisa pero no se alcanza desde el abrigo. Es la unica forma
-			# de comprobar si la rejilla esta acertando.
+			# se pisa pero no se alcanza desde el abrigo, y AZUL lo que solo
+			# se pasa por el vado. El azul hacia falta: la capa dejaba sin
+			# pintar una celda del rio abierta por su vado -o sea igual que un
+			# prado seco- y al pinchar esa casilla la ficha decia que no se
+			# podia pasar. Es la unica forma de comprobar si la rejilla esta
+			# acertando.
 			if nav_overlay and sim:
 				var on := nav_overlay.toggle(sim.navgrid(),
 					sim.home_position, terrain)

@@ -46,24 +46,22 @@ func _init() -> void:
 	# decia «lleva 0.0» de los quince y no era verdad, era la hora.
 	var primero: int = sim.day
 	var visto := -1
+	var mojados := 0
 	var antes := _total_en_despensa(sim)
 	while sim.day < primero + dias:
 		await process_frame
+		# En CADA cuadro, no solo a mediodia: cruzar el rio dura unos segundos
+		# y mirando una vez al dia no se ve nunca.
+		mojados += _pisadas_en_lo_hondo(sim)
 		if sim.day == visto or sim.hour < 14.0 or sim.hour > 15.0:
 			continue
 		visto = sim.day
 		_parte_del_dia(sim, antes)
 		antes = _total_en_despensa(sim)
 
-
-func _total_en_despensa(sim: Node) -> float:
-	var total := 0.0
-	for kind: int in Materia.Kind.values():
-		total += sim.store.amount(kind as Materia.Kind)
-	return total
-
 	print("")
 	print("--- Y AL CABO ---")
+	print("pisadas en agua que no se vadea: %d" % mojados)
 	print("parajes conocidos: %d" % sim.parajes.list.size())
 	for paraje: Paraje in sim.parajes.list:
 		print("   %-26s %-14s a %4.0f m · sabido %.0f %%" % [
@@ -170,3 +168,24 @@ func _repartir(sim: Node) -> void:
 			continue
 		person.set_priority(Profession.task_id(Profession.Job.HOGAR), 1)
 	sim.apply_priorities()
+
+
+## Cuántas veces alguien ha puesto el pie en agua que no se vadea.
+##
+## Es la comprobación de «hay algún poblador que ha cruzado el río y no sé por
+## dónde»: si esto sale por encima de cero, alguien está andando por lo hondo.
+func _pisadas_en_lo_hondo(sim: Node) -> int:
+	var cuantas := 0
+	for person: Inhabitant in sim.people:
+		var calado: float = sim._terrain.crossing_difficulty_at(person.position)
+		if not Hydrography.can_cross(calado, sim.has_boat, sim.has_bridge):
+			cuantas += 1
+	return cuantas
+
+
+## Lo que hay en la despensa ahora mismo, todo junto.
+func _total_en_despensa(sim: Node) -> float:
+	var total := 0.0
+	for kind: int in Materia.Kind.values():
+		total += sim.store.amount(kind as Materia.Kind)
+	return total

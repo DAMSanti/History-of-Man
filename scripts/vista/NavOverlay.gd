@@ -31,6 +31,23 @@ const FILL := 0.88
 const BLOCKED_COLOUR := Color(0.85, 0.20, 0.16, 0.42)
 const CUT_OFF_COLOUR := Color(0.95, 0.62, 0.15, 0.42)
 
+## La celda que SOLO se pasa por el vado.
+##
+## Hacía falta un tercer color porque la capa decía media verdad. [Navgrid]
+## abre una celda de cuarenta metros en cuanto encuentra una línea vadeable
+## dentro —lo cual es correcto: por ahí se cruza— y la capa la dejaba sin
+## pintar, o sea igual que un prado seco. Pinchando esa misma casilla, la ficha
+## del terreno decía «no se puede pasar por aquí», porque la ficha mira EL
+## PUNTO y la capa miraba LA CELDA. No se contradecían: contestaban a cosas
+## distintas y ninguna lo decía.
+##
+## Ahora se ve: azul es «se cruza, pero mojándose y por donde el río deja».
+const FORD_COLOUR := Color(0.25, 0.55, 0.90, 0.38)
+
+## A partir de cuánta agua en el centro de la celda se considera que lo que hay
+## es un vado y no suelo seco.
+const MOJADO := 0.02
+
 
 var _shown := false
 
@@ -73,10 +90,17 @@ func _rebuild(grid: Navgrid, home: Vector3, terrain: TerrainGenerator) -> void:
 	# Primero se cuentan las baldosas que hacen falta: un MultiMesh se
 	# dimensiona antes de llenarlo
 	var wanted: Array[int] = []
+	var vados: Dictionary = {}
 	for cell in range(grid.cost.size()):
 		if grid.cost[cell] <= Navgrid.BLOCKED:
 			wanted.append(cell)
 		elif home_area >= 0 and grid.area[cell] != home_area:
+			wanted.append(cell)
+		elif terrain != null and terrain.crossing_difficulty_at(
+				grid.point_of(cell)) > MOJADO:
+			# Abierta, comunicada... y con agua. Es un vado, y decirlo es la
+			# mitad de contestar «¿por dónde ha cruzado ése el río?».
+			vados[cell] = true
 			wanted.append(cell)
 
 	var tile := QuadMesh.new()
@@ -97,9 +121,12 @@ func _rebuild(grid: Navgrid, home: Vector3, terrain: TerrainGenerator) -> void:
 			point.y = terrain.get_height_at(point)
 		point.y += LIFT
 		mesh.set_instance_transform(index, Transform3D(Basis(), point))
-		mesh.set_instance_color(index,
-			BLOCKED_COLOUR if grid.cost[cell] <= Navgrid.BLOCKED
-			else CUT_OFF_COLOUR)
+		var tinte := CUT_OFF_COLOUR
+		if grid.cost[cell] <= Navgrid.BLOCKED:
+			tinte = BLOCKED_COLOUR
+		elif vados.has(cell):
+			tinte = FORD_COLOUR
+		mesh.set_instance_color(index, tinte)
 		index += 1
 
 	multimesh = mesh
