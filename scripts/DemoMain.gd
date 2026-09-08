@@ -1300,7 +1300,7 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 		# nada nuevo: se deja caer el clic al resto de la cadena -persona,
 		# recurso, terreno- en vez de consumirlo aqui sin mas.
 		if paraje and not ui.paraje_is_open(paraje):
-			ui.show_paraje(paraje)
+			ui.sitios.show_paraje(paraje)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1310,7 +1310,7 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 			camera.project_ray_origin(event.position),
 			camera.project_ray_normal(event.position))
 		if not peak.is_empty():
-			ui.show_peak(peak)
+			ui.sitios.show_peak(peak)
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1333,14 +1333,14 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 		var hit := props.pick(camera.project_ray_origin(event.position),
 			camera.project_ray_normal(event.position))
 		if not hit.is_empty():
-			ui.show_resource(hit["kind"] as Materia.Kind, hit["pos"],
+			ui.sitios.show_resource(hit["kind"] as Materia.Kind, hit["pos"],
 				hit["from"] as Subsistence.Activity)
 			get_viewport().set_input_as_handled()
 			return
 
 	var cave := _pick_cave(event.position)
 	if cave and ui:
-		ui.show_feature(cave.feature, cave.pick_position(),
+		ui.sitios.show_feature(cave.feature, cave.pick_position(),
 			sim.home_position if sim else Vector3.ZERO)
 		get_viewport().set_input_as_handled()
 		return
@@ -1362,9 +1362,9 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 			# reabriendo la misma ficha para siempre y el terreno de ahi
 			# dentro dejaba de responder a nada.
 			if here_paraje and not ui.paraje_is_open(here_paraje):
-				ui.show_paraje(here_paraje)
+				ui.sitios.show_paraje(here_paraje)
 			else:
-				ui.show_ground(ground, terrain)
+				ui.sitios.show_ground(ground, terrain)
 			get_viewport().set_input_as_handled()
 			return
 

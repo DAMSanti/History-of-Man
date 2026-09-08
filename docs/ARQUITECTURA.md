@@ -45,12 +45,12 @@ Tamaños al día de hoy, para saber dónde duele:
 
 | carpeta | ficheros | líneas |
 |---|---|---|
-| `tests/` | 104 | 21 081 |
+| `tests/` | 105 | 21 165 |
 | `sim/` | 28 | 14 701 |
-| `vista/` | 22 | 6 845 |
-| `ui/` | 9 | 6 335 |
-| `mundo/` | 11 | 5 047 |
-| `tools/` | 26 | 3 906 |
+| `vista/` | 23 | 7 196 |
+| `ui/` | 11 | 6 460 |
+| `mundo/` | 12 | 5 081 |
+| `tools/` | 26 | 3 931 |
 | `region/` | 7 | 2 936 |
 | `banda/` | 7 | 2 170 |
 | `economia/` | 7 | 1 897 |
@@ -85,9 +85,13 @@ var caceria: Caceria = Caceria.new(self)
 
 Ya salieron así `Caceria`, `Cumbres`, `Despensa`, `Hogar`, `Marcha`, `Nasas`,
 `Percances`, `Pinturas`, `Reconocimiento`, `Reparto`, `Tajo`, `Taller` y
-`Trampas`; y de `GameUI`, `PanelAlmacen`, `PanelRastros` y `PanelTrabajos`.
-`SettlementSim` ha pasado de **9 276 líneas a 3 099** por ese camino, y
-`GameUI` de 5 015 a 3 059.
+`Trampas`; de `GameUI`, `BarraSuperior`, `PanelAlmacen`, `PanelRastros`,
+`PanelSitios` y `PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de
+`DemoMain`, `Minimapa`.
+
+`SettlementSim` ha pasado de **9 276 líneas a 3 100** por ese camino, `GameUI`
+de **5 015 a 1 968**, `TerrainGenerator` de 1 715 a 1 182 y `DemoMain` de 2 007
+a 1 485.
 
 **Reglas del troceado:**
 
