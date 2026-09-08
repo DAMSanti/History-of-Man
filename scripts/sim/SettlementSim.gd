@@ -335,6 +335,13 @@ var lobo: ElLobo = ElLobo.new(self)
 ## El monton de lo que se tira, que no desaparece. Ver [Desechos] y [Conchero].
 var desechos: Desechos = Desechos.new()
 
+## La poblacion de fauna: la caza resta y la cria repone. La pone [DemoMain] al
+## sembrar la fauna. Ver [Poblaciones].
+var poblaciones: Poblaciones = null
+
+## Lo esquilmado se deja descansar y se busca en otra parte. Ver [Barbecho].
+var barbecho: Barbecho = Barbecho.new(self)
+
 
 # --- lo que la despensa comparte con el resto ------------------------------
 
@@ -1783,6 +1790,14 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 	if best != Vector3.ZERO:
 		out.append(best)
 
+	# Si a este oficio no le queda un sitio conocido sin esquilmar, se sale a
+	# BUSCAR. Va lo primero -por delante incluso del mejor conocido- porque en
+	# ese caso el mejor conocido es un sitio muerto. Ver [Barbecho.donde_buscar].
+	if barbecho.sin_sitio(person.activity):
+		var buscando := barbecho.donde_buscar(person.activity, person.position)
+		if buscando != Vector3.ZERO:
+			out.insert(0, buscando)
+
 	for entry: Dictionary in (_known_spots.get(person.activity, []) as Array):
 		if out.size() >= INTENTOS_DE_TAJO:
 			break
@@ -2099,6 +2114,13 @@ func _end_of_day() -> void:
 	store.age(1)
 	desechos.nuevo_dia()
 	lobo.nuevo_dia()
+	# Y revista a los parajes: lo que baja del veinte por ciento se deja
+	# descansar solo, sin que el jugador tenga que estar mirandolo.
+	barbecho.revisar()
+	# Y la fauna cria, con techo. Sin esto la caza solo resta y el valle se
+	# vacia; con crecimiento sin techo, no se vacia nunca.
+	if poblaciones != null:
+		poblaciones.nuevo_dia(GameState.season as Subsistence.Season)
 	despensa._report_spoilage()
 	hogar._burn_hearth()
 

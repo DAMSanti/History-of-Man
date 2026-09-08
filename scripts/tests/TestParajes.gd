@@ -848,7 +848,9 @@ func test_la_lena_no_bautiza_medio_valle() -> void:
 func _esquilmar(field: ResourceField, activity: Subsistence.Activity) -> void:
 	for z in range(field.height):
 		for x in range(field.width):
-			field.deplete_at(activity, field.cell_center(x, z), 999.0)
+			# Por celda y con `take_from_cell`, que es lo que usa el juego:
+			# `deplete_at` era el otro camino y no lo llamaba nadie.
+			field.take_from_cell(activity, z * field.width + x, 999.0)
 
 
 ## Un campo con una mancha de materia prima en una celda que de verdad da una
@@ -934,8 +936,8 @@ func test_la_veta_no_se_repone_ni_estando_a_medias() -> void:
 	var x := int(veta["x"])
 	var z := int(veta["z"])
 	field.freeze(Subsistence.Activity.MATERIA_PRIMA, x, z)
-	field.deplete_at(Subsistence.Activity.MATERIA_PRIMA,
-		field.cell_center(x, z), 0.5)
+	field.take_from_cell(Subsistence.Activity.MATERIA_PRIMA,
+		z * field.width + x, 0.5)
 	var medio := field.abundance_cell(Subsistence.Activity.MATERIA_PRIMA, x, z)
 
 	for _day in range(100):

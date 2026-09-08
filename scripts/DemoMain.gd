@@ -520,6 +520,10 @@ func _levantar_fauna_y_tecnica() -> void:
 	herds.name = "Wildlife"
 	add_child(herds)
 	herds.setup(terrain, field)
+	# Y con ella su poblacion: la caza resta y la cria repone, con techo. Se
+	# monta DESPUES de sembrar la fauna porque el techo sale del censo real.
+	herds.poblaciones = Poblaciones.new(herds)
+	sim.poblaciones = herds.poblaciones
 	# La fauna anda al compas de la partida: en pausa no se mueve. Ver
 	# `WildlifeHerds.sim`.
 	herds.sim = sim

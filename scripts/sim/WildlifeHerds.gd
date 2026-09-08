@@ -823,17 +823,73 @@ func is_spooked(animal: Dictionary) -> bool:
 	return float(animal.get("spooked", 0.0)) > 0.0
 
 
-## Se la ha llevado la banda.
+## Se la ha llevado la banda: la pieza MUERE.
 ##
-## Lo mismo que hace [_catch] con la que se lleva un lobo, y por el mismo
-## motivo: el hueco de su `MultiMesh` no lo ocupa nadie, así que la pieza no
-## desaparece del valle —reaparece en otra querencia de su especie, que es lo
-## que pasa de verdad con una manada—.
+## Antes reaparecía en otra querencia —lo decía el comentario de aquí mismo—, y
+## era defendible mientras la caza no importara porque mantenía el valle
+## poblado. Pero convierte el coto en un grifo: se puede cazar el mismo valle
+## mil años y el censo no se mueve. Ahora el que cae, cae, y lo que repone la
+## manada es la cría. Ver [Poblaciones].
 func taken_by_band(animal: Dictionary) -> void:
 	if animal.is_empty():
 		return
-	animal["spooked"] = 0.0
-	_catch(animal)
+	var especie := String(animal.get("species", ""))
+	retirar(animal)
+	if poblaciones != null:
+		poblaciones.cobrada(especie)
+
+
+## La población de cada especie, que decide quién nace. La pone [DemoMain] al
+## montar la fauna; sin ella la caza sigue restando y no repone nadie.
+var poblaciones: Poblaciones = null
+
+
+## Quita un animal del valle y libera su hueco del `MultiMesh`.
+##
+## El hueco se rellena con el ÚLTIMO de su especie —intercambio y recorte— en
+## vez de dejarlo vacío: los huecos se pintan por índice y `visible_instance_count`
+## corta por el final, así que un agujero en medio dejaría un animal fantasma
+## clavado donde murió el otro.
+func retirar(animal: Dictionary) -> void:
+	var species := String(animal.get("species", ""))
+	if not _groups.has(species):
+		return
+	var slot := int(animal.get("slot", -1))
+	var ultimo: Dictionary = {}
+	for otro: Dictionary in _animals:
+		if String(otro["species"]) != species:
+			continue
+		if int(otro["slot"]) == _counts[species] - 1:
+			ultimo = otro
+	_animals.erase(animal)
+	_predators.erase(animal)
+	if not ultimo.is_empty() and ultimo != animal:
+		ultimo["slot"] = slot
+	_counts[species] = maxi(int(_counts[species]) - 1, 0)
+	var group: AnimatedMultiMeshInstance3D = _groups[species]
+	group.multimesh.visible_instance_count = _counts[species]
+
+
+## Nace uno de esta especie, en la querencia de los suyos. Devuelve si cupo.
+##
+## Nace DONDE HAY MÁS de su especie y no en un sitio al azar: una camada sale
+## donde está la manada, y sembrarla en la otra punta del valle convertiría la
+## cría en teletransporte.
+func nacer(species: String) -> bool:
+	if not _groups.has(species) or _terrain == null:
+		return false
+	var group: AnimatedMultiMeshInstance3D = _groups[species]
+	if int(_counts[species]) >= group.multimesh.instance_count:
+		return false
+	var anchor := Vector3.ZERO
+	for animal: Dictionary in _animals:
+		if String(animal["species"]) == species:
+			anchor = animal["anchor"]
+			break
+	if anchor == Vector3.ZERO:
+		return false
+	_spawn(species, anchor)
+	return true
 
 
 ## Cuántos hay de cada especie. Es lo que rellena la lista del censo sin tener

@@ -161,38 +161,6 @@ func seasonal_abundance_at(activity: Subsistence.Activity, world_position: Vecto
 	return abundance_at(activity, world_position) * seasonal_factor(activity, season)
 
 
-## Gasta parte de lo que hay en una celda y devuelve el rendimiento relativo
-## que quedaba, de 0 a 1.
-##
-## Es lo que hace que un paraje se agote: el segundo recolector del dia saca
-## menos que el primero, y el de la semana que viene menos todavia. Sin esto,
-## anadir gente a un sitio bueno da comida sin limite.
-func deplete_at(activity: Subsistence.Activity, world_position: Vector3,
-		amount: float) -> float:
-	if world_size.x <= 0.0 or world_size.y <= 0.0 or not grids.has(activity):
-		return 1.0
-	if world_position.x < 0.0 or world_position.z < 0.0 			or world_position.x > world_size.x or world_position.z > world_size.y:
-		return 1.0
-
-	var x := clampi(int(world_position.x / world_size.x * float(width)), 0, width - 1)
-	var z := clampi(int(world_position.z / world_size.y * float(height)), 0, height - 1)
-	var i := z * width + x
-
-	var grid: PackedFloat32Array = grids[activity]
-	var capacity := grid[i]
-	if capacities.has(activity):
-		var cap: PackedFloat32Array = capacities[activity]
-		if i < cap.size():
-			capacity = cap[i]
-	if capacity <= 0.001:
-		return 0.0
-
-	var before := grid[i]
-	grid[i] = maxf(before - amount, 0.0)
-	grids[activity] = grid
-	return clampf(before / capacity, 0.0, 1.0)
-
-
 ## Repone lo gastado, con curva logistica: se recupera mas rapido a media carga
 ## que casi vacio, que es como funcionan las poblaciones de verdad. Una mancha
 ## esquilmada tarda desproporcionadamente en volver.

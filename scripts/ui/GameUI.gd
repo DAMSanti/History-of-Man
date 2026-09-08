@@ -126,6 +126,9 @@ var sitios: PanelSitios = PanelSitios.new(self)
 ## Los oficios que hay y quien los ejerce. Ver [PanelOficios].
 var oficios: PanelOficios = PanelOficios.new(self)
 
+## Lo que la banda ha PUESTO en el valle. Ver [PanelObras].
+var obras: PanelObras = PanelObras.new(self)
+
 ## Lo que sabe hacer cada oficio y su arbol. Ver [PanelTecnicas].
 var tecnicas: PanelTecnicas = PanelTecnicas.new(self)
 
@@ -239,6 +242,7 @@ func _process(_delta: float) -> void:
 			"trabajos": show_jobs()
 			"banda": show_band()
 			"tecnicas": tecnicas.show_tech()
+			"obras": obras.show_obras()
 			"oficios": oficios.show_professions()
 			"territorio": show_territory()
 			"cronica": show_lore()
@@ -330,7 +334,8 @@ func _build_taskbar() -> void:
 		["tecnicas", "Técnicas"], ["oficios", "Oficios"],
 		["territorio", "Territorio"],
 		["cronica", "Crónica"], ["parajes", "Parajes"], ["rastros", "Rastros"],
-		["entidades", "Entidades"], ["controles", "Controles"],
+		["entidades", "Entidades"], ["obras", "Obras"],
+		["controles", "Controles"],
 	]:
 		var button := Button.new()
 		button.text = entry[1]
@@ -565,6 +570,7 @@ func _toggle(id: String) -> void:
 		"parajes": sitios.show_places()
 		"rastros": show_trails()
 		"entidades": censo.show_census()
+		"obras": obras.show_obras()
 
 
 func _clear(body: VBoxContainer) -> void:
