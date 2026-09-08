@@ -55,6 +55,9 @@ CC0 de Poly Haven y Quaternius. El detalle está en
 | | |
 |---|---|
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | **cómo está montado y cómo se escribe código aquí** |
+| [docs/ESTADO_DE_LA_SLICE.md](docs/ESTADO_DE_LA_SLICE.md) | **qué hace hoy, qué falta para que sea jugable, medido** |
+| [docs/INTERFAZ.md](docs/INTERFAZ.md) | la piel de la interfaz y cómo cambia con las eras |
+| [docs/PERRO_Y_BELLOTA.md](docs/PERRO_Y_BELLOTA.md) | dos mecánicas de época, listas para implementar |
 | [docs/SLICE_PALEOLITICO.md](docs/SLICE_PALEOLITICO.md) | qué tiene que demostrar la rebanada jugable |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | por dónde va y qué falta |
 | [docs/CAZA_Y_PESCA.md](docs/CAZA_Y_PESCA.md) | el modelo de subsistencia, con sus medidas |
