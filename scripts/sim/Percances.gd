@@ -93,7 +93,7 @@ func _apply_mishap(person: Inhabitant, ground: Traversal.Ground,
 		person.carrying = 0.0
 
 	if Mishap.turns_back(kind):
-		sim._send_to(person, sim.home_position)
+		sim.marcha._send_to(person, sim.home_position)
 		person.state = Inhabitant.State.VOLVIENDO
 		# Un percance cancela la orden: insistir en mandarlos al mismo sitio
 		# despues de que se hayan tenido que volver es el jugador quien lo
@@ -129,7 +129,7 @@ func _offer_mishap_choice(person: Inhabitant, kind: Mishap.Kind,
 			"hint": "Se acaba su salida y pierde lo que fuera a traer, pero se "
 				+ "cura como debe.",
 			"on_pick": func() -> void:
-				sim._send_to(person, sim.home_position)
+				sim.marcha._send_to(person, sim.home_position)
 				person.state = Inhabitant.State.VOLVIENDO,
 		},
 		{

@@ -788,12 +788,12 @@ func test_can_reach_le_hace_caso_a_la_rejilla() -> void:
 	sim.home_position = Vector3(400.0, 200.0, 400.0)
 
 	var cerca := Vector3(460.0, 200.0, 400.0)
-	assert_eq(sim.can_reach(cerca), sim._navgrid().connected(
+	assert_eq(sim.marcha.can_reach(cerca), sim.marcha._navgrid().connected(
 		sim.home_position, cerca),
 		"lo que dice `can_reach` es lo que dice la rejilla")
 
 	var lejos := Vector3(1800.0, 200.0, 1800.0)
-	assert_eq(sim.can_reach(lejos), sim._navgrid().connected(
+	assert_eq(sim.marcha.can_reach(lejos), sim.marcha._navgrid().connected(
 		sim.home_position, lejos),
 		"y también para lo lejano")
 

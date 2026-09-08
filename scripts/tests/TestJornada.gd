@@ -85,16 +85,16 @@ func test_a_la_hora_de_dormir_se_acaba_para_todos() -> void:
 
 func test_andar_lejos_lleva_mas_horas_que_andar_cerca() -> void:
 	var sim := _sim()
-	assert_gt(sim.hours_to_walk(2000.0), sim.hours_to_walk(200.0),
+	assert_gt(sim.marcha.hours_to_walk(2000.0), sim.marcha.hours_to_walk(200.0),
 		"dos kilometros llevan mas que doscientos metros")
-	assert_gt(sim.hours_to_walk(2000.0), 0.0, "y llevan un rato de verdad")
+	assert_gt(sim.marcha.hours_to_walk(2000.0), 0.0, "y llevan un rato de verdad")
 
 
 func test_la_vuelta_de_lejos_se_emprende_antes() -> void:
 	# Es la cuenta que decide cuando dar media vuelta: si volver desde el tajo
 	# lleva mas de lo que queda de luz, ya se va tarde.
 	var sim := _sim()
-	var lejos := sim.hours_to_walk(2000.0)
+	var lejos := sim.marcha.hours_to_walk(2000.0)
 	assert_lt(SettlementSim.HORA_REGRESO - lejos, SettlementSim.HORA_REGRESO,
 		"desde dos kilometros se sale antes que desde la puerta")
 

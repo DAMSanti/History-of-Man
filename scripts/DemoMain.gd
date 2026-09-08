@@ -598,7 +598,7 @@ func _nearest_shore(point: Vector3) -> Vector3:
 	var walkable := func(p: Vector3) -> bool:
 		return terrain.crossing_difficulty_at(p) <= Hydrography.FORD_WADEABLE
 
-	if walkable.call(point) and (sim == null or sim.can_reach(point)):
+	if walkable.call(point) and (sim == null or sim.marcha.can_reach(point)):
 		return point
 
 	# Espiral corta hacia fuera. Se guarda ademas la primera orilla sin mas,
@@ -619,7 +619,7 @@ func _nearest_shore(point: Vector3) -> Vector3:
 				continue
 
 			candidate.y = terrain.get_height_at(candidate)
-			if sim == null or sim.can_reach(candidate):
+			if sim == null or sim.marcha.can_reach(candidate):
 				return candidate
 			if not has_fallback:
 				fallback = candidate
@@ -685,25 +685,25 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 				var score := river * clampf(1.0 - distance / 1200.0, 0.05, 1.0)
 				# A la pesquera se llega por la ribera, asi que el trayecto se
 				# corta antes del cauce en vez de en el radio de llegada
-				if score > best_river_score and sim.can_reach(point, RIVER_APPROACH_M):
+				if score > best_river_score and sim.marcha.can_reach(point, RIVER_APPROACH_M):
 					best_river_score = score
 					best_river = point
 
 			if terrain.is_underwater(point) and distance < best_coast_dist \
-					and sim.can_reach(point, RIVER_APPROACH_M):
+					and sim.marcha.can_reach(point, RIVER_APPROACH_M):
 				best_coast_dist = distance
 				best_coast = point
 
 			# Coto de caza: llano y despejado, ni pegado a casa ni lejisimos
 			var hunt := (1.0 - clampf(slope, 0.0, 1.0)) - absf(distance - 700.0) / 2600.0
-			if hunt > best_hunt_score and sim.can_reach(point):
+			if hunt > best_hunt_score and sim.marcha.can_reach(point):
 				best_hunt_score = hunt
 				best_hunt = point
 
 			# Recoleccion: ladera suave y cerca
 			var gather_fit := 1.0 - clampf(slope * 0.7, 0.0, 1.0)
 			var gather := gather_fit * clampf(1.0 - distance / 1400.0, 0.05, 1.0)
-			if gather > best_gather_score and sim.can_reach(point):
+			if gather > best_gather_score and sim.marcha.can_reach(point):
 				best_gather_score = gather
 				best_gather = point
 
@@ -753,7 +753,7 @@ func _best_work_spot(activity: Subsistence.Activity, near: Vector3) -> Vector3:
 	for candidate: Vector3 in candidates:
 		var spot := _nearest_shore(candidate)
 		spot.y = terrain.get_height_at(spot)
-		if sim.can_reach(spot):
+		if sim.marcha.can_reach(spot):
 			return spot
 	return Vector3.ZERO
 
@@ -770,7 +770,7 @@ func _on_day_passed(_day: int) -> void:
 	# Los parajes se bautizan al cerrar la jornada: es el momento de poner o
 	# quitar sus chapas
 	if paraje_markers and sim:
-		var grid := sim._navgrid()
+		var grid := sim.marcha._navgrid()
 		paraje_markers.refresh(sim.parajes, terrain,
 			func(a: Vector3, b: Vector3) -> bool: return grid.connected(a, b))
 		paraje_markers.refresh_peaks(sim.cumbres.peaks(), terrain)

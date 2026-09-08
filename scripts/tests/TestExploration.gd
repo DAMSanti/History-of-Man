@@ -249,14 +249,14 @@ func test_se_llega_desde_donde_uno_esta_y_no_desde_el_campamento() -> void:
 	person.position = Vector3(700.0, 200.0, 1900.0)
 	var next_door := Vector3(900.0, 200.0, 1900.0)
 
-	assert_true(sim._reachable(person, next_door),
+	assert_true(sim.marcha._reachable(person, next_door),
 		"desde donde esta, ahi al lado se llega andando")
 
 	# Y desde el campamento, en efecto, no se llega: es lo que se preguntaba
 	# antes, y por eso salia que no
 	var at_home := Inhabitant.create(1, sim.home_position, sim._rng)
 	at_home.position = sim.home_position
-	assert_false(sim._reachable(at_home, next_door),
+	assert_false(sim.marcha._reachable(at_home, next_door),
 		"desde el campamento hay un rio de por medio")
 
 
@@ -537,7 +537,7 @@ func test_quien_no_puede_volver_a_casa_duerme_igual() -> void:
 	person.state = Inhabitant.State.VOLVIENDO
 	sim.people = [person]
 
-	assert_false(sim._navgrid().connected(person.position, sim.home_position),
+	assert_false(sim.marcha._navgrid().connected(person.position, sim.home_position),
 		"de verdad no puede volver: hay un rio de por medio")
 
 	for tick in range(120):
@@ -585,13 +585,13 @@ func test_un_camino_gastado_se_vuelve_a_trazar() -> void:
 	person.position = Vector3(1000.0, 200.0, 700.0)
 
 	var far := Vector3(400.0, 200.0, 700.0)
-	sim._send_to(person, far)
+	sim.marcha._send_to(person, far)
 	assert_gt(float(person.route.size()), 0.0, "se le traza camino")
 
 	# Se gasta el camino sin haber llegado, que es lo que pasa de verdad
 	# cuando a alguien lo interrumpen a mitad de trayecto
 	person.route_step = person.route.size()
-	sim._send_to(person, far)
+	sim.marcha._send_to(person, far)
 
 	assert_lt(float(person.route_step), float(person.route.size()),
 		"se le traza otro y vuelve a tener hitos por delante")
@@ -797,13 +797,13 @@ func test_el_andador_y_la_rejilla_dicen_lo_mismo() -> void:
 	# y no se ponian de acuerdo, asi que habia sitios donde una persona podia
 	# estar y que para la rejilla no existian.
 	var sim := _sim_on_fake()
-	var grid := sim._navgrid()
+	var grid := sim.marcha._navgrid()
 
 	for probe in range(60):
 		var point := Vector3(
 			sim._rng.randf_range(60.0, 1980.0), 0.0,
 			sim._rng.randf_range(60.0, 1980.0))
-		assert_eq(sim._can_step_into(point),
+		assert_eq(sim.marcha._can_step_into(point),
 			grid.cost[grid.cell_of(point)] > Navgrid.BLOCKED,
 			"en %s los dos dicen lo mismo" % point)
 
@@ -1117,7 +1117,7 @@ func test_cruzar_un_vado_nuevo_sube_la_destreza_de_expedicion() -> void:
 		Profession.Speciality.EXPEDICION)
 	var before := person.skill_in(task)
 
-	sim._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
+	sim.marcha._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
 
 	assert_gt(person.skill_in(task), before,
 		"encontrar por donde cruzar es un hallazgo, no un paso mas")
@@ -1129,9 +1129,9 @@ func test_el_mismo_vado_no_vuelve_a_contar() -> void:
 	var task := Profession.task_id(Profession.Job.EXPLORACION,
 		Profession.Speciality.EXPEDICION)
 
-	sim._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
+	sim.marcha._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
 	var after_first := person.skill_in(task)
-	sim._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
+	sim.marcha._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
 
 	assert_eq(person.skill_in(task), after_first,
 		"un vado ya conocido no es un hallazgo la segunda vez")
@@ -1147,7 +1147,7 @@ func test_la_batida_no_se_lleva_el_hito_del_vado() -> void:
 		Profession.Speciality.EXPEDICION)
 	var before := person.skill_in(task)
 
-	sim._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
+	sim.marcha._terrain_speed(person, Vector3(1.0, 0.0, 0.0), 1.0)
 
 	assert_eq(person.skill_in(task), before,
 		"una batida de paso no aprende de expedicion por cruzar agua")
@@ -1162,8 +1162,8 @@ func test_saber_nadar_cruza_la_marisma_mas_rapido() -> void:
 	nadador.traits[Inhabitant.Trait.NATACION] = 1.0
 	seco.traits[Inhabitant.Trait.NATACION] = 0.0
 
-	var speed_seco := sim._terrain_speed(seco, Vector3(1.0, 0.0, 0.0))
-	var speed_nadador := sim._terrain_speed(nadador, Vector3(1.0, 0.0, 0.0))
+	var speed_seco := sim.marcha._terrain_speed(seco, Vector3(1.0, 0.0, 0.0))
+	var speed_nadador := sim.marcha._terrain_speed(nadador, Vector3(1.0, 0.0, 0.0))
 
 	assert_gt(speed_nadador, speed_seco, "quien nada cruza el vado mejor que quien no")
 

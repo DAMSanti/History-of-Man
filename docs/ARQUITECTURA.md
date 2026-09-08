@@ -46,11 +46,11 @@ Tamaños al día de hoy, para saber dónde duele:
 | carpeta | ficheros | líneas |
 |---|---|---|
 | `tests/` | 104 | 21 081 |
-| `sim/` | 24 | 14 602 |
+| `sim/` | 28 | 14 701 |
 | `vista/` | 22 | 6 845 |
-| `ui/` | 8 | 6 295 |
+| `ui/` | 9 | 6 335 |
 | `mundo/` | 11 | 5 047 |
-| `tools/` | 24 | 3 625 |
+| `tools/` | 26 | 3 906 |
 | `region/` | 7 | 2 936 |
 | `banda/` | 7 | 2 170 |
 | `economia/` | 7 | 1 897 |
@@ -83,10 +83,11 @@ y en `SettlementSim`:
 var caceria: Caceria = Caceria.new(self)
 ```
 
-Ya salieron así `Caceria`, `Cumbres`, `Hogar`, `Nasas`, `Percances`,
-`Reconocimiento`, `Reparto`, `Tajo` y `Trampas`; y de `GameUI`,
-`PanelAlmacen` y `PanelTrabajos`. `SettlementSim` ha pasado de 9 276 líneas
-a 5 153 por ese camino.
+Ya salieron así `Caceria`, `Cumbres`, `Despensa`, `Hogar`, `Marcha`, `Nasas`,
+`Percances`, `Pinturas`, `Reconocimiento`, `Reparto`, `Tajo`, `Taller` y
+`Trampas`; y de `GameUI`, `PanelAlmacen`, `PanelRastros` y `PanelTrabajos`.
+`SettlementSim` ha pasado de **9 276 líneas a 3 099** por ese camino, y
+`GameUI` de 5 015 a 3 059.
 
 **Reglas del troceado:**
 
@@ -99,8 +100,9 @@ a 5 153 por ese camino.
    Si un sistema merece la pena pero está repartido, se **agrupa primero** en
    un commit que NO cambie una sola letra: se mueven los bloques y se comprueba
    que el texto de cada función es idéntico y que no ha desaparecido ninguna
-   línea. Después, el corte es uno solo. Así se hizo con la marcha, que estaba
-   en doce trozos.
+   línea. Después, el corte es uno solo. Así salió la marcha: estaba en doce
+   trozos, se juntó en un commit que sólo movía líneas, y el corte siguiente
+   fue un único bloque de 820.
 3. **El simulador se queda de fachada.** No se reescriben las llamadas de
    fuera: se dejan pasamanos.
 

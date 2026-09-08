@@ -260,7 +260,7 @@ func _camps_out(person: Inhabitant, mid_survey: bool) -> bool:
 			return false
 		if not _worth_sleeping_out(person):
 			return false
-		var round_trip := sim.hours_to_walk(
+		var round_trip := sim.marcha.hours_to_walk(
 			person.position.distance_to(sim.home_position) * SettlementSim.RODEO_DE_VUELTA) * 2.0
 		return round_trip >= SettlementSim.HORAS_UTILES * VUELTA_QUE_NO_COMPENSA
 	return false
@@ -456,7 +456,7 @@ func _drink_and_thirst(person: Inhabitant, hours: float) -> void:
 	var water := sim.tajo._shore_near(person.position)
 	if not sim.tajo._water_beside(water):
 		water = sim.home_position
-	sim._send_to(person, water)
+	sim.marcha._send_to(person, water)
 	person.state = Inhabitant.State.YENDO
 	person.log_deed(person.current_task(), "a por agua", false)
 

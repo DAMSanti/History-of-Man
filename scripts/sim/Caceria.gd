@@ -773,7 +773,7 @@ func _load_up(person: Inhabitant, hunt: Hunt) -> void:
 
 	if not took:
 		# Va lleno: a casa, y lo que queda espera. Ver [Hunt.DIAS_EN_EL_SUELO].
-		sim._send_to(person, sim.home_position)
+		sim.marcha._send_to(person, sim.home_position)
 		person.state = Inhabitant.State.VOLVIENDO
 		hunt.crew.erase(person)
 		return
@@ -857,7 +857,7 @@ func _follow_quarry(person: Inhabitant, hunt: Hunt, point: Vector3,
 	if hunt.routed_to == Vector3.INF \
 			or hunt.routed_to.distance_to(point) > REPLANTEO_DE_CAZA:
 		hunt.routed_to = point
-		sim._send_to(person, point)
+		sim.marcha._send_to(person, point)
 
 
 ## Andar derecho hacia un punto, sin pedir camino a la rejilla.

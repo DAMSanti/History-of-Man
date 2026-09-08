@@ -130,7 +130,7 @@ func _init() -> void:
 	# El propio juego ya guarda el parte completo de cada atasco: se lee de ahí
 	# en vez de intentar pillarlo en el aire desde fuera.
 	# El informe forense entero, que ya lo sabe escribir el propio juego.
-	print(sim.stuck_report_text())
+	print(sim.marcha.stuck_report_text())
 	quit()
 
 
@@ -139,7 +139,7 @@ func _tell(sim: Node, person: Inhabitant) -> void:
 	var next_point := person.next_waypoint()
 	var to_target := next_point - person.position
 	to_target.y = 0.0
-	var grid: Navgrid = sim._navgrid()
+	var grid: Navgrid = sim.marcha._navgrid()
 	print("%-6s %-11s hito %d/%d a %6.1f m · destino a %6.1f m · %s" % [
 		person.given_name, person.state_name(),
 		person.route_step, person.route.size(), to_target.length(),
@@ -147,8 +147,8 @@ func _tell(sim: Node, person: Inhabitant) -> void:
 		"pisable" if grid.passable(person.position) else "EN SUELO CERRADO"])
 	print("       siguiente hito %s · paso libre %s · bloqueos %d · fatiga %.0f" % [
 		"pisable" if grid.passable(next_point) else "CERRADO",
-		"si" if sim._can_step_into(next_point) else "NO",
+		"si" if sim.marcha._can_step_into(next_point) else "NO",
 		person.blocked_steps, person.fatigue])
 	print("       carga %.0f%% · terreno %.2f de velocidad" % [
 		person.load_fraction() * 100.0,
-		sim._terrain_speed(person, to_target.normalized()) / maxf(sim.walk_speed, 0.001)])
+		sim.marcha._terrain_speed(person, to_target.normalized()) / maxf(sim.walk_speed, 0.001)])

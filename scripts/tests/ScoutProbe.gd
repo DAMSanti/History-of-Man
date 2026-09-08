@@ -146,7 +146,7 @@ func _initialize() -> void:
 		print(line)
 
 	print("=== FORENSE DE ATASCOS ===")
-	print(sim.stuck_report_text())
+	print(sim.marcha.stuck_report_text())
 
 	print("=== ATASCOS ===")
 	var total_stuck := 0

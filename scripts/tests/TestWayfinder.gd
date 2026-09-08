@@ -330,8 +330,8 @@ func test_dos_personas_del_mismo_tramo_no_van_por_la_misma_linea() -> void:
 	for id in range(8):
 		var uno := _andando(id, origen, destino)
 		var otro := _andando(id + 1, origen, destino)
-		var a := sim._lane_shift(uno, rumbo)
-		var b := sim._lane_shift(otro, rumbo)
+		var a := sim.marcha._lane_shift(uno, rumbo)
+		var b := sim.marcha._lane_shift(otro, rumbo)
 		separacion = (a - b).length()
 		assert_gt(separacion, 0.6,
 			"id %d y %d se separan solo %.2f m" % [id, id + 1, separacion])
@@ -341,7 +341,7 @@ func test_el_carril_es_lateral_y_no_alarga_el_camino() -> void:
 	var sim := SettlementSim.new()
 	var person := _andando(3, Vector3(400.0, 0.0, 400.0), Vector3(900.0, 0.0, 400.0))
 	var rumbo := person.target - person.position
-	var desviado := sim._lane_shift(person, rumbo)
+	var desviado := sim.marcha._lane_shift(person, rumbo)
 
 	# Lo que se suma tiene que ser perpendicular a la marcha: si tuviera
 	# componente en el sentido del camino, el carril adelantaria o frenaria a
@@ -364,7 +364,7 @@ func test_el_carril_se_deshace_al_llegar() -> void:
 	for metros: float in [1.0, 3.0, sim.arrive_radius]:
 		var person := _andando(3, destino + Vector3(metros, 0.0, 0.0), destino)
 		var rumbo := destino - person.position
-		var desvio := (sim._lane_shift(person, rumbo) - rumbo).length()
+		var desvio := (sim.marcha._lane_shift(person, rumbo) - rumbo).length()
 		assert_lt(desvio, sim.arrive_radius * 0.5,
 			"a %.0f m del destino el carril ya no estorba (%.2f m)" % [metros, desvio])
 
@@ -375,9 +375,9 @@ func test_el_carril_no_cambia_de_un_fotograma_a_otro() -> void:
 	var sim := SettlementSim.new()
 	var person := _andando(5, Vector3(400.0, 0.0, 400.0), Vector3(900.0, 0.0, 400.0))
 	var rumbo := person.target - person.position
-	var primero := sim._lane_shift(person, rumbo)
+	var primero := sim.marcha._lane_shift(person, rumbo)
 	for _i in range(10):
-		assert_eq(sim._lane_shift(person, rumbo), primero,
+		assert_eq(sim.marcha._lane_shift(person, rumbo), primero,
 			"el carril es el mismo mientras no se mueva")
 
 
@@ -423,7 +423,7 @@ func test_moverse_reinicia_el_reloj_de_atasco_aunque_estes_llegando() -> void:
 
 	# Anda de sobra, pero pegado a su destino
 	person.position = Vector3(720.0, 200.0, 700.0)
-	sim._watch_for_stuck(person, 1.0)
+	sim.marcha._watch_for_stuck(person, 1.0)
 	assert_eq(person.stuck_hours, 0.0,
 		"quien se ha movido veinte metros no esta atascado, este donde este")
 
@@ -442,7 +442,7 @@ func test_quien_llega_y_no_se_mueve_si_se_detecta() -> void:
 	person.stuck_where = person.position
 	sim.people = [person]
 
-	sim._watch_for_stuck(person, SettlementSim.STUCK_HOURS + 0.1)
+	sim.marcha._watch_for_stuck(person, SettlementSim.STUCK_HOURS + 0.1)
 	assert_eq(person.state, Inhabitant.State.OCIOSO,
 		"llego y el estado se ha soltado solo")
 

@@ -409,7 +409,7 @@ func peak_for(person: Inhabitant) -> Dictionary:
 		for peak: Dictionary in peaks:
 			if (peak["pos"] as Vector3).distance_to(peak_order) > 1.0:
 				continue
-			if float(peak["hard"]) <= dares and sim._reachable(person, peak["pos"]):
+			if float(peak["hard"]) <= dares and sim.marcha._reachable(person, peak["pos"]):
 				return peak
 
 	# TODAS las que se atreve a atacar, no la primera de la lista.
@@ -425,7 +425,7 @@ func peak_for(person: Inhabitant) -> Dictionary:
 			continue
 		if not _climbing_party_enough(float(peak["hard"])):
 			continue
-		if not sim._reachable(person, peak["pos"]):
+		if not sim.marcha._reachable(person, peak["pos"]):
 			continue
 		if float(peak["hard"]) <= dares:
 			within.append(peak)
@@ -446,7 +446,7 @@ func peak_for(person: Inhabitant) -> Dictionary:
 			continue
 		if not _climbing_party_enough(float(peaks[i]["hard"])):
 			continue
-		if sim._reachable(person, peaks[i]["pos"]):
+		if sim.marcha._reachable(person, peaks[i]["pos"]):
 			return peaks[i]
 	return {}
 

@@ -16,8 +16,8 @@ extends SceneTree
 ## Las fachadas y las clases que salieron de ellas.
 const FACHADAS := {
 	"res://scripts/sim/SettlementSim.gd": ["Caceria", "Cumbres", "Despensa",
-		"Hogar", "Nasas", "Percances", "Pinturas", "Reconocimiento", "Reparto",
-		"Tajo", "Taller", "Trampas"],
+		"Hogar", "Marcha", "Nasas", "Percances", "Pinturas", "Reconocimiento",
+		"Reparto", "Tajo", "Taller", "Trampas"],
 	"res://scripts/ui/GameUI.gd": ["PanelAlmacen", "PanelRastros", "PanelTrabajos"],
 }
 

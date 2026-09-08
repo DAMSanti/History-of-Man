@@ -160,10 +160,10 @@ func _run() -> void:
 			spot["pos"], float(spot["score"]),
 			sim.field.abundance_at(Subsistence.Activity.PESCA, spot["pos"])])
 	var reserva: Vector3 = sim.work_sites.get(Subsistence.Activity.PESCA, Vector3.ZERO)
-	var grid := sim._navgrid()
+	var grid := sim.marcha._navgrid()
 	print("  sitio de reserva: %v" % reserva)
 	print("  can_reach: %s | connected(casa, sitio): %s | zonas: %d" % [
-		sim.can_reach(reserva), grid.connected(sim.home_position, reserva),
+		sim.marcha.can_reach(reserva), grid.connected(sim.home_position, reserva),
 		grid.areas])
 	print("  celda de casa: %d | celda del rio: %d" % [
 		grid.nearest_open(sim.home_position), grid.nearest_open(reserva)])

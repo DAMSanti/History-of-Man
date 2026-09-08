@@ -185,5 +185,5 @@ func _init() -> void:
 	print("atascos por motivo: %s" % str(sim.stuck_tally))
 	print("sitios dados por imposibles ahora mismo: %d" % abandoned)
 	print("")
-	print(sim.stuck_report_text())
+	print(sim.marcha.stuck_report_text())
 	quit()

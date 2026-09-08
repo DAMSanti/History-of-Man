@@ -48,7 +48,7 @@ func _scout_target(person: Inhabitant) -> Vector3:
 		# es que no quisiera: es que se descartaba ella misma todas las
 		# fronteras y se quedaba con las cuatro de al lado de casa.
 		var reachable := func(point: Vector3) -> bool:
-			return sim._navgrid().connected(person.position, point)
+			return sim.marcha._navgrid().connected(person.position, point)
 
 		# Los destinos que ya tienen batida en marcha, para que las partidas se
 		# abran en abanico en vez de salir en fila india a la misma frontera
@@ -280,7 +280,7 @@ func _name_new_parajes() -> void:
 	# sitios distintos, basta con que no se pueda ir de una a otra sin
 	# rodear. Es lo mismo que ya usa `_scout_target` para saber si se
 	# puede llegar a un sitio, aplicado ahora a si dos sitios son el mismo.
-	var grid := sim._navgrid()
+	var grid := sim.marcha._navgrid()
 	var same_patch := func(a: Vector3, b: Vector3) -> bool:
 		return grid.connected(a, b)
 	sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
@@ -570,7 +570,7 @@ func _finish_survey(person: Inhabitant) -> void:
 	person.survey_hours = 0.0
 	person.log_deed(person.current_task(), "comarca reconocida")
 	person.end_journey(sim.day, where, outcome)
-	sim._send_to(person, sim.home_position)
+	sim.marcha._send_to(person, sim.home_position)
 	person.state = Inhabitant.State.VOLVIENDO
 
 
@@ -593,7 +593,7 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.route = PackedVector3Array()
 		person.route_step = 0
 		person.forage_target = candidate
-		sim._send_to(person, candidate)
+		sim.marcha._send_to(person, candidate)
 
 		if not person.route.is_empty() \
 				or candidate.distance_to(person.position) < sim.arrive_radius * 2.0:

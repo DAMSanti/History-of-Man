@@ -70,7 +70,7 @@ func _rank_known_spots() -> void:
 				# volver. Un sitio el doble de rico a hora y media no gana
 				# a uno mediano a diez minutos, y uno esquilmado al lado
 				# tampoco gana a uno entero un poco más allá.
-				var travel := 2.0 * sim.hours_to_walk(distance)
+				var travel := 2.0 * sim.marcha.hours_to_walk(distance)
 				var usable := clampf(1.0 - travel / SettlementSim.HORAS_UTILES, 0.1, 1.0)
 				var stock := sim.field.stock_fraction_around(act, centre, 90.0)
 				# Un paraje con nombre pesa más que monte anónimo del mismo
@@ -225,7 +225,7 @@ func _best_known_spot(person: Inhabitant) -> Vector3:
 		# `_give_up_on`: sin esto se vuelve a elegir el mismo cotarro detrás del
 		# mismo cortado en cuanto se queda uno libre, y la jornada se va en ir y
 		# volver del mismo sitio imposible.
-		if sim._given_up_on(person, centre):
+		if sim.marcha._given_up_on(person, centre):
 			continue
 
 		# Descuento por lo que ya hay trabajando ahi. El radio es amplio y la
