@@ -947,6 +947,28 @@ func crossing_difficulty_at(world_pos: Vector3) -> float:
 	return _ford_map[z * resolution + x] * caudal
 
 
+## Lo mismo, pero al caudal que se le diga en vez de al de hoy.
+##
+## Lo necesita [Navgrid] para poder hornear la rejilla de CADA estacion: una
+## rejilla del invierno hay que medirla con el rio de enero, no con el de la
+## jornada en que se hornea.
+##
+## Hubo aqui un apaño que impedia que la crecida cerrara un vado abierto,
+## porque con una sola rejilla -horneada en seco- la banda planeaba rutas por
+## vados que en enero ya no existian y salia a estrellarse contra el rio.
+## Medido: la pesca del año paso de 639 raciones a 31 y la caza de 222 a 16. El
+## apaño sobra desde que hay una rejilla por estacion: ahora un vado SI se
+## cierra en invierno, y los caminos de invierno lo saben.
+func crossing_difficulty_with(world_pos: Vector3, con_caudal: float) -> float:
+	if _ford_map.is_empty() or resolution <= 1:
+		return 0.0
+	var x := clampi(int(round(world_pos.x / float(terrain_size.x) * float(resolution - 1))),
+		0, resolution - 1)
+	var z := clampi(int(round(world_pos.z / float(terrain_size.y) * float(resolution - 1))),
+		0, resolution - 1)
+	return _ford_map[z * resolution + x] * con_caudal
+
+
 ## Si un trayecto recto se puede recorrer a pie de principio a fin.
 ##
 ## Mira las DOS cosas que cortan el paso: el agua que no se vadea y la

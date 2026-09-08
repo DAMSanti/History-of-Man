@@ -715,3 +715,89 @@ func test_sin_cueva_marcada_el_abrigo_es_solo_el_reparto() -> void:
 		"llega hasta donde se reparte la campa")
 	assert_true(sim._shelter_reach() < Navgrid.CELL,
 		"y no se inventa un abrigo de una celda entera")
+
+
+# ------------------------------ una rejilla por estacion, y vados que cierran --
+
+func test_la_rejilla_se_mide_al_caudal_que_se_le_diga() -> void:
+	# Es lo que permite hornear la del invierno en agosto: se le pasa el rio de
+	# enero, no el del dia en que se hornea.
+	# `FakeTerrain` tiene el rio binario -1,0 dentro y 0,0 fuera- asi que para
+	# que la diferencia sea legible hay que cruzar el umbral de vadeo
+	# ([Hydrography.FORD_WADEABLE], 0,35): con un estiaje fuerte el cauce se
+	# pasa de piedra en piedra y con la crecida no.
+	var terrain := FakeTerrain.new()
+	var seca := Navgrid.from_terrain(terrain, false, false, 0.30)
+	var crecida := Navgrid.from_terrain(terrain, false, false, 1.55)
+	assert_lt(crecida.open_fraction(), seca.open_fraction(),
+		"con el rio crecido se anda menos valle que en el estiaje")
+
+
+func test_un_vado_se_cierra_en_invierno() -> void:
+	# La peticion literal: «quiero que haya vados que se vuelven intransitables
+	# en algunas temporadas». Con el caudal del invierno tiene que haber celdas
+	# que dejan de pasarse.
+	var terrain := FakeTerrain.new()
+	var verano := Navgrid.from_terrain(terrain, false, false,
+		Temporada.CAUDAL[Subsistence.Season.VERANO])
+	var invierno := Navgrid.from_terrain(terrain, false, false,
+		Temporada.CAUDAL[Subsistence.Season.INVIERNO])
+	var cerradas := 0
+	for i in range(mini(verano.cost.size(), invierno.cost.size())):
+		if verano.cost[i] > Navgrid.BLOCKED and invierno.cost[i] <= Navgrid.BLOCKED:
+			cerradas += 1
+	assert_gt(float(cerradas), 0.0,
+		"con la crecida de enero hay celdas que dejan de pasarse")
+
+
+func test_hornear_a_trozos_da_la_misma_rejilla_que_de_golpe() -> void:
+	# Es la condicion para que amasar en segundo plano no cambie la partida.
+	var terrain := FakeTerrain.new()
+	var golpe := Navgrid.from_terrain(terrain, false, false, 1.0)
+	var trozos := Navgrid.preparar(terrain, false, false, 1.0)
+	var vueltas := 0
+	while not trozos.amasar(terrain, 1):
+		vueltas += 1
+		assert_lt(float(vueltas), 10000.0, "el horneado a trozos termina")
+	assert_eq(trozos.cost.size(), golpe.cost.size(), "mismo tamaño")
+	var iguales := true
+	for i in range(golpe.cost.size()):
+		if not is_equal_approx(golpe.cost[i], trozos.cost[i]):
+			iguales = false
+			break
+	assert_true(iguales, "y las mismas celdas, celda a celda")
+	assert_eq(trozos.areas, golpe.areas, "y las mismas zonas comunicadas")
+
+
+func test_el_horno_da_la_de_hoy_entera_desde_el_primer_momento() -> void:
+	# Sin ella no hay partida: la de hoy se hornea entera al encargar y las
+	# otras tres quedan a medias, a la cola.
+	var terrain := FakeTerrain.new()
+	var horno := HornoDeRejillas.new()
+	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+		Temporada.CAUDAL)
+	assert_true(horno.de(Subsistence.Season.VERANO).horneada(),
+		"la de hoy esta lista ya")
+	assert_eq(horno.pendientes(), 3, "y las otras tres estan a la cola")
+
+
+func test_mientras_se_hornea_una_se_anda_con_otra() -> void:
+	# Nunca se devuelve una a medias: una rejilla sin inundar dice que no hay
+	# camino a ninguna parte, y con eso la banda se queda en el abrigo.
+	var terrain := FakeTerrain.new()
+	var horno := HornoDeRejillas.new()
+	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+		Temporada.CAUDAL)
+	var invierno := horno.de(Subsistence.Season.INVIERNO)
+	assert_true(invierno.horneada(),
+		"pidiendo la del invierno sin estar lista se devuelve una que si lo esta")
+
+
+func test_la_barca_invalida_las_cuatro() -> void:
+	var terrain := FakeTerrain.new()
+	var horno := HornoDeRejillas.new()
+	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+		Temporada.CAUDAL)
+	assert_true(horno.sirven(false, false), "sirven para lo que se hornearon")
+	assert_false(horno.sirven(true, false),
+		"con barca cambian los pasos y hay que rehacerlas")

@@ -509,9 +509,15 @@ func _reach_key(point: Vector3) -> String:
 ## cambian por donde se pasa, y una rejilla que no lo sabe deja medio mapa
 ## marcado como imposible para siempre.
 func _navgrid() -> Navgrid:
-	if sim._grid == null or not sim._grid.matches(sim.has_boat, sim.has_bridge):
+	# UNA REJILLA POR ESTACION. El rio crecido cierra vados, asi que los
+	# caminos de enero no son los de agosto: con una sola rejilla -horneada en
+	# seco- la banda planeaba rutas por vados que ya no existian. Ver
+	# [HornoDeRejillas], que amasa las otras tres mientras se juega.
+	if not sim.horno.sirven(sim.has_boat, sim.has_bridge):
 		var started := Time.get_ticks_msec()
-		sim._grid = Navgrid.from_terrain(sim._terrain, sim.has_boat, sim.has_bridge)
+		sim.horno.encargar(sim._terrain, sim.has_boat, sim.has_bridge,
+			GameState.season as Subsistence.Season, Temporada.CAUDAL)
+		sim._grid = sim.horno.de(GameState.season as Subsistence.Season)
 		sim.grid_build_ms = Time.get_ticks_msec() - started
 		# Los caminos de antes de la barca ya no son los mejores
 		forget_routes()
@@ -536,6 +542,22 @@ func _navgrid() -> Navgrid:
 		if home_cell < 0:
 			push_warning("El campamento no tiene suelo pisable cerca: "
 				+ "nadie podra ir a ninguna parte.")
+
+	# Y AQUI ES DONDE CAMBIA LA ESTACION. Es una consulta a un diccionario, asi
+	# que se hace en cada llamada sin pensarlo: en cuanto el horno tiene lista
+	# la del trimestre nuevo, se pasa a ella.
+	var quiere := sim.horno.de(GameState.season as Subsistence.Season)
+	if quiere != null and quiere != sim._grid:
+		sim._grid = quiere
+		# Los caminos guardados son de la estacion pasada y puede que crucen
+		# por un vado que ahora va crecido. Se tiran.
+		forget_routes()
+		# La puerta de casa se anda SIEMPRE, tambien en la rejilla nueva: cada
+		# una se mide por su cuenta y ninguna hereda el hueco de la anterior.
+		sim._grid.open_around_home(sim.home_position, sim._terrain)
+		print("Navegacion: caminos de %s · transitable %.0f%% · zonas %d" % [
+			Subsistence.season_name(GameState.season as Subsistence.Season),
+			sim._grid.open_fraction() * 100.0, sim._grid.areas])
 	return sim._grid
 
 

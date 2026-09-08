@@ -111,31 +111,75 @@ var areas: int = 0
 var built_with_boat: bool = false
 var built_with_bridge: bool = false
 
+## Y con que caudal se midio.
+##
+## Una rejilla de invierno y una de agosto NO son la misma: en enero el rio va
+## crecido y hay vados que dejan de serlo. Ver [Temporada] y [HornoDeRejillas].
+var built_with_caudal: float = 1.0
 
-## Construye la rejilla a partir del terreno. Es lo caro, y pasa una vez.
+## Por que fila va el horneado, cuando se hace a trozos. Igual a `tall` cuando
+## esta terminada.
+var _fila: int = 0
+
+
+## Construye la rejilla a partir del terreno. Es lo caro -novecientos
+## milisegundos medidos- y pasa una vez por estacion.
 static func from_terrain(terrain: TerrainGenerator,
-		has_boat: bool, has_bridge: bool) -> Navgrid:
+		has_boat: bool, has_bridge: bool, con_caudal: float = 1.0) -> Navgrid:
+	var grid := preparar(terrain, has_boat, has_bridge, con_caudal)
+	while not grid.horneada():
+		grid.amasar(terrain, grid.tall)
+	return grid
+
+
+## Reserva la rejilla sin medir ni una celda. Lo que sigue es [amasar].
+##
+## Existe para poder hornear A TROZOS. Una rejilla cuesta novecientos
+## milisegundos: hacer las cuatro estaciones de golpe al arrancar serian tres
+## segundos y medio de tiron, y hacerlas al cambiar de estacion seria un
+## parpadeo a mitad de partida. Ver [HornoDeRejillas].
+static func preparar(terrain: TerrainGenerator, has_boat: bool,
+		has_bridge: bool, con_caudal: float = 1.0) -> Navgrid:
 	var grid := Navgrid.new()
 	grid.built_with_boat = has_boat
 	grid.built_with_bridge = has_bridge
+	grid.built_with_caudal = con_caudal
 	if terrain == null:
 		return grid
-
 	grid.world = Vector2(float(terrain.terrain_size.x), float(terrain.terrain_size.y))
 	grid.wide = int(grid.world.x / CELL) + 1
 	grid.tall = int(grid.world.y / CELL) + 1
 	grid.cost.resize(grid.wide * grid.tall)
 	grid.area.resize(grid.wide * grid.tall)
-
-	for z in range(grid.tall):
-		for x in range(grid.wide):
-			var centre := Vector3(
-				(float(x) + 0.5) * CELL, 0.0, (float(z) + 0.5) * CELL)
-			grid.cost[z * grid.wide + x] = _measure(
-				terrain, centre, has_boat, has_bridge)
-
-	grid._flood_areas()
 	return grid
+
+
+## Mide unas cuantas filas. Devuelve si ya esta terminada.
+##
+## Al acabar la ultima fila se inundan las zonas, que es lo que dice que dos
+## puntos estan conectados: eso NO se puede hacer a medias, asi que va entero
+## en el ultimo trozo.
+func amasar(terrain: TerrainGenerator, filas: int) -> bool:
+	if terrain == null or tall <= 0:
+		_fila = maxi(tall, 0)
+		return true
+	var hasta := mini(_fila + maxi(filas, 1), tall)
+	while _fila < hasta:
+		for x in range(wide):
+			var centre := Vector3(
+				(float(x) + 0.5) * CELL, 0.0, (float(_fila) + 0.5) * CELL)
+			cost[_fila * wide + x] = _measure(
+				terrain, centre, built_with_boat, built_with_bridge,
+				built_with_caudal)
+		_fila += 1
+	if _fila >= tall:
+		_flood_areas()
+		return true
+	return false
+
+
+func horneada() -> bool:
+	return tall > 0 and _fila >= tall
 
 
 ## Si por esta celda se puede cruzar el agua de lado a lado.
@@ -224,7 +268,7 @@ const FORCED_COST := 9.0
 ## cruzar. Se probó a aflojarlo y el resultado, medido, fue gente parada
 ## contra una pared durante horas.
 static func _measure(terrain: TerrainGenerator, centre: Vector3,
-		has_boat: bool, has_bridge: bool) -> float:
+		has_boat: bool, has_bridge: bool, con_caudal: float = 1.0) -> float:
 	var total := 0.0
 	var worst := 0.0
 	# El vadeo de cada muestra, en el orden de `PROBES`, para poder mirar
@@ -240,7 +284,9 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 		point.y = terrain.get_height_at(point)
 
 		var slope := terrain.get_slope_at(point)
-		var ford := terrain.crossing_difficulty_at(point)
+		# AL CAUDAL DE ESTA REJILLA, no al de hoy: una rejilla de invierno se
+		# mide con el rio de enero aunque se hornee en agosto.
+		var ford := terrain.crossing_difficulty_with(point, con_caudal)
 
 		# LA PENDIENTE Y EL AGUA NO SE JUZGAN IGUAL, y ésa es la diferencia.
 		#

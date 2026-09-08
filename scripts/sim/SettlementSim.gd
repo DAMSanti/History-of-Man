@@ -339,6 +339,9 @@ var desechos: Desechos = Desechos.new()
 ## sembrar la fauna. Ver [Poblaciones].
 var poblaciones: Poblaciones = null
 
+## Las rejillas de caminos, una por estacion. Ver [HornoDeRejillas].
+var horno: HornoDeRejillas = HornoDeRejillas.new()
+
 ## Lo que la estacion le hace al PAISAJE: nieve, barro y caudal. Ver [Temporada].
 var temporada: Temporada = Temporada.new()
 
@@ -965,6 +968,11 @@ var _pendiente := 0.0
 
 
 func _process(delta: float) -> void:
+	# El horno amasa SIEMPRE, aunque el reloj este parado: si no, una partida en
+	# pausa no adelantaria trabajo y al reanudar seguiria faltando la rejilla
+	# del trimestre que viene. Cuatro milisegundos por cuadro, ver
+	# [HornoDeRejillas.MS_POR_CUADRO].
+	horno.amasar()
 	if people.is_empty() or _terrain == null or time_scale <= 0.0:
 		return
 	_pendiente += delta

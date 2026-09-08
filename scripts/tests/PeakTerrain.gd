@@ -49,3 +49,10 @@ func get_slope_at(world_pos: Vector3) -> float:
 
 func crossing_difficulty_at(_world_pos: Vector3) -> float:
 	return 0.0
+
+
+## El vado a un caudal dado. Lo pide [Navgrid] para hornear la rejilla de cada
+## estacion, y el doble tiene que tenerlo o la rejilla mide cero por todas
+## partes -o sea que se anda por encima del rio-.
+func crossing_difficulty_with(world_pos: Vector3, con_caudal: float) -> float:
+	return crossing_difficulty_at(world_pos) * con_caudal
