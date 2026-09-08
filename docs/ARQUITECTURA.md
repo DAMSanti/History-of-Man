@@ -110,14 +110,25 @@ a 5 153 por ese camino.
    ```
 
    `Reparto` tenía 156 llamadas externas y se resolvieron con 28 pasamanos.
-4. **Las constantes se piden por la CLASE, no por la instancia.**
+4. **El coste de sacar un sistema NO es la velocidad.** Medido con
+   `tools/CosteIndireccion.gd`: una función que lee ocho campos del simulador
+   pasa de 249 a 453 ns cuando los pide por `sim.` — un 82 % más. Suena mucho y
+   no lo es: quince personas por ocho pasos son 120 llamadas por fotograma,
+   0,024 ms sobre 38,5. El **0,06 %**. Para costar un milisegundo harían falta
+   unas 4 900 llamadas por fotograma y aquí no hay nada que se acerque.
+
+   Lo que sí se paga es que **`sim.loquesea` deja de comprobarse en
+   compilación**, y eso ya costó que la fauna no estuviera conectada a la caza
+   y que la ventana del almacén reventara al abrirse. Por eso la regla 7 no es
+   opcional: sustituye a la comprobación que se pierde.
+5. **Las constantes se piden por la CLASE, no por la instancia.**
    `SettlementSim.MIN_HEARTH`, nunca `sim.MIN_HEARTH`: por la instancia se
    pierde el tipo y `var a := sim.MI_CONST if x else y` deja de compilar con
    *«Cannot infer the type»*.
-5. **Al cortar un bloque se van constantes que usa el resto.** Después de
+6. **Al cortar un bloque se van constantes que usa el resto.** Después de
    cortar hay que comparar lo declarado en el fichero nuevo contra lo que
    sigue usándose en el viejo, y devolver lo compartido.
-6. **Y hay que redirigir lo que llamaba desde fuera, VARIABLES INCLUIDAS.**
+7. **Y hay que redirigir lo que llamaba desde fuera, VARIABLES INCLUIDAS.**
    Esto no da error de compilación: GDScript sólo se entera al ejecutar. Se
    comprueba con
 
