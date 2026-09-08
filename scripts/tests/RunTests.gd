@@ -33,6 +33,7 @@ func _init() -> void:
 		TestHunting.new(),
 		TestJornada.new(),
 		TestDespensa.new(),
+		TestLobo.new(),
 		TestCaceria.new(),
 		TestRelato.new(),
 	]

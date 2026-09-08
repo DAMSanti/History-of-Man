@@ -62,6 +62,10 @@ func _check_mishaps() -> void:
 		# que se vuelve con un tobillo o no se vuelve con la carga. Ver
 		# `_bivouac`.
 		risk *= pow(SettlementSim.VIVAC_RIESGO, float(person.bivouac_lack))
+		# A un campamento con perro no lo sorprenden de noche, y a uno con la
+		# manada en contra lo rondan. Ver [ElLobo.riesgo_de_vivac].
+		if sim.lobo != null:
+			risk *= sim.lobo.riesgo_de_vivac()
 		person.bivouac_lack = 0
 		if sim._rng.randf() > risk:
 			continue

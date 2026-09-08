@@ -128,6 +128,7 @@ func _lo_del_oficio(body: VBoxContainer) -> void:
 	match _tab:
 		Profession.Job.CAZA:
 			_hunting_block(body)
+			_lobo_block(body)
 		Profession.Job.RIBERA:
 			_fishing_block(body)
 		Profession.Job.HOGAR:
@@ -351,6 +352,56 @@ func _hunting_block(body: VBoxContainer) -> void:
 					trap.condition() * 100.0, trap.taken,
 					"  ·  CEBADA" if ready else ""],
 				UISkin.INK if ready else UISkin.INK_FAINT)
+
+
+## El trato con los lobos, que es la otra cosa que puede cambiar la caza y no
+## está en el árbol porque no se aprende: se construye o se rompe.
+##
+## Va en la pestaña de caza y no en una ventana propia porque su efecto es de
+## caza: corta el rastro perdido, que es donde se van tres de cada cuatro
+## cacerías. Ver [ElLobo].
+func _lobo_block(body: VBoxContainer) -> void:
+	if ui.sim == null or ui.sim.lobo == null:
+		return
+	var lobo: ElLobo = ui.sim.lobo
+	_rotulo(body, "LOS LOBOS")
+	_escrito(body, lobo.resumen())
+
+	if lobo.perro:
+		_fila(body, "◆  Corta el rastro", "%.0f %% de las veces que se pierde"
+			% (ElLobo.CORTA_EL_RASTRO * 100.0), UISkin.OCHRE)
+		_fila(body, "◆  Para la pieza", "×%.2f de fuelle en la carrera"
+			% ElLobo.FUELLE_EXTRA, UISkin.OCHRE)
+		_fila(body, "◆  Guarda el vivac", "×%.2f de riesgo por noche fuera"
+			% ElLobo.VIVAC_MAS_SEGURO, UISkin.OCHRE)
+		_fila(body, "·  Y come", "%.1f raciones al día" % ElLobo.COME_AL_DIA,
+			UISkin.INK_SOFT)
+		return
+
+	if lobo.hostil():
+		_fila(body, "✕  La manada en contra", "×%.2f de riesgo por noche fuera"
+			% ElLobo.VIVAC_CON_ENEMIGOS, UISkin.ALARM)
+		_escrito(body, "Se les dio motivos y no lo olvidan. El trato se " 			+ "recupera solo, pero muy despacio: el miedo se olvida y no rápido.",
+			true)
+		return
+
+	if lobo.cachorro:
+		_fila(body, "▸  Criando el cachorro", "%.0f de %.0f jornadas · come %.1f al día"
+			% [lobo.cria, ElLobo.CRIA_JORNADAS, ElLobo.COME_AL_DIA], UISkin.OCHRE)
+		return
+
+	# Y si todavía no ha empezado, POR QUÉ no. Es la pregunta que el jugador se
+	# hace mirando esta pestaña, y sin contestarla el camino del perro es
+	# invisible hasta que salta solo.
+	var monton := ui.sim.desechos.volumen() if ui.sim.desechos != null else 0.0
+	_fila(body, "Trato con la manada", "%.0f de %.0f" % [lobo.trato,
+		ElLobo.TRATO_TOPE], UISkin.INK)
+	_fila(body, "Vienen al montón", "%d noches de %d" % [lobo.noches,
+		ElLobo.NOCHES_PARA_EMPEZAR], UISkin.INK)
+	_fila(body, "El montón", "%.0f litros de %.0f que hacen falta" % [
+		monton, ElLobo.MONTON_QUE_ATRAE],
+		UISkin.INK if monton >= ElLobo.MONTON_QUE_ATRAE else UISkin.INK_FAINT)
+	_escrito(body, "Los lobos vienen a lo que se tira, no a la gente. Sin " 		+ "montón de desechos no se acercan, y sin que se acerquen no hay " 		+ "nada que decidir.", true)
 
 
 ## Cuánto multiplica una técnica de caza en su rama.

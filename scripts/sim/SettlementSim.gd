@@ -328,6 +328,10 @@ var taller: Taller = Taller.new(self)
 ## Comer, beber y salir avituallado. Ver [Despensa].
 var despensa: Despensa = Despensa.new(self)
 
+## El trato con los lobos, que acaba en perro o en enemigo. Ver [ElLobo]. Va
+## detras de `desechos` a proposito: es el monton lo que los trae.
+var lobo: ElLobo = ElLobo.new(self)
+
 ## El monton de lo que se tira, que no desaparece. Ver [Desechos] y [Conchero].
 var desechos: Desechos = Desechos.new()
 
@@ -2094,6 +2098,7 @@ func _end_of_day() -> void:
 	hogar._lavar_bellota()
 	store.age(1)
 	desechos.nuevo_dia()
+	lobo.nuevo_dia()
 	despensa._report_spoilage()
 	hogar._burn_hearth()
 

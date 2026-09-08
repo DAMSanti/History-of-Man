@@ -588,6 +588,17 @@ func _stalk(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 	# distancia- o se le hace de noche siguiendo un rastro que se enfría, y eso
 	# es tiempo.
 	if distance > Hunt.PIERDE_M or hunt.spent > Hunt.ACECHO_HORAS:
+		# Y aquí es donde entra el perro. Es el 73 % de las cacerías que se
+		# pierden —«se enfrió el rastro», «se fue de vista»— y es exactamente
+		# lo que un perro arregla: no mata la pieza, la ENCUENTRA. Con él hay
+		# una tirada de recuperar el rastro en vez de terminar aquí. Ver
+		# [ElLobo.corta_el_rastro].
+		if sim.lobo != null and sim.lobo.corta_el_rastro(sim._rng):
+			hunt.spent = 0.0
+			person.log_deed(person.current_task(),
+				"el perro cortó el rastro de %s"
+					% Fauna.species_name(hunt.species).to_lower(), true)
+			return
 		hunt.phase = Hunt.Phase.FALLIDA
 		_note_ending("acecho: se fue de vista" if distance > Hunt.PIERDE_M
 			else "acecho: se enfrió el rastro")
@@ -639,7 +650,10 @@ func _chase(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 	person.log_deed(person.current_task(), hunt.doing_text(), false)
 
 	var distance := person.position.distance_to(quarry)
-	if distance > Hunt.PIERDE_M or hunt.chased > Hunt.FUELLE_HORAS:
+	# El perro la entretiene mientras el cazador llega: es fuelle prestado, no
+	# fuelle propio. Ver [ElLobo.fuelle].
+	var fuelle := Hunt.FUELLE_HORAS 		* (sim.lobo.fuelle() if sim.lobo != null else 1.0)
+	if distance > Hunt.PIERDE_M or hunt.chased > fuelle:
 		hunt.phase = Hunt.Phase.FALLIDA
 		_note_ending("carrera: se fue de vista" if distance > Hunt.PIERDE_M
 			else "carrera: sin fuelle")
