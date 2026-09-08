@@ -246,7 +246,7 @@ func _build_band_gauge(strip: HBoxContainer) -> void:
 
 
 ## Una barra con su rotulo, para la tira de arriba.
-func _strip_gauge(strip: HBoxContainer, caption: String) -> ProgressBar:
+func _strip_gauge(strip: HBoxContainer, caption: String) -> Muescas:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 1)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -259,12 +259,11 @@ func _strip_gauge(strip: HBoxContainer, caption: String) -> ProgressBar:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(label)
 
-	var meter := ProgressBar.new()
-	meter.min_value = 0.0
-	meter.max_value = 100.0
-	meter.custom_minimum_size = Vector2(150, 12)
-	meter.show_percentage = true
-	meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Muescas talladas y no barra de relleno: es como se cuenta en esta epoca
+	# -los bastones de muescas estan atestiguados- y ademas se lee mejor.
+	# Ver [Muescas] y docs/INTERFAZ.md.
+	var meter := Muescas.new()
+	meter.custom_minimum_size = Vector2(150, 13)
 	box.add_child(meter)
 	return meter
 
@@ -294,28 +293,22 @@ func _update_band_gauge() -> void:
 	ui._band_label.text = "%d personas%s%s" % [ui.sim.people.size(),
 		"  ·  %d tocados" % hurt if hurt > 0 else "", rot]
 	if ui._hunger_bar != null:
-		ui._hunger_bar.value = hunger
+		ui._hunger_bar.valor = hunger / 100.0
 		_paint_gauge(ui._hunger_bar, hunger)
 	if ui._tired_bar != null:
-		ui._tired_bar.value = tired
+		ui._tired_bar.valor = tired / 100.0
 		_paint_gauge(ui._tired_bar, tired)
 
 
 ## El color de una barra segun lo alta que este: la barra dice CUANTO y el
 ## color dice si hay que hacer algo.
-func _paint_gauge(meter: ProgressBar, value: float) -> void:
+func _paint_gauge(meter: Muescas, value: float) -> void:
 	var tint := UISkin.GREEN
 	if value > 75.0:
 		tint = UISkin.ALARM
 	elif value > 50.0:
 		tint = UISkin.OCHRE
-	var box := StyleBoxFlat.new()
-	box.bg_color = tint
-	box.corner_radius_top_left = 2
-	box.corner_radius_top_right = 2
-	box.corner_radius_bottom_left = 2
-	box.corner_radius_bottom_right = 2
-	meter.add_theme_stylebox_override("fill", box)
+	meter.tinta = tint
 
 
 ## puede cerrar, y en otoño se pone en ocre.

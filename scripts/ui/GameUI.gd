@@ -295,8 +295,8 @@ const STAT_WORDS := {
 var _band_label: Label
 
 ## Las barras de hambre y cansancio de la tira de arriba.
-var _hunger_bar: ProgressBar
-var _tired_bar: ProgressBar
+var _hunger_bar: Muescas
+var _tired_bar: Muescas
 
 var _winter_label: Label
 var _winter_bar: ProgressBar
