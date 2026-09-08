@@ -741,11 +741,50 @@ func _create_terrain_mesh() -> void:
 		_create_terrain_mesh_from_cache(_gen_cache)
 		return
 
-	# Construccion con arrays directos en vez de SurfaceTool. SurfaceTool anade
-	# vertice a vertice desde GDScript y luego recalcula normales y tangentes
-	# promediando por cara: en una malla de 1M de vertices eso eran ~35 s.
-	# Aqui las normales salen analiticamente del heightfield, que es exacto y
-	# no necesita recorrer las caras.
+	var arrays := _construir_arrays()
+
+	# El paso vuelve a hacer falta aqui: es lo que dice si el recuadro es
+	# cuadrado, y de eso depende que haga falta colision de malla.
+	var step_x := float(terrain_size.x) / float(resolution - 1)
+	var step_z := float(terrain_size.y) / float(resolution - 1)
+	var single_mesh := _malla_para_dibujar(arrays, step_x, step_z)
+
+	_terrain_mesh = MeshInstance3D.new()
+	_terrain_mesh.name = "TerrainMesh"
+	# Con troceado el nodo raiz no lleva malla: la llevan los trozos, que
+	# cuelgan de el. Ver [_split_into_chunks].
+	if terrain_chunks <= 1:
+		_terrain_mesh.mesh = single_mesh
+
+	var tmat0 := Time.get_ticks_msec()
+	_apply_terrain_material()
+	print("[TIMING]   material/texturas de terreno: %d ms" % (Time.get_ticks_msec() - tmat0))
+
+	add_child(_terrain_mesh)
+
+	var chunk_meshes: Array[ArrayMesh] = []
+	if terrain_chunks > 1:
+		var tchunk0 := Time.get_ticks_msec()
+		chunk_meshes = _split_into_chunks(arrays)
+		print("[TIMING]   _split_into_chunks: %d ms" % (Time.get_ticks_msec() - tchunk0))
+
+	# Crear colisión. Sale del campo de alturas, no de la malla, asi que el
+	# troceado no la toca.
+	var tcol0 := Time.get_ticks_msec()
+	_create_collision(single_mesh)
+	print("[TIMING]   _create_collision: %d ms" % (Time.get_ticks_msec() - tcol0))
+
+	_save_generation_cache(single_mesh, chunk_meshes)
+
+
+## Los arrays de la malla: vertices, normales, tangentes, color, UV e indices.
+##
+## Se construyen A MANO en vez de con SurfaceTool. SurfaceTool anade vertice a
+## vertice desde GDScript y luego recalcula normales y tangentes promediando
+## por cara: en una malla de un millon de vertices eso eran unos 35 segundos.
+## Aqui las normales salen analiticamente del campo de alturas, que ademas de
+## rapido es exacto: no hay que recorrer las caras.
+func _construir_arrays() -> Array:
 	var step_x := float(terrain_size.x) / float(resolution - 1)
 	var step_z := float(terrain_size.y) / float(resolution - 1)
 	var count := resolution * resolution
@@ -862,7 +901,16 @@ func _create_terrain_mesh() -> void:
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_TEX_UV2] = uv2s
 	arrays[Mesh.ARRAY_INDEX] = indices
+	return arrays
 
+
+## La malla que se dibuja, si es que hay que dibujar una sola.
+##
+## Con el terreno troceado -el caso normal- devuelve null: la malla la llevan
+## los trozos y la colision sale del campo de alturas, asi que construirla
+## seria pagar `generate_lods()` dos veces sobre el mismo millon de vertices
+## para tirar la primera entera. Medido: de 9 a 19 segundos regalados.
+func _malla_para_dibujar(arrays: Array, step_x: float, step_z: float) -> ArrayMesh:
 	# Con niveles de detalle. Medido: el recuadro cuesta 29 ms de fotograma con
 	# 2,1 millones de triangulos a 1025 vertices por lado, y buena parte de esa
 	# malla cae lejos de la camara, donde un vertice cada cuatro metros y uno
@@ -892,33 +940,7 @@ func _create_terrain_mesh() -> void:
 		single_mesh = ArrayMesh.new()
 		single_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	print("[TIMING]   _mesh_with_lods: %d ms" % (Time.get_ticks_msec() - tlod0))
-
-	_terrain_mesh = MeshInstance3D.new()
-	_terrain_mesh.name = "TerrainMesh"
-	# Con troceado el nodo raiz no lleva malla: la llevan los trozos, que
-	# cuelgan de el. Ver [_split_into_chunks].
-	if terrain_chunks <= 1:
-		_terrain_mesh.mesh = single_mesh
-
-	var tmat0 := Time.get_ticks_msec()
-	_apply_terrain_material()
-	print("[TIMING]   material/texturas de terreno: %d ms" % (Time.get_ticks_msec() - tmat0))
-
-	add_child(_terrain_mesh)
-
-	var chunk_meshes: Array[ArrayMesh] = []
-	if terrain_chunks > 1:
-		var tchunk0 := Time.get_ticks_msec()
-		chunk_meshes = _split_into_chunks(arrays)
-		print("[TIMING]   _split_into_chunks: %d ms" % (Time.get_ticks_msec() - tchunk0))
-
-	# Crear colisión. Sale del campo de alturas, no de la malla, asi que el
-	# troceado no la toca.
-	var tcol0 := Time.get_ticks_msec()
-	_create_collision(single_mesh)
-	print("[TIMING]   _create_collision: %d ms" % (Time.get_ticks_msec() - tcol0))
-
-	_save_generation_cache(single_mesh, chunk_meshes)
+	return single_mesh
 
 
 ## Aplica el material triplanar (o el basico de reserva) a `_terrain_mesh`.

@@ -2477,6 +2477,18 @@ func show_person(person: Inhabitant) -> void:
 	var body := _window("persona", "Persona")
 	_clear(body)
 
+	_ficha_quien_es(body, person)
+	_ficha_ahora_mismo(body, person)
+	_ficha_como_esta(body, person)
+	_ficha_cuerpo(body, person)
+	_ficha_que_sabe(body, person)
+	_ficha_que_lleva(body, person)
+	_ficha_petate(body, person)
+	_ficha_que_puede_hacer(body, person)
+
+
+## Quien es: nombre, sexo, edad y de que familia.
+func _ficha_quien_es(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, person.given_name)
 	_text(body, "%s · %s de %d años%s" % [
 		"Mujer" if person.sex == Inhabitant.Sex.MUJER else "Hombre",
@@ -2484,6 +2496,10 @@ func show_person(person: Inhabitant) -> void:
 		" · criando" if person.nursing else ""])
 
 	body.add_child(HSeparator.new())
+
+
+## Que esta haciendo en este momento, y donde.
+func _ficha_ahora_mismo(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "AHORA MISMO")
 	var state_line := _text(body, "Está %s." % person.state_name())
 	_bind(state_line, func() -> void:
@@ -2516,6 +2532,10 @@ func show_person(person: Inhabitant) -> void:
 			+ "así que primero tiene que encontrar lo que ha venido a buscar.", true)
 
 	body.add_child(HSeparator.new())
+
+
+## Hambre, cansancio y salud.
+func _ficha_como_esta(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "CÓMO ESTÁ")
 	# Atadas, no pintadas y ya: el hambre y el cansancio cambian a cada rato y
 	# el repintado de la ventana se salta cuando el ratón está dentro —que es
@@ -2533,6 +2553,10 @@ func show_person(person: Inhabitant) -> void:
 	# El cuerpo, aparte del oficio: esto no se aprende en un tajo concreto,
 	# es de fábrica y sube muy despacio con los años. Ver [Inhabitant.Stat].
 	body.add_child(HSeparator.new())
+
+
+## El cuerpo y los rasgos con los que nacio.
+func _ficha_cuerpo(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "CUERPO Y RASGOS")
 	_bar(body, "Fuerza", person.stat_in(Inhabitant.Stat.FUERZA))
 	_bar(body, "Resistencia", person.stat_in(Inhabitant.Stat.RESISTENCIA))
@@ -2553,6 +2577,10 @@ func show_person(person: Inhabitant) -> void:
 	# La pericia, oficio por oficio. Antes salía una sola barra que decía
 	# «pericia en su oficio» sin decir cuál era, y encima mezclaba talla con
 	# peletería porque las dos eran «materia prima».
+
+
+## La pericia en cada actividad: lo que ha aprendido pisando.
+func _ficha_que_sabe(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "QUÉ SABE HACER")
 	for job_key: int in GRID_JOBS:
 		var job := job_key as Profession.Job
@@ -2572,6 +2600,10 @@ func show_person(person: Inhabitant) -> void:
 		+ "cambiar a alguien de oficio a menudo sale caro.", true)
 
 	body.add_child(HSeparator.new())
+
+
+## Lo que trae en las manos de esta salida.
+func _ficha_que_lleva(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "QUÉ LLEVA")
 	_bar(body, "Carga (%.0f de %.0f kg)" % [person.load_kg(), person.carry_limit_kg()],
 		person.load_fraction())
@@ -2589,6 +2621,11 @@ func show_person(person: Inhabitant) -> void:
 	# sólo lo recogido, o sea que un cazador con azagaya, cesto y odre lleno
 	# salía con «las manos vacías» de vuelta a casa.
 	body.add_child(HSeparator.new())
+
+
+## El petate: ropa, herramientas, cestos y odres. Lo que lleva SIEMPRE,
+## que no es lo mismo que lo que ha recogido hoy.
+func _ficha_petate(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "EL PETATE")
 	# Quien sale al monte lleva apero; el del abrigo y el que no tiene oficio,
 	# no. `_tool_for` cae en la azagaya cuando la actividad no esta definida, y
@@ -2627,6 +2664,10 @@ func show_person(person: Inhabitant) -> void:
 		_text(body, "Sin cesto va a brazadas, y eso limita la jornada más que "
 			+ "el tiempo.", true)
 	body.add_child(HSeparator.new())
+
+
+## Que oficios puede ejercer y por que no puede los otros.
+func _ficha_que_puede_hacer(body: VBoxContainer, person: Inhabitant) -> void:
 	_heading(body, "QUÉ PUEDE HACER")
 	for job_key: int in Profession.CATALOGUE.keys():
 		var job := job_key as Profession.Job

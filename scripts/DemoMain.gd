@@ -300,13 +300,34 @@ func _place_site_features() -> void:
 		placed, Expedition.site.features.size()])
 
 
-## Levanta el asentamiento con la gente de la partida
+## Levanta el asentamiento con la gente de la partida.
+##
+## EL ORDEN IMPORTA, y por eso esto es una lista de fases y no un bloque de
+## doscientas lineas: la simulacion antes que los tajos -asignarlos necesita
+## saber si se llega-, y el censo despues de los props, el bosque y la fauna,
+## porque les pregunta a ellos y montado antes se queda con referencias nulas.
 func _start_settlement() -> void:
 	if not Expedition.is_active() or terrain == null:
 		return
 
 	var home := terrain.geo_to_world(Expedition.site.lon, Expedition.site.lat)
 
+	_levantar_simulacion(home)
+	_levantar_marcadores()
+	_levantar_conocimiento(home)
+	_levantar_vegetacion()
+	_levantar_hogar()
+	_levantar_fauna_y_tecnica()
+	_levantar_interfaz()
+	_elegir_tajos(home)
+
+
+## La simulacion y el campo de recursos: lo primero de todo, porque el resto
+## le pregunta a ellos.
+##
+## `setup` va ANTES que nada mas porque asignar los tajos ya necesita saber
+## si se llega a ellos, y eso lo decide el terreno que se le pasa aqui.
+func _levantar_simulacion(home: Vector3) -> void:
 	sim = SettlementSim.new()
 	sim.name = "Asentamiento"
 	add_child(sim)
@@ -319,6 +340,14 @@ func _start_settlement() -> void:
 	# Lo que el valle tiene, repartido en manchas y con su estacion
 	field = ResourceMapper.build(terrain, home)
 
+
+## Los marcadores y visores del mundo: el asa por la que el jugador agarra
+## cada cosa.
+##
+## Sin ellos los parajes, las trampas y las nasas existen pero no se pueden
+## pinchar, y no poder pincharlos es seguir mandando con numeros en una
+## pestana.
+func _levantar_marcadores() -> void:
 	# Y lo que la banda sabe de ello, que al llegar es nada. Sabe que en el rio
 	# hay peces; no sabe en que remanso. Eso lo aprende pisandolo.
 	# El diario de la partida. Va aqui y no dentro de la simulacion porque lo
@@ -372,6 +401,12 @@ func _start_settlement() -> void:
 	nav_overlay.name = "Navegacion"
 	add_child(nav_overlay)
 
+
+## La cronica y lo que la banda sabe del valle, que al llegar es nada.
+##
+## Sabe que en el rio hay peces; no sabe en que remanso. Eso lo aprende
+## pisandolo. Lo de alrededor del campamento si lo conoce: vive ahi.
+func _levantar_conocimiento(home: Vector3) -> void:
 	sim.chronicle = Chronicle.new()
 	sim.chronicle.record(sim.day, GameState.season as int, GameState.year,
 		Chronicle.Kind.GENTE,
@@ -389,6 +424,9 @@ func _start_settlement() -> void:
 	# dejaria el mapa entero en negro sin nada por donde empezar a leerlo.
 	knowledge.see_from(home, sim.sight_range * 1.6)
 
+
+## Lo que se ve crecer: los recursos en el suelo, la hierba y el bosque.
+func _levantar_vegetacion() -> void:
 	# Los recursos, VISIBLES en el terreno. Hasta ahora la abundancia existia
 	# en los numeros y en una capa de color del minimapa, pero no en el mundo.
 	props = ResourceProps.new()
@@ -422,6 +460,10 @@ func _start_settlement() -> void:
 	add_child(forest)
 	forest.setup(terrain)
 
+
+## El fuego del abrigo y las hogueras de quien duerme fuera, con la cueva de
+## casa mandando donde se duerme y donde se hace corro.
+func _levantar_hogar() -> void:
 	# La hoguera del abrigo. Va aquí y no dentro de la cueva porque no es parte
 	# de la cueva: es una obra de la banda, aparece cuando la levantan y se apaga
 	# cuando se les acaba la leña. Ver [HearthFire].
@@ -455,6 +497,9 @@ func _start_settlement() -> void:
 	add_child(bivouac_fires)
 	bivouac_fires.setup(sim, terrain)
 
+
+## La fauna que anda de verdad por el valle, y el arbol de tecnicas.
+func _levantar_fauna_y_tecnica() -> void:
 	herds = WildlifeHerds.new()
 	herds.name = "Wildlife"
 	add_child(herds)
@@ -486,6 +531,9 @@ func _start_settlement() -> void:
 		# jornadas. Ver `TechTree.LEARNING_COST`.
 		tech.larder = sim.store
 
+
+## La interfaz, el censo de lo pintado y las capas que van encima.
+func _levantar_interfaz() -> void:
 	ui = GameUI.new()
 	ui.name = "GameUI"
 	ui.sim = sim
@@ -513,6 +561,10 @@ func _start_settlement() -> void:
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
 	_check_discoveries()
 
+
+## Donde se va a trabajar: de los sitios que ofrece el valle, los que de
+## verdad se alcanzan.
+func _elegir_tajos(home: Vector3) -> void:
 	var descartados := 0
 	for entry: Dictionary in _find_work_sites(home):
 		# Se pesca y se coge agua DESDE la orilla. El punto que sale de la
@@ -1545,139 +1597,154 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 ## Es ademas donde escucha la camara, asi que ahora van los dos por el mismo
 ## sitio.
 func _unhandled_input(event: InputEvent) -> void:
-	# Pinchar una cueva abre su ficha. Va antes del match de teclas porque el
-	# raton no entra ahi.
+	# El raton va antes que las teclas porque no entra en el match.
 	if event is InputEventMouseButton and event.pressed \
 			and event.button_index == MOUSE_BUTTON_LEFT:
-		# Un clic en cualquier otro sitio borra el camino pintado: si no, se
-		# quedan lineas de gente que ya ha llegado
-		if paraje_markers:
-			paraje_markers.hide_route()
-
-		# Los parajes primero: son chapas que flotan sobre el terreno, o sea
-		# lo mas alto y lo que el jugador esta buscando cuando pincha ahi.
-		if paraje_markers and sim and ui and camera:
-			var paraje := paraje_markers.pick(sim.parajes,
-				camera.project_ray_origin(event.position),
-				camera.project_ray_normal(event.position))
-			# Si su ficha ya esta abierta, pinchar la chapa otra vez no hace
-			# nada nuevo: se deja caer el clic al resto de la cadena -persona,
-			# recurso, terreno- en vez de consumirlo aqui sin mas.
-			if paraje and not ui.paraje_is_open(paraje):
-				ui.show_paraje(paraje)
-				get_viewport().set_input_as_handled()
-				return
-
-			# Y las cumbres, con el mismo alfiler: también son un sitio al
-			# que se manda gente, aunque no se trabaje en ellas
-			var peak := paraje_markers.pick_peak(sim.cumbres.peaks(),
-				camera.project_ray_origin(event.position),
-				camera.project_ray_normal(event.position))
-			if not peak.is_empty():
-				ui.show_peak(peak)
-				get_viewport().set_input_as_handled()
-				return
-
-		# Las personas despues: son mas pequenas y estan mas cerca de la
-		# camara, asi que si compiten con una cueva gana la persona
-		var person := _pick_person(event.position)
-		if person and ui:
-			ui.show_person(person)
-			# Y se le pinta el camino que lleva: es lo que hace visible que la
-			# banda rodea el canchal en vez de cruzarlo
-			if paraje_markers:
-				paraje_markers.show_route(person.remaining_route(),
-					person.position, terrain)
-			get_viewport().set_input_as_handled()
-			return
-
-		# Y despues los recursos del suelo, antes que las cuevas: son mas
-		# pequenos y estan mas cerca
-		if props and ui and camera:
-			var hit := props.pick(camera.project_ray_origin(event.position),
-				camera.project_ray_normal(event.position))
-			if not hit.is_empty():
-				ui.show_resource(hit["kind"] as Materia.Kind, hit["pos"],
-					hit["from"] as Subsistence.Activity)
-				get_viewport().set_input_as_handled()
-				return
-
-		var cave := _pick_cave(event.position)
-		if cave and ui:
-			ui.show_feature(cave.feature, cave.pick_position(),
-				sim.home_position if sim else Vector3.ZERO)
-			get_viewport().set_input_as_handled()
-			return
-
-		# Y por ultimo el propio suelo. Es lo que faltaba para que el clic sea
-		# un verbo en todas partes: hasta ahora el terreno desnudo no consumia
-		# el clic y no habia forma de decir «id a mirar alli».
-		if ui and camera and terrain:
-			var ground := _pick_ground(event.position)
-			if ground != Vector3.INF:
-				# Todavia puede caer dentro de la mancha de un paraje: la chapa
-				# solo cubre su propio centro, y el sitio es mucho mas grande
-				# que eso. Sin esto, pinchar el borde de un avellanar abria la
-				# ficha del terreno en vez de la del avellanar.
-				var here_paraje := sim.parajes.at(ground) if sim else null
-				# Y si esa ficha YA esta abierta, el punto se trata como
-				# terreno normal: sin esto, cualquier clic dentro de una
-				# mancha grande -a veces un buen trozo del mapa- se quedaba
-				# reabriendo la misma ficha para siempre y el terreno de ahi
-				# dentro dejaba de responder a nada.
-				if here_paraje and not ui.paraje_is_open(here_paraje):
-					ui.show_paraje(here_paraje)
-				else:
-					ui.show_ground(ground, terrain)
-				get_viewport().set_input_as_handled()
-				return
+		_pinchar_en_el_mundo(event as InputEventMouseButton)
 
 	if event is InputEventKey and event.pressed:
-		match event.keycode:
-			KEY_ESCAPE:
-				# Primero cierra lo que tengas delante. Salirse del mapa entero
-				# al pulsar ESC daba un susto cada vez: eso ahora es el boton
-				# del minimapa, que es donde se busca.
-				if ui and ui.close_topmost():
-					pass
-				elif Expedition.is_active():
-					_return_to_region()
-			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-				if sim:
-					var index: int = event.keycode - KEY_1
-					var acts: Array[int] = []
-					for a: int in sim.work_sites.keys():
-						acts.append(a)
-					acts.sort()
-					if index < acts.size():
-						sim.assign_all(acts[index] as Subsistence.Activity)
-						_update_band_panel()
-			KEY_R:
-				_cycle_overlay()
-			KEY_N:
-				# La capa de navegacion: rojo lo que no se pisa, naranja lo que
-				# se pisa pero no se alcanza desde el abrigo. Es la unica forma
-				# de comprobar si la rejilla esta acertando.
-				if nav_overlay and sim:
-					var on := nav_overlay.toggle(sim.navgrid(),
-						sim.home_position, terrain)
-					print("Navegacion: %s" % ["visible" if on else "oculta"])
-					if on:
-						print("   " + NavOverlay.tally_text(
-							sim.navgrid(), sim.home_position))
-			# El teclado mueve LA MISMA velocidad que los botones del reloj.
-			# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
-			# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
-			# segundo reloj: sólo manda `sim`.
-			KEY_P, KEY_SPACE:
-				if sim:
-					sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0
-			KEY_F1:
-				if sim: sim.time_scale = 1.0
-			KEY_F2:
-				if sim: sim.time_scale = 3.0
-			KEY_F3:
-				if sim: sim.time_scale = 5.0
+		_tecla(event as InputEventKey)
+
+
+## Que pasa al pinchar en el mundo, por orden de prioridad.
+##
+## El orden NO es casual y es lo unico que importa aqui: los parajes son chapas
+## que flotan sobre el terreno, o sea lo mas alto y lo que el jugador esta
+## buscando; las personas van antes que las cuevas porque son mas pequenas y
+## estan mas cerca de la camara; y el suelo desnudo va el ultimo, para que el
+## clic sea un verbo en todas partes.
+func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
+	# Un clic en cualquier otro sitio borra el camino pintado: si no, se
+	# quedan lineas de gente que ya ha llegado
+	if paraje_markers:
+		paraje_markers.hide_route()
+
+	# Los parajes primero: son chapas que flotan sobre el terreno, o sea
+	# lo mas alto y lo que el jugador esta buscando cuando pincha ahi.
+	if paraje_markers and sim and ui and camera:
+		var paraje := paraje_markers.pick(sim.parajes,
+			camera.project_ray_origin(event.position),
+			camera.project_ray_normal(event.position))
+		# Si su ficha ya esta abierta, pinchar la chapa otra vez no hace
+		# nada nuevo: se deja caer el clic al resto de la cadena -persona,
+		# recurso, terreno- en vez de consumirlo aqui sin mas.
+		if paraje and not ui.paraje_is_open(paraje):
+			ui.show_paraje(paraje)
+			get_viewport().set_input_as_handled()
+			return
+
+		# Y las cumbres, con el mismo alfiler: también son un sitio al
+		# que se manda gente, aunque no se trabaje en ellas
+		var peak := paraje_markers.pick_peak(sim.cumbres.peaks(),
+			camera.project_ray_origin(event.position),
+			camera.project_ray_normal(event.position))
+		if not peak.is_empty():
+			ui.show_peak(peak)
+			get_viewport().set_input_as_handled()
+			return
+
+	# Las personas despues: son mas pequenas y estan mas cerca de la
+	# camara, asi que si compiten con una cueva gana la persona
+	var person := _pick_person(event.position)
+	if person and ui:
+		ui.show_person(person)
+		# Y se le pinta el camino que lleva: es lo que hace visible que la
+		# banda rodea el canchal en vez de cruzarlo
+		if paraje_markers:
+			paraje_markers.show_route(person.remaining_route(),
+				person.position, terrain)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Y despues los recursos del suelo, antes que las cuevas: son mas
+	# pequenos y estan mas cerca
+	if props and ui and camera:
+		var hit := props.pick(camera.project_ray_origin(event.position),
+			camera.project_ray_normal(event.position))
+		if not hit.is_empty():
+			ui.show_resource(hit["kind"] as Materia.Kind, hit["pos"],
+				hit["from"] as Subsistence.Activity)
+			get_viewport().set_input_as_handled()
+			return
+
+	var cave := _pick_cave(event.position)
+	if cave and ui:
+		ui.show_feature(cave.feature, cave.pick_position(),
+			sim.home_position if sim else Vector3.ZERO)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Y por ultimo el propio suelo. Es lo que faltaba para que el clic sea
+	# un verbo en todas partes: hasta ahora el terreno desnudo no consumia
+	# el clic y no habia forma de decir «id a mirar alli».
+	if ui and camera and terrain:
+		var ground := _pick_ground(event.position)
+		if ground != Vector3.INF:
+			# Todavia puede caer dentro de la mancha de un paraje: la chapa
+			# solo cubre su propio centro, y el sitio es mucho mas grande
+			# que eso. Sin esto, pinchar el borde de un avellanar abria la
+			# ficha del terreno en vez de la del avellanar.
+			var here_paraje := sim.parajes.at(ground) if sim else null
+			# Y si esa ficha YA esta abierta, el punto se trata como
+			# terreno normal: sin esto, cualquier clic dentro de una
+			# mancha grande -a veces un buen trozo del mapa- se quedaba
+			# reabriendo la misma ficha para siempre y el terreno de ahi
+			# dentro dejaba de responder a nada.
+			if here_paraje and not ui.paraje_is_open(here_paraje):
+				ui.show_paraje(here_paraje)
+			else:
+				ui.show_ground(ground, terrain)
+			get_viewport().set_input_as_handled()
+			return
+
+
+## Los atajos de teclado.
+func _tecla(event: InputEventKey) -> void:
+	match event.keycode:
+		KEY_ESCAPE:
+			# Primero cierra lo que tengas delante. Salirse del mapa entero
+			# al pulsar ESC daba un susto cada vez: eso ahora es el boton
+			# del minimapa, que es donde se busca.
+			if ui and ui.close_topmost():
+				pass
+			elif Expedition.is_active():
+				_return_to_region()
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
+			if sim:
+				var index: int = event.keycode - KEY_1
+				var acts: Array[int] = []
+				for a: int in sim.work_sites.keys():
+					acts.append(a)
+				acts.sort()
+				if index < acts.size():
+					sim.assign_all(acts[index] as Subsistence.Activity)
+					_update_band_panel()
+		KEY_R:
+			_cycle_overlay()
+		KEY_N:
+			# La capa de navegacion: rojo lo que no se pisa, naranja lo que
+			# se pisa pero no se alcanza desde el abrigo. Es la unica forma
+			# de comprobar si la rejilla esta acertando.
+			if nav_overlay and sim:
+				var on := nav_overlay.toggle(sim.navgrid(),
+					sim.home_position, terrain)
+				print("Navegacion: %s" % ["visible" if on else "oculta"])
+				if on:
+					print("   " + NavOverlay.tally_text(
+						sim.navgrid(), sim.home_position))
+		# El teclado mueve LA MISMA velocidad que los botones del reloj.
+		# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
+		# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
+		# segundo reloj: sólo manda `sim`.
+		KEY_P, KEY_SPACE:
+			if sim:
+				sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0
+		KEY_F1:
+			if sim: sim.time_scale = 1.0
+		KEY_F2:
+			if sim: sim.time_scale = 3.0
+		KEY_F3:
+			if sim: sim.time_scale = 5.0
 
 
 ## Donde toca el terreno el rayo del cursor, o INF si no lo toca.
