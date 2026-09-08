@@ -34,16 +34,70 @@ func amount(kind: Materia.Kind) -> float:
 
 ## Guarda material. Devuelve cuánto entró de verdad, que puede ser menos de lo
 ## que se pidió si no cabe.
+## Litros que caben SIN recipiente: lo que se apila en el suelo y en hoyos.
+##
+## La lena, el asta y la piedra se amontonan; la comida no. Un monton de
+## avellana en el suelo de una cueva se lo comen los roedores y se moja.
+## Litros de comida que caben ahora mismo, contando los recipientes que hay.
+##
+## Lo pone `SettlementSim` cada dia desde el utillaje: los cestos se rompen y
+## se trenzan otros, asi que la despensa crece y encoge con el taller.
+var capacidad_comida: float = 0.0
+
+const A_GRANEL := 900.0
+
+## Litros que guarda cada cesto y cada odre.
+##
+## Un cesto de mimbre de los que se trenzan en una tarde son unos treinta
+## litros; un odre de piel, doce. No son cifras de balanceo: son el tamano de
+## la cosa.
+const POR_CESTO := 30.0
+const POR_ODRE := 12.0
+
+
+## Cuanta comida cabe, que NO es lo mismo que cuanto cabe en la cueva.
+##
+## Esto sustituye a un tope inventado que hubo aqui -un numero que el jugador
+## ponia en el panel- y que no era una mecanica: nada en el mundo impedia a la
+## banda seguir amontonando. Medido entonces, la despensa iba de 6 dias de
+## comida a 120 y no bajaba nunca.
+##
+## Lo que de verdad limita es EN QUE SE GUARDA. Doce metros cubicos de cueva
+## dan para 10.200 raciones de avellana -cuatrocientos dias para quince bocas-,
+## asi que el volumen del abrigo no muerde jamas; lo que muerde es que la banda
+## arranca SIN CESTOS y trenzar cuesta jornadas de cordeleria.
+##
+## Con eso guardar comida deja de ser gratis y pasa a competir con lo demas del
+## taller, que es la decision que se buscaba.
+func capacidad_de_comida(cestos: int, odres: int) -> float:
+	return A_GRANEL + float(cestos) * POR_CESTO + float(odres) * POR_ODRE
+
+
+## Los litros de comida que hay ahora mismo.
+func litros_de_comida() -> float:
+	var total := 0.0
+	for kind: int in contents:
+		var k := kind as Materia.Kind
+		if Materia.is_food(k):
+			total += float(contents[k]) * Materia.litres_per_unit(k)
+	return total
+
+
 func add(kind: Materia.Kind, units: float) -> float:
 	overflow = 0.0
 	if units <= 0.0:
 		return 0.0
 
 	var accepted := units
-	if capacity_litres > 0.0:
-		var per_unit := Materia.litres_per_unit(kind)
-		if per_unit > 0.0:
-			var room := maxf(free_litres(), 0.0)
+	var per_unit := Materia.litres_per_unit(kind)
+	if per_unit > 0.0:
+		# La comida tiene su propio limite -en que se guarda- ademas del de la
+		# cueva. Ver [capacidad_de_comida]: lo que no cabe en cesto ni en odre
+		# se queda en el suelo, y en el suelo se lo comen los roedores.
+		var room := maxf(free_litres(), 0.0)
+		if Materia.is_food(kind) and capacidad_comida > 0.0:
+			room = minf(room, maxf(capacidad_comida - litros_de_comida(), 0.0))
+		if capacity_litres > 0.0 or (Materia.is_food(kind) and capacidad_comida > 0.0):
 			accepted = minf(units, room / per_unit)
 			overflow = units - accepted
 

@@ -64,12 +64,28 @@ func _init() -> void:
 	var ultimo: int = -1
 	var pudrido := 0.0
 	var por_estacion: Dictionary = {}
+	## Oficio -> jornadas-persona trabajadas. Contar quien lo tiene AL FINAL
+	## reparte el año entre los que quedan y da cifras sin sentido cuando la
+	## banda acaba ociosa.
+	var jornadas: Dictionary = {}
+	# `produced_days` es una ventana rodante de 30 dias
+	# ([SettlementSim.CONSUMO_DIAS]), no el libro del año: sumarla al final da
+	# el ultimo mes creyendo que es la partida entera. Por eso se apunta cada
+	# jornada al cerrarse, que es cuando `_roll_production` la ha metido ahi.
+	var total: Dictionary = {}
 	while sim.day < primero + dias:
 		await process_frame
 		if sim.day == ultimo:
 			continue
 		ultimo = sim.day
 		pudrido += sim.spoiled_rations_today
+		if sim.taller.produced_days.size() > 0:
+			var ayer: Dictionary = sim.taller.produced_days.back()
+			for k: int in ayer:
+				total[k] = float(total.get(k, 0.0)) + float(ayer[k])
+		for quien2: Inhabitant in sim.people:
+			var oficio2 := Profession.job_name(quien2.job as Profession.Job)
+			jornadas[oficio2] = int(jornadas.get(oficio2, 0)) + 1
 		var est := Subsistence.season_name(GameState.season)
 		por_estacion[est] = float(por_estacion.get(est, 0.0)) + sim.spoiled_rations_today
 		if (sim.day - primero) % 15 != 0:
@@ -134,40 +150,35 @@ func _init() -> void:
 
 	print("")
 	print("--- LO QUE RINDE CADA OFICIO ---")
-	var jornadas: Dictionary = {}
-	for p2: Inhabitant in sim.people:
-		var j := Profession.job_name(p2.job as Profession.Job)
-		jornadas[j] = int(jornadas.get(j, 0)) + 1
 	var come := 0.0
 	for p2: Inhabitant in sim.people:
 		come += p2.daily_food()
 	come /= maxf(float(sim.people.size()), 1.0)
 	print("   una persona come %.2f raciones al dia" % come)
 	var por_actividad: Dictionary = {}
-	for a_day: Dictionary in sim.taller.produced_days:
-		for k: int in a_day:
-			# Las claves negativas son piezas de utillaje, no materiales: la
-			# produccion lleva las dos en el mismo registro. Ver `logged_name`.
-			if k < 0:
-				continue
-			var kk := k as Materia.Kind
-			if not Materia.is_food(kk):
-				continue
-			var act := "otros"
-			if kk in [Materia.Kind.CARNE, Materia.Kind.CARNE_SECA]:
-				act = "Caza"
-			elif kk in [Materia.Kind.PESCADO, Materia.Kind.PESCADO_SECO,
-					Materia.Kind.MARISCO]:
-				act = "Ribera"
-			else:
-				act = "Recolección"
-			por_actividad[act] = float(por_actividad.get(act, 0.0)) 				+ float(a_day[k]) * Materia.nutrition(kk)
-	var dias_corridos := maxf(float(sim.day - primero), 1.0)
+	for k: int in total:
+		# Las claves negativas son piezas de utillaje, no materiales: la
+		# produccion lleva las dos en el mismo registro. Ver `logged_name`.
+		if k < 0:
+			continue
+		var kk := k as Materia.Kind
+		if not Materia.is_food(kk):
+			continue
+		var act := "otros"
+		if kk in [Materia.Kind.CARNE, Materia.Kind.CARNE_SECA]:
+			act = "Caza"
+		elif kk in [Materia.Kind.PESCADO, Materia.Kind.PESCADO_SECO,
+				Materia.Kind.MARISCO]:
+			act = "Ribera"
+		else:
+			act = "Recolección"
+		por_actividad[act] = float(por_actividad.get(act, 0.0)) \
+			+ float(total[k]) * Materia.nutrition(kk)
 	for oficio: String in ["Recolección", "Caza", "Ribera"]:
-		var gente: int = int(jornadas.get(oficio, 0))
+		var jp: int = int(jornadas.get(oficio, 0))
 		var rac: float = float(por_actividad.get(oficio, 0.0))
-		print("   %-14s %2d personas · %7.0f raciones · %6.2f por persona y dia" % [
-			oficio, gente, rac, rac / maxf(float(gente) * dias_corridos, 1.0)])
+		print("   %-14s %5d jornadas-persona · %7.0f raciones · %6.2f al dia cada uno" % [
+			oficio, jp, rac, rac / maxf(float(jp), 1.0)])
 
 	print("")
 	print("--- QUE HAY EN LA DESPENSA AL FINAL ---")
@@ -188,10 +199,6 @@ func _init() -> void:
 
 	print("")
 	print("--- lo que ha entrado en el año, por material ---")
-	var total: Dictionary = {}
-	for a_day: Dictionary in sim.taller.produced_days:
-		for k: int in a_day:
-			total[k] = float(total.get(k, 0.0)) + float(a_day[k])
 	var orden: Array[int] = []
 	orden.assign(total.keys())
 	orden.sort_custom(func(a: int, b: int) -> bool: return total[a] > total[b])

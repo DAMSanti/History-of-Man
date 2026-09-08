@@ -871,12 +871,7 @@ func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: floa
 	# El reparto de oficios NO va aqui: necesita que los tajos esten montados,
 	# y en este punto todavia no lo estan. Lo llama la escena despues.
 
-	# El tope de comida arranca puesto, no en cero: sin el la banda acumula
-	# sin fin y la partida no tiene forma. Ver [DIAS_DE_TOPE_AL_EMPEZAR].
-	var bocas := 0.0
-	for person: Inhabitant in people:
-		bocas += person.daily_food()
-	food_cap = bocas * DIAS_DE_TOPE_AL_EMPEZAR
+	_ajustar_despensa()
 ## Muda la banda a otro abrigo.
 ##
 ## Lo que se lleva es lo que cabe en la espalda; lo que se queda es el abrigo.
@@ -2079,6 +2074,9 @@ func tool_history_of(kind: Tool.Kind) -> PackedFloat32Array:
 
 
 func _end_of_day() -> void:
+	# Cuanta comida cabe cambia con el taller: los cestos se rompen y se
+	# trenzan otros. Ver [_ajustar_despensa].
+	_ajustar_despensa()
 	_record_history()
 	# Lo que la banda cree saber se reordena una vez al dia. Antes se
 	# recalculaba por persona y por salida, y eso eran 61.000 operaciones cada
@@ -2635,21 +2633,28 @@ func _lament(person: Inhabitant, where: Vector3) -> void:
 ## acaba de traer. Tirar carne para respetar un tope seria absurdo.
 var food_cap: float = 0.0
 
-## Con cuantos dias de comida arranca puesto el tope.
+## Ajusta cuanta comida cabe, segun los recipientes que tenga la banda.
 ##
-## Estuvo SIN TOPE -cero es sin tope- y el jugador tenia que descubrir el
-## control en el almacen para que la banda dejara de acumular. Medido con
-## `scripts/tests/AnoProbe.gd`, sin tope la despensa iba de 6 dias de comida a
-## 120 en medio año y no bajaba nunca: la partida no tenia forma.
+## Se llama al montar y al cerrar cada jornada, porque el utillaje cambia: los
+## cestos se rompen con el uso y se trenzan otros.
 ##
-## Treinta dias es lo que cabe en una cueva sin que se pudra y lo que hace que
-## el invierno importe: da margen para una mala racha pero no para dos
-## estaciones. Al llegar al tope la banda deja de salir a por comida y se pone
-## a otra cosa -que es la decision que el tope existe para provocar- y no
-## vuelve hasta haberse comido un tercio. Ver [REANUDAR_COMIDA].
+## ESTO SUSTITUYE A UN TOPE INVENTADO. Hubo aqui un `food_cap` que arrancaba en
+## treinta dias de comida y paraba a los recolectores cuando se llegaba. No era
+## una mecanica: era un numero. Nada en el mundo impide a una banda seguir
+## amontonando avellana, y poner que si lo impide es hacer trampa.
 ##
-## Pendiente de playtest: lo decidido es que HAYA tope de salida, no cuanto.
-const DIAS_DE_TOPE_AL_EMPEZAR := 30.0
+## Lo que de verdad limita es EN QUE SE GUARDA. La cueva tiene doce metros
+## cubicos, que dan para 10.200 raciones de avellana -cuatrocientos dias para
+## quince bocas-, asi que su volumen no muerde nunca. Lo que muerde es que la
+## banda arranca SIN CESTOS y que trenzar cuesta jornadas de cordeleria.
+##
+## `food_cap` sigue existiendo y sigue en cero: es lo que el JUGADOR puede
+## pedir -«no me acumules mas de tanto»-, y eso si es suyo.
+func _ajustar_despensa() -> void:
+	if store == null:
+		return
+	store.capacidad_comida = store.capacidad_de_comida(
+		toolkit.count(Tool.Kind.CESTO), toolkit.count(Tool.Kind.ODRE))
 
 
 ## Hasta donde tiene que bajar la despensa para volver a salir a por comida,
