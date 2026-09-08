@@ -146,7 +146,7 @@ func _camp_work(person: Inhabitant, hours: float) -> void:
 		# La materia prima la traen los recolectores; el artesano trabaja sobre
 		# lo que hay en el abrigo, y si no hay, se va a su siguiente oficio
 		# -ver `_speciality_can_work`.
-		sim._craft(person, hours)
+		sim.taller._craft(person, hours)
 
 
 ## Trabajo de quien esta en el hogar: no sale del campamento. Si hay un
@@ -192,7 +192,7 @@ func _tend_camp(person: Inhabitant, hours: float) -> void:
 	# de ahumar porque es lo único de aquí que el jugador ha PEDIDO: lo demás
 	# lo hace la banda sola. Ver `_paint_wall`.
 	if sim.painting_queue != null:
-		sim._paint_wall(person, fraction)
+		sim.pinturas._paint_wall(person, fraction)
 		return
 
 	# Y cuidar de quien no se vale. AHUMAR YA NO ESTA AQUI, y esa es la

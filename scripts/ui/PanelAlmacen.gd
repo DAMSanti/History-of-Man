@@ -228,7 +228,7 @@ func _show_camp(body: VBoxContainer) -> void:
 func _show_toolkit(body: VBoxContainer) -> void:
 	ui._heading(body, "EL UTILLAJE")
 
-	var demand := ui.sim.tool_demand()
+	var demand := ui.sim.taller.tool_demand()
 
 	# Se listan TODAS las piezas que la banda necesita, tenga o no ninguna. Lo
 	# que no existe es justo lo que hay que ver, y en una lista de lo que hay
@@ -262,7 +262,7 @@ func _show_toolkit(body: VBoxContainer) -> void:
 	# en el abrigo, está.
 	var known_kinds: Array[int] = []
 	for kind: int in kinds:
-		if ui.sim.knows_tool(kind as Tool.Kind) \
+		if ui.sim.taller.knows_tool(kind as Tool.Kind) \
 			or ui.sim.toolkit.count(kind as Tool.Kind) > 0:
 			known_kinds.append(kind)
 	kinds = known_kinds
@@ -396,7 +396,7 @@ func _ledger_row(body: VBoxContainer, icon: Control, name_text: String,
 ## tenga. Aquí se dice una vez y vale para todo lo que se come.
 func _food_cap_row(body: VBoxContainer) -> void:
 	var have := ui.sim.store.food_rations()
-	var capped := ui.sim.food_is_capped()
+	var capped := ui.sim.despensa.food_is_capped()
 
 	var frame := PanelContainer.new()
 	frame.add_theme_stylebox_override("panel", UISkin.row_box(UISkin.SURFACE))
@@ -426,7 +426,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 		var rations := ui.sim.store.food_rations()
 		now.text = "%.0f" % rations
 		now.add_theme_color_override("font_color",
-			UISkin.OCHRE if ui.sim.food_is_capped() else UISkin.INK))
+			UISkin.OCHRE if ui.sim.despensa.food_is_capped() else UISkin.INK))
 
 	var state := Label.new()
 	state.custom_minimum_size = Vector2(GameUI.COL_NEED, 0)
@@ -434,7 +434,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 	state.add_theme_font_size_override("font_size", 10)
 	row.add_child(state)
 	ui._bind(state, func() -> void:
-		state.text = "lleno" if ui.sim.food_is_capped() else ""
+		state.text = "lleno" if ui.sim.despensa.food_is_capped() else ""
 		state.add_theme_color_override("font_color", UISkin.OCHRE))
 
 	var goal := Label.new()
@@ -463,7 +463,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 			show_store(),
 		ui.sim.food_cap > 0.0)
 
-	var days := ui.sim.food_cap_days()
+	var days := ui.sim.despensa.food_cap_days()
 	frame.tooltip_text = "Tope de comida para toda la despensa.\n\n"
 	if ui.sim.food_cap > 0.0:
 		frame.tooltip_text += "%.0f raciones: unas %.0f jornadas para la banda entera.\n" % [
@@ -496,7 +496,7 @@ func show_tool(kind: Tool.Kind) -> void:
 	ui._heading(body, Tool.kind_name(kind).to_upper())
 
 	var have := ui.sim.toolkit.count(kind)
-	var hands := int(ui.sim.tool_natural_demand().get(int(kind), 0))
+	var hands := int(ui.sim.taller.tool_natural_demand().get(int(kind), 0))
 	ui._text(body, "Hay %d para %d manos · filo medio al %.0f%%" % [
 		have, hands, ui.sim.toolkit.condition(kind) * 100.0])
 
@@ -540,7 +540,7 @@ func show_material(kind: Materia.Kind) -> void:
 	ui._text(body, Materia.describe(kind), true)
 
 	var have := ui.sim.store.amount(kind)
-	var needed := ui.sim.material_needed(kind)
+	var needed := ui.sim.taller.material_needed(kind)
 	ui._text(body, "Ahora hay %.0f · se gastan %.0f al mes · pesa %s y ocupa %s"
 		% [have, needed,
 			Materia.format_weight(have * Materia.kg_per_unit(kind)),
@@ -737,7 +737,7 @@ func _crafted_by(kind: Tool.Kind) -> String:
 func _tool_serves(kind: Tool.Kind) -> String:
 	var jobs: Array[String] = []
 	for activity: int in GameUI.ALL_ACTIVITIES:
-		if ui.sim.activity_tool(activity as Subsistence.Activity) == int(kind):
+		if ui.sim.taller.activity_tool(activity as Subsistence.Activity) == int(kind):
 			jobs.append(Subsistence.activity_name(
 				activity as Subsistence.Activity).to_lower())
 	if kind == Tool.Kind.LASCA:
@@ -833,7 +833,7 @@ func _ration_rate(kind: Materia.Kind) -> float:
 
 func _material_row(body: VBoxContainer, kind: Materia.Kind,
 		units: float, index: int) -> void:
-	var needed := ui.sim.material_needed(kind)
+	var needed := ui.sim.taller.material_needed(kind)
 	var has_goal: bool = ui.sim.limits.has(kind)
 	var goal: float = float(ui.sim.limits.get(kind, 0.0))
 
@@ -858,7 +858,7 @@ func _material_row(body: VBoxContainer, kind: Materia.Kind,
 	var goal_text := "%.0f" % (goal * rate) if has_goal else "—"
 	var goal_tint := UISkin.OCHRE if has_goal else UISkin.INK_FAINT
 
-	var makes := ui.sim.production_of(kind) * rate
+	var makes := ui.sim.taller.production_of(kind) * rate
 	var row := _ledger_row(body, MateriaIcon.for_materia(kind),
 		Materia.material_name(kind),
 		"%.0f" % (units * rate), have_tint,
@@ -872,7 +872,7 @@ func _material_row(body: VBoxContainer, kind: Materia.Kind,
 	var have_label: Label = row.get_meta("have")
 	ui._bind(have_label, func() -> void:
 		var now := ui.sim.store.amount(kind)
-		var want := ui.sim.material_needed(kind)
+		var want := ui.sim.taller.material_needed(kind)
 		var tint := UISkin.INK
 		if want > 0.0:
 			tint = UISkin.coverage_color(now / maxf(want, 0.001))
@@ -883,12 +883,12 @@ func _material_row(body: VBoxContainer, kind: Materia.Kind,
 
 	var need_label: Label = row.get_meta("need")
 	ui._bind(need_label, func() -> void:
-		var want := ui.sim.material_needed(kind)
+		var want := ui.sim.taller.material_needed(kind)
 		need_label.text = "%.0f" % (want * rate) if want > 0.0 else "—")
 
 	var makes_label: Label = row.get_meta("makes")
 	ui._bind(makes_label, func() -> void:
-		makes_label.text = _makes_text(ui.sim.production_of(kind) * rate))
+		makes_label.text = _makes_text(ui.sim.taller.production_of(kind) * rate))
 
 	# El paso era el 25% de lo que hubiera guardado, así que cambiaba solo
 	# según lo que la banda trajera ese día: pulsabas «+» y subía 5, 12 o 30
@@ -937,12 +937,12 @@ func _material_row(body: VBoxContainer, kind: Materia.Kind,
 func _tool_row(body: VBoxContainer, kind: Tool.Kind,
 		needed: int, index: int) -> void:
 	var have := ui.sim.toolkit.count(kind)
-	var has_order: bool = ui.sim.tool_orders.has(kind)
-	var order: int = int(ui.sim.tool_orders.get(kind, 0))
+	var has_order: bool = ui.sim.taller.tool_orders.has(kind)
+	var order: int = int(ui.sim.taller.tool_orders.get(kind, 0))
 
 	# GASTA es cuantas se rompen al mes, no cuantas quieres tener: si fuera lo
 	# segundo, subir la meta subiria el gasto y el numero no diria nada.
-	var broken := ui.sim.tools_broken_per_month(kind)
+	var broken := ui.sim.taller.tools_broken_per_month(kind)
 	var have_tint := UISkin.coverage_color(
 		float(have) / maxf(float(needed), 0.001)) if needed > 0 else UISkin.INK
 
@@ -952,19 +952,19 @@ func _tool_row(body: VBoxContainer, kind: Tool.Kind,
 		"%.1f" % broken if broken < 10.0 else "%.0f" % broken,
 		"%d" % order if has_order else "—",
 		UISkin.OCHRE if has_order else UISkin.INK_FAINT, index,
-		_makes_text(ui.sim.tool_production_of(kind)))
+		_makes_text(ui.sim.taller.tool_production_of(kind)))
 
 	_goal_buttons(row,
 		func() -> void:
 			var base := order if has_order else needed
-			ui.sim.set_tool_order(kind, maxi(base - int(_goal_step()), 0))
+			ui.sim.taller.set_tool_order(kind, maxi(base - int(_goal_step()), 0))
 			show_store(),
 		func() -> void:
 			var base := order if has_order else needed
-			ui.sim.set_tool_order(kind, base + int(_goal_step()))
+			ui.sim.taller.set_tool_order(kind, base + int(_goal_step()))
 			show_store(),
 		func() -> void:
-			ui.sim.set_tool_order(kind, 0)
+			ui.sim.taller.set_tool_order(kind, 0)
 			show_store(),
 		has_order)
 

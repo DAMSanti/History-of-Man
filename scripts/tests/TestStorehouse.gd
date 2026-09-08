@@ -288,10 +288,10 @@ func test_lo_que_se_lleva_de_casa_y_vuelve_no_cuenta() -> void:
 	person.add_load(Materia.Kind.PIEL, 1.0)
 	person.note_from_store(Materia.Kind.PIEL, 1.0)
 
-	sim._deliver(person)
-	assert_eq(sim.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
+	sim.despensa._deliver(person)
+	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
 		"la comida que fue y volvio no la ha producido nadie")
-	assert_eq(sim.produced_today.get(int(Materia.Kind.PIEL), 0.0), 0.0,
+	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.PIEL), 0.0), 0.0,
 		"ni la piel de la tienda")
 
 
@@ -307,10 +307,10 @@ func test_lo_que_se_trae_del_monte_si_cuenta() -> void:
 	person.note_from_store(Materia.Kind.CARNE_SECA, 2.0)
 	person.add_load(Materia.Kind.PESCADO, 5.0)
 
-	sim._deliver(person)
-	assert_eq(sim.produced_today.get(int(Materia.Kind.PESCADO), 0.0), 5.0,
+	sim.despensa._deliver(person)
+	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.PESCADO), 0.0), 5.0,
 		"el pescado si lo ha pescado")
-	assert_eq(sim.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
+	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
 		"la carne seca sigue siendo la misma de casa")
 
 
@@ -325,6 +325,6 @@ func test_lo_comido_por_el_camino_deja_de_estar_apuntado() -> void:
 	person.add_load(Materia.Kind.CARNE_SECA, 4.0)
 	person.note_from_store(Materia.Kind.CARNE_SECA, 4.0)
 
-	sim._eat_from_pack(person, 24.0)
+	sim.despensa._eat_from_pack(person, 24.0)
 	assert_lt(person.brought_from_store(Materia.Kind.CARNE_SECA), 4.0,
 		"lo comido ya no se le debe al almacen")

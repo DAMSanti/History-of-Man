@@ -439,11 +439,11 @@ func _tracking_hours_for(person: Inhabitant,
 	var chain := person.effectiveness() * sim._knowledge_factor(person)
 	chain *= ResourceField.seasonal_factor(person.activity, GameState.season)
 	chain *= sim.weather.work_factor()
-	chain *= Hunting.crew_factor(speciality, sim.hunters_in(speciality))
-	var tool_kind := sim._tool_for(person)
+	chain *= Hunting.crew_factor(speciality, sim.taller.hunters_in(speciality))
+	var tool_kind := sim.taller._tool_for(person)
 	if tool_kind >= 0:
 		chain *= sim.toolkit.efficiency(tool_kind as Tool.Kind,
-			sim.workers_in(person.activity))
+			sim.taller.workers_in(person.activity))
 	if chain <= 0.01:
 		return SettlementSim.HORAS_UTILES
 
@@ -661,7 +661,7 @@ func _throw(person: Inhabitant, hunt: Hunt) -> void:
 	if hunt.weapon >= 0:
 		sim.toolkit.use(hunt.weapon as Tool.Kind,
 			Tool.wear_per_day(hunt.weapon as Tool.Kind) * 0.5)
-		sim._note_breakage(person, hunt.weapon as Tool.Kind)
+		sim.taller._note_breakage(person, hunt.weapon as Tool.Kind)
 
 	if sim._rng.randf() > clampf(chance, 0.02, 0.95):
 		# Fallado. Si queda fuelle se sigue; si no, se acabó.
@@ -729,7 +729,7 @@ func _butcher_in_field(person: Inhabitant, hunt: Hunt, hours: float) -> void:
 	var edge := sim.toolkit.efficiency(Tool.Kind.LASCA, hunt.crew.size())
 	var fraction := hours / SettlementSim.HORAS_UTILES
 	sim.toolkit.use(Tool.Kind.LASCA, fraction * Tool.wear_per_day(Tool.Kind.LASCA))
-	sim._note_breakage(person, Tool.Kind.LASCA)
+	sim.taller._note_breakage(person, Tool.Kind.LASCA)
 
 	hunt.opened += fraction * edge
 	person.log_deed(person.current_task(), hunt.doing_text(), false)

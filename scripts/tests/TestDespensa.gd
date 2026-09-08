@@ -115,7 +115,7 @@ func test_lo_que_se_pudre_se_apunta_con_nombre() -> void:
 	sim.store.add(Materia.Kind.PESCADO, 40.0)
 	# El pescado aguanta tres dias y empieza a perderse a partir de la mitad
 	sim.store.age(3)
-	sim._report_spoilage()
+	sim.despensa._report_spoilage()
 	assert_true(sim.spoiled_today.has(int(Materia.Kind.PESCADO)),
 		"el parte dice QUE se ha perdido, no solo cuanto")
 	assert_gt(sim.spoiled_rations_today, 0.0,
@@ -128,7 +128,7 @@ func test_el_parte_sale_todos_los_dias_en_la_cronica() -> void:
 	sim.store.add(Materia.Kind.CARNE, 60.0)
 	sim.store.age(4)
 	var antes := sim.chronicle.entries.size()
-	sim._report_spoilage()
+	sim.despensa._report_spoilage()
 	assert_gt(float(sim.chronicle.entries.size()), float(antes),
 		"tirar comida se cuenta")
 
@@ -139,7 +139,7 @@ func test_sin_perdidas_no_se_dice_nada() -> void:
 	sim.chronicle = Chronicle.new()
 	sim.store.add(Materia.Kind.PIEDRA, 20.0)
 	sim.store.age(30)
-	sim._report_spoilage()
+	sim.despensa._report_spoilage()
 	assert_eq(sim.chronicle.entries.size(), 0,
 		"la piedra no se pudre y no hay parte que dar")
 
@@ -151,7 +151,7 @@ func test_el_parte_dice_que_falta_para_que_no_vuelva_a_pasar() -> void:
 	sim.chronicle = Chronicle.new()
 	sim.store.add(Materia.Kind.PESCADO, 60.0)
 	sim.store.age(3)
-	sim._report_spoilage()
+	sim.despensa._report_spoilage()
 	var texto := String(sim.chronicle.entries[-1]["text"])
 	assert_true(texto.contains("secadero"),
 		"sin secadero, el parte lo dice: %s" % texto)
@@ -164,13 +164,13 @@ func test_perder_mucho_es_noticia_y_perder_poco_no() -> void:
 	poco.chronicle = Chronicle.new()
 	poco.store.add(Materia.Kind.PESCADO, 1.0)
 	poco.store.age(3)
-	poco._report_spoilage()
+	poco.despensa._report_spoilage()
 
 	var mucho := SettlementSim.new()
 	mucho.chronicle = Chronicle.new()
 	mucho.store.add(Materia.Kind.PESCADO, 200.0)
 	mucho.store.age(3)
-	mucho._report_spoilage()
+	mucho.despensa._report_spoilage()
 
 	assert_eq(int(poco.chronicle.entries[-1]["weight"]), 0,
 		"una merma pequena es rutina")
@@ -219,7 +219,7 @@ func test_lo_que_gasta_el_almacen_es_lo_que_come_la_banda() -> void:
 	for kind: int in Materia.Kind.values():
 		var k := kind as Materia.Kind
 		if Materia.is_food(k):
-			gasta += sim.material_needed(k) * Materia.nutrition(k)
+			gasta += sim.taller.material_needed(k) * Materia.nutrition(k)
 
 	var bocas := 0.0
 	for person: Inhabitant in sim.people:
@@ -236,7 +236,7 @@ func test_no_se_gasta_lo_que_no_hay() -> void:
 	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
 	sim.apply_priorities()
 	sim.store.add(Materia.Kind.CARNE, 40.0)
-	assert_gt(sim.material_needed(Materia.Kind.CARNE), 0.0,
+	assert_gt(sim.taller.material_needed(Materia.Kind.CARNE), 0.0,
 		"de lo que hay si se come")
-	assert_eq(sim.material_needed(Materia.Kind.SETA), 0.0,
+	assert_eq(sim.taller.material_needed(Materia.Kind.SETA), 0.0,
 		"y de lo que no hay en la despensa, no")

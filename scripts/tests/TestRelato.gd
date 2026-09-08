@@ -4,7 +4,7 @@ extends TestCase
 ##
 ## Las dos mitades, porque la gracia está en la diferencia: contado, un relato
 ## dura lo que dure quien estuvo; pintado, no. Ver [Tale] y
-## `SettlementSim.paintings_ceiling`.
+## `Pinturas.paintings_ceiling`.
 
 
 func suite_name() -> String:
@@ -102,9 +102,9 @@ func test_aprender_una_tecnica_se_cuenta() -> void:
 func test_sin_saber_pintar_no_se_pinta() -> void:
 	var sim := _pintable()
 	sim.techs = _techs([])
-	assert_false(sim.can_paint(), "sin arte parietal no hay pared")
-	assert_true(sim.painting_blocked_by().contains("pintar"),
-		"y se dice por qué: %s" % sim.painting_blocked_by())
+	assert_false(sim.pinturas.can_paint(), "sin arte parietal no hay pared")
+	assert_true(sim.pinturas.painting_blocked_by().contains("pintar"),
+		"y se dice por qué: %s" % sim.pinturas.painting_blocked_by())
 
 
 func test_sin_lampara_no_se_pinta_dentro() -> void:
@@ -112,21 +112,21 @@ func test_sin_lampara_no_se_pinta_dentro() -> void:
 	# aparece en Lascaux: un canto ahuecado con grasa y una mecha.
 	var sim := _pintable()
 	sim.toolkit.pieces.clear()
-	assert_false(sim.can_paint(), "a oscuras no se pinta")
-	assert_true(sim.painting_blocked_by().contains("lámpara"),
-		"y se dice: %s" % sim.painting_blocked_by())
+	assert_false(sim.pinturas.can_paint(), "a oscuras no se pinta")
+	assert_true(sim.pinturas.painting_blocked_by().contains("lámpara"),
+		"y se dice: %s" % sim.pinturas.painting_blocked_by())
 
 
 func test_sin_ocre_ni_grasa_no_se_pinta() -> void:
 	var sin_ocre := _pintable()
 	sin_ocre.store.take(Materia.Kind.OCRE, 20.0)
-	assert_true(sin_ocre.painting_blocked_by().contains("ocre"),
-		"sin pigmento: %s" % sin_ocre.painting_blocked_by())
+	assert_true(sin_ocre.pinturas.painting_blocked_by().contains("ocre"),
+		"sin pigmento: %s" % sin_ocre.pinturas.painting_blocked_by())
 
 	var sin_grasa := _pintable()
 	sin_grasa.store.take(Materia.Kind.GRASA, 20.0)
-	assert_true(sin_grasa.painting_blocked_by().contains("grasa"),
-		"sin combustible: %s" % sin_grasa.painting_blocked_by())
+	assert_true(sin_grasa.pinturas.painting_blocked_by().contains("grasa"),
+		"sin combustible: %s" % sin_grasa.pinturas.painting_blocked_by())
 
 
 func test_pintar_cuesta_jornadas_ocre_y_grasa() -> void:
@@ -138,13 +138,13 @@ func test_pintar_cuesta_jornadas_ocre_y_grasa() -> void:
 	sim.people = [person]
 
 	var tale := _relato()
-	assert_true(sim.queue_painting(tale), "se encola")
+	assert_true(sim.pinturas.queue_painting(tale), "se encola")
 	var ocre_antes := sim.store.amount(Materia.Kind.OCRE)
 
 	for _i in range(200):
 		if sim.painting_queue == null:
 			break
-		sim._paint_wall(person, 0.1)
+		sim.pinturas._paint_wall(person, 0.1)
 
 	assert_true(tale.painted, "acaba en la pared")
 	assert_eq(sim.paintings.size(), 1, "y la pared la guarda")
@@ -158,13 +158,13 @@ func test_la_pared_sube_el_techo_de_lo_que_se_aprende_de_oidas() -> void:
 	var sim := _pintable()
 	var task := Profession.task_id(Profession.Job.CAZA,
 		Profession.Speciality.CAZA_MAYOR)
-	assert_near(sim.paintings_ceiling(task), SettlementSim.TRANSMISSION_CEILING,
+	assert_near(sim.pinturas.paintings_ceiling(task), SettlementSim.TRANSMISSION_CEILING,
 		0.001, "sin paredes, el techo de siempre")
 
 	var tale := _relato()
 	tale.painted = true
 	sim.paintings.append(tale)
-	assert_gt(sim.paintings_ceiling(task), SettlementSim.TRANSMISSION_CEILING,
+	assert_gt(sim.pinturas.paintings_ceiling(task), SettlementSim.TRANSMISSION_CEILING,
 		"con la cacería en la pared se aprende más de oídas")
 
 
@@ -175,7 +175,7 @@ func test_una_pared_de_caza_no_ensena_a_trenzar_cordel() -> void:
 	sim.paintings.append(tale)
 	var cordel := Profession.task_id(Profession.Job.MANUFACTURA,
 		Profession.Speciality.CORDELERIA)
-	assert_near(sim.paintings_ceiling(cordel),
+	assert_near(sim.pinturas.paintings_ceiling(cordel),
 		SettlementSim.TRANSMISSION_CEILING, 0.001,
 		"un bisonte en la pared no enseña cestería")
 
@@ -190,7 +190,7 @@ func test_el_relato_de_una_tecnica_cubre_el_oficio_entero() -> void:
 	sim.paintings.append(tale)
 	var orilla := Profession.task_id(Profession.Job.RIBERA,
 		Profession.Speciality.ORILLA)
-	assert_gt(sim.paintings_ceiling(orilla),
+	assert_gt(sim.pinturas.paintings_ceiling(orilla),
 		SettlementSim.TRANSMISSION_CEILING,
 		"el arpón en la pared enseña a toda la ribera")
 
@@ -205,22 +205,22 @@ func test_el_techo_no_llega_nunca_al_todo() -> void:
 		var tale := _relato()
 		tale.painted = true
 		sim.paintings.append(tale)
-	assert_lt(sim.paintings_ceiling(task), 1.0,
+	assert_lt(sim.pinturas.paintings_ceiling(task), 1.0,
 		"ni con la cueva entera pintada se aprende todo de oídas")
-	assert_near(sim.paintings_ceiling(task), SettlementSim.PINTURA_TECHO_MAX,
+	assert_near(sim.pinturas.paintings_ceiling(task), SettlementSim.PINTURA_TECHO_MAX,
 		0.001, "se para donde dice el tope")
 
 
 func test_no_se_pinta_lo_ya_pintado_ni_dos_a_la_vez() -> void:
 	var sim := _pintable()
 	var tale := _relato()
-	assert_true(sim.queue_painting(tale), "la primera entra")
-	assert_false(sim.queue_painting(_relato()),
+	assert_true(sim.pinturas.queue_painting(tale), "la primera entra")
+	assert_false(sim.pinturas.queue_painting(_relato()),
 		"la segunda espera: sólo hay una pared en marcha")
 
 	tale.painted = true
 	sim.painting_queue = null
-	assert_false(sim.queue_painting(tale), "y lo ya pintado no se repinta")
+	assert_false(sim.pinturas.queue_painting(tale), "y lo ya pintado no se repinta")
 
 
 func test_el_taller_no_hace_lamparas_antes_de_saber_pintar() -> void:
@@ -228,9 +228,9 @@ func test_el_taller_no_hace_lamparas_antes_de_saber_pintar() -> void:
 	# algo que hacer dentro de la cueva.
 	var sim := SettlementSim.new()
 	sim.techs = _techs([])
-	assert_eq(int(sim.tool_natural_demand().get(Tool.Kind.LAMPARA, 0)), 0,
+	assert_eq(int(sim.taller.tool_natural_demand().get(Tool.Kind.LAMPARA, 0)), 0,
 		"sin arte parietal no se piden lámparas")
 
 	sim.techs = _techs([TechTree.Tech.ARTE])
-	assert_gt(float(sim.tool_natural_demand().get(Tool.Kind.LAMPARA, 0)), 0.0,
+	assert_gt(float(sim.taller.tool_natural_demand().get(Tool.Kind.LAMPARA, 0)), 0.0,
 		"sabiendo pintar, una")

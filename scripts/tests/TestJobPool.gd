@@ -609,7 +609,7 @@ func test_se_come_la_raiz_y_no_solo_la_carne() -> void:
 	# raíz, y la banda se moría de hambre al lado de ella.
 	var sim := _sim(_banda(2))
 	sim.store.add(Materia.Kind.RAIZ, 40.0)
-	var comido := sim._eat_from_store(5.0)
+	var comido := sim.despensa._eat_from_store(5.0)
 	assert_true(comido > 4.9,
 		"con cuarenta de raíz se comen cinco raciones, no %.2f" % comido)
 	assert_true(sim.store.amount(Materia.Kind.RAIZ) < 40.0,
@@ -622,7 +622,7 @@ func test_se_come_todo_lo_que_alimenta() -> void:
 			continue
 		var sim := _sim(_banda(2))
 		sim.store.add(kind as Materia.Kind, 60.0)
-		var comido := sim._eat_from_store(3.0)
+		var comido := sim.despensa._eat_from_store(3.0)
 		assert_true(comido > 2.9,
 			"%s alimenta, así que se puede comer (comido %.2f)"
 				% [Materia.material_name(kind as Materia.Kind), comido])
@@ -637,7 +637,7 @@ func test_se_come_antes_lo_que_antes_se_pudre() -> void:
 		< Materia.shelf_life(Materia.Kind.CARNE_SECA),
 		"la carne fresca aguanta menos que la curada")
 
-	sim._eat_from_store(4.0)
+	sim.despensa._eat_from_store(4.0)
 	assert_true(sim.store.amount(Materia.Kind.CARNE) < 20.0,
 		"se tira de la fresca")
 	assert_eq(sim.store.amount(Materia.Kind.CARNE_SECA), 20.0,
@@ -657,12 +657,12 @@ func test_el_tope_no_se_suelta_a_la_primera_racion() -> void:
 	sim.store.add(Materia.Kind.CARNE_SECA,
 		102.0 / Materia.nutrition(Materia.Kind.CARNE_SECA))
 	assert_true(sim.store.food_rations() >= 100.0, "la despensa esta llena")
-	assert_true(sim.food_is_capped(), "y se nota")
+	assert_true(sim.despensa.food_is_capped(), "y se nota")
 
 	# Se cena: baja del tope, pero de poco. No se vuelve al monte por eso.
-	sim._eat_from_store(12.0)
+	sim.despensa._eat_from_store(12.0)
 	assert_true(sim.store.food_rations() < 100.0, "ya no llega al tope")
-	assert_true(sim.food_is_capped(),
+	assert_true(sim.despensa.food_is_capped(),
 		"pero con %.0f raciones no se sube al monte a por la de hoy"
 			% sim.store.food_rations())
 
@@ -672,12 +672,12 @@ func test_al_ver_el_fondo_se_vuelve_a_por_comida() -> void:
 	sim.food_cap = 100.0
 	sim.store.add(Materia.Kind.CARNE_SECA,
 		102.0 / Materia.nutrition(Materia.Kind.CARNE_SECA))
-	assert_true(sim.food_is_capped(), "lleno de salida")
+	assert_true(sim.despensa.food_is_capped(), "lleno de salida")
 
 	# Comida hasta bajar por debajo de la banda
 	while sim.store.food_rations() > 100.0 * SettlementSim.REANUDAR_COMIDA:
-		sim._eat_from_store(5.0)
-	assert_false(sim.food_is_capped(),
+		sim.despensa._eat_from_store(5.0)
+	assert_false(sim.despensa.food_is_capped(),
 		"con la despensa al %.0f%% se vuelve a salir"
 			% (SettlementSim.REANUDAR_COMIDA * 100.0))
 
@@ -685,7 +685,7 @@ func test_al_ver_el_fondo_se_vuelve_a_por_comida() -> void:
 func test_sin_tope_puesto_no_hay_memoria_que_valga() -> void:
 	var sim := _sim(_banda(4))
 	sim.store.add(Materia.Kind.CARNE_SECA, 500.0)
-	assert_false(sim.food_is_capped(), "sin tope, nunca esta lleno")
+	assert_false(sim.despensa.food_is_capped(), "sin tope, nunca esta lleno")
 
 
 # --- la pesca cuenta en el reparto ----------------------------------------

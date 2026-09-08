@@ -262,7 +262,7 @@ func test_el_artesano_no_pasa_por_trabajando() -> void:
 	person.state = Inhabitant.State.OCIOSO
 	person.craft_progress = 0.4
 
-	var work := sim.crafting_now(person)
+	var work := sim.taller.crafting_now(person)
 	assert_false(work.is_empty(), "en OCIOSO tambien se esta tallando")
 	assert_eq(work["progress"], 0.4, "y se sabe cuanto lleva")
 
@@ -272,7 +272,7 @@ func test_de_noche_no_se_talla() -> void:
 	var person := _artesano(sim)
 	person.state = Inhabitant.State.DURMIENDO
 	sim.hour = 3.0
-	assert_true(sim.crafting_now(person).is_empty(),
+	assert_true(sim.taller.crafting_now(person).is_empty(),
 		"a las tres de la manana no hay nadie en el taller")
 
 
@@ -281,7 +281,7 @@ func test_quien_no_es_del_taller_no_fabrica() -> void:
 	var person := _artesano(sim)
 	sim.hour = 10.0
 	Profession.assign(Profession.Job.CAZA, person)
-	assert_true(sim.crafting_now(person).is_empty(),
+	assert_true(sim.taller.crafting_now(person).is_empty(),
 		"un cazador no lleva chapa de taller")
 
 

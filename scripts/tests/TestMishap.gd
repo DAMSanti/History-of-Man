@@ -107,7 +107,7 @@ func test_el_vivac_se_cobra_una_vez_por_noche() -> void:
 	person.add_load(Materia.Kind.LENA, 8.0)
 
 	for _i in range(50):
-		sim._bivouac(person)
+		sim.despensa._bivouac(person)
 	assert_eq(person.load.get(Materia.Kind.LENA, 0.0),
 		8.0 - SettlementSim.VIVAC_LENA, "una noche, una hoguera")
 	assert_eq(person.bivouac_lack, 0, "con las dos cosas no falta nada")
@@ -120,7 +120,7 @@ func test_la_piel_no_se_gasta_pero_hace_falta() -> void:
 	var person := _fuera(sim)
 	person.add_load(Materia.Kind.PIEL, 1.0)
 	person.add_load(Materia.Kind.LENA, 4.0)
-	sim._bivouac(person)
+	sim.despensa._bivouac(person)
 	assert_eq(person.load.get(Materia.Kind.PIEL, 0.0), 1.0,
 		"la piel vuelve al abrigo con quien la llevo")
 
@@ -128,7 +128,7 @@ func test_la_piel_no_se_gasta_pero_hace_falta() -> void:
 func test_sin_nada_encima_se_duerme_a_la_intemperie() -> void:
 	var sim := SettlementSim.new()
 	var person := _fuera(sim)
-	sim._bivouac(person)
+	sim.despensa._bivouac(person)
 	assert_eq(person.bivouac_lack, 2, "faltan la tienda y la hoguera")
 
 
@@ -136,7 +136,7 @@ func test_falta_solo_la_hoguera() -> void:
 	var sim := SettlementSim.new()
 	var person := _fuera(sim)
 	person.add_load(Materia.Kind.PIEL, 1.0)
-	sim._bivouac(person)
+	sim.despensa._bivouac(person)
 	assert_eq(person.bivouac_lack, 1, "tienda si, hoguera no")
 
 
@@ -148,7 +148,7 @@ func test_la_mala_noche_deja_rastro_en_la_cronica() -> void:
 	sim.chronicle = Chronicle.new()
 	var person := _fuera(sim)
 	var antes := sim.chronicle.entries.size()
-	sim._bivouac(person)
+	sim.despensa._bivouac(person)
 	assert_gt(float(sim.chronicle.entries.size()), float(antes),
 		"la noche mala se anota")
 

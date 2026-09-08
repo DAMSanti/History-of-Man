@@ -818,9 +818,9 @@ func test_mas_destreza_de_expedicion_da_mas_dias_de_comida() -> void:
 		Profession.Speciality.EXPEDICION)
 
 	person.skill[task] = 0.0
-	var novato_days := sim._expedition_days_for(person)
+	var novato_days := sim.despensa._expedition_days_for(person)
 	person.skill[task] = 0.9
-	var veterano_days := sim._expedition_days_for(person)
+	var veterano_days := sim.despensa._expedition_days_for(person)
 
 	assert_gt(veterano_days, novato_days,
 		"quien mejor sabe racionar y buscar por el camino aguanta mas noches fuera")
@@ -837,9 +837,9 @@ func test_expedicion_y_ascension_no_comparten_destreza_para_los_dias() -> void:
 		Profession.Speciality.EXPEDICION)] = 0.0
 
 	person.current_speciality = Profession.Speciality.ASCENSION
-	var ascension_days := sim._expedition_days_for(person)
+	var ascension_days := sim.despensa._expedition_days_for(person)
 	person.current_speciality = Profession.Speciality.EXPEDICION
-	var expedicion_days := sim._expedition_days_for(person)
+	var expedicion_days := sim.despensa._expedition_days_for(person)
 
 	assert_gt(ascension_days, expedicion_days,
 		"la destreza de ascension no regala dias a una expedicion")
@@ -853,7 +853,7 @@ func test_no_hace_falta_avituallar_un_viaje_de_un_dia() -> void:
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.current_speciality = Profession.Speciality.EXPEDICION
 
-	assert_true(sim._provision(person, sim.arrive_radius * 2.0),
+	assert_true(sim.despensa._provision(person, sim.arrive_radius * 2.0),
 		"con el destino cerca, sale sin comida encima")
 	assert_true(person.load.is_empty(),
 		"y no ha cargado nada del almacen")
@@ -872,7 +872,7 @@ func test_sin_carne_seca_ni_grasa_se_sale_igual_con_lo_que_haya() -> void:
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.current_speciality = Profession.Speciality.EXPEDICION
 
-	assert_true(sim._provision(person, 2000.0),
+	assert_true(sim.despensa._provision(person, 2000.0),
 		"sin carne seca ni grasa, pero con pescado de sobra, sale igual")
 	assert_false(person.load.is_empty(),
 		"y ha cargado del pescado que si habia")
@@ -886,8 +886,8 @@ func test_avituallar_pide_mas_comida_cuanto_mas_lejos_se_va() -> void:
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.current_speciality = Profession.Speciality.EXPEDICION
 
-	var cerca := sim._expedition_days_for(person, 400.0)
-	var lejos := sim._expedition_days_for(person, 8000.0)
+	var cerca := sim.despensa._expedition_days_for(person, 400.0)
+	var lejos := sim.despensa._expedition_days_for(person, 8000.0)
 	assert_gt(lejos, cerca,
 		"un destino mucho mas lejano pide mas dias de comida")
 
@@ -934,7 +934,7 @@ func test_avituallar_sin_distancia_usa_el_suelo_de_siempre() -> void:
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.current_speciality = Profession.Speciality.EXPEDICION
 
-	assert_eq(sim._expedition_days_for(person), sim._expedition_days_for(person, -1.0),
+	assert_eq(sim.despensa._expedition_days_for(person), sim.despensa._expedition_days_for(person, -1.0),
 		"sin distancia, el mismo resultado de siempre")
 
 
@@ -1070,7 +1070,7 @@ func test_una_partida_corta_no_va_al_borde_del_mapa() -> void:
 	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
 
 	var destino := sim.reconocimiento._scout_target(person)
-	assert_lt(destino.distance_to(sim.home_position), SettlementSim.REGIONAL_DISTANCE,
+	assert_lt(destino.distance_to(sim.home_position), Despensa.REGIONAL_DISTANCE,
 		"solo, no se aventura tan lejos aunque el jugador lo señale")
 
 
@@ -1085,7 +1085,7 @@ func test_con_grupo_numeroso_si_se_va_lejos() -> void:
 	person.position = sim.home_position
 
 	var companeros: Array[Inhabitant] = [person]
-	for i in range(1, SettlementSim.MIN_GROUP_FOR_REGIONAL):
+	for i in range(1, Despensa.MIN_GROUP_FOR_REGIONAL):
 		var otro := Inhabitant.create(i, sim.home_position, sim._rng)
 		otro.job = Profession.Job.EXPLORACION
 		otro.current_speciality = Profession.Speciality.EXPEDICION
@@ -1096,7 +1096,7 @@ func test_con_grupo_numeroso_si_se_va_lejos() -> void:
 	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
 
 	var destino := sim.reconocimiento._scout_target(person)
-	assert_gt(destino.distance_to(sim.home_position), SettlementSim.REGIONAL_DISTANCE,
+	assert_gt(destino.distance_to(sim.home_position), Despensa.REGIONAL_DISTANCE,
 		"con bastante gente puesta en ello, si se llega al rumbo lejano")
 
 

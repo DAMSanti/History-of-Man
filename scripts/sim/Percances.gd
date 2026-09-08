@@ -164,7 +164,7 @@ func _check_hunting_risk(person: Inhabitant, speciality: Profession.Speciality,
 		return
 
 	var risk := Hunting.risk_at(speciality, person.work_centre,
-		GameState.season as Subsistence.Season, sim.hunters_in(speciality), sim.toolkit)
+		GameState.season as Subsistence.Season, sim.taller.hunters_in(speciality), sim.toolkit)
 	if risk <= 0.0:
 		return
 	risk *= fraction

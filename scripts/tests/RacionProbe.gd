@@ -35,7 +35,7 @@ func _initialize() -> void:
 			continue
 		var rate := Materia.nutrition(k)
 		var units := sim.store.amount(k)
-		var need := sim.material_needed(k)
+		var need := sim.taller.material_needed(k)
 		hay += units * rate
 		gasta += need * rate
 		if units <= 0.0 and need <= 0.0:

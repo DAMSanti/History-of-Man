@@ -86,11 +86,11 @@ func _init() -> void:
 					Tajo.ALCANCE_DEL_TAJO)
 				row["queda"] = float(row["queda"]) + \
 					field.stock_of_cell(person.activity, cell)
-				var tool_kind: int = sim._tool_for(person)
+				var tool_kind: int = sim.taller._tool_for(person)
 				var filo := 1.0
 				if tool_kind >= 0:
 					filo = sim.toolkit.efficiency(tool_kind as Tool.Kind,
-						sim.workers_in(person.activity))
+						sim.taller.workers_in(person.activity))
 				row["filo"] = float(row["filo"]) + filo
 				row["tiempo"] = float(row["tiempo"]) + sim.weather.work_factor()
 				tally[person.id] = row

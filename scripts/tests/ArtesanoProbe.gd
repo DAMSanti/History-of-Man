@@ -69,7 +69,7 @@ func _init() -> void:
 	for frame in range(FRAMES):
 		await process_frame
 		for person: Inhabitant in sim.people:
-			var doing: Dictionary = sim.crafting_now(person)
+			var doing: Dictionary = sim.taller.crafting_now(person)
 			# Se espera a que lleve algo hecho: una barra a cero no enseña que
 			# la barra funcione.
 			if doing.is_empty() or float(doing["progress"]) < 0.15:

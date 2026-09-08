@@ -348,12 +348,12 @@ func _search_target(person: Inhabitant) -> Vector3:
 ## La suma del periodo para una clave, materiales y piezas por igual.
 func _produced_in_period(key: int) -> float:
 	var total := 0.0
-	for a_day: Dictionary in sim.produced_days:
+	for a_day: Dictionary in sim.taller.produced_days:
 		total += float(a_day.get(key, 0.0))
 	# El día en curso cuenta: sin él, la cifra no se mueve hasta mañana y el
 	# jugador que acaba de mandar a media banda a por leña no ve nada.
-	total += float(sim.produced_today.get(key, 0.0))
-	var days := sim.produced_days.size() + 1
+	total += float(sim.taller.produced_today.get(key, 0.0))
+	var days := sim.taller.produced_days.size() + 1
 	if days >= SettlementSim.CONSUMO_DIAS:
 		return total
 	return total * float(SettlementSim.CONSUMO_DIAS) / float(days)
@@ -361,10 +361,10 @@ func _produced_in_period(key: int) -> float:
 
 ## Cierra el día de producción y lo mete en el registro.
 func _roll_production() -> void:
-	sim.produced_days.append(sim.produced_today.duplicate())
-	while sim.produced_days.size() > SettlementSim.CONSUMO_DIAS:
-		sim.produced_days.remove_at(0)
-	sim.produced_today = {}
+	sim.taller.produced_days.append(sim.taller.produced_today.duplicate())
+	while sim.taller.produced_days.size() > SettlementSim.CONSUMO_DIAS:
+		sim.taller.produced_days.remove_at(0)
+	sim.taller.produced_today = {}
 
 ## Materiales que NO están en todas partes: solo salen del paraje que los
 ## tiene. Son los que dan nombre a un sitio por sí solos -una veta de
@@ -511,12 +511,12 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 	# le cabe en los brazos. Y usar la herramienta la gasta, que es de donde
 	# sale la demanda del taller sin tener que inventarse ninguna cuota.
 	var tool_factor := 1.0
-	var tool_kind := sim._tool_for(person)
+	var tool_kind := sim.taller._tool_for(person)
 	if tool_kind >= 0:
 		var kind_value := tool_kind as Tool.Kind
-		tool_factor = sim.toolkit.efficiency(kind_value, sim.workers_in(person.activity))
+		tool_factor = sim.toolkit.efficiency(kind_value, sim.taller.workers_in(person.activity))
 		sim.toolkit.use(kind_value, fraction * Tool.wear_per_day(kind_value))
-		sim._note_breakage(person, kind_value)
+		sim.taller._note_breakage(person, kind_value)
 
 	# El despiece se lleva por delante mas filo que ninguna otra cosa: una res
 	# grande se come varias lascas. Va aparte de la azagaya porque son dos
@@ -524,7 +524,7 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 	if person.activity == Subsistence.Activity.CAZA:
 		sim.toolkit.use(Tool.Kind.LASCA,
 			fraction * Tool.wear_per_day(Tool.Kind.LASCA))
-		sim._note_breakage(person, Tool.Kind.LASCA)
+		sim.taller._note_breakage(person, Tool.Kind.LASCA)
 
 	# La cuadrilla. Sólo pinta en caza mayor -ver [Hunting.crew_factor]-, y
 	# ahi es donde manda de verdad: un solo batidor contra un uro trae casi
@@ -532,7 +532,7 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 	var crew := 1.0
 	if person.activity == Subsistence.Activity.CAZA:
 		var speciality := person.current_speciality as Profession.Speciality
-		crew = Hunting.crew_factor(speciality, sim.hunters_in(speciality))
+		crew = Hunting.crew_factor(speciality, sim.taller.hunters_in(speciality))
 		sim.percances._check_hunting_risk(person, speciality, fraction)
 
 	# La pericia entra RELATIVA a la de referencia, no en crudo: asi el numero
@@ -555,7 +555,7 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 ## que ya no cabe en el cesto. Son dos cosas, y la segunda es la larga.
 func _fill_the_basket(person: Inhabitant, hours: float, fraction: float,
 		multiplier: float, worked_cell: int) -> void:
-	var yields := sim._yields_for(person)
+	var yields := sim.taller._yields_for(person)
 
 	# Lo que pasa por delante y no se puede cobrar. Se dice, porque la puerta
 	# de [Fauna.huntable_with] cerrada en silencio es la peor version de si

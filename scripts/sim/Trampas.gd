@@ -89,7 +89,7 @@ func _trap_to_set(point: Vector3) -> int:
 	var here := Fauna.species_at(point, GameState.season as Subsistence.Season)
 	var fallback := -1
 	for kind: int in known_traps():
-		if not sim._can_afford(Trap.materials(kind as Trap.Kind)):
+		if not sim.taller._can_afford(Trap.materials(kind as Trap.Kind)):
 			continue
 		if fallback < 0:
 			fallback = kind
@@ -213,7 +213,7 @@ func _trapline(person: Inhabitant, hours: float) -> void:
 	person.craft_progress = 0.0
 	# Se paga al terminar, no al empezar: una obra a medias no se ha comido
 	# la fibra todavía.
-	if not sim._can_afford(Trap.materials(trap_kind)):
+	if not sim.taller._can_afford(Trap.materials(trap_kind)):
 		return
 	for material: int in Trap.materials(trap_kind):
 		sim.store.take(material as Materia.Kind,

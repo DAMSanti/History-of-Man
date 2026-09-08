@@ -1,0 +1,29 @@
+# El proyecto se escribe con finales de linea LF, dentro y fuera del
+# repositorio. Sin esto, `core.autocrlf=true` deja el arbol de trabajo en CRLF
+# mientras git guarda LF, y basta un `git stash` para que la mitad de los
+# ficheros cambien de final de linea sin que nadie lo pida. Ya costo un fichero
+# corrompido: un script de edicion que buscaba "\n" metio dos lineas sueltas en
+# la cabecera de SettlementSim.gd.
+* text=auto eol=lf
+
+# Codigo y datos de texto
+*.gd        text eol=lf
+*.gdshader  text eol=lf
+*.tscn      text eol=lf
+*.tres      text eol=lf
+*.godot     text eol=lf
+*.md        text eol=lf
+*.json      text eol=lf
+*.cfg       text eol=lf
+*.uid       text eol=lf
+
+# Binarios: que git no los toque
+*.res       binary
+*.png       binary
+*.jpg       binary
+*.svg       text eol=lf
+*.fbx       binary
+*.glb       binary
+*.gltf      binary
+*.ttf       binary
+*.zip       binary

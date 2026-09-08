@@ -373,9 +373,9 @@ func test_hunters_in_cuenta_solo_esta_especialidad_de_caza() -> void:
 	ocioso.current_speciality = Profession.Speciality.CAZA_MAYOR
 	sim.people = [mayor_uno, mayor_dos, menor, ocioso]
 
-	assert_eq(sim.hunters_in(Profession.Speciality.CAZA_MAYOR), 2,
+	assert_eq(sim.taller.hunters_in(Profession.Speciality.CAZA_MAYOR), 2,
 		"dos en cuadrilla mayor, sin contar al que no tiene tarea hoy")
-	assert_eq(sim.hunters_in(Profession.Speciality.CAZA_MENOR), 1,
+	assert_eq(sim.taller.hunters_in(Profession.Speciality.CAZA_MENOR), 1,
 		"uno solo en menor, aparte del todo")
 
 

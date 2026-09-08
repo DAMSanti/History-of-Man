@@ -492,7 +492,7 @@ func _materials_of(activity: Subsistence.Activity) -> Array[String]:
 		return []
 
 	var lines: Array[String] = []
-	var yields: Dictionary = ui.sim._yield_materials(activity)
+	var yields: Dictionary = ui.sim.tajo._yield_materials(activity)
 	for kind: int in yields.keys():
 		var k := kind as Materia.Kind
 		var left := ui.sim.remaining_units(activity, k)

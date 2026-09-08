@@ -133,7 +133,7 @@ func _init() -> void:
 						person.current_speciality as Profession.Speciality),
 					person.state_name(),
 					person.position.distance_to(sim.home_position),
-					person.fatigue, sim.pack_rations(person)])
+					person.fatigue, sim.despensa.pack_rations(person)])
 
 		var entries: Array = sim.chronicle.entries
 		for i in range(seen, entries.size()):

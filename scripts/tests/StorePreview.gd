@@ -56,7 +56,7 @@ func _init() -> void:
 		sim.toolkit.craft(Tool.Kind.CESTO, Tool.Stuff.FIBRA, 0.5)
 	sim.toolkit.craft(Tool.Kind.AZAGAYA, Tool.Stuff.ASTA, 0.5)
 	sim.toolkit.pieces[0].wear(20.0)
-	sim.set_tool_order(Tool.Kind.AZAGAYA, 4)
+	sim.taller.set_tool_order(Tool.Kind.AZAGAYA, 4)
 
 	sim.camp_built[CampProjects.Kind.HOGAR] = true
 	sim.queue_project(CampProjects.Kind.SECADERO)

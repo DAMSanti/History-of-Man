@@ -103,7 +103,7 @@ func _init() -> void:
 		var name := Tool.kind_name(kind as Tool.Kind)
 		if not listed.has(name):
 			hidden.append("%s (%s)" % [name,
-				"no se sabe" if not sim.knows_tool(kind as Tool.Kind) else "OJO"])
+				"no se sabe" if not sim.taller.knows_tool(kind as Tool.Kind) else "OJO"])
 	print("piezas listadas: %d de %d" % [listed.size(), Tool.Kind.values().size()])
 	print("no listadas: %s" % ", ".join(hidden))
 	print("odres llenos en el abrigo: %.0f · odres que existen: %d" % [
@@ -111,13 +111,13 @@ func _init() -> void:
 	# Y con odres de verdad: el almacen tiene que contarlos, no tener agua suelta.
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
-	sim._sync_waterskins()
+	sim.despensa._sync_waterskins()
 	print("con dos odres hechos y nadie fuera: %.0f llenos" % sim.store.amount(
 		Materia.Kind.AGUA))
-	sim._hand_out_containers(sim.people[0])
+	sim.despensa._hand_out_containers(sim.people[0])
 	print("uno se lo lleva alguien: %.0f llenos, y el lleva agua para %.1f h" % [
 		sim.store.amount(Materia.Kind.AGUA), sim.people[0].water_left])
-	sim._deliver(sim.people[0])
+	sim.despensa._deliver(sim.people[0])
 	print("vuelve y lo cuelga: %.0f llenos" % sim.store.amount(Materia.Kind.AGUA))
 
 	# Y una vista del valle con los parajes, para mirar los alfileres nuevos.

@@ -61,13 +61,13 @@ func _run() -> void:
 
 	var step := sim.seconds_per_day / 24.0 / 60.0
 	var flips := 0
-	var previous := sim.food_is_capped()
+	var previous := sim.despensa.food_is_capped()
 	var dias_libres := 0
 	for _day in range(DAYS):
 		for _tick in range(24 * 60):
 			sim._process(step)
 
-		var capped := sim.food_is_capped()
+		var capped := sim.despensa.food_is_capped()
 		if capped != previous:
 			flips += 1
 			previous = capped

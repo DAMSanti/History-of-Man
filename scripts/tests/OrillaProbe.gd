@@ -100,7 +100,7 @@ func _run() -> void:
 	print("  atascos: %s" % JSON.stringify(sim.stuck_tally))
 	print("  cargas perdidas: %d" % sim.lost_loads)
 	print("  produccion diaria de pescado que cuenta la banda: %.2f"
-		% sim.production_of(Materia.Kind.PESCADO))
+		% sim.taller.production_of(Materia.Kind.PESCADO))
 	print("=== LO QUE DICE CADA SALIDA DE PESCA ===")
 	for person: Inhabitant in elegidos:
 		if person.activity != Subsistence.Activity.PESCA:

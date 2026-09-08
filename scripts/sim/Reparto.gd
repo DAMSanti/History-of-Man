@@ -232,7 +232,7 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 		# tres cosas cubiertas y una a cero tiene un problema, no un notable
 		var worst := INF
 		for kind: int in makes:
-			worst = minf(worst, sim.tool_coverage(kind as Tool.Kind))
+			worst = minf(worst, sim.taller.tool_coverage(kind as Tool.Kind))
 		return worst
 
 	# Las de comida no producen UN material: producen comida, y la comida se
@@ -508,7 +508,7 @@ func task_blocked_by(person: Inhabitant, task: int) -> String:
 	if not Profession.can_do(job, person):
 		return "no puede: no le toca por edad o por criar"
 
-	if sim.food_is_capped() and sim._feeds_the_band(job):
+	if sim.despensa.food_is_capped() and sim.despensa._feeds_the_band(job):
 		return "la despensa esta al tope; nadie sale a por mas comida"
 
 	var speciality := Profession.task_speciality(task)
@@ -557,7 +557,7 @@ func apply_priorities() -> void:
 		# -la banda seguia recolectando igual, en silencio.
 		var candidates: Array[int] = []
 
-		var larder_full := sim.food_is_capped()
+		var larder_full := sim.despensa.food_is_capped()
 
 		for job_key: int in Profession.CATALOGUE:
 			if job_key == Profession.Job.OCIOSO:
@@ -568,7 +568,7 @@ func apply_priorities() -> void:
 			# bloquea el reparto, no el trabajo empezado: quien viene cargado
 			# entrega igual, y quien esta en una pieza abatida la termina de
 			# traer. Lo que se para es abrir tajo nuevo.
-			if larder_full and sim._feeds_the_band(job_key as Profession.Job):
+			if larder_full and sim.despensa._feeds_the_band(job_key as Profession.Job):
 				continue
 			for task: int in Profession.tasks_of(job_key as Profession.Job):
 				# Si esa TAREA no tiene ADONDE ir, no cuenta: se pasa a la

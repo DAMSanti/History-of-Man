@@ -406,13 +406,13 @@ func test_el_cazador_con_pieza_levantada_duerme_fuera() -> void:
 	person.position = Vector3(900.0, 0.0, 900.0)
 	sim.people = [person]
 
-	assert_false(sim._camps_out(person, false),
+	assert_false(sim.despensa._camps_out(person, false),
 		"sin pieza levantada no hay por que dormir fuera")
 
 	var hunt := Hunt.new()
 	hunt.crew = [person]
 	sim.caceria.hunts.append(hunt)
-	assert_true(sim._camps_out(person, false),
+	assert_true(sim.despensa._camps_out(person, false),
 		"con la pieza levantada se sigue el rastro y se duerme al raso")
 	sim.free()
 
@@ -431,7 +431,7 @@ func test_el_de_casa_no_acampa_por_muy_cazador_que_sea() -> void:
 	var hunt := Hunt.new()
 	hunt.crew = [person]
 	sim.caceria.hunts.append(hunt)
-	assert_false(sim._camps_out(person, false),
+	assert_false(sim.despensa._camps_out(person, false),
 		"en la puerta de casa no se acampa")
 	sim.free()
 
@@ -505,7 +505,7 @@ func test_sin_arma_no_se_espera_nada_de_la_pieza_grande() -> void:
 	assert_eq(sim.caceria.raciones_esperadas(person,
 		Profession.Speciality.CAZA_MAYOR), 0.0,
 		"sin azagaya, la caza mayor no promete nada")
-	assert_false(sim._worth_sleeping_out(person),
+	assert_false(sim.despensa._worth_sleeping_out(person),
 		"y por eso no se duerme fuera")
 
 

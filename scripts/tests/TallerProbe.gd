@@ -103,14 +103,14 @@ func _report(sim: SettlementSim, gala: Inhabitant) -> void:
 		for kind_key: int in (SettlementSim.SPECIALITY_MAKES[speciality_key] as Array):
 			var kind := kind_key as Tool.Kind
 			var why := ""
-			var coverage := sim.tool_coverage(kind)
+			var coverage := sim.taller.tool_coverage(kind)
 			if coverage >= SettlementSim.RESERVA_UTILLAJE:
 				why = "cubierta %.2f" % coverage
 			else:
 				var prerequisite := Tool.needs_tool(kind)
 				if prerequisite >= 0 and sim.toolkit.count(prerequisite as Tool.Kind) <= 0:
 					why = "sin %s" % Tool.kind_name(prerequisite as Tool.Kind)
-				elif not sim._can_pay_for(kind):
+				elif not sim.taller._can_pay_for(kind):
 					why = "sin material (%s)" % _recipe_text(sim, kind)
 				else:
 					why = "SE PUEDE (cobertura %.2f)" % coverage

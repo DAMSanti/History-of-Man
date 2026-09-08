@@ -121,8 +121,8 @@ func _init() -> void:
 		float(puesta.spoils.get(int(Materia.Kind.CARNE), 0.0)),
 		Hunt.butcher_days("uro")])
 
-	sim.produced_days.clear()
-	sim.produced_today.clear()
+	sim.taller.produced_days.clear()
+	sim.taller.produced_today.clear()
 	var last_hour := -1
 	while sim.day < first_day + days:
 		await process_frame
@@ -139,9 +139,9 @@ func _init() -> void:
 	# carne se come segun entra y el delta sale cero aunque hayan llegado
 	# doscientas unidades.
 	var carne := 0.0
-	for a_day: Dictionary in sim.produced_days:
+	for a_day: Dictionary in sim.taller.produced_days:
 		carne += float(a_day.get(int(Materia.Kind.CARNE), 0.0))
-	carne += float(sim.produced_today.get(int(Materia.Kind.CARNE), 0.0))
+	carne += float(sim.taller.produced_today.get(int(Materia.Kind.CARNE), 0.0))
 	print("")
 	print("carne entregada al almacen: %.1f (el almacen tiene %.1f)" % [
 		carne, sim.store.amount(Materia.Kind.CARNE)])

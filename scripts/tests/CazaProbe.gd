@@ -154,9 +154,9 @@ func _run() -> void:
 		sim.toolkit.count(Tool.Kind.CESTO)])
 	print("  filo de caza %.2f · filo de recoleccion %.2f" % [
 		sim.toolkit.efficiency(Tool.Kind.AZAGAYA,
-			sim.workers_in(Subsistence.Activity.CAZA)),
+			sim.taller.workers_in(Subsistence.Activity.CAZA)),
 		sim.toolkit.efficiency(Tool.Kind.CESTO,
-			sim.workers_in(Subsistence.Activity.RECOLECCION))])
+			sim.taller.workers_in(Subsistence.Activity.RECOLECCION))])
 	print("  temporada: caza %.2f · recoleccion %.2f  (%s)" % [
 		ResourceField.seasonal_factor(Subsistence.Activity.CAZA,
 			GameState.season as Subsistence.Season),

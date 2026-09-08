@@ -336,6 +336,102 @@ var tajo: Tajo = Tajo.new(self)
 ## Abrir monte nuevo. Ver [Reconocimiento].
 var reconocimiento: Reconocimiento = Reconocimiento.new(self)
 
+## La pared del abrigo. Ver [Pinturas].
+var pinturas: Pinturas = Pinturas.new(self)
+
+## Lo que se fabrica y lo que se gasta. Ver [Taller].
+var taller: Taller = Taller.new(self)
+
+## Comer, beber y salir avituallado. Ver [Despensa].
+var despensa: Despensa = Despensa.new(self)
+
+
+# --- lo que la despensa comparte con el resto ------------------------------
+
+## Cuantos tajos se prueban antes de darse por vencido. Cinco: el mejor y
+## cuatro alternativas. Probar todos seria trazar cuarenta caminos por
+## persona y jornada para nada.
+const INTENTOS_DE_TAJO := 5
+
+## Actividades a las que hoy no se ha podido llegar por ningun sitio.
+##
+## Se limpia al cerrar la jornada, DESPUES del reparto, para que el reparto
+## la vea y mande a esa gente a otra cosa; al dia siguiente se vuelve a
+## intentar, porque una pasarela o una piragua pueden haber abierto el paso.
+var _unreachable_today: Dictionary = {}
+
+## Cuanto multiplica la velocidad por marisma o vado saber nadar de verdad.
+const NATACION_MARISMA_BONUS := 1.6
+
+## Cuanto sube NATACION por hora metido en el barro o el vado. Minusculo, a
+## proposito: es un rasgo de cuerpo, no una destreza de tajo.
+const NATACION_TRAINING_RATE := 0.00006
+
+## Ya se ha marcado que celdas de materia prima no vuelven a crecer.
+var _veins_frozen := false
+
+## Caminos ya trazados, por par de celdas.
+##
+## Existe porque el patron de una partida es repetitivo hasta el aburrimiento:
+## el abrigo, los tres tajos de la temporada y la vuelta. El primero que va
+## paga la busqueda; los otros catorce, y el mismo manana, no pagan nada.
+##
+## La clave es la celda gruesa y no el punto exacto: dos personas que salen
+## del abrigo con veinte metros de diferencia no necesitan dos caminos
+## distintos, y exigir el punto exacto convertiria la cache en un adorno.
+var _route_cache: Dictionary = {}
+
+var _route_order: Array[String] = []
+
+## Cuantos caminos se guardan. Doscientos cubren de sobra los trayectos de una
+## temporada; guardarlos todos seria pagar memoria por rutas que no se van a
+## repetir nunca.
+const ROUTE_CACHE_LIMIT := 200
+
+## Metros por celda de la cache. Mas gruesa que la de navegacion a proposito:
+## lo que se quiere es que los quince del campamento compartan camino.
+const LANE_CELL := 48.0
+
+
+# --- lo que el taller comparte con el resto --------------------------------
+
+## Cuantos pasos seguidos contra un obstaculo antes de volver a trazar.
+##
+## Treinta: medio segundo de reloj. Bastantes para que un roce con la orilla
+## se resuelva solo con el esquive -que para eso esta- y pocos para que nadie
+## se pase la jornada empujando una pared.
+const BLOCKED_BEFORE_REPLAN := 30
+
+## A qué distancia de un sitio que se dio por imposible sigue contando como el
+## mismo sitio. Un cotarro mide decenas de metros: cien es «el de detrás del
+## cortado», no «el de al lado».
+const UNREACHABLE_SLACK := 100.0
+
+## Cuántas veces se vuelve a trazar contra la misma pared antes de rendirse.
+##
+## Tres. Con una o dos se abandonaría un destino por un roce con la orilla que
+## el esquive habría resuelto solo; con más, la tarde se va en intentarlo.
+const BLOCKED_REPLANS := 3
+
+## Cuantas veces se ha quedado alguien atascado por cada motivo.
+##
+## Se lleva la cuenta a proposito y no solo el aviso suelto: un atasco es una
+## anecdota, veinte del mismo motivo son un fallo con nombre. Lo lee el panel
+## de rastros.
+var stuck_tally: Dictionary = {}
+
+## Los primeros atascos, con TODO el contexto.
+##
+## Existe para poder contestar «por que se traba» con datos y no con una
+## teoria. Un motivo resumido -«no avanza por el camino trazado»- dice que
+## sintoma tiene, no que le pasa: hace falta saber donde estaba, adonde iba,
+## que llevaba trazado y como estaba el suelo debajo.
+var stuck_reports: Array[Dictionary] = []
+
+## Cuantos se guardan. Veinte llegan de sobra para ver el patron; guardar
+## todos seria memoria por nada.
+const STUCK_REPORTS := 20
+
 
 # --- lo que el reconocimiento comparte --------------------------------------
 
@@ -1016,7 +1112,7 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 			and person.position.distance_to(home_position) > arrive_radius * 4.0
 		if not on_expedition:
 			if _at_shelter(person):
-				_deliver(person)
+				despensa._deliver(person)
 				person.state = Inhabitant.State.OCIOSO
 			else:
 				_send_to(person, home_position)
@@ -1059,7 +1155,7 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 	# demás. Ver `_settle_at_home`.
 	# El agua del dia. Va aqui, al final del tick, para que mire la posicion en
 	# la que la persona ha ACABADO el paso y no la de antes de darlo.
-	_drink_and_thirst(person, hours)
+	despensa._drink_and_thirst(person, hours)
 
 	_settle_at_home(person, delta)
 
@@ -1224,7 +1320,7 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 func _tick_routine(person: Inhabitant, hours: float, delta: float,
 		night: bool) -> void:
 	if night and person.state == Inhabitant.State.COMIENDO:
-		_eat_meal(person, hours)
+		despensa._eat_meal(person, hours)
 		_settle_at_home(person, delta)
 	elif night:
 		# La batida de reconocimiento NO vuelve a dormir a casa: acampa donde
@@ -1251,15 +1347,15 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 		# noche encima- y volvia con las manos vacias, sin haber llamado ni
 		# una vez a `_finish_survey`.
 		var mid_survey := person.state == Inhabitant.State.RECONOCIENDO
-		var camping := _camps_out(person, mid_survey)
+		var camping := despensa._camps_out(person, mid_survey)
 
 		# Sin comida encima, la salida se acaba y se vuelve: es lo que pone
 		# limite a su alcance, mas todavia que el cansancio -salvo, por lo
 		# de arriba, mientras se este terminando de reconocer.
-		if camping and (pack_rations(person) > 0.2 or mid_survey):
+		if camping and (despensa.pack_rations(person) > 0.2 or mid_survey):
 			person.state = Inhabitant.State.DURMIENDO
 			# La tienda y la hoguera de esta noche. Ver `_bivouac`.
-			_bivouac(person)
+			despensa._bivouac(person)
 			# Se descansa peor al raso que en el abrigo, y peor todavía sin
 			# nada con que armar el vivac.
 			# Lo que falta y lo mal armado que este pesan igual: una tienda que se
@@ -1268,7 +1364,7 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 			var rest := 6.0 - (float(person.bivouac_lack) + botched) * VIVAC_REST_LOSS
 			person.fatigue = maxf(person.fatigue - hours * maxf(rest, 0.0), 0.0)
 			# Y se cena de lo que se lleva
-			_eat_from_pack(person, hours)
+			despensa._eat_from_pack(person, hours)
 		else:
 			# De noche NO SE ANDA. Se trazaba camino a casa cada tick y se seguia
 			# andando en la oscuridad: medido antes, a las nueve -la hora de
@@ -1281,7 +1377,7 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 				# no entraba en el almacen hasta la manana siguiente -y si por la
 				# manana se salia sin pasar por la boca, se perdia entera-. Medido
 				# antes: 635 momentos de gente en el abrigo con 5,5 kg encima.
-				_deliver(person)
+				despensa._deliver(person)
 				person.state = Inhabitant.State.DURMIENDO
 				person.fatigue = maxf(person.fatigue - hours * 9.0, 0.0)
 				# El invierno en una cueva sin fuego no se descansa: se
@@ -1322,7 +1418,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 		Inhabitant.State.DURMIENDO, Inhabitant.State.OCIOSO:
 			_decide_the_day(person, hours)
 		Inhabitant.State.COMIENDO:
-			_eat_meal(person, hours)
+			despensa._eat_meal(person, hours)
 		Inhabitant.State.YENDO:
 			if person.position.distance_to(person.target) < arrive_radius:
 				if person.job == Profession.Job.EXPLORACION \
@@ -1408,7 +1504,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 				if not caceria._is_hunting(person):
 					tajo._forage_drift(person)
 				if person.job == Profession.Job.MANUFACTURA:
-					_craft(person, hours)
+					taller._craft(person, hours)
 				elif person.current_speciality == Profession.Speciality.CAZA_MENOR \
 						or person.current_speciality == Profession.Speciality.CAZA_MAYOR:
 					# La caza YA NO cosecha: acecha, persigue y cobra una
@@ -1444,7 +1540,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 
 		Inhabitant.State.VOLVIENDO:
 			if _home_reached(person):
-				_deliver(person)
+				despensa._deliver(person)
 				person.state = Inhabitant.State.OCIOSO
 
 
@@ -1529,7 +1625,7 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 			# bloque nocturno-, asi que esto no atasca a nadie:
 			# solo retrasa la salida un dia o dos.
 			person.state = Inhabitant.State.OCIOSO
-		elif at_home and not _provision(person, frontier.distance_to(home_position)):
+		elif at_home and not despensa._provision(person, frontier.distance_to(home_position)):
 			# Sin provisiones no hay expedicion. Se queda ayudando.
 			person.state = Inhabitant.State.OCIOSO
 		else:
@@ -1570,358 +1666,9 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 		_send_to_work(person)
 
 
-## Cuantos dias de mas pide una distancia, por encima del suelo de
-## siempre. Grosero a proposito: no sabe de rios ni de cuestas por el
-## camino real, solo dice "esto esta lejos, para esto no basta con lo de
-## siempre".
-func _travel_days_for(distance_m: float) -> float:
-	if distance_m <= 0.0:
-		return 0.0
-	return floor((distance_m / 1000.0) / KM_PER_EXTRA_DAY)
-
-
-## Cuantos dias de comida le tocan a esta persona, segun su destreza y lo
-## lejos que va.
-##
-## En LA SUYA: expedicion y ascension no comparten cuenta, cada una avanza
-## con su propio ritmo -alguien puede ser un buen escalador y un mal
-## logistico de expedicion larga, o al reves.
-##
-## `distance_m` es la distancia real al destino de esta salida. Antes se
-## cargaban siempre los mismos `expedition_days` sin mirar adonde se iba,
-## asi que una ascension a la loma de al lado y una expedicion a dos
-## valles cargaban exactamente lo mismo: de sobra para la primera, corto
-## para la segunda. Sin distancia -pruebas, o destino aun sin calcular- se
-## queda en el suelo de siempre.
-func _expedition_days_for(person: Inhabitant, distance_m: float = -1.0) -> float:
-	var task := Profession.task_id(Profession.Job.EXPLORACION,
-		person.current_speciality as Profession.Speciality)
-	var factor := lerpf(EXPEDITION_SKILL_DAYS_RANGE.x, EXPEDITION_SKILL_DAYS_RANGE.y,
-		person.skill_in(task))
-	var base_days := float(expedition_days)
-	if distance_m > 0.0:
-		base_days = maxf(base_days, _travel_days_for(distance_m) + SAFETY_MARGIN_DAYS)
-	return base_days * factor
-
-
-## Avitualla una expedicion o ascension. Devuelve si pudo salir.
-##
-## Es lo que hace que explorar lejos deje de ser gratis: cada salida se
-## lleva comida del almacen, y en un mal invierno eso es comida que no esta.
-## La batida no pasa por aqui -no acampa, vuelve a diario- ver el bloque
-## nocturno de `_tick_person`.
-##
-## `distance_m` es la distancia al destino de HOY. Si no llega a acampar
-## -un pico cercano, un frente a un paso del abrigo- no hace falta cargar
-## nada: se come en casa como cualquier otro y se vuelve esa misma tarde.
-## Cargar racion aqui era pedirle un peaje a quien ni siquiera duerme fuera.
-func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
-	if distance_m >= 0.0 and distance_m <= arrive_radius * 4.0:
-		return true
-
-	# Lo que ya lleve cuenta
-	var carried := 0.0
-	for kind: int in person.load.keys():
-		var k := kind as Materia.Kind
-		if Materia.is_food(k):
-			carried += float(person.load[kind]) * Materia.nutrition(k)
-
-	var days := _expedition_days_for(person, distance_m)
-	var needed := person.daily_food() * days - carried
-	if needed <= 0.0:
-		return true
-
-	# Se prefiere lo que menos pesa por racion y mas aguanta: para llevar
-	# encima varios dias, la carne seca y el fruto son lo unico razonable
-	for kind: int in [Materia.Kind.CARNE_SECA, Materia.Kind.PESCADO_SECO,
-			Materia.Kind.FRUTO_SECO, Materia.Kind.GRASA]:
-		if needed <= 0.0:
-			break
-		var k := kind as Materia.Kind
-		var units := store.take(k, needed / maxf(Materia.nutrition(k), 0.001))
-		if units > 0.0:
-			person.add_load(k, units)
-			person.note_from_store(k, units)
-			needed -= units * Materia.nutrition(k)
-
-	# Sin nada de eso -o sin bastante-, se carga lo que HAYA, fresco o no.
-	# Antes, si el almacen se quedaba sin las tres cosas concretas de
-	# arriba, la expedicion simplemente NO SALIA, sin una nota ni un
-	# aviso: una banda que agotaba su carne seca dejaba de explorar EL
-	# RESTO DE LA PARTIDA sin que nadie supiera por que, aunque el
-	# almacen siguiera lleno de pescado, mariscos o fruto fresco.
-	# Cualquier banda de verdad sale con lo que tenga antes que quedarse
-	# en el abrigo por no tener precisamente la mejor racion de viaje.
-	if needed > 0.0:
-		for kind: int in Materia.Kind.values():
-			if needed <= 0.0:
-				break
-			var k := kind as Materia.Kind
-			if not Materia.is_food(k):
-				continue
-			var units := store.take(k, needed / maxf(Materia.nutrition(k), 0.001))
-			if units > 0.0:
-				person.add_load(k, units)
-				person.note_from_store(k, units)
-				needed -= units * Materia.nutrition(k)
-
-	_pack_bivouac(person, days)
-
-	# Con menos de un dia de comida no se sale
-	return needed <= person.daily_food() * (days - 1.0)
-
-
-## Carga la tienda y la hoguera de las noches que se van a pasar fuera.
-##
-## No impide salir si falta: una banda sale con lo que tiene, igual que con la
-## comida. Lo que hace la falta es cara: se paga esa noche, en riesgo de
-## percance. Ver `_bivouac`.
-func _pack_bivouac(person: Inhabitant, days: float) -> void:
-	var nights := maxf(ceil(days), 1.0) + VIVAC_MARGEN_NOCHES
-	var piel := VIVAC_PIEL - float(person.load.get(Materia.Kind.PIEL, 0.0))
-	if piel > 0.0:
-		var got := store.take(Materia.Kind.PIEL, piel)
-		person.add_load(Materia.Kind.PIEL, got)
-		person.note_from_store(Materia.Kind.PIEL, got)
-	var lena := VIVAC_LENA * nights - float(person.load.get(Materia.Kind.LENA, 0.0))
-	if lena > 0.0:
-		var got_wood := store.take(Materia.Kind.LENA, lena)
-		person.add_load(Materia.Kind.LENA, got_wood)
-		person.note_from_store(Materia.Kind.LENA, got_wood)
-
-
-## Lo que cuesta pasar la noche fuera del abrigo.
-##
-## Se cobra UNA vez por noche —de ahí `bivouac_day`— y no en cada tick, que es
-## como se cobraría sesenta veces por segundo. La piel no se gasta: hay que
-## tenerla, y vuelve al abrigo con quien la llevó. La leña arde.
-func _bivouac(person: Inhabitant) -> void:
-	if person.bivouac_day == day:
-		return
-	person.bivouac_day = day
-	person.bivouac_lack = 0
-	if float(person.load.get(Materia.Kind.PIEL, 0.0)) < VIVAC_PIEL:
-		person.bivouac_lack += 1
-	# La leña que se quema es la hoguera, y ahora se ve arder: ver
-	# [BivouacFires]. Sin fuego se sigue durmiendo, pero a oscuras y con el
-	# riesgo que eso trae.
-	person.bivouac_fire = person.take_load(
-		Materia.Kind.LENA, VIVAC_LENA) >= VIVAC_LENA
-	if not person.bivouac_fire:
-		person.bivouac_lack += 1
-
-	# Y ARMARLO, que no es tener el material. Montar una tienda de pieles con
-	# viento, prender con leña húmeda y dejarlo de forma que aguante la noche es
-	# saber del HOGAR: es el mismo oficio que mantiene el fuego del abrigo, y
-	# por eso es su saber el que decide, no el de explorar.
-	#
-	# Quien no lo sabe hacer duerme peor aunque lleve todo lo que hace falta, y
-	# eso se paga a la mañana siguiente: se levanta mas cansado y la jornada le
-	# cunde menos. Es lo que hace que poner a alguien en el hogar valga tambien
-	# para quien sale de expedicion.
-	# Va APARTE de `bivouac_lack`, que cuenta lo que FALTA: llevar la piel y la
-	# leña y no saber armarlo son dos cosas distintas y se leen distinto en la
-	# cronica -«sin tienda» no es «mal armado»-.
-	person.bivouac_botched = not _camps_well(person)
-	if person.bivouac_botched:
-		person.log_deed(person.current_task(),
-			"pasó la noche mal armado", false)
-
-	if person.bivouac_lack <= 0:
-		return
-	var falta := "sin tienda ni hoguera"
-	if person.bivouac_lack == 1:
-		var tent := float(person.load.get(Materia.Kind.PIEL, 0.0)) >= VIVAC_PIEL
-		falta = "sin hoguera" if tent else "sin tienda"
-	_note(Chronicle.Kind.PENURIA,
-		"%s pasa la noche %s en %s." % [person.given_name, falta,
-			parajes.place_name(person.position, home_position)], 1)
-
-
-## Cuanto pesa el saber del hogar en armar un vivac.
-##
-## De cero a uno: con el hogar sin practicar se falla casi siempre, y con el
-## oficio hecho no se falla nunca. La suerte que queda es la noche -llueve, o
-## no-, y por eso no es un si o no seco.
-##
-## Pendiente de playtest: lo decidido es que el hogar sirva para esto, no
-## cuanto.
-const VIVAC_BASE := 0.35
-
-
-## Si esta persona sabe armar el campamento de una noche.
-func _camps_well(person: Inhabitant) -> bool:
-	var task := Profession.task_id(Profession.Job.HOGAR)
-	var know := clampf(VIVAC_BASE + person.skill_in(task), 0.0, 1.0)
-	return _rng.randf() < know
-
-
-## Cuanto del dia util puede costar el ir y venir antes de que no compense
-## volver a dormir a casa.
-##
-## MEDIDO, y es de las cifras que mas cambian el juego. Con
-## `scripts/tests/JornadaCazadorProbe.gd`, doce jornadas y cinco cazadores de
-## caza mayor con azagaya, el dia de un cazador se repartia asi:
-##
-##   durmiendo          45,2 %
-##   de camino          23,4 %
-##   volviendo          22,5 %
-##   ocioso              4,7 %
-##   buscando            3,2 %
-##   TRABAJANDO          0,8 %   <- rastreo, acecho y lance, todo junto
-##
-## Y en esos ratos de trabajo tenia pieza al alcance el CIEN por cien de las
-## veces. O sea que la caza no fallaba por falta de caza, ni por punteria, ni
-## por fuelle: el cazador no llegaba a cazar. Se le iba el dia andando a un
-## coto a kilometro y medio -[CAZA_LEJOS_M]- y volviendo de el.
-##
-## Media jornada util. Pendiente de playtest: lo decidido es que a partir de
-## cierto punto se duerma donde se caza en vez de hacer el camino dos veces al
-## dia, no donde esta ese punto.
-const VUELTA_QUE_NO_COMPENSA := 0.5
-
-
-## Si esta persona pasa la noche FUERA en vez de volver al abrigo.
-##
-## Lo hacia solo el explorador. Ahora tambien EL CAZADOR DE PIEZA GRANDE, y esa
-## es la diferencia entre una caza de jornada y una caza de verdad: una pieza
-## grande no se cobra entre el desayuno y la cena. Se sale con provisiones, se
-## duerme al raso y se vuelve con ella o sin ella.
-##
-## Las tres condiciones son las mismas para todos: hay que estar LEJOS -si no
-## se duerme en casa, que se duerme mejor-, hay que poder con la noche, y hay
-## que llevar de comer. Lo de comer lo mira quien llama; aqui va el resto.
-func _camps_out(person: Inhabitant, mid_survey: bool) -> bool:
-	if person.position.distance_to(home_position) <= arrive_radius * 4.0:
-		return false
-	if person.job == Profession.Job.EXPLORACION:
-		return person.current_speciality != Profession.Speciality.BATIDA \
-			and (person.fatigue < 70.0 or mid_survey)
-	if person.job == Profession.Job.CAZA:
-		if person.fatigue >= 70.0:
-			return false
-		# Con la pieza levantada no se vuelve: eso no se discute.
-		if caceria.hunt_of(person) != null:
-			return true
-		# Y sin ella tampoco, si el coto esta tan lejos que el camino se come el
-		# dia. Antes se volvia siempre, y el rastreo -que es la mayor parte del
-		# oficio- no llegaba a empezar nunca. Ver [VUELTA_QUE_NO_COMPENSA].
-		if person.current_speciality != Profession.Speciality.CAZA_MAYOR:
-			return false
-		if not _worth_sleeping_out(person):
-			return false
-		var round_trip := hours_to_walk(
-			person.position.distance_to(home_position) * RODEO_DE_VUELTA) * 2.0
-		return round_trip >= HORAS_UTILES * VUELTA_QUE_NO_COMPENSA
-	return false
-
-
-## Si a esta persona le compensa quedarse a dormir en el monte a por pieza
-## grande, en vez de volverse y hacer caza menor cerca de casa.
-##
-## La gente NO ES TONTA: sabe con lo que sale. Un cazador con las manos vacias
-## no se va cinco jornadas detras de un uro -no lo va a matar, y mientras tanto
-## no come-; con azagayas en el abrigo y tres personas al lado, la cuenta
-## cambia y entonces si.
-##
-## Se pide de verdad, no se aproxima: `Caceria.raciones_esperadas` mira las
-## raciones que tiene la pieza -[Fauna] manda-, lo que se cobra de lo que se
-## levanta, y las horas de rastreo, que ya llevan dentro LA PERICIA, el filo
-## que hay y la cuadrilla que hay. Los tres mandos que se pedian estan ahi
-## dentro sin tener que ponerlos aparte.
-##
-## Y el liston es el que se puede defender solo: que traiga al menos lo que
-## come mientras esta fuera. Por debajo de eso, irse es perder comida.
-func _worth_sleeping_out(person: Inhabitant) -> bool:
-	var big := caceria.raciones_esperadas(person, Profession.Speciality.CAZA_MAYOR)
-	if big < person.daily_food():
-		return false
-	# Y ademas tiene que ganarle a quedarse cerca haciendo caza menor, que es
-	# la alternativa de verdad y no «no hacer nada».
-	return big >= caceria.raciones_esperadas(person,
-		Profession.Speciality.CAZA_MENOR)
-
-
-## Come de lo que lleva en la mochila, estando fuera.
-func _eat_from_pack(person: Inhabitant, hours: float) -> void:
-	var wanted := person.daily_food() * (hours / 24.0)
-	for kind: int in person.load.keys().duplicate():
-		if wanted <= 0.0:
-			break
-		var k := kind as Materia.Kind
-		if not Materia.is_food(k):
-			continue
-		var have: float = person.load[k]
-		var units := minf(have, wanted / maxf(Materia.nutrition(k), 0.001))
-		person.load[k] = have - units
-		if person.load[k] <= 0.0001:
-			person.load.erase(k)
-		# Lo comido sale de lo que se sacó del almacén: si no se descontara
-		# aquí, al volver se le restaría a la producción una comida que ya no
-		# lleva encima.
-		person.carried_out[k] = maxf(
-			float(person.carried_out.get(k, 0.0)) - units, 0.0)
-		wanted -= units * Materia.nutrition(k)
-		person.hunger = maxf(person.hunger - units * Materia.nutrition(k) * (3.4 * 24.0), 0.0)
-
-
-## Cuanta comida le queda encima a una persona, en raciones.
-func pack_rations(person: Inhabitant) -> float:
-	var total := 0.0
-	for kind: int in person.load.keys():
-		var k := kind as Materia.Kind
-		if Materia.is_food(k):
-			total += float(person.load[kind]) * Materia.nutrition(k)
-	return total
-
-
-## A partir de que distancia del abrigo cuenta como "lejos": el borde del
-## mapa local, donde la exploracion empieza a asomarse a la comarca.
-const REGIONAL_DISTANCE := 2600.0
-
-## Cuanta gente hace falta dedicada a la expedicion antes de dejar que
-## alguien se aventure mas alla de [REGIONAL_DISTANCE].
-##
-## La peticion explicita: "las exploraciones mas lejanas o regionales
-## requieren grupos relativamente numerosos". Todavia no hay partidas que
-## caminen juntas en formacion -cada explorador sigue su propio paso y su
-## propio destino-, asi que esto se aplica como una condicion de PARTIDA:
-## mientras la banda no tenga suficiente gente puesta en ello, nadie sale
-## solo a explorar el borde del mapa. Con mas manos dedicadas a la vez, sí.
-const MIN_GROUP_FOR_REGIONAL := 3
-
-
-## Cuanta gente de la banda esta puesta en expedicion ahora mismo.
-func _expedition_party_size() -> int:
-	var n := 0
-	for p: Inhabitant in people:
-		if p.job == Profession.Job.EXPLORACION \
-				and p.current_speciality == Profession.Speciality.EXPEDICION:
-			n += 1
-	return n
-
-
 ## Levanta un momento: algo que hay que enseñar o decidir ahora. Ver [Moment].
 func raise_moment(moment: Moment) -> void:
 	moment_raised.emit(moment)
-
-
-## Cómo va la reserva de cara al invierno.
-##
-## Es la cuenta central de la época —SLICE_PALEOLITICO §3: el otoño decide si
-## sobrevives al invierno— y hasta ahora sólo existía repartida entre el almacén
-## y la cabeza del jugador. Devuelve raciones guardadas, las que hacen falta
-## para pasar el invierno entero, y la fracción entre las dos.
-func winter_stock() -> Dictionary:
-	var mouths := 0.0
-	for person: Inhabitant in people:
-		mouths += person.daily_food()
-	var needed := mouths * float(Subsistence.DAYS_PER_SEASON)
-	var have := store.food_rations()
-	return {
-		"have": have, "needed": needed,
-		"share": have / maxf(needed, 0.001),
-	}
 
 
 ## Dónde se pone esta persona cuando está en el abrigo, según lo que hace.
@@ -2113,7 +1860,7 @@ func _send_to_work(person: Inhabitant) -> void:
 	# firma de una fuga y no de un gasto.
 	if not person.load.is_empty():
 		if _home_reached(person):
-			_deliver(person)
+			despensa._deliver(person)
 		else:
 			lost_loads += 1
 	person.load.clear()
@@ -2123,7 +1870,7 @@ func _send_to_work(person: Inhabitant) -> void:
 	# Los recipientes se cogen al salir, y DESPUES de entregar: `_deliver`
 	# los devuelve al abrigo, asi que repartirlos antes era dejar salir a la
 	# gente con las manos vacias.
-	_hand_out_containers(person)
+	despensa._hand_out_containers(person)
 
 	# EL CAZADOR MAYOR SE AVITUALLA, como el explorador. Una pieza grande no se
 	# cobra entre el desayuno y la cena -medido: con caza de jornada salian una
@@ -2131,7 +1878,7 @@ func _send_to_work(person: Inhabitant) -> void:
 	# seguir un rastro dos jornadas pide llevar de comer. Sin provisiones sale
 	# igual: lo que no puede es dormir fuera, y eso ya lo mira `_camps_out`.
 	if person.current_speciality == Profession.Speciality.CAZA_MAYOR:
-		_provision(person, CAZA_LEJOS_M)
+		despensa._provision(person, CAZA_LEJOS_M)
 
 	# El taller NO sale a picar piedra. Su oficio figura con la actividad
 	# «materia prima» -es de donde saca lo que gasta- y eso le mandaba al
@@ -2141,7 +1888,7 @@ func _send_to_work(person: Inhabitant) -> void:
 	#
 	# Sale SOLO cuando de verdad falta lo que necesita para la pieza que toca,
 	# y entonces es un recado, no una jornada de cantera.
-	if person.job == Profession.Job.MANUFACTURA and not _workshop_short(person):
+	if person.job == Profession.Job.MANUFACTURA and not taller._workshop_short(person):
 		person.has_task = true
 		person.work_centre = home_position
 		person.forage_target = home_position
@@ -2200,111 +1947,6 @@ const SED_HORAS_CON_ODRE := HORAS_UTILES
 ## pendiente de playtest. Subirlo hace el odre menos necesario; bajarlo obliga
 ## a la banda a trabajar pegada al rio.
 const SED_HORAS_SIN_ODRE := HORAS_UTILES * 0.5
-
-
-## Cuantos odres LLENOS cuelgan del abrigo ahora mismo.
-##
-## El almacen no guarda agua a granel: guarda odres llenos, y por eso
-## `Materia.Kind.AGUA` se mide en «odre» y pesa lo que pesa uno. La cifra no se
-## lleva a mano -eso serian dos verdades sobre lo mismo- sino que se deriva de
-## los odres que ha hecho el taller menos los que hay fuera con alguien.
-##
-## Y estan llenos porque el abrigo se funda junto al agua: colgar un odre en la
-## boca de la cueva es tenerlo lleno. El que se vacia es el que sale.
-func _sync_waterskins() -> void:
-	if store == null or toolkit == null:
-		return
-	var out := 0
-	for person: Inhabitant in people:
-		if person.has_waterskin:
-			out += 1
-	var at_home := maxf(float(toolkit.count(Tool.Kind.ODRE) - out), 0.0)
-	var now := store.amount(Materia.Kind.AGUA)
-	if absf(now - at_home) < 0.01:
-		return
-	if now > at_home:
-		store.take(Materia.Kind.AGUA, now - at_home)
-	else:
-		store.add(Materia.Kind.AGUA, at_home - now)
-
-
-## Reparte cesto y odre entre los que salen, de lo que hay HECHO.
-##
-## Uno por cabeza y hasta donde llegue el taller: dos personas no comparten un
-## odre. Antes se preguntaba si en el almacen quedaba piel o fibra en bruto,
-## con lo que la banda entera salia siempre con los dos recipientes desde el
-## primer dia -medido en el sitio 56: cero odres tallados y aun asi todo el
-## mundo con odre- y el taller no servia para nada en este frente.
-func _hand_out_containers(person: Inhabitant) -> void:
-	person.has_basket = _take_container(person, Tool.Kind.CESTO)
-	person.has_waterskin = _take_container(person, Tool.Kind.ODRE)
-	# Se sale de casa con el odre lleno; sin odre, con lo que se lleva bebido.
-	person.water_left = SED_HORAS_CON_ODRE if person.has_waterskin \
-		else SED_HORAS_SIN_ODRE
-	_sync_waterskins()
-
-
-## Si queda una pieza de este tipo libre para esta persona.
-func _take_container(person: Inhabitant, kind: Tool.Kind) -> bool:
-	var made := toolkit.count(kind)
-	if made <= 0:
-		return false
-	var taken := 0
-	for other: Inhabitant in people:
-		if other == person:
-			continue
-		var carries := other.has_basket if kind == Tool.Kind.CESTO \
-			else other.has_waterskin
-		if carries:
-			taken += 1
-	return taken < made
-
-
-## El agua del dia: se bebe donde la hay y se gasta donde no.
-##
-## Es la regla que faltaba para que una banda no pueda plantarse una jornada
-## entera en un canchal seco. Beber es gratis y no cuesta tiempo mientras se
-## este JUNTO al agua -o en el abrigo, que se funda al lado de ella-; lo que
-## cuesta es el viaje cuando se acaba a media tarde en mitad del monte.
-func _drink_and_thirst(person: Inhabitant, hours: float) -> void:
-	if tajo._water_beside(person.position) or _at_shelter(person):
-		person.water_left = SED_HORAS_CON_ODRE if person.has_waterskin \
-			else SED_HORAS_SIN_ODRE
-		return
-	# Durmiendo no se bebe, pero tampoco se suda: la noche no cuenta.
-	if person.state == Inhabitant.State.DURMIENDO:
-		return
-	person.water_left = maxf(person.water_left - hours, 0.0)
-	if person.water_left > 0.0:
-		return
-	# Sin agua se deja el tajo. No se sigue trabajando sediento, que es
-	# exactamente lo que se venia haciendo.
-	if person.state != Inhabitant.State.TRABAJANDO \
-			and person.state != Inhabitant.State.BUSCANDO:
-		return
-	# Al charco mas cercano si lo hay, y si no, al abrigo, que se funda junto
-	# al agua. `_shore_near` solo mira setenta metros y devuelve el MISMO punto
-	# cuando no encuentra nada: tomando eso por un destino, la persona se
-	# quedaba plantada trabajando seca, que es justo lo que se venia a impedir.
-	var water := tajo._shore_near(person.position)
-	if not tajo._water_beside(water):
-		water = home_position
-	_send_to(person, water)
-	person.state = Inhabitant.State.YENDO
-	person.log_deed(person.current_task(), "a por agua", false)
-
-
-## Cuantos tajos se prueban antes de darse por vencido. Cinco: el mejor y
-## cuatro alternativas. Probar todos seria trazar cuarenta caminos por
-## persona y jornada para nada.
-const INTENTOS_DE_TAJO := 5
-
-## Actividades a las que hoy no se ha podido llegar por ningun sitio.
-##
-## Se limpia al cerrar la jornada, DESPUES del reparto, para que el reparto
-## la vea y mande a esa gente a otra cosa; al dia siguiente se vuelve a
-## intentar, porque una pasarela o una piragua pueden haber abierto el paso.
-var _unreachable_today: Dictionary = {}
 
 
 ## Los sitios adonde se puede mandar a trabajar a alguien, por orden de
@@ -2394,237 +2036,6 @@ const SHORE_TRIES := 16
 ## mitad de los sitios que probaba caían tierra adentro.
 const SHORE_FORAGE_FACTOR := 0.45
 
-## Lo que se saca de un rato de trabajo, ya en materiales concretos.
-## Cuenta una rotura, y con mas enfasis si era LA ULTIMA.
-##
-## Quedarse sin la ultima azagaya a mitad de temporada de caza es el momento
-## en que el jugador entiende para que servia el taller. Una linea en una
-## lista no dice eso; una frase con el nombre de quien la llevaba, si.
-func _note_breakage(person: Inhabitant, kind: Tool.Kind) -> void:
-	if toolkit.broke_last_use.is_empty():
-		return
-
-	var left := toolkit.count(kind)
-	var doing := Subsistence.activity_name(person.activity).to_lower()
-	if left <= 0:
-		_note(Chronicle.Kind.TALLER,
-			"A %s se le partio la ULTIMA %s, %s. No queda ninguna."
-				% [person.given_name, toolkit.broke_last_use.to_lower(), doing], 2)
-	else:
-		_note(Chronicle.Kind.TALLER,
-			"A %s se le partio %s %s. Quedan %d."
-				% [person.given_name, toolkit.broke_last_use.to_lower(), doing, left], 0)
-
-
-## Que herramienta pide cada actividad, o -1 si ninguna.
-##
-## El marisqueo no lleva nada, y es a proposito: es el trabajo al que se puede
-## echar mano cuando todo lo demas se ha roto. Por eso sostiene el invierno.
-func activity_tool(activity: Subsistence.Activity) -> int:
-	match activity:
-		Subsistence.Activity.CAZA: return Tool.Kind.AZAGAYA
-		Subsistence.Activity.PESCA: return Tool.Kind.ARPON
-		Subsistence.Activity.RECOLECCION: return Tool.Kind.CESTO
-		_: return -1
-
-
-## Cuanta gente esta en una actividad. Es lo que decide cuantas piezas hacen
-## falta para ir a pleno rendimiento: una por mano.
-func workers_in(activity: Subsistence.Activity) -> int:
-	var total := 0
-	for person: Inhabitant in people:
-		if person.has_task and person.activity == activity:
-			total += 1
-	return maxi(total, 1)
-
-
-## Cuanta gente esta HOY en esta especialidad de caza en concreto -no toda
-## la actividad CAZA, que mezcla trampas, menor y mayor-. Es lo que decide
-## si una cuadrilla de caza mayor es de verdad una cuadrilla: ver
-## [Hunting.crew_factor].
-func hunters_in(speciality: Profession.Speciality) -> int:
-	var total := 0
-	for person: Inhabitant in people:
-		if person.has_task and person.current_speciality == speciality:
-			total += 1
-	return maxi(total, 1)
-
-
-## Pedidos permanentes de herramienta que ha puesto el jugador.
-##
-## Vacio quiere decir «lo que haga falta», que es lo razonable por defecto.
-var tool_orders: Dictionary = {}
-
-
-## Fija -o quita, con 0- un pedido permanente de una pieza.
-##
-## Igual que el tope de material del almacen: sin pedido, el taller decide
-## solo cuanto hace falta de cada cosa; con uno puesto, el pedido manda.
-func set_tool_order(kind: Tool.Kind, value: int) -> void:
-	if value <= 0:
-		tool_orders.erase(kind)
-	else:
-		tool_orders[kind] = value
-
-
-## Si la banda sabe hacer esta pieza.
-##
-## Sin arbol de tecnicas -las pruebas montan simulaciones a medias- se sabe
-## hacer todo, que es como se comportaba antes de que existiera esta puerta.
-func knows_tool(kind_value: Tool.Kind) -> bool:
-	var tech := Tool.tech_of(kind_value)
-	if tech < 0 or techs == null:
-		return true
-	return techs.has(tech as TechTree.Tech)
-
-
-## Cuantas piezas de cada tipo le hacen falta a la banda ahora mismo.
-##
-## Sale de quien esta trabajando en que, no de una tabla fija: si el jugador
-## pone a cinco a pescar, la demanda de arpones sube sola y el taller lo nota
-## sin que nadie tenga que pedirlo.
-func tool_demand() -> Dictionary:
-	var demand := tool_natural_demand()
-	# El pedido permanente del jugador manda por encima de lo calculado
-	for kind: int in tool_orders:
-		demand[kind] = int(tool_orders[kind])
-	return demand
-
-
-## Cuantas piezas pide EL TRABAJO, sin contar lo que haya pedido el jugador.
-##
-## Existe aparte porque el consumo de materia prima NO puede depender de lo
-## que el jugador quiera tener guardado: que quieras treinta huesos en el
-## abrigo no hace que la banda gaste mas huesos. Lo que se gasta sale del uso
-## -cuanta gente trabaja y cuanto aguanta cada pieza- y punto.
-func tool_natural_demand() -> Dictionary:
-	var demand := {
-		Tool.Kind.LASCA: maxi(people.size() / 2, 2),
-		Tool.Kind.AZAGAYA: workers_in(Subsistence.Activity.CAZA),
-		Tool.Kind.CESTO: workers_in(Subsistence.Activity.RECOLECCION),
-		Tool.Kind.RAEDERA: 2,
-		Tool.Kind.BURIL: 2,
-		Tool.Kind.AGUJA: 2,
-		Tool.Kind.PUNZON: 1,
-		Tool.Kind.CUERDA: 3,
-		Tool.Kind.ODRE: 2,
-		Tool.Kind.PUNTA: 2,
-		# El aparejo de pesca NO va con una cifra fija: va con la forma de
-		# pescar que la banda sepa. Pedir arpones desde el primer dia era
-		# pedirle al taller que gastara asta en algo que nadie sabe usar
-		# todavia, y pedir de todo a la vez seria peor: una red se lleva la
-		# fibra de una estacion entera.
-		Tool.Kind.ARPON: 0,
-		Tool.Kind.NASA: 0,
-		Tool.Kind.ANZUELO: 0,
-		Tool.Kind.RED: 0,
-		# Y la lampara, cero MIENTRAS no se sepa pintar. Nadie ahueca un canto
-		# para tener luz dentro de la cueva antes de tener algo que hacer
-		# dentro de la cueva; en cuanto se sabe pintar, una, que es lo que hace
-		# falta y lo que aparece en los yacimientos.
-		Tool.Kind.LAMPARA: 0,
-	}
-	if techs != null and techs.has(TechTree.Tech.ARTE):
-		demand[Tool.Kind.LAMPARA] = 1
-	var fishers := workers_in(Subsistence.Activity.PESCA)
-	if fishers > 0:
-		var wanted := _fishing_tool_to_stock()
-		if wanted >= 0:
-			demand[wanted] = maxi(fishers, 1)
-	return demand
-
-
-## Que aparejo hay que tener hecho: el de la mejor manera de pescar que la
-## banda SEPA, tenga hoy la pieza o no.
-##
-## Va aparte de `fishing_method` a proposito. Aquella dice con que se pesca
-## HOY -y si se ha roto el ultimo arpon dice "a mano"-; esta dice que hay que
-## reponer, que es el arpon precisamente porque se ha roto.
-func _fishing_tool_to_stock() -> int:
-	var top := -1
-	for i in range(Fishing.ORDER.size() - 1, -1, -1):
-		var method: Fishing.Method = Fishing.ORDER[i]
-		var tech := Fishing.tech_of(method)
-		if tech >= 0 and (techs == null or not techs.has(tech as TechTree.Tech)):
-			continue
-		var tool := Fishing.tool_of(method)
-		if tool < 0:
-			# La pesquera no es una pieza: es una obra. A partir de aqui hacia
-			# abajo no hay nada que encargarle al taller.
-			break
-		if top < 0:
-			top = tool
-		# Se encarga lo mejor que se pueda HACER, no solo lo mejor que se
-		# sepa. Sin esto, el dia que la banda aprende el arpon dejaba de
-		# trenzar redes -solo se pedia el escalon de arriba- y si no habia
-		# asta en el abrigo se quedaba sin lo uno y sin lo otro, pescando a
-		# mano con dos tecnicas de pesca dominadas.
-		if toolkit.count(tool as Tool.Kind) > 0 or _can_pay_for(tool as Tool.Kind):
-			return tool
-	return top
-
-
-## Cuantas piezas de un tipo se rompen al mes con el trabajo que hay puesto.
-##
-## Es el GASTO de verdad: sale de cuantas estan en uso, cuanto se desgastan al
-## dia y cuanto aguantan. No lo toca el jugador.
-func tools_broken_per_month(kind: Tool.Kind) -> float:
-	var in_use := float(int(tool_natural_demand().get(kind, 0)))
-	if in_use <= 0.0:
-		return 0.0
-	var life := Tool.durability_of(kind)
-	var per_day := Tool.wear_per_day(kind) * TYPICAL_YIELD_FRACTION
-	return in_use * per_day * float(CONSUMO_DIAS) / maxf(life, 1.0)
-
-
-## Lo que la banda ha traído HOY, por material, y el registro de los últimos
-## días. La columna PRODUCE del almacén sale de aquí.
-##
-## Es producción MEDIDA, no una estimación a partir de las tablas: entre lo
-## nominal y lo que de verdad entra hay cinco penalizaciones y un día que se
-## va casi entero en andar -ver [HARVEST_SCALE]-, así que una estimación
-## habría dicho diez veces más de lo que el jugador ve llegar al abrigo.
-var produced_today: Dictionary = {}
-
-## Lo producido cada uno de los últimos días, el más reciente al final.
-##
-## Era una media exponencial POR DÍA, y la columna de al lado -GASTA- va por
-## [CONSUMO_DIAS], o sea por mes: las dos cifras que el jugador lee juntas
-## estaban en escalas distintas por un factor de treinta, y la comparación que
-## justifica la columna -entra tanto, se va tanto- no se podía hacer. Ahora se
-## guardan los días de verdad y se suman.
-var produced_days: Array[Dictionary] = []
-
-
-## Apunta lo que acaba de entrar en el almacén.
-func note_production(kind: Materia.Kind, units: float) -> void:
-	if units <= 0.0:
-		return
-	produced_today[int(kind)] = float(produced_today.get(int(kind), 0.0)) + units
-
-
-## Lo que produce la banda de esto en el mismo periodo que se mide el gasto,
-## o sea en [CONSUMO_DIAS].
-##
-## Con menos días jugados que el periodo se proyecta a mes completo -si no, un
-## día tres compararía tres jornadas de producción contra treinta de gasto y la
-## banda parecería arruinada siempre-. En cuanto hay mes entero es la suma a
-## secas, sin nada encima.
-func production_of(kind: Materia.Kind) -> float:
-	return tajo._produced_in_period(int(kind))
-
-
-## Y lo mismo para el taller. Las piezas van con clave NEGATIVA para no
-## chocar con los materiales, igual que en el libro de trabajo de cada cual.
-func note_tool_made(kind: Tool.Kind) -> void:
-	var key := -1 - int(kind)
-	produced_today[key] = float(produced_today.get(key, 0.0)) + 1.0
-
-
-func tool_production_of(kind: Tool.Kind) -> float:
-	return tajo._produced_in_period(-1 - int(kind))
-
-
 ## Anota algo en el diario, con la fecha puesta.
 ##
 ## Todo lo que se cuenta sale de cosas que la simulacion YA detectaba y se
@@ -2660,115 +2071,6 @@ const CONSUMO_DIAS := 30
 const ALGO_EN_DESPENSA := 0.5
 
 
-func material_needed(kind: Materia.Kind) -> float:
-	var total := 0.0
-
-	# Lo que se COME, si alimenta y SI LO HAY. Es el gasto mas grande con
-	# diferencia.
-	#
-	# Lo de «si lo hay» es el arreglo de un fallo que hinchaba la columna GASTA
-	# del almacen: el consumo se repartia entre los alimentos que la banda tiene
-	# en despensa -bien, nadie come avellana treinta dias seguidos- pero se le
-	# cobraba entero A CADA MATERIAL, tambien a los que estaban a cero. Con
-	# cuatro alimentos guardados de catorce, los catorce declaraban la cuarta
-	# parte del consumo y la columna sumaba 2.667 raciones al mes cuando la
-	# banda come 762. Medido con `scripts/tests/RacionProbe.gd`.
-	if Materia.is_food(kind) and store.amount(kind) > ALGO_EN_DESPENSA:
-		var mouths := 0.0
-		for person: Inhabitant in people:
-			mouths += person.daily_food()
-		var larder := 0
-		for other: int in Materia.Kind.values():
-			if Materia.is_food(other as Materia.Kind) 					and store.amount(other as Materia.Kind) > ALGO_EN_DESPENSA:
-				larder += 1
-		var share := 1.0 / maxf(float(larder), 1.0)
-		total += mouths * float(CONSUMO_DIAS) * share 			/ maxf(Materia.nutrition(kind), 0.001)
-
-	# Lo que se ROMPE al mes, por su receta. Se usa la demanda NATURAL: si
-	# usara la del jugador, subir la meta de azagayas subiria el asta que
-	# «gasta» la banda, y querer tener mas guardado no hace que se gaste mas.
-	for tool_kind: int in tool_natural_demand():
-		var recipe := Tool.recipe(tool_kind as Tool.Kind)
-		var per_material := float(recipe.get(kind, 0.0))
-		if per_material <= 0.0:
-			continue
-		total += tools_broken_per_month(tool_kind as Tool.Kind) * per_material
-
-	# Y lo que pide la obra en cola, que es un gasto de una vez
-	if camp_queue >= 0 and not _camp_paid:
-		var project: Dictionary = CampProjects.materials(camp_queue as CampProjects.Kind)
-		total += float(project.get(kind, 0.0))
-
-	return total
-
-
-## Cuanto tiene la banda de un tipo respecto a lo que le hace falta, de 0 a 1.
-## No se recorta a 1: el taller necesita distinguir «justo» de «de sobra»
-## para saber cuando parar. Quien si recorta es `Toolkit.efficiency`, porque
-## ahi acumular de mas no debe dar rendimiento de mas.
-func tool_coverage(kind: Tool.Kind) -> float:
-	var needed: float = float(tool_demand().get(kind, 1))
-	if needed <= 0.0:
-		return 1.0
-	return float(toolkit.count(kind)) / needed
-
-
-## Que pieza toca hacer dentro de una especialidad: la que mas falte.
-func _next_piece(speciality: Profession.Speciality) -> int:
-	var options: Array = SPECIALITY_MAKES.get(speciality, [])
-	if options.is_empty():
-		return -1
-	var chosen := -1
-	var worst := INF
-	for kind: int in options:
-		var kind_value := kind as Tool.Kind
-		# Lo que ya esta cubierto de sobra no se hace: nadie talla ciento
-		# veinte lascas que no va a usar
-		# Lo que nadie pide no se hace. `tool_coverage` devuelve 1.0 cuando la
-		# demanda es cero -no hay con que dividir- y 1.0 esta por debajo de la
-		# reserva, asi que sin esta linea el taller se ponia a trenzar redes
-		# que la banda ni sabe calar todavia.
-		if float(tool_demand().get(kind_value, 0)) <= 0.0:
-			continue
-		# Y lo que todavia no se sabe hacer, no se hace. Ver `Tool.tech_of`.
-		if not knows_tool(kind_value):
-			continue
-		var coverage := tool_coverage(kind_value)
-		if coverage >= RESERVA_UTILLAJE:
-			continue
-		# Sin la herramienta previa no es que se tarde mas: es que no se hace
-		var prerequisite := Tool.needs_tool(kind_value)
-		if prerequisite >= 0 and toolkit.count(prerequisite as Tool.Kind) <= 0:
-			continue
-		# Y sin materia prima en el abrigo, tampoco. Antes esto no se miraba
-		# aqui: se elegia la pieza MENOS cubierta aunque no hubiera con que
-		# hacerla, y el artesano se plantaba delante de ella sin probar con
-		# otra que si podia sacar.
-		if not _can_pay_for(kind_value):
-			continue
-		if coverage < worst:
-			worst = coverage
-			chosen = kind
-	return chosen
-
-
-## Si el abrigo tiene la materia prima que pide una pieza.
-##
-## Mismo criterio que usa `_craft` al cobrarla, incluida la sustitucion de
-## cuarcita por silex cuando lo hay: si aqui dijera que si y alli que no, el
-## artesano se plantaria en el banco sin sacar nada.
-func _can_pay_for(kind: Tool.Kind) -> bool:
-	var recipe := Tool.recipe(kind)
-	for material: int in recipe:
-		var wanted: float = float(recipe[material])
-		if material == Materia.Kind.PIEDRA \
-				and store.amount(Materia.Kind.SILEX) >= wanted:
-			continue
-		if store.amount(material as Materia.Kind) < wanted:
-			return false
-	return true
-
-
 ## Si esta especialidad de taller tiene algo que hacer hoy. Lo que no es
 ## taller no le afecta: devuelve que si y sigue su camino.
 func _speciality_can_work(speciality: Profession.Speciality) -> bool:
@@ -2785,13 +2087,13 @@ func _speciality_can_work(speciality: Profession.Speciality) -> bool:
 		return not trampas.traps.is_empty() or _can_afford_a_trap()
 	if not SPECIALITY_MAKES.has(speciality):
 		return true
-	return _next_piece(speciality) >= 0
+	return taller._next_piece(speciality) >= 0
 
 
 ## Si en el abrigo hay con que armar alguna de las trampas que se saben hacer.
 func _can_afford_a_trap() -> bool:
 	for kind: int in trampas.known_traps():
-		if _can_afford(Trap.materials(kind as Trap.Kind)):
+		if taller._can_afford(Trap.materials(kind as Trap.Kind)):
 			return true
 	return false
 
@@ -2811,7 +2113,7 @@ func _can_afford_a_trap() -> bool:
 ## jornadas de armar y el pescador en lo que lleva en el cesto es cosa de la
 ## simulación, no del jugador.
 func doing_now(person: Inhabitant) -> Dictionary:
-	var crafting := crafting_now(person)
+	var crafting := taller.crafting_now(person)
 	if not crafting.is_empty():
 		var look: Array = MateriaIcon.TOOL_LOOK[int(crafting["tool"]) as Tool.Kind]
 		return {
@@ -2881,237 +2183,6 @@ func _hunt_progress(hunt: Hunt) -> float:
 				return 0.0
 			return clampf(hunt.spent / maxf(
 				caceria._tracking_hours(hunt.crew[0]), 0.01), 0.0, 1.0)
-
-
-## Qué pieza está haciendo alguien ahora mismo, y cuánto lleva de ella.
-##
-## Devuelve vacío si no está fabricando. Existe porque `craft_progress` llevaba
-## desde siempre en `Inhabitant` sin que lo leyera nadie fuera de esta clase: en
-## pantalla no había forma de saber qué estaba tallando alguien ni cuánto le
-## faltaba, así que un artesano trabajando y un artesano parado se veían igual.
-## Ver [CraftMarkers].
-func crafting_now(person: Inhabitant) -> Dictionary:
-	# La misma puerta que abre `_craft`, y no una parecida. Se mira el oficio y
-	# la hora, no el estado: la chapa tiene que encenderse en cuanto hay pieza
-	# en marcha, y el estado ya lo comprueba quien llama si le hace falta.
-	if person.job != Profession.Job.MANUFACTURA:
-		return {}
-	if hour < HORA_SALIDA or hour >= HORA_REGRESO:
-		return {}
-	var kind := _next_piece(person.current_speciality as Profession.Speciality)
-	if kind < 0:
-		return {}
-	return {"tool": kind, "progress": clampf(person.craft_progress, 0.0, 1.0)}
-
-
-func _craft(person: Inhabitant, hours: float) -> void:
-	var fraction := hours / HORAS_UTILES
-	if fraction <= 0.0:
-		return
-
-	var speciality := person.current_speciality as Profession.Speciality
-	var kind := _next_piece(speciality)
-	if kind < 0:
-		return
-	var kind_value := kind as Tool.Kind
-
-	# Con todo cubierto no se sigue tallando. Nadie hace ciento veinte lascas
-	# que no va a usar, y dejarlo abierto convertia al artesano en una fabrica
-	# de numeros que no cambian nada.
-	#
-	# El margen del 30% es la reserva: se trabaja hasta tener algo de sobra,
-	# no hasta el filo justo, porque quedarse al ras un dia de caza es como se
-	# pierde una jornada entera.
-	if tool_coverage(kind_value) >= RESERVA_UTILLAJE:
-		person.craft_progress = 0.0
-		return
-
-	# La herramienta previa. Sin buril no se ranura el asta: no es que se
-	# tarde mas, es que no se hace, y esa dependencia entre talleres es media
-	# gracia del sistema.
-	var prerequisite := Tool.needs_tool(kind_value)
-	if prerequisite >= 0 and toolkit.count(prerequisite as Tool.Kind) <= 0:
-		return
-
-	# Progreso acumulado hacia la siguiente pieza. Se guarda por persona
-	# porque una azagaya no sale de una sentada.
-	var rate: float = float(CRAFT_PER_DAY.get(speciality, 1.0))
-	person.craft_progress += fraction * rate * person.effectiveness()
-	if person.craft_progress < 1.0:
-		return
-
-	# Ya hay pieza. Se paga la materia prima; si no la hay, no sale y el
-	# progreso se queda esperando a que alguien la traiga.
-	var stuff := Tool.default_stuff(kind_value)
-	var recipe := Tool.recipe(kind_value)
-	for material: int in recipe:
-		var wanted: float = float(recipe[material])
-		# El silex se prefiere cuando lo hay: triplica la vida de la pieza
-		if material == Materia.Kind.PIEDRA \
-				and store.amount(Materia.Kind.SILEX) >= wanted:
-			continue
-		if store.amount(material as Materia.Kind) < wanted:
-			return
-
-	for material: int in recipe:
-		var wanted: float = float(recipe[material])
-		if material == Materia.Kind.PIEDRA \
-				and store.amount(Materia.Kind.SILEX) >= wanted:
-			store.take(Materia.Kind.SILEX, wanted)
-			stuff = Tool.Stuff.SILEX
-			continue
-		store.take(material as Materia.Kind, wanted)
-
-	if prerequisite >= 0:
-		toolkit.use(prerequisite as Tool.Kind,
-			Tool.wear_per_day(prerequisite as Tool.Kind) * 0.5)
-
-	var made := toolkit.craft(kind_value, stuff, person.effectiveness())
-	note_tool_made(kind_value)
-	person.craft_progress -= 1.0
-	# Las piezas se apuntan en negativo del catalogo de materiales para no
-	# mezclarlas con la materia prima: el libro de trabajo las separa al
-	# leerlas. Ver [Inhabitant.work_log].
-	person.log_gain(person.current_task(), -1 - int(kind_value), 1.0)
-
-	# La PRIMERA de un tipo, o la primera de silex, se cuenta. Las siguientes
-	# no: un diario que anota cada lasca deja de leerse.
-	var first_of_kind := toolkit.count(kind_value) == 1
-	if stuff == Tool.Stuff.SILEX and not _knows_silex:
-		_knows_silex = true
-		_note(Chronicle.Kind.TALLER,
-			"%s saco la primera pieza de silex de la banda: %s. Aguanta casi el "
-				% [person.given_name, made.display_name().to_lower()]
-			+ "triple que la cuarcita.", 2)
-	elif first_of_kind:
-		_note(Chronicle.Kind.TALLER,
-			"%s hizo la primera %s de la banda."
-				% [person.given_name, Tool.kind_name(kind_value).to_lower()], 1)
-
-
-## Si la banda ha llegado a trabajar silex alguna vez. Solo para no repetir el
-## aviso: la primera pieza de silex es noticia, la decima no.
-var _knows_silex: bool = false
-
-
-## Descarga lo que trae en el almacen.
-func _deliver(person: Inhabitant) -> void:
-	# Volver al abrigo cierra la salida. Sin esto, una salida que se
-	# interrumpe -porque se acaba la comida, porque se le cambia el oficio, o
-	# porque no habia por donde llegar- se queda abierta para siempre y sigue
-	# sumando kilometros de otros dias.
-	if not person.journey.is_empty():
-		# El sitio se nombra por LO MAS LEJOS que llego, no por su destino: al
-		# volver, el destino ya es el propio abrigo, y salia «en del abrigo, a
-		# 0 m», que no es una frase.
-		var reached := float(person.journey["farthest"])
-		var where := "el entorno del abrigo" if reached < arrive_radius * 3.0 			else parajes.place_name(
-				person.journey["far_point"] as Vector3, home_position)
-		person.end_journey(day, where, _brought_text(person))
-
-	var rejected := 0.0
-	for kind: int in person.load.keys():
-		var units: float = person.load[kind]
-		if units <= 0.0:
-			continue
-		store.add(kind as Materia.Kind, units)
-		# Lo que se llevó de casa y vuelve sin gastar NO es producción: es la
-		# misma comida y la misma piel dando un paseo. Ver `carried_out`.
-		var gathered := units - person.brought_from_store(kind as Materia.Kind)
-		note_production(kind as Materia.Kind, maxf(gathered, 0.0))
-		rejected += store.overflow
-	person.load.clear()
-	person.carried_out.clear()
-	person.carrying = 0.0
-	# Y el cesto y el odre vuelven al abrigo con quien los llevaba. Se cogen
-	# AL SALIR -ver `_hand_out_containers`-, asi que quedarselos puestos en
-	# casa es quitarselos a quien sale manana: con dos cestos hechos y quince
-	# personas, los dos primeros que los cogieron no los soltaban nunca.
-	person.has_basket = false
-	person.has_waterskin = false
-	# El odre vuelve al abrigo, y vuelve LLENO: se rellena en el rio de la
-	# puerta. Ver `_sync_waterskins`.
-	_sync_waterskins()
-	if rejected > 0.01:
-		storage_full.emit(rejected)
-
-	# Y se cuenta lo que se trae. Al llegar y no antes: una cacería se cuenta
-	# en el abrigo, con la banda delante, y ésa es la mitad de lo que la hace
-	# un relato en vez de una entrada de almacén.
-	if person.pending_tale != null:
-		var tale := person.pending_tale
-		person.pending_tale = null
-		tell_tale(tale)
-
-
-## Un rato de comida: se come del almacen y baja el hambre.
-##
-## Sale del bloque de estados para poder llamarla TAMBIEN de noche. La cena es
-## a las nueve -ver [HORA_CENA]- y a esa hora el reparto noche/dia ya ha
-## mandado a todo el mundo a dormir, asi que el estado COMIENDO no llegaba a
-## procesarse nunca y la cena era una comida que empezaba y no terminaba.
-func _eat_meal(person: Inhabitant, hours: float) -> void:
-	# La barra de hambre ES la jornada: de 0 a 100 va lo que come una persona en
-	# un dia. Asi una RACION -media jornada, ver [Materia.KCAL_RACION]- quita
-	# exactamente cincuenta, y las dos comidas del dia suman cien.
-	#
-	# Antes eran dos numeros sueltos —hambre por hora y hambre por racion— y no
-	# cuadraban: la banda consumia un 50% mas de lo que decia `daily_food()`.
-	var bite := _eat_from_store(hours * 3.0)
-	# Cocinar no anade comida: hace que la que hay cunda mas. La carne y la
-	# raiz al fuego se digieren mejor y dan mas calorias aprovechables por la
-	# misma racion -es la tesis de Wrangham sobre el fuego en la dieta humana-,
-	# asi que el hogar no toca el almacen, toca cuanto quita el hambre.
-	# Encendido, no construido: un hogar apagado es un corro de piedras, y
-	# sobre un corro de piedras no se cocina.
-	var cooked := 1.15 if hearth_lit else 1.0
-	person.hunger = maxf(person.hunger - bite * cooked * HAMBRE_POR_RACION, 0.0)
-	if person.hunger < COMIDA_SUFICIENTE or bite <= 0.0:
-		person.state = Inhabitant.State.OCIOSO
-
-
-## Come del almacen, empezando por lo que antes se echa a perder.
-##
-## El orden importa: comerse primero la carne fresca y dejar el fruto seco para
-## el final es lo que de verdad hacia una banda, y ademas es lo optimo.
-func _eat_from_store(rations: float) -> float:
-	# TODO lo que alimenta, y no una lista escrita a mano.
-	#
-	# Era una lista de seis -pescado, marisco, carne, grasa, carne seca y
-	# fruto seco- mientras `Storehouse.food_rations` contaba las doce cosas
-	# que alimentan. O sea que la raiz, la baya, la bellota, la seta, el
-	# huevo, la miel y el caracol entraban en la cuenta de la despensa y no
-	# se comian NUNCA. Medido en el sitio 56: dia 23, cuarenta y siete
-	# raciones en el abrigo, los quince con el hambre a 100 y la cifra
-	# clavada quince dias seguidos. En primavera lo que se recoge es raiz, y
-	# la banda se moria de hambre al lado de ella.
-	#
-	# El orden es por lo que antes se pudre: se come primero lo que no
-	# aguanta, que es lo que haria cualquiera y ademas evita tirarlo.
-	var order: Array[int] = []
-	for kind: int in Materia.Kind.values():
-		if Materia.is_food(kind as Materia.Kind):
-			order.append(kind)
-	order.sort_custom(func(a: int, b: int) -> bool:
-		return Materia.shelf_life(a as Materia.Kind) 			< Materia.shelf_life(b as Materia.Kind))
-
-	var eaten := 0.0
-	for kind: int in order:
-		if eaten >= rations:
-			break
-		var k := kind as Materia.Kind
-		var needed := (rations - eaten) / maxf(Materia.nutrition(k), 0.001)
-		var taken := store.take(k, needed)
-		eaten += taken * Materia.nutrition(k)
-	return eaten
-
-
-## Cuanto multiplica la velocidad por marisma o vado saber nadar de verdad.
-const NATACION_MARISMA_BONUS := 1.6
-
-## Cuanto sube NATACION por hora metido en el barro o el vado. Minusculo, a
-## proposito: es un rasgo de cuerpo, no una destreza de tajo.
-const NATACION_TRAINING_RATE := 0.00006
 
 
 ## Velocidad de una persona aqui y ahora, en unidades de mundo por segundo.
@@ -3318,7 +2389,7 @@ func _end_of_day() -> void:
 	# de aplicar la podredumbre sería ahumar lo que ya se tiró.
 	hogar._smoke_the_larder()
 	store.age(1)
-	_report_spoilage()
+	despensa._report_spoilage()
 	hogar._burn_hearth()
 
 	# Las piezas rotas se retiran ahora y no al romperse, para que el parte del
@@ -3449,7 +2520,7 @@ func _knowledge_transmission() -> void:
 			# dejarla puesta -ver `paintings_ceiling` y [Tale]-, y sin
 			# paredes devuelve exactamente el de siempre.
 			var ceiling: float = float(best_known[task]) \
-				* paintings_ceiling(task)
+				* pinturas.paintings_ceiling(task)
 			var mine := person.skill_in(task)
 			if ceiling <= mine:
 				continue
@@ -3478,43 +2549,6 @@ var spoiled_rations_today: float = 0.0
 ## raciones son dos días de una persona: por debajo de eso es la merma normal
 ## de una despensa, por encima es que algo se está haciendo mal.
 const MERMA_QUE_DUELE := 4.0
-
-
-## Redacta el parte del día y lo anota. Se llama justo después de `store.age`,
-## que es quien acaba de tirar lo que aquí se cuenta.
-func _report_spoilage() -> void:
-	spoiled_today = store.spoiled.duplicate()
-	spoiled_rations_today = 0.0
-	if spoiled_today.is_empty():
-		return
-
-	var parts: Array[String] = []
-	for kind: int in spoiled_today:
-		var k := kind as Materia.Kind
-		var units := float(spoiled_today[kind])
-		if units < 0.05:
-			continue
-		if Materia.is_food(k):
-			spoiled_rations_today += units * Materia.nutrition(k)
-		parts.append("%.1f de %s" % [units, Materia.material_name(k).to_lower()])
-	if parts.is_empty():
-		return
-
-	# Y por qué. Un parte que sólo dice cuánto se ha perdido deja al jugador
-	# sin nada que hacer con el dato; lo que lo convierte en una decisión es
-	# saber qué le falta para que no vuelva a pasar.
-	var why := ""
-	if spoiled_rations_today > 0.0:
-		if not camp_built.get(CampProjects.Kind.SECADERO, false):
-			why = " Sin secadero no hay forma de guardarlo."
-		elif not hearth_lit:
-			why = " El secadero está frío: sin brasas no se ahúma."
-		elif hogar._hearth_hands().is_empty():
-			why = " El secadero está cargado y no hay nadie al hogar."
-
-	var weight := 1 if spoiled_rations_today >= MERMA_QUE_DUELE else 0
-	_note(Chronicle.Kind.PENURIA,
-		"Se echó a perder %s.%s" % [_join_and(parts), why], weight)
 
 
 ## Une una lista como se diría en voz alta: «a, b y c». Vacía da cadena vacía.
@@ -3608,7 +2642,7 @@ const PERCANCE_AGUANTAR := 1.8
 ## caza y el jugador se enteraba si iba a mirar la tabla. Aquí se le pone
 ## delante, con la reserva que lleva, y se le deja decidir en el momento.
 func _offer_rut_choice() -> void:
-	var stock := winter_stock()
+	var stock := despensa.winter_stock()
 	var moment := Moment.new()
 	moment.kind = Moment.Kind.BERREA
 	moment.title = "Empieza la berrea"
@@ -3676,18 +2710,6 @@ func state_counts() -> Dictionary:
 		var key := person.state_name()
 		counts[key] = int(counts.get(key, 0)) + 1
 	return counts
-
-
-func hungry_count(threshold: float = 60.0) -> int:
-	var total := 0
-	for person: Inhabitant in people:
-		if person.hunger >= threshold:
-			total += 1
-	return total
-
-
-## Ya se ha marcado que celdas de materia prima no vuelven a crecer.
-var _veins_frozen := false
 
 
 ## Marca de una vez las celdas de materia prima que NO se reponen.
@@ -4109,62 +3131,6 @@ const REANUDAR_COMIDA := 0.65
 var _larder_full := false
 
 
-## Si la despensa ha llegado al tope que puso el jugador.
-func food_is_capped() -> bool:
-	if food_cap <= 0.0:
-		_larder_full = false
-		return false
-	var have := store.food_rations()
-	if _larder_full:
-		if have < food_cap * REANUDAR_COMIDA:
-			_larder_full = false
-	elif have >= food_cap:
-		_larder_full = true
-	return _larder_full
-
-
-## Si este oficio existe para traer comida.
-##
-## La manufactura gasta materia prima y el hogar no sale del campamento: el
-## tope no les toca. La exploracion tampoco, que no trae comida sino mapa.
-func _feeds_the_band(job: Profession.Job) -> bool:
-	return job == Profession.Job.CAZA or job == Profession.Job.RIBERA \
-		or job == Profession.Job.RECOLECCION
-
-
-## Cuantos dias de comida da el tope puesto, para poder decirselo al jugador
-## en dias y no en raciones -que no significan nada solas-.
-func food_cap_days() -> float:
-	if food_cap <= 0.0:
-		return 0.0
-	var mouths := 0.0
-	for person: Inhabitant in people:
-		mouths += person.daily_food()
-	return food_cap / maxf(mouths, 0.001)
-
-
-## Caminos ya trazados, por par de celdas.
-##
-## Existe porque el patron de una partida es repetitivo hasta el aburrimiento:
-## el abrigo, los tres tajos de la temporada y la vuelta. El primero que va
-## paga la busqueda; los otros catorce, y el mismo manana, no pagan nada.
-##
-## La clave es la celda gruesa y no el punto exacto: dos personas que salen
-## del abrigo con veinte metros de diferencia no necesitan dos caminos
-## distintos, y exigir el punto exacto convertiria la cache en un adorno.
-var _route_cache: Dictionary = {}
-var _route_order: Array[String] = []
-
-## Cuantos caminos se guardan. Doscientos cubren de sobra los trayectos de una
-## temporada; guardarlos todos seria pagar memoria por rutas que no se van a
-## repetir nunca.
-const ROUTE_CACHE_LIMIT := 200
-
-## Metros por celda de la cache. Mas gruesa que la de navegacion a proposito:
-## lo que se quiere es que los quince del campamento compartan camino.
-const LANE_CELL := 48.0
-
-
 func _lane_key(from_point: Vector3, to_point: Vector3) -> String:
 	return "%d_%d>%d_%d" % [
 		int(from_point.x / LANE_CELL), int(from_point.z / LANE_CELL),
@@ -4316,7 +3282,7 @@ func _watch_for_stuck(person: Inhabitant, hours: float) -> void:
 	# abrigo» -once avisos el primer dia- y eso no es informar: es tapar con
 	# ruido las dos lineas que si importaban.
 	if _home_reached(person):
-		_deliver(person)
+		despensa._deliver(person)
 		person.route = PackedVector3Array()
 		person.route_step = 0
 		person.state = Inhabitant.State.OCIOSO
@@ -4383,63 +3349,6 @@ var _comarca_known: bool = false
 
 ## Y si ya se ha contado que no queda cumbre por coronar.
 var _peaks_done: bool = false
-
-
-## Si al taller le falta materia prima para lo que toca hacer.
-##
-## Es la unica razon por la que un artesano sale del abrigo. Mientras haya de
-## que, se trabaja dentro: el taller es un sitio, no una ruta.
-func _workshop_short(person: Inhabitant) -> bool:
-	var speciality := person.current_speciality as Profession.Speciality
-	var kind := _next_piece(speciality)
-	if kind < 0:
-		return false
-
-	for material: int in Tool.recipe(kind as Tool.Kind):
-		var wanted: float = float(Tool.recipe(kind as Tool.Kind)[material])
-		# El silex vale por la piedra: si hay de uno, no falta el otro
-		if material == Materia.Kind.PIEDRA \
-				and store.amount(Materia.Kind.SILEX) >= wanted:
-			continue
-		if store.amount(material as Materia.Kind) < wanted * WORKSHOP_RESERVE:
-			return true
-	return false
-
-
-## Cuantas piezas de reserva de materia prima quiere tener el taller.
-##
-## Tres. Con una sola, el artesano saldria a por material cada dos dias y se
-## pasaria la vida andando; con muchas mas, no saldria nunca y el taller se
-## pararia en seco el dia que se acabase.
-const WORKSHOP_RESERVE := 3.0
-
-
-## Cuantos pasos seguidos contra un obstaculo antes de volver a trazar.
-##
-## Treinta: medio segundo de reloj. Bastantes para que un roce con la orilla
-## se resuelva solo con el esquive -que para eso esta- y pocos para que nadie
-## se pase la jornada empujando una pared.
-const BLOCKED_BEFORE_REPLAN := 30
-
-## A qué distancia de un sitio que se dio por imposible sigue contando como el
-## mismo sitio. Un cotarro mide decenas de metros: cien es «el de detrás del
-## cortado», no «el de al lado».
-const UNREACHABLE_SLACK := 100.0
-
-
-## Cuántas veces se vuelve a trazar contra la misma pared antes de rendirse.
-##
-## Tres. Con una o dos se abandonaría un destino por un roce con la orilla que
-## el esquive habría resuelto solo; con más, la tarde se va en intentarlo.
-const BLOCKED_REPLANS := 3
-
-
-## Cuantas veces se ha quedado alguien atascado por cada motivo.
-##
-## Se lleva la cuenta a proposito y no solo el aviso suelto: un atasco es una
-## anecdota, veinte del mismo motivo son un fallo con nombre. Lo lee el panel
-## de rastros.
-var stuck_tally: Dictionary = {}
 
 
 ## Por que no puede seguir esta persona.
@@ -4646,54 +3555,7 @@ var techs: TechTree = null:
 ## hace de verdad cuando falta el aparejo bueno.
 func fishing_method() -> int:
 	return Fishing.best_for(techs, toolkit, store,
-		workers_in(Subsistence.Activity.PESCA))
-
-
-func _yields_for(person: Inhabitant) -> Dictionary:
-	var speciality := person.current_speciality as Profession.Speciality
-	# La pesca no tiene UNA tabla: tiene una por cada forma de pescar, y cual
-	# toca depende de lo que se sepa, de lo que haya en el abrigo y de cuanta
-	# gente este en el agua a la vez.
-	if speciality == Profession.Speciality.ORILLA:
-		return Fishing.yields_of(fishing_method() as Fishing.Method)
-
-	# La caza tampoco tiene UNA tabla: tiene la PIEZA. Lo que se cobra sale de
-	# que animales de su porte andan por ese sitio en esta estacion y de como
-	# se despieza cada uno, no de una lista escrita a mano. Por eso un cotarro
-	# de aves da plumas y no piel, y por eso la tecnica se nota: un cazador
-	# con propulsor no encuentra ciervos donde no los hay, cobra mas de los
-	# que encuentra.
-	if speciality == Profession.Speciality.CAZA_MENOR 			or speciality == Profession.Speciality.CAZA_MAYOR:
-		return Hunting.yields_at(speciality, person.work_centre,
-			GameState.season as Subsistence.Season, techs, toolkit)
-	if SPECIALITY_YIELDS.has(speciality):
-		return SPECIALITY_YIELDS[speciality]
-	return tajo._yield_materials(person.activity)
-
-
-## Y el utillaje que pide, por el mismo criterio.
-func _tool_for(person: Inhabitant) -> int:
-	var speciality := person.current_speciality as Profession.Speciality
-	if speciality == Profession.Speciality.ORILLA:
-		# El aparejo lo pone la forma de pescar, no la especialidad: a mano y
-		# con pesquera no se gasta ninguna pieza.
-		return Fishing.tool_of(fishing_method() as Fishing.Method)
-	if SPECIALITY_TOOL.has(speciality):
-		return int(SPECIALITY_TOOL[speciality])
-	return activity_tool(person.activity)
-
-
-## Los primeros atascos, con TODO el contexto.
-##
-## Existe para poder contestar «por que se traba» con datos y no con una
-## teoria. Un motivo resumido -«no avanza por el camino trazado»- dice que
-## sintoma tiene, no que le pasa: hace falta saber donde estaba, adonde iba,
-## que llevaba trazado y como estaba el suelo debajo.
-var stuck_reports: Array[Dictionary] = []
-
-## Cuantos se guardan. Veinte llegan de sobra para ver el patron; guardar
-## todos seria memoria por nada.
-const STUCK_REPORTS := 20
+		taller.workers_in(Subsistence.Activity.PESCA))
 
 
 func _record_stuck(person: Inhabitant, why: String) -> void:
@@ -4803,13 +3665,6 @@ func _firm_ground(point: Vector3) -> Vector3:
 var trampas: Trampas = Trampas.new(self)
 
 
-func _can_afford(recipe: Dictionary) -> bool:
-	for material: int in recipe:
-		if store.amount(material as Materia.Kind) < float(recipe[material]):
-			return false
-	return true
-
-
 func _quarry_bonus(person: Inhabitant, centre: Vector3) -> float:
 	var speciality := person.current_speciality as Profession.Speciality
 	if not Hunting.RACIONES_POR_JORNADA_PERFECTA.has(speciality):
@@ -4917,109 +3772,6 @@ const PINTURA_TECHO := 0.06
 const PINTURA_TECHO_MAX := 0.95
 
 
-## Cuánto se puede aprender de oídas sobre una tarea, con lo que hay pintado.
-##
-## Es [TRANSMISSION_CEILING] más lo que suban las paredes. Sin pinturas devuelve
-## exactamente lo de siempre, así que una partida que no pinte nada se comporta
-## igual que antes: esto añade, no cambia lo que había.
-func paintings_ceiling(task: int) -> float:
-	var ceiling := TRANSMISSION_CEILING
-	for tale: Tale in paintings:
-		if _painting_covers(tale, task):
-			ceiling += PINTURA_TECHO
-	return minf(ceiling, PINTURA_TECHO_MAX)
-
-
-## Si una pared enseña algo sobre esta tarea.
-##
-## Una escena de caza mayor enseña a cazar pieza mayor y no a trenzar cordel,
-## así que lo normal es que la tarea coincida clavada. La excepción es el
-## relato de una TÉCNICA, que no tiene especialidad -se aprende a hacer el
-## arpón, no a hacerlo desde la orilla-: ése cubre el oficio entero.
-func _painting_covers(tale: Tale, task: int) -> bool:
-	if tale.task < 0 or task < 0:
-		return false
-	if tale.task == task:
-		return true
-	if Profession.task_speciality(tale.task) != Profession.Speciality.NINGUNA:
-		return false
-	return Profession.task_job(tale.task) == Profession.task_job(task)
-
-
-## Si la banda podría pintar ahora mismo, y qué le falta si no. "" si puede.
-##
-## Se contesta ENTERO y con nombres, porque es lo que va en el botón del
-## momento: ofrecer «pintarlo en la cueva» sin decir que faltan tres de ocre es
-## ofrecer un botón que no hace nada.
-func painting_blocked_by() -> String:
-	if techs == null or not techs.has(TechTree.Tech.ARTE):
-		return "todavía no se sabe pintar"
-	if not camp_built.get(CampProjects.Kind.HOGAR, false):
-		return "hace falta el hogar"
-	if toolkit.count(Tool.Kind.LAMPARA) <= 0:
-		return "no hay lámpara: dentro no se ve nada"
-	if store.amount(Materia.Kind.OCRE) < PINTURA_OCRE:
-		return "falta ocre"
-	if store.amount(Materia.Kind.GRASA) < PINTURA_GRASA:
-		return "falta grasa para la lámpara"
-	if painting_queue != null:
-		return "ya hay una pared empezada"
-	return ""
-
-
-func can_paint() -> bool:
-	return painting_blocked_by().is_empty()
-
-
-## Manda pintar un relato. Devuelve si se ha podido encolar.
-func queue_painting(tale: Tale) -> bool:
-	if tale == null or tale.painted or not tale.paintable():
-		return false
-	if not can_paint():
-		return false
-	painting_queue = tale
-	painting_progress = 0.0
-	return true
-
-
-## La jornada de quien está pintando. La hace el hogar, que es de quien es la
-## cueva por dentro —y es donde vive [TechTree.Tech.ARTE] en el árbol—.
-##
-## Se cobra AL TERMINAR y no al empezar, igual que las obras del campamento:
-## una pared a medias no se ha comido el ocre todavía.
-func _paint_wall(person: Inhabitant, fraction: float) -> void:
-	painting_progress += fraction * person.effectiveness()
-	person.log_deed(person.current_task(),
-		"pintando %s" % painting_queue.title.to_lower(), false)
-	if painting_progress < PINTURA_JORNADAS:
-		return
-
-	var tale := painting_queue
-	painting_queue = null
-	painting_progress = 0.0
-
-	if store.amount(Materia.Kind.OCRE) < PINTURA_OCRE \
-			or store.amount(Materia.Kind.GRASA) < PINTURA_GRASA:
-		_note(Chronicle.Kind.PENURIA,
-			"Se quedaron sin ocre a media pared: %s se queda sin pintar."
-				% tale.title.to_lower(), 1)
-		return
-
-	store.take(Materia.Kind.OCRE, PINTURA_OCRE)
-	store.take(Materia.Kind.GRASA, PINTURA_GRASA)
-	toolkit.use(Tool.Kind.LAMPARA, PINTURA_JORNADAS
-		* Tool.wear_per_day(Tool.Kind.LAMPARA))
-	_note_breakage(person, Tool.Kind.LAMPARA)
-
-	tale.painted = true
-	tale.painted_day = day
-	paintings.append(tale)
-	_note(Chronicle.Kind.OBRA,
-		"%s está en la pared del fondo. Ya no hace falta que quede nadie que "
-			% tale.title
-		+ "estuviera allí para que se sepa.", 2)
-
-
 ## Levanta un relato: lo guarda, lo cuenta en la crónica y se lo enseña al
 ## jugador con la opción de pintarlo.
 ##
@@ -5045,7 +3797,7 @@ func tell_tale(tale: Tale) -> void:
 	# La decisión sólo se ofrece si de verdad se puede tomar. Un botón que
 	# contesta «falta ocre» al pulsarlo es peor que no estar.
 	if tale.paintable():
-		var falta := painting_blocked_by()
+		var falta := pinturas.painting_blocked_by()
 		if falta.is_empty():
 			moment.options = [
 				{
@@ -5054,7 +3806,7 @@ func tell_tale(tale: Tale) -> void:
 						% PINTURA_OCRE
 						+ "la lámpara. Lo que queda en la pared se aprende "
 						+ "aunque no quede nadie que estuviera allí.",
-					"on_pick": func() -> void: queue_painting(tale),
+					"on_pick": func() -> void: pinturas.queue_painting(tale),
 				},
 				{
 					"label": "Con contarlo basta",

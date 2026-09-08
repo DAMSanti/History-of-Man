@@ -86,10 +86,10 @@ func _scout_target(person: Inhabitant) -> Vector3:
 	# Ni el rumbo del jugador se salta esto: una partida corta no se
 	# aventura al borde del mapa por mucho que se le señale. Se queda
 	# repasando lo que tiene mas cerca hasta que se sume mas gente.
-	if target.distance_to(sim.home_position) > SettlementSim.REGIONAL_DISTANCE \
-			and sim._expedition_party_size() < SettlementSim.MIN_GROUP_FOR_REGIONAL:
+	if target.distance_to(sim.home_position) > Despensa.REGIONAL_DISTANCE \
+			and sim.despensa._expedition_party_size() < Despensa.MIN_GROUP_FOR_REGIONAL:
 		target = _least_known_around(sim.home_position,
-			BATIDA_RADIUS, SettlementSim.REGIONAL_DISTANCE, person)
+			BATIDA_RADIUS, Despensa.REGIONAL_DISTANCE, person)
 
 	target.y = sim._terrain.get_height_at(target)
 	return target

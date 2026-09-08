@@ -468,7 +468,7 @@ func _start_settlement() -> void:
 	# los que se ven. Ver [Hunt] y [Caceria].
 	#
 	# La fauna cuelga de [Caceria] y no del simulador. Estuvo puesta como
-	# `sim.wildlife` -de cuando la caceria vivia dentro de `SettlementSim`- y
+	# `sim.caceria.wildlife` -de cuando la caceria vivia dentro de `SettlementSim`- y
 	# al sacarla nadie corrigio esta linea: GDScript no avisa de asignar una
 	# propiedad que no existe hasta que corre, las pruebas montan la fauna a
 	# mano y las sondas la piden por `sim.caceria.wildlife`, asi que EN LA
@@ -1369,7 +1369,7 @@ func _update_band_panel() -> void:
 			sim.day, int(sim.hour),
 			Subsistence.season_name(GameState.season), GameState.year],
 		"gente %d   ·   reserva %.1f jornadas   ·   con hambre %d" % [
-			sim.population(), sim.store.food_rations(), sim.hungry_count()],
+			sim.population(), sim.store.food_rations(), sim.despensa.hungry_count()],
 		"",
 	]
 

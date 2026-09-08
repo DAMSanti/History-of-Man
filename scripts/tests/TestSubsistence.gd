@@ -145,14 +145,14 @@ func test_la_reserva_de_invierno_se_mide_contra_una_estacion_entera() -> void:
 		people.append(person)
 	sim.people = people
 
-	var stock := sim.winter_stock()
+	var stock := sim.despensa.winter_stock()
 	assert_gt(float(stock["needed"]), 0.0, "seis bocas comen algo")
 	assert_eq(stock["share"], 0.0, "con el almacen vacio no se llega a nada")
 
 	# Justo lo de una estacion entera
 	sim.store.add(Materia.Kind.CARNE_SECA,
 		float(stock["needed"]) / Materia.nutrition(Materia.Kind.CARNE_SECA))
-	var full := sim.winter_stock()
+	var full := sim.despensa.winter_stock()
 	assert_true(absf(float(full["share"]) - 1.0) < 0.05,
 		"con la despensa justa, el invierno esta cubierto (%.2f)" % full["share"])
 

@@ -118,10 +118,10 @@ func _init() -> void:
 		# caen las raciones es la conversion.
 		var today := 0.0
 		var raw := 0.0
-		for key: int in sim.produced_today:
+		for key: int in sim.taller.produced_today:
 			if key >= 0:
-				raw += float(sim.produced_today[key])
-				today += float(sim.produced_today[key]) 					* Materia.nutrition(key as Materia.Kind)
+				raw += float(sim.taller.produced_today[key])
+				today += float(sim.taller.produced_today[key]) 					* Materia.nutrition(key as Materia.Kind)
 		if raw >= _raw_seen:
 			_raw_seen = raw
 		else:

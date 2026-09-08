@@ -37,7 +37,7 @@ func _init() -> void:
 		var name_text := Tool.kind_name(kind as Tool.Kind)
 		print("  %-10s %s" % [name_text,
 			"SALE" if found.has(name_text) else "NO SALE"])
-	print("=== demanda: %s" % JSON.stringify(sim.tool_demand()))
+	print("=== demanda: %s" % JSON.stringify(sim.taller.tool_demand()))
 	quit()
 
 

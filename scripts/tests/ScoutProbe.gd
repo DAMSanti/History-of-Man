@@ -218,7 +218,7 @@ func _initialize() -> void:
 				Profession.job_name(person.job as Profession.Job),
 				Profession.speciality_name(
 					person.current_speciality as Profession.Speciality),
-				person.fatigue, sim.pack_rations(person)])
+				person.fatigue, sim.despensa.pack_rations(person)])
 
 	print("=== EXPLORACION A LO LARGO DE 40 JORNADAS ===")
 	for person: Inhabitant in sim.people:

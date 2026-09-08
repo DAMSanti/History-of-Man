@@ -87,7 +87,7 @@ func _run() -> void:
 			sim._process(step)
 
 		var method := sim.fishing_method()
-		var pescadores := sim.workers_in(Subsistence.Activity.PESCA)
+		var pescadores := sim.taller.workers_in(Subsistence.Activity.PESCA)
 		if method != last or sim.day % 40 == 0:
 			last = method
 			print("dia %3d  %-20s  pescado %7.1f  pescadores %d  aparejo: %s" % [
@@ -132,6 +132,6 @@ func _next_step(sim: SettlementSim, actual: int) -> String:
 		return "no hay escalon mas alto"
 	var siguiente: Fishing.Method = Fishing.ORDER[index + 1]
 	var why := Fishing.blocked_by(siguiente, sim.techs, sim.toolkit, sim.store,
-		sim.workers_in(Subsistence.Activity.PESCA))
+		sim.taller.workers_in(Subsistence.Activity.PESCA))
 	return "para %s: %s" % [Fishing.method_name(siguiente),
 		why if why != "" else "nada, ya se puede"]

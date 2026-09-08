@@ -182,7 +182,7 @@ const OJEO_SIGILO := 0.55
 ## contrario: doce jornadas por escalon, DIEZ piezas cobradas de ONCE caceria
 ## levantadas en los dos escalones armados. El lance no es el problema. Lo que
 ## es raro es LEVANTAR la pieza, y eso se midio aparte con
-## `scripts/tests/JornadaCazadorProbe.gd`: ver [SettlementSim.VUELTA_QUE_NO_COMPENSA].
+## `scripts/tests/JornadaCazadorProbe.gd`: ver [Despensa.VUELTA_QUE_NO_COMPENSA].
 ##
 ## Se queda en 0,42 y sin tocar, ahora por una razon distinta de la de antes:
 ## la cuenta da entre 0,35 y 0,58 de acierto con la destreza de la banda, y con

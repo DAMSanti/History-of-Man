@@ -108,7 +108,7 @@ func test_sin_odres_hechos_nadie_lleva_odre() -> void:
 	sim.store.add(Materia.Kind.PIEL, 50.0)
 	sim.store.add(Materia.Kind.FIBRA, 50.0)
 	var person := _person(sim)
-	sim._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
 	assert_false(person.has_waterskin,
 		"un pellejo sin curtir en el almacen no es un odre")
 
@@ -120,8 +120,8 @@ func test_hay_tantos_odres_como_ha_hecho_el_taller() -> void:
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	var uno := _person(sim)
 	var otro := _person(sim)
-	sim._hand_out_containers(uno)
-	sim._hand_out_containers(otro)
+	sim.despensa._hand_out_containers(uno)
+	sim.despensa._hand_out_containers(otro)
 	assert_true(uno.has_waterskin, "el primero coge el unico odre")
 	assert_false(otro.has_waterskin, "y el segundo se queda sin el")
 
@@ -134,7 +134,7 @@ func test_con_odre_lleno_se_pasa_la_jornada_fuera() -> void:
 	sim.toolkit = Toolkit.new()
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	var person := _person(sim)
-	sim._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
 	assert_true(person.water_left >= SettlementSim.HORAS_UTILES,
 		"un odre lleno da para el dia entero, que es la peticion")
 
@@ -144,7 +144,7 @@ func test_sin_odre_no_se_pasa_la_jornada_fuera() -> void:
 	sim.store = Storehouse.new()
 	sim.toolkit = Toolkit.new()
 	var person := _person(sim)
-	sim._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
 	assert_lt(person.water_left, SettlementSim.HORAS_UTILES,
 		"sin odre no se aguanta el dia lejos del agua")
 	assert_gt(person.water_left, 0.0, "pero se sale con lo bebido, no seco")
@@ -160,9 +160,9 @@ func test_entregar_devuelve_los_recipientes_al_abrigo() -> void:
 	sim.toolkit = Toolkit.new()
 	sim.toolkit.craft(Tool.Kind.CESTO, Tool.Stuff.FIBRA, 0.5)
 	var person := _person(sim)
-	sim._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
 	assert_true(person.has_basket, "sale con el cesto")
-	sim._deliver(person)
+	sim.despensa._deliver(person)
 	assert_false(person.has_basket, "y lo deja al entregar")
 
 
@@ -172,7 +172,7 @@ func test_entregar_vacia_lo_recogido_pero_no_el_petate() -> void:
 	sim.toolkit = Toolkit.new()
 	var person := _person(sim)
 	person.add_load(Materia.Kind.FRUTO_SECO, 3.0)
-	sim._deliver(person)
+	sim.despensa._deliver(person)
 	assert_true(person.load.is_empty(), "lo cogido va al almacen entero")
 	assert_gt(sim.store.amount(Materia.Kind.FRUTO_SECO), 0.0,
 		"y aparece en la despensa")
@@ -186,7 +186,7 @@ func test_sin_agua_se_deja_el_tajo_y_se_va_a_beber() -> void:
 	var person := _person(sim, Vector3(900.0, 0.0, 900.0))
 	person.state = Inhabitant.State.TRABAJANDO
 	person.water_left = 0.0
-	sim._drink_and_thirst(person, 0.5)
+	sim.despensa._drink_and_thirst(person, 0.5)
 	assert_false(person.state == Inhabitant.State.TRABAJANDO,
 		"seco no se sigue trabajando: se va a por agua")
 
@@ -199,7 +199,7 @@ func test_dormir_no_da_sed() -> void:
 	var person := _person(sim, Vector3(900.0, 0.0, 900.0))
 	person.state = Inhabitant.State.DURMIENDO
 	person.water_left = 3.0
-	sim._drink_and_thirst(person, 8.0)
+	sim.despensa._drink_and_thirst(person, 8.0)
 	assert_eq(person.water_left, 3.0, "la noche no gasta agua")
 
 # --- el trampero no sale de vacio ----------------------------------------
@@ -248,9 +248,9 @@ func test_produce_se_mide_en_el_mismo_periodo_que_el_gasto() -> void:
 	sim.store = Storehouse.new()
 	# Un mes entero produciendo dos al dia.
 	for i in range(SettlementSim.CONSUMO_DIAS):
-		sim.note_production(Materia.Kind.LENA, 2.0)
+		sim.taller.note_production(Materia.Kind.LENA, 2.0)
 		sim.tajo._roll_production()
-	assert_near(sim.production_of(Materia.Kind.LENA),
+	assert_near(sim.taller.production_of(Materia.Kind.LENA),
 		2.0 * float(SettlementSim.CONSUMO_DIAS), 2.5,
 		"el mes suma lo de los treinta dias, no la media de uno")
 
@@ -261,9 +261,9 @@ func test_produce_se_proyecta_mientras_no_haya_mes_entero() -> void:
 	var sim := _sim()
 	sim.store = Storehouse.new()
 	for i in range(3):
-		sim.note_production(Materia.Kind.LENA, 2.0)
+		sim.taller.note_production(Materia.Kind.LENA, 2.0)
 		sim.tajo._roll_production()
-	assert_gt(sim.production_of(Materia.Kind.LENA), 40.0,
+	assert_gt(sim.taller.production_of(Materia.Kind.LENA), 40.0,
 		"tres dias a dos proyectan a mes, no se quedan en seis")
 
 
@@ -271,9 +271,9 @@ func test_el_registro_de_produccion_no_crece_sin_fin() -> void:
 	var sim := _sim()
 	sim.store = Storehouse.new()
 	for i in range(SettlementSim.CONSUMO_DIAS * 3):
-		sim.note_production(Materia.Kind.LENA, 1.0)
+		sim.taller.note_production(Materia.Kind.LENA, 1.0)
 		sim.tajo._roll_production()
-	assert_eq(sim.produced_days.size(), SettlementSim.CONSUMO_DIAS,
+	assert_eq(sim.taller.produced_days.size(), SettlementSim.CONSUMO_DIAS,
 		"solo se guardan los dias del periodo")
 
 # --- el almacen guarda odres llenos, no agua a granel --------------------
@@ -285,13 +285,13 @@ func test_los_odres_llenos_del_abrigo_son_los_que_hay_menos_los_que_salen() -> v
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	var person := _person(sim)
-	sim._sync_waterskins()
+	sim.despensa._sync_waterskins()
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 2.0,
 		"dos odres hechos y nadie fuera: dos colgados en la boca")
-	sim._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
 		"el que sale se lleva el suyo")
-	sim._deliver(person)
+	sim.despensa._deliver(person)
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 2.0,
 		"y al volver lo cuelga otra vez, lleno del rio de la puerta")
 
@@ -302,7 +302,7 @@ func test_sin_odres_hechos_no_hay_agua_guardada() -> void:
 	sim.store = Storehouse.new()
 	sim.toolkit = Toolkit.new()
 	sim.store.add(Materia.Kind.AGUA, 9.0)
-	sim._sync_waterskins()
+	sim.despensa._sync_waterskins()
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
 		"sin odres, el agua guardada no existe")
 
@@ -312,10 +312,10 @@ func test_sin_odres_hechos_no_hay_agua_guardada() -> void:
 func test_sin_la_tecnica_no_se_sabe_hacer_la_pieza() -> void:
 	var sim := _sim()
 	sim.techs = TechTree.new()
-	assert_false(sim.knows_tool(Tool.Kind.ARPON),
+	assert_false(sim.taller.knows_tool(Tool.Kind.ARPON),
 		"un arpon pide su tecnica")
 	sim.techs.known[TechTree.Tech.ARPON] = true
-	assert_true(sim.knows_tool(Tool.Kind.ARPON),
+	assert_true(sim.taller.knows_tool(Tool.Kind.ARPON),
 		"y con ella aparece")
 
 
@@ -326,7 +326,7 @@ func test_las_piezas_de_siempre_no_piden_tecnica() -> void:
 	sim.techs = TechTree.new()
 	for kind: int in [Tool.Kind.LASCA, Tool.Kind.BURIL, Tool.Kind.RAEDERA,
 		Tool.Kind.PUNZON, Tool.Kind.CESTO, Tool.Kind.ODRE, Tool.Kind.CUERDA]:
-		assert_true(sim.knows_tool(kind as Tool.Kind),
+		assert_true(sim.taller.knows_tool(kind as Tool.Kind),
 			"%s se sabe hacer desde el principio" % Tool.kind_name(
 				kind as Tool.Kind))
 
@@ -335,7 +335,7 @@ func test_sin_arbol_de_tecnicas_se_sabe_hacer_todo() -> void:
 	# Las pruebas y las sondas montan simulaciones a medias, sin arbol.
 	var sim := _sim()
 	for kind: int in Tool.Kind.values():
-		assert_true(sim.knows_tool(kind as Tool.Kind),
+		assert_true(sim.taller.knows_tool(kind as Tool.Kind),
 			"sin arbol que consultar no se cierra nada")
 
 # --- se come dos veces al dia --------------------------------------------
@@ -366,7 +366,7 @@ func test_comer_baja_el_hambre_y_levanta_de_la_mesa() -> void:
 	var person := _person(sim)
 	person.hunger = 80.0
 	person.state = Inhabitant.State.COMIENDO
-	sim._eat_meal(person, 1.0)
+	sim.despensa._eat_meal(person, 1.0)
 	assert_lt(person.hunger, 80.0, "comer quita hambre")
 
 
@@ -378,7 +378,7 @@ func test_sin_comida_no_se_queda_uno_sentado_a_la_mesa() -> void:
 	var person := _person(sim)
 	person.hunger = 80.0
 	person.state = Inhabitant.State.COMIENDO
-	sim._eat_meal(person, 1.0)
+	sim.despensa._eat_meal(person, 1.0)
 	assert_eq(person.state, Inhabitant.State.OCIOSO,
 		"sin nada que comer, se levanta de la mesa")
 
@@ -410,7 +410,7 @@ func test_al_saciado_no_se_le_vuelve_a_sentar_a_la_mesa() -> void:
 	var person := _person(sim)
 	person.hunger = 0.0
 	person.state = Inhabitant.State.COMIENDO
-	sim._eat_meal(person, 1.0)
+	sim.despensa._eat_meal(person, 1.0)
 	assert_eq(person.state, Inhabitant.State.OCIOSO,
 		"el saciado se levanta")
 	assert_lt(SettlementSim.COMIDA_SUFICIENTE, 55.0,
@@ -496,9 +496,9 @@ func test_armar_el_vivac_es_saber_del_hogar() -> void:
 	var bien_torpe := 0
 	var bien_mano := 0
 	for i in range(400):
-		if sim._camps_well(torpe):
+		if sim.despensa._camps_well(torpe):
 			bien_torpe += 1
-		if sim._camps_well(mano):
+		if sim.despensa._camps_well(mano):
 			bien_mano += 1
 	assert_gt(bien_mano, bien_torpe,
 		"quien sabe de hogar arma mejor el vivac")

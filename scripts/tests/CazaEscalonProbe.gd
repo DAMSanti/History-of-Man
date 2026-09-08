@@ -146,8 +146,8 @@ func _correr(sim: Node, fila: Dictionary, days: int) -> void:
 	# Lo PRODUCIDO, no lo que queda en el almacen: con toda la banda a la caza
 	# no hay quien recolecte, se comen la carne segun entra y el delta del
 	# almacen sale cero aunque se hayan cobrado tres piezas.
-	sim.produced_days.clear()
-	sim.produced_today.clear()
+	sim.taller.produced_days.clear()
+	sim.taller.produced_today.clear()
 	var first_day: int = sim.day
 	while sim.day < first_day + days:
 		await process_frame
@@ -176,9 +176,9 @@ func _correr(sim: Node, fila: Dictionary, days: int) -> void:
 		"", sim.caceria.lances_fallados]
 		+ " a la persecucion mientras quede fuelle)")
 	var carne := 0.0
-	for a_day: Dictionary in sim.produced_days:
+	for a_day: Dictionary in sim.taller.produced_days:
 		carne += float(a_day.get(int(Materia.Kind.CARNE), 0.0))
-	carne += float(sim.produced_today.get(int(Materia.Kind.CARNE), 0.0))
+	carne += float(sim.taller.produced_today.get(int(Materia.Kind.CARNE), 0.0))
 	var raciones := carne * Materia.nutrition(Materia.Kind.CARNE)
 	var comen := 0.0
 	for person: Inhabitant in sim.people:

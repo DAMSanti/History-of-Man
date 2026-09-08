@@ -111,6 +111,20 @@ a 5 153 por ese camino.
 5. **Al cortar un bloque se van constantes que usa el resto.** Después de
    cortar hay que comparar lo declarado en el fichero nuevo contra lo que
    sigue usándose en el viejo, y devolver lo compartido.
+6. **Y hay que redirigir lo que llamaba desde fuera, VARIABLES INCLUIDAS.**
+   Esto no da error de compilación: GDScript sólo se entera al ejecutar. Se
+   comprueba con
+
+   ```
+   godot --headless --path . --script res://scripts/tools/LlamadasHuerfanas.gd
+   ```
+
+   que tiene que decir `llamadas huerfanas: 0`. Existe porque se colaron seis
+   llamadas a `sim._report_spoilage` al sacar [Despensa] y **la suite seguía
+   en verde**: cinco pruebas reventaban antes de su primera comprobación y se
+   contaban como que pasaban. Se vio porque el total de comprobaciones bajó de
+   5.171 a 5.164. **Ese número hay que mirarlo**: 716 pruebas «en verde» con
+   siete comprobaciones menos no es verde.
 
 ---
 
@@ -258,3 +272,9 @@ Lo que **sí** se versiona: `data/sites/*.res`, `data/boundaries/*.res` y los
   corridas del mismo escalón de caza llegó a ser mayor que la que hay entre el
   primer escalón y el último. Si la muestra son tres sucesos, no se toca nada.
 - **No se toca un `.gd` mientras corre una medida.**
+- **No se mira sólo el número de pruebas.** Una prueba que revienta antes de su
+  primer `assert` no falla: pasa. Lo que la delata es el total de
+  comprobaciones.
+- **Cuidado con `endswith` sobre nombres de fichero.** Un guardia
+  `if p.endswith("Despensa.gd"): continue` se salta también
+  `TestDespensa.gd`, que es justo el fichero que había que arreglar.

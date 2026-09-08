@@ -20,7 +20,7 @@ extends RefCounted
 ## animales y transmitirlo a quien no estaba: es la primera tecnología de la
 ## memoria»— y es exactamente lo que hace en la partida: sube el techo de lo que
 ## se puede aprender de oídas sobre ESA tarea, para siempre y aunque se muera
-## todo el que estuvo. Ver `SettlementSim.paintings_ceiling`.
+## todo el que estuvo. Ver `Pinturas.paintings_ceiling`.
 
 enum Kind {
 	CACERIA,    ## Una pieza mayor cobrada. La que de verdad se cuenta

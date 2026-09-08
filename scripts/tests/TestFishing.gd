@@ -380,7 +380,7 @@ func test_el_aparejo_no_se_pide_hasta_saber_usarlo() -> void:
 			Profession.Speciality.ORILLA)
 
 	sim.techs = TechTree.new()
-	var demand := sim.tool_demand()
+	var demand := sim.taller.tool_demand()
 	for tool: Tool.Kind in [Tool.Kind.NASA, Tool.Kind.ANZUELO, Tool.Kind.RED,
 			Tool.Kind.ARPON]:
 		assert_eq(int(demand.get(tool, 0)), 0,
@@ -388,5 +388,5 @@ func test_el_aparejo_no_se_pide_hasta_saber_usarlo() -> void:
 
 	sim.techs.known[TechTree.Tech.PESQUERA] = true
 	sim.techs.known[TechTree.Tech.NASA] = true
-	assert_true(int(sim.tool_demand().get(Tool.Kind.NASA, 0)) > 0,
+	assert_true(int(sim.taller.tool_demand().get(Tool.Kind.NASA, 0)) > 0,
 		"sabida la nasa, el taller la tiene en la lista")

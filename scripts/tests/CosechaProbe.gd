@@ -171,10 +171,10 @@ func _init() -> void:
 			left = sim.field.seasonal_abundance_at(
 				person.activity, person.position, GameState.season)
 		var tool_factor := 1.0
-		var tool_kind: int = sim._tool_for(person)
+		var tool_kind: int = sim.taller._tool_for(person)
 		if tool_kind >= 0:
 			tool_factor = sim.toolkit.efficiency(tool_kind as Tool.Kind,
-				sim.workers_in(person.activity))
+				sim.taller.workers_in(person.activity))
 		print("%-6s %-14s destreza %.2f · estacion %.2f · paraje %.2f · filo %.2f · tiempo %.2f" % [
 			person.given_name,
 			Subsistence.activity_name(person.activity),

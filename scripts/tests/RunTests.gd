@@ -49,7 +49,7 @@ func _init() -> void:
 		checks += suite.checks
 		for f: String in suite.failures:
 			failures.append(f)
-		print("  %-16s %2d pasan, %d fallan" % [suite.suite_name(), result[0], result[1]])
+		print("  %-16s %2d pasan, %d fallan, %d comprobaciones" % [suite.suite_name(), result[0], result[1], suite.checks])
 
 	print("")
 	if failures.is_empty():
