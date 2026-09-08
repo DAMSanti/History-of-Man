@@ -157,9 +157,12 @@ priorización sobre el árbol tecnológico, no una vía paralela que le compita.
 
 ## FASE D — Épocas
 
-Diez épocas con cultura material documentada en Cantabria, del Achelense a la
-Edad Moderna. Cada una es **datos**: materiales, procesos y edificios
-disponibles, más las técnicas que hay que externalizar para cerrarla.
+Épocas con cultura material documentada en Cantabria, del Achelense a la Edad
+Moderna. Cada una es **datos**: materiales, procesos y edificios disponibles,
+más las técnicas que hay que externalizar para cerrarla.
+
+Están escritas una a una —salieron once, no diez— en
+[EPOCAS.md](EPOCAS.md), con el hito que cierra cada una.
 
 **El tiempo avanza por hitos, no por calendario.** El Paleolítico es el 99,4 %
 del intervalo real; si el tiempo de juego fuese proporcional, la partida entera

@@ -1207,3 +1207,33 @@ func test_la_mancha_de_una_pesquera_ES_el_rio() -> void:
 	assert_false(markers._fits_terrain(paraje, ladera, terrain),
 		"y la ladera de enfrente no")
 	markers.free()
+
+
+# ------------------------------------ lo que la banda sabe al asentarse --
+
+func test_asentarse_sin_campo_no_revienta() -> void:
+	# `Querencia` corrio una vez con `sim.field` a null -se llamaba desde
+	# `setup`, que va ANTES de poblar el campo- y sembraba cero parajes sin
+	# decir nada. Que devuelva cero es correcto; que reviente, no.
+	var sim := SettlementSim.new()
+	assert_eq(Querencia.new(sim).asentarse(), 0,
+		"sin campo de recursos no se siembra nada y no pasa nada")
+
+
+func test_lo_sembrado_pasa_los_dos_umbrales() -> void:
+	# Son DOS y distintos: 0,30 para bautizar el sitio y 0,35 para que el
+	# reparto de tajos lo ofrezca. Sembrar entre los dos daba parajes en los
+	# que la banda no podia trabajar.
+	var minimo := Querencia.SABIDO * 0.75
+	assert_gt(minimo, Parajes.NAMED_AT,
+		"hasta el filo del radio se puede bautizar")
+	assert_gt(minimo, 0.35,
+		"y hasta el filo del radio se puede ofrecer como tajo")
+
+
+func test_el_tanteo_no_manda_a_cruzar_el_valle() -> void:
+	# La vuelta de tanteo es media jornada como mucho: quien no sabe si al
+	# llegar habra algo no se juega el dia entero en el camino.
+	assert_lt(Tanteo.VUELTA, 400.0, "la vuelta de tanteo es corta")
+	assert_lt(Barbecho.BUSCAR_HASTA, 400.0,
+		"y buscar sitio nuevo tampoco cruza el valle")

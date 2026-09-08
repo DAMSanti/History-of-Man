@@ -45,6 +45,15 @@ const REPUESTO := 0.55
 ## del mismo paraje.
 const RADIO := 90.0
 
+## Hasta donde se busca sitio nuevo cuando no queda ninguno, en metros.
+##
+## Trescientos ochenta -el radio de una batida, ver [Reconocimiento.BATIDA_RADIUS]-
+## y no los novecientos del tope de jornada. La diferencia importa: novecientos
+## metros es lo mas lejos a lo que se PUEDE ir a trabajar un sitio que ya se
+## conoce y se sabe bueno; salir a probar suerte tan lejos es gastar la jornada
+## en el camino y volver de vacio.
+const BUSCAR_HASTA := 380.0
+
 var sim: SettlementSim
 
 ## Lo ultimo que se busco para cada oficio, y en que jornada. Ver [donde_buscar].
@@ -140,7 +149,7 @@ func donde_buscar(activity: Subsistence.Activity, desde: Vector3) -> Vector3:
 	var mejor := Vector3.ZERO
 	var mejor_nota := 0.0
 	var tope := SettlementSim.CAZA_LEJOS_M \
-		if activity == Subsistence.Activity.CAZA else 900.0
+		if activity == Subsistence.Activity.CAZA else BUSCAR_HASTA
 	for z in range(sim.field.height):
 		for x in range(sim.field.width):
 			var centre := sim.field.cell_center(x, z)
@@ -159,8 +168,20 @@ func donde_buscar(activity: Subsistence.Activity, desde: Vector3) -> Vector3:
 			# llegar. Aquí sin `believed_abundance` porque justamente lo que
 			# se está haciendo es ir a ver lo que no se sabe.
 			var viaje := 2.0 * sim.marcha.hours_to_walk(lejos)
-			var util := clampf(1.0 - viaje / SettlementSim.HORAS_UTILES, 0.1, 1.0)
-			var nota := hay * util * queda
+			# SIN SUELO DE 0,1: un sitio al que no da tiempo a llegar y volver
+			# no vale una decima de lo que vale uno cerca, vale CERO. Con el
+			# suelo puesto, una celda riquisima a setecientos metros ganaba a
+			# una decente a doscientos, y medido en las primeras jornadas el
+			# resultado era que A MEDIODIA NADIE ESTABA TRABAJANDO: estaban
+			# todos «de camino» o «volviendo», y la despensa perdia veinte al
+			# dia sin ganar nada. Ver `ArranqueProbe`.
+			var util := clampf(1.0 - viaje / SettlementSim.HORAS_UTILES, 0.0, 1.0)
+			if util <= 0.0:
+				continue
+			# Y el tiempo pesa AL CUADRADO: media jornada andando no deja media
+			# jornada de trabajo, deja media hecha con prisa y con la carga a
+			# cuestas.
+			var nota := hay * util * util * queda
 			if nota > mejor_nota:
 				mejor_nota = nota
 				if sim._terrain:

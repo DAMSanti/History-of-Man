@@ -432,6 +432,17 @@ func _levantar_conocimiento(home: Vector3) -> void:
 	# dejaria el mapa entero en negro sin nada por donde empezar a leerlo.
 	knowledge.see_from(home, sim.sight_range * 1.6)
 
+	# Y LO QUE YA SABE DE SUS ALREDEDORES. Va AQUI y no en `sim.setup`, que es
+	# donde estuvo primero y no servia de nada: el campo de recursos se puebla
+	# en esta funcion, o sea DESPUES de `setup`, asi que `Querencia` corria con
+	# `sim.field` a null y sembraba cero parajes.
+	#
+	# Una banda no llega a un valle y planta el campamento a ciegas: elige el
+	# abrigo por lo que tiene alrededor. Ver [Querencia].
+	var sembrados := Querencia.new(sim).asentarse()
+	print("La banda se asienta: %d parajes de la primera vuelta al abrigo"
+		% sembrados)
+
 
 ## Lo que se ve crecer: los recursos en el suelo, la hierba y el bosque.
 func _levantar_vegetacion() -> void:

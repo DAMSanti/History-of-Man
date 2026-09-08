@@ -433,14 +433,32 @@ func _place_sun(hour: float, season: int, season_day: int) -> void:
 
 	_place_moon(latitude, day, hour, above)
 
-	# Una línea por HORA de juego, no por tick. Con el ciclo encendido esto se
-	# llama doscientas cuarenta veces al día y un día dura veinticuatro segundos:
-	# sin el filtro son diez líneas por segundo y la consola deja de servir.
-	var stamp := int(hour)
+	# UNA LINEA POR JORNADA, no por hora de juego.
+	#
+	# Era una por hora, o sea veinticuatro por jornada, y en una partida a
+	# velocidad rápida eso son diez líneas por segundo: la consola dejaba de
+	# servir para ver cualquier otra cosa. Y encima confundía, porque lo que
+	# imprimía era el día del año SOLAR -«dia 88», «dia 90»- que no es el día de
+	# la partida y salta de dos en dos.
+	#
+	# Salta de dos en dos porque el año del juego son ciento ochenta jornadas y
+	# el año astronómico trescientos sesenta y cinco: cada jornada vale 2,03
+	# días solares. Y empieza en el 80 porque el 80 es el equinoccio de marzo,
+	# que es cuando arranca la primavera. Las dos cosas son correctas y las dos
+	# parecían un fallo, así que ahora se dice el mediodía y se dice ENTERO:
+	# qué jornada de la partida, qué mes, y de paso a qué día solar cae.
+	# Sin excepcion para la primera: con ella la linea de arranque salia a la
+	# hora que fuera y decia «altura -0,3º», o sea el sol bajo el horizonte a
+	# «mediodia».
+	if absf(hour - 12.0) > 0.55:
+		_update_fill()
+		return
+	var stamp := int(day)
 	if stamp != _last_reported_hour:
 		_last_reported_hour = stamp
-		print("Sol: %2d:00 · dia %.0f del año · altura %5.1fº · energia %.2f" % [
-			stamp, day, above, _directional_light.light_energy])
+		print("Sol: mediodia · %s · dia %.0f del año solar · altura %5.1fº" % [
+			Subsistence.month_name(season as Subsistence.Season, season_day),
+			day, above])
 	_update_fill()
 
 

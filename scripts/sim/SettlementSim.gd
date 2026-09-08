@@ -345,6 +345,10 @@ var horno: HornoDeRejillas = HornoDeRejillas.new()
 ## Lo que la estacion le hace al PAISAJE: nieve, barro y caudal. Ver [Temporada].
 var temporada: Temporada = Temporada.new()
 
+## Sin paraje donde trabajar se sale a TANTEAR el terreno, no a cruzar el
+## valle. Ver [Tanteo].
+var tanteo: Tanteo = Tanteo.new(self)
+
 ## Lo esquilmado se deja descansar y se busca en otra parte. Ver [Barbecho].
 var barbecho: Barbecho = Barbecho.new(self)
 
@@ -1803,11 +1807,26 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 
 	# Si a este oficio no le queda un sitio conocido sin esquilmar, se sale a
 	# BUSCAR. Va lo primero -por delante incluso del mejor conocido- porque en
-	# ese caso el mejor conocido es un sitio muerto. Ver [Barbecho.donde_buscar].
+	# ese caso el mejor conocido es un sitio muerto.
+	#
+	# Dos cosas distintas, y las dos hacen falta:
+	#
+	#   BUSCAR   el mejor sitio del entorno, mirando el campo de recursos. Es
+	#            una mudanza y se hace sabiendo adonde se va. Ver
+	#            [Barbecho.donde_buscar].
+	#   TANTEAR  cuando no hay ni eso: una vuelta por el sector que toca -el
+	#            margen del rio si es pescador- a ver que sale. Ver [Tanteo].
+	#
+	# El tanteo va DETRAS del buscar como candidato: si hay un sitio bueno al
+	# alcance se va a el, y si no, se da la vuelta. Lo que ya no pasa es
+	# quedarse en el abrigo.
 	if barbecho.sin_sitio(person.activity):
 		var buscando := barbecho.donde_buscar(person.activity, person.position)
 		if buscando != Vector3.ZERO:
 			out.insert(0, buscando)
+		var tanteando := tanteo.adonde(person)
+		if tanteando != Vector3.ZERO and not out.has(tanteando):
+			out.append(tanteando)
 
 	for entry: Dictionary in (_known_spots.get(person.activity, []) as Array):
 		if out.size() >= INTENTOS_DE_TAJO:
