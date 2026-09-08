@@ -346,7 +346,7 @@ func _layer_colour(arrays: TerrainTextureArrays, layer: int,
 ## el color propio del suelo, no el de la hora del día. Con el sol dentro, la
 ## hierba llevaría pintadas las sombras del mediodía a las seis de la tarde.
 func _start_albedo_bake() -> void:
-	var pieces := _terrain.mesh_pieces()
+	var pieces := _terrain.malla.mesh_pieces()
 	if pieces.is_empty():
 		return
 	var maps := _terrain.sample_maps()

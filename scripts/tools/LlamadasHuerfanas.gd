@@ -19,6 +19,7 @@ const FACHADAS := {
 		"Hogar", "Marcha", "Nasas", "Percances", "Pinturas", "Reconocimiento",
 		"Reparto", "Tajo", "Taller", "Trampas"],
 	"res://scripts/ui/GameUI.gd": ["PanelAlmacen", "PanelRastros", "PanelTrabajos"],
+	"res://scripts/mundo/TerrainGenerator.gd": ["MallaDelTerreno"],
 }
 
 
@@ -73,9 +74,12 @@ func _revisar(fachada: String, clases: Array) -> int:
 		for fila: String in texto.split("\n"):
 			linea += 1
 			# La documentacion NOMBRA metodos a proposito -«ver `_harvest`»- y eso
-			# no es una llamada.
+			# no es una llamada. Y los `print` los nombran tambien: el rotulo
+			# «TerrainGenerator._create_terrain_mesh (total)» de un cronometro
+			# daba positivo estando la llamada de al lado bien puesta.
 			if fila.strip_edges().begins_with("#"):
 				continue
+			fila = _sin_cadenas(fila)
 			for nombre: String in mudados:
 				# Solo `algo.loquesea`, que es un acceso sobre un objeto: la
 				# definicion y los usos internos no interesan.
@@ -87,6 +91,25 @@ func _revisar(fachada: String, clases: Array) -> int:
 					ruta, linea, nombre, mudados[nombre]])
 				malas += 1
 	return malas
+
+
+## La linea sin lo que va entre comillas. Lo de dentro es texto, no codigo.
+func _sin_cadenas(fila: String) -> String:
+	var fuera := ""
+	var dentro := false
+	var comilla := ""
+	for i in range(fila.length()):
+		var c := fila[i]
+		if dentro:
+			if c == comilla:
+				dentro = false
+			continue
+		if c == "\"" or c == "'":
+			dentro = true
+			comilla = c
+			continue
+		fuera += c
+	return fuera
 
 
 ## Si la linea accede de verdad a ese nombre sobre un objeto.
