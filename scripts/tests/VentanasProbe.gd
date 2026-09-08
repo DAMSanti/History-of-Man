@@ -40,7 +40,7 @@ func _initialize() -> void:
 	print("")
 	print("=== TODAS LAS VENTANAS ===")
 	_mide(ui, "oficios", "oficios", func() -> void: ui.oficios.show_professions())
-	_mide(ui, "tecnicas", "tecnicas", func() -> void: ui.oficios.show_tech())
+	_mide(ui, "tecnicas", "tecnicas", func() -> void: ui.tecnicas.show_tech())
 	_mide(ui, "censo", "entidades", func() -> void: ui.censo.show_census())
 	_mide(ui, "ficha de entidad", "entidad",
 		func() -> void: ui.censo.show_entity("banda", 0, false))

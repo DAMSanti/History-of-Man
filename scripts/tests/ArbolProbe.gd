@@ -63,8 +63,8 @@ func _init() -> void:
 	print("")
 	print("=== EL ARBOL, OFICIO A OFICIO ===")
 	for job: int in TechTree.BRANCHES:
-		ui.oficios._tech_tab = job
-		ui.oficios.show_tech()
+		ui.tecnicas._tab = job
+		ui.tecnicas.show_tech()
 		for i in range(6):
 			await process_frame
 		var graph := _find_graph(ui)
@@ -145,21 +145,29 @@ func _init() -> void:
 		quit()
 		return
 
-	# Y la captura de la pestaña que se pida, para poder mirarla.
+	# Y una captura de CADA pestaña, para poder mirarlas. Sin `OFICIO` salen
+	# todas: la ventana lleva la piel de la era y lo que hay que revisar es
+	# como queda cada rama, no una.
 	var wanted := OS.get_environment("OFICIO")
+	# Las demas ventanas, apagadas: el almacen se abrio despues que tecnicas y
+	# en Godot el orden de hijos ES el orden de dibujo, asi que salia ENCIMA y
+	# las cinco capturas eran cinco fotos del almacen.
+	for id: String in ui._windows.keys():
+		if id != "tecnicas":
+			(ui._windows[id] as Control).visible = false
 	for job: int in TechTree.BRANCHES:
-		if wanted.is_empty() or Profession.job_name(
-				job as Profession.Job) == wanted:
-			ui.oficios._tech_tab = job
-			ui.oficios.show_tech()
-			for i in range(10):
-				await process_frame
-			var image := get_root().get_texture().get_image()
-			if image != null:
-				image.save_png("user://arbol_%d.png" % job)
-				print("captura de %s guardada" % Profession.job_name(
-					job as Profession.Job))
-			break
+		if not wanted.is_empty() and Profession.job_name(
+				job as Profession.Job) != wanted:
+			continue
+		ui.tecnicas._tab = job
+		ui.tecnicas.show_tech()
+		for i in range(10):
+			await process_frame
+		var image := get_root().get_texture().get_image()
+		if image != null:
+			image.save_png("user://arbol_%d.png" % job)
+			print("captura de %s guardada" % Profession.job_name(
+				job as Profession.Job))
 	# Las reglas nuevas: sin recipientes al empezar, y el hogar sin repartir.
 	print("")
 	print("=== AL EMPEZAR ===")

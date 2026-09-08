@@ -50,6 +50,10 @@ Fuentes: MDT del IGN/CNIG, teselas Terrarium de AWS, OpenStreetMap, y modelos
 CC0 de Poly Haven y Quaternius. El detalle está en
 [docs/CREDITOS.md](docs/CREDITOS.md).
 
+La letra manuscrita de la interfaz es **Caveat**, con licencia SIL OFL 1.1
+(`fonts/Caveat-OFL.txt`). Ésa sí se versiona: son 400 kB y sin ella la interfaz
+del Paleolítico sale con la tipografía de serie.
+
 ## Documentación
 
 | | |

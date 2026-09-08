@@ -123,8 +123,11 @@ var barra: BarraSuperior = BarraSuperior.new(self)
 var sitios: PanelSitios = PanelSitios.new(self)
 
 
-## Los oficios que hay y las tecnicas que se aprenden. Ver [PanelOficios].
+## Los oficios que hay y quien los ejerce. Ver [PanelOficios].
 var oficios: PanelOficios = PanelOficios.new(self)
+
+## Lo que sabe hacer cada oficio y su arbol. Ver [PanelTecnicas].
+var tecnicas: PanelTecnicas = PanelTecnicas.new(self)
 
 ## Que hay pintado en el mundo. Ver [PanelCenso].
 var censo: PanelCenso = PanelCenso.new(self)
@@ -136,7 +139,7 @@ func show_professions() -> void:
 
 
 func show_tech() -> void:
-	oficios.show_tech()
+	tecnicas.show_tech()
 
 
 func show_census() -> void:
@@ -235,7 +238,7 @@ func _process(_delta: float) -> void:
 			"almacen": show_store()
 			"trabajos": show_jobs()
 			"banda": show_band()
-			"tecnicas": oficios.show_tech()
+			"tecnicas": tecnicas.show_tech()
 			"oficios": oficios.show_professions()
 			"territorio": show_territory()
 			"cronica": show_lore()
@@ -346,7 +349,7 @@ func _build_taskbar() -> void:
 ## una ventana del sistema operativo, que en pantalla completa se comporta
 ## fatal y no se puede estilar con el resto de la interfaz.
 func _window(id: String, title: String,
-		width: int = PANEL_WIDTH) -> VBoxContainer:
+		width: int = PANEL_WIDTH, piel: bool = false) -> VBoxContainer:
 	_building = id
 	if _windows.has(id):
 		var existing: Control = _windows[id]
@@ -378,14 +381,29 @@ func _window(id: String, title: String,
 	frame.position = Vector2(24 + _next_offset * 26, 108 + _next_offset * 26)
 	_next_offset = (_next_offset + 1) % 5
 	add_child(frame)
-	# El grano del soporte, encima del fondo y debajo de todo lo demas: es lo
-	# que hace que la ventana parezca piel tensada y no un rectangulo. Ver
-	# [UISkin.grain_layer] y docs/INTERFAZ.md.
-	var grano := UISkin.grain_layer()
-	frame.add_child(grano)
-	# Detras de todo lo demas: el grano tiñe el soporte, no el texto escrito
-	# encima. En Godot el orden de hijos ES el orden de dibujo.
-	frame.move_child(grano, 0)
+	# El soporte, encima del fondo y debajo de todo lo demas. Hay dos:
+	#
+	#   `piel`  la piel TENSADA, con su borde combado y sus correas. Es la
+	#           buena, y la ventana que la lleva no necesita caja de estilo
+	#           porque el fondo lo dibuja ella. Ver [PielTensada].
+	#   si no   una capa de grano en multiply sobre la caja de siempre, que es
+	#           lo que tenian todas antes de que hubiera piel.
+	#
+	# Se va a ir pasando ventana a ventana. Ver docs/INTERFAZ.md.
+	var soporte: Control = null
+	if piel:
+		# La caja no pinta nada: solo aparta el contenido del borde de la piel,
+		# que sobresale y se comba y necesita su sitio.
+		var hueca := StyleBoxEmpty.new()
+		hueca.set_content_margin_all(PielTensada.DESBORDE)
+		frame.add_theme_stylebox_override("panel", hueca)
+		soporte = PielTensada.new()
+	else:
+		soporte = UISkin.grain_layer()
+	frame.add_child(soporte)
+	# Detras de todo lo demas: el soporte tiñe lo escrito encima, no al reves.
+	# En Godot el orden de hijos ES el orden de dibujo.
+	frame.move_child(soporte, 0)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 6)
@@ -398,8 +416,13 @@ func _window(id: String, title: String,
 	var caption := Label.new()
 	caption.text = title
 	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	caption.add_theme_font_size_override("font_size", 15)
-	caption.add_theme_color_override("font_color", UISkin.OCHRE)
+	# En una ventana de piel, el rotulo va escrito a mano como el resto. Dejarlo
+	# con la letra de serie era lo unico que seguia pareciendo un programa.
+	if piel:
+		Pigmento.escribir(caption, UISkin.OCHRE, 24)
+	else:
+		caption.add_theme_font_size_override("font_size", 15)
+		caption.add_theme_color_override("font_color", UISkin.OCHRE)
 	header.add_child(caption)
 	_captions[id] = caption
 
@@ -431,7 +454,12 @@ func _window(id: String, title: String,
 
 	var body := VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	body.custom_minimum_size = Vector2(width - 40, 0)
+	# El borde de la piel se come su ancho por los dos lados. Sin descontarlo,
+	# el minimo del cuerpo salia mas ancho que el hueco util y los renglones se
+	# cortaban por la derecha: se leia «la misma persona en el mismo rio trae» y
+	# ahi se acababa la frase.
+	var margen := PielTensada.DESBORDE * 2.0 if piel else 0.0
+	body.custom_minimum_size = Vector2(width - 40 - margen, 0)
 	body.add_theme_constant_override("separation", 8)
 	scroll.add_child(body)
 
@@ -530,7 +558,7 @@ func _toggle(id: String) -> void:
 		"almacen": show_store()
 		"trabajos": show_jobs()
 		"banda": show_band()
-		"tecnicas": oficios.show_tech()
+		"tecnicas": tecnicas.show_tech()
 		"oficios": oficios.show_professions()
 		"territorio": show_territory()
 		"cronica": show_lore()
