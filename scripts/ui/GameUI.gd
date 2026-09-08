@@ -123,6 +123,30 @@ var barra: BarraSuperior = BarraSuperior.new(self)
 var sitios: PanelSitios = PanelSitios.new(self)
 
 
+## Los oficios que hay y las tecnicas que se aprenden. Ver [PanelOficios].
+var oficios: PanelOficios = PanelOficios.new(self)
+
+## Que hay pintado en el mundo. Ver [PanelCenso].
+var censo: PanelCenso = PanelCenso.new(self)
+
+
+## Las cuatro ventanas que se abren desde la barra de abajo y desde el mundo.
+func show_professions() -> void:
+	oficios.show_professions()
+
+
+func show_tech() -> void:
+	oficios.show_tech()
+
+
+func show_census() -> void:
+	censo.show_census()
+
+
+func show_entity(key: String, index: int, focus: bool = true) -> void:
+	censo.show_entity(key, index, focus)
+
+
 ## Las seis fichas del sitio. Se dejan pasamanos porque las abre `DemoMain` al
 ## pinchar en el mundo, y son la cara publica de la interfaz para el raton.
 func show_ground(world: Vector3, terrain: TerrainGenerator) -> void:
@@ -211,13 +235,13 @@ func _process(_delta: float) -> void:
 			"almacen": show_store()
 			"trabajos": show_jobs()
 			"banda": show_band()
-			"tecnicas": show_tech()
-			"oficios": show_professions()
+			"tecnicas": oficios.show_tech()
+			"oficios": oficios.show_professions()
 			"territorio": show_territory()
 			"cronica": show_lore()
 			"parajes": sitios.show_places()
 			"rastros": show_trails()
-			"entidades": show_census()
+			"entidades": censo.show_census()
 			# La ficha de una entidad se repinta SIN volver a mover la cámara.
 			# Mover la cámara es lo que hace la flecha, no el repintado: con el
 			# foco puesto aquí, la vista se enganchaba a la entidad y el
@@ -227,8 +251,7 @@ func _process(_delta: float) -> void:
 				if shown_person != null:
 					show_person(shown_person)
 			"entidad":
-				if not _census_group.is_empty():
-					show_entity(_census_group, _census_index, false)
+				censo.repintar()
 			"paraje":
 				# La ficha de UN paraje concreto: lo que descubre una batida
 				# -materiales nuevos, el % conocido- tiene que verse aquí sin
@@ -387,7 +410,7 @@ func _window(id: String, title: String,
 		# rastro lo pinta la ficha y sin ficha no tiene quién lo mantenga al
 		# día, así que se quedaría congelado en el mapa para siempre.
 		elif id == "entidad":
-			_forget_entity())
+			censo._forget_entity())
 	header.add_child(close)
 
 	column.add_child(HSeparator.new())
@@ -478,7 +501,7 @@ func close_topmost() -> bool:
 		markers.hide_extent()
 	# Y la ficha de una entidad apaga su rastro, igual que al pulsar la cruz.
 	if _windows.get("entidad", null) == best:
-		_forget_entity()
+		censo._forget_entity()
 	return true
 
 
@@ -499,13 +522,13 @@ func _toggle(id: String) -> void:
 		"almacen": show_store()
 		"trabajos": show_jobs()
 		"banda": show_band()
-		"tecnicas": show_tech()
-		"oficios": show_professions()
+		"tecnicas": oficios.show_tech()
+		"oficios": oficios.show_professions()
 		"territorio": show_territory()
 		"cronica": show_lore()
 		"parajes": sitios.show_places()
 		"rastros": show_trails()
-		"entidades": show_census()
+		"entidades": censo.show_census()
 
 
 func _clear(body: VBoxContainer) -> void:
@@ -868,405 +891,6 @@ func _rastros_panel() -> PanelRastros:
 
 
 var _rastros: PanelRastros = null
-
-
-## El árbol de oficios: qué sabe hacer la banda y en qué se puede repartir.
-##
-## Va aparte de «Trabajos» y no es lo mismo. Aquélla es la mesa de mando —cuánta
-## gente en qué, con sus prioridades— y ésta es el mapa: qué oficios hay, en qué
-## especialidades se abre cada uno, qué hace falta para cada especialidad y
-## quién la ejerce hoy. Sin esto, la única forma de saber que la pesca de altura
-## existe y pide embarcación era leer el código.
-func show_professions() -> void:
-	var body := _window("oficios", "Oficios")
-	_clear(body)
-	if sim == null:
-		_text(body, "Sin asentamiento.")
-		return
-
-	_text(body, "Un oficio es cómo se organiza la banda; una especialidad es "
-		+ "qué parte del monte se toca. Casi nadie vive de un solo trabajo: en "
-		+ "una banda de quince, la especialización es la recompensa de haber "
-		+ "crecido.", true)
-
-	var counts := _job_headcount()
-	for job: int in Profession.Job.values():
-		if job == Profession.Job.OCIOSO:
-			continue
-		body.add_child(HSeparator.new())
-		var here: int = counts.get(job, 0)
-		_heading(body, "%s · %d %s" % [
-			Profession.job_name(job as Profession.Job).to_upper(), here,
-			"persona" if here == 1 else "personas"])
-		_text(body, Profession.job_desc(job as Profession.Job), true)
-		_text(body, "   pueden: %s" % _who_can(job as Profession.Job), true)
-
-		var specialities := Profession.specialities_of(job as Profession.Job)
-		if specialities.is_empty():
-			_text(body, "   no se reparte en especialidades", true)
-			continue
-		for speciality: int in specialities:
-			_speciality_line(body, job as Profession.Job,
-				speciality as Profession.Speciality)
-
-
-## Cuánta gente hay hoy en cada oficio.
-func _job_headcount() -> Dictionary:
-	var counts: Dictionary = {}
-	for person: Inhabitant in sim.people:
-		counts[person.job] = int(counts.get(person.job, 0)) + 1
-	return counts
-
-
-## Quién puede con un oficio, dicho en una línea.
-func _who_can(job: Profession.Job) -> String:
-	var entry: Dictionary = Profession.CATALOGUE[job]
-	var parts: Array[String] = ["de %d a %d años" % [
-		int(entry["min_age"]), int(entry["max_age"])]]
-	if bool(entry["mobile"]):
-		parts.append("adultos, y no quien esté criando")
-	var able := 0
-	for person: Inhabitant in sim.people:
-		if Profession.can_do(job, person):
-			able += 1
-	parts.append("%d de los %d de la banda" % [able, sim.people.size()])
-	return " · ".join(parts)
-
-
-## Una especialidad: qué es, qué le hace falta y quién la ejerce hoy.
-func _speciality_line(body: VBoxContainer, job: Profession.Job,
-		speciality: Profession.Speciality) -> void:
-	var doing: Array[String] = []
-	for person: Inhabitant in sim.people:
-		if person.job == job and person.current_speciality == speciality:
-			doing.append(person.given_name)
-
-	var blocked := _speciality_blocked(speciality)
-	var mark := "·" if not blocked.is_empty() else ("◆" if not doing.is_empty() else "▸")
-	_text(body, "   %s %s" % [mark,
-		Profession.speciality_name(speciality)], blocked.is_empty() == false)
-	_text(body, "       %s" % Profession.speciality_desc(speciality), true)
-	if not blocked.is_empty():
-		_text(body, "       falta: %s" % blocked, true)
-	elif not doing.is_empty():
-		_text(body, "       hoy: %s" % ", ".join(doing), true)
-
-
-## Qué le falta a una especialidad para poder ejercerse, o "" si nada.
-##
-## Es la pregunta que no tenía respuesta en pantalla: por qué la pesca de altura
-## sale en la tabla y no se puede elegir, o por qué el ahumado no hace nada.
-func _speciality_blocked(speciality: Profession.Speciality) -> String:
-	match speciality:
-		Profession.Speciality.ALTURA:
-			return "embarcación, y todavía no se sabe hacer"
-
-	return ""
-
-
-## Qué oficio se está mirando en la ventana de técnicas.
-var _tech_tab: int = Profession.Job.MANUFACTURA
-
-
-func show_tech() -> void:
-	var body := _window("tecnicas", "Técnicas")
-	_clear(body)
-	if tech == null:
-		_text(body, "Sin datos de técnica.")
-		return
-
-	_text(body, "En el Paleolítico nadie investiga: se aprende haciendo. Cada "
-		+ "técnica sale de acumular jornadas en la actividad que la produce, y "
-		+ "de gastar material aprendiendo: se estropean nódulos aprendiendo a "
-		+ "tallarlos. Pon el ratón encima de una para ver qué pide.", true)
-	_text(body, "verde: dominada    ocre: las jornadas están, falta el "
-		+ "material    gris: falta lo de antes", true)
-
-	# Una pestaña por oficio, y dentro el árbol dibujado. Ver [TechGraph].
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 4)
-	body.add_child(tabs)
-	for job: int in TechTree.BRANCHES:
-		var button := Button.new()
-		button.text = Profession.job_name(job as Profession.Job)
-		button.add_theme_font_size_override("font_size", 11)
-		button.custom_minimum_size = Vector2(0, 24)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		if job == _tech_tab:
-			button.add_theme_stylebox_override("normal",
-				UISkin.button_box("pressed"))
-			button.add_theme_color_override("font_color", UISkin.OCHRE)
-		button.pressed.connect(func() -> void:
-			_tech_tab = job
-			show_tech())
-		tabs.add_child(button)
-
-	if not TechTree.BRANCHES.has(_tech_tab):
-		_tech_tab = int(TechTree.BRANCHES.keys()[0])
-
-	# El árbol es más ancho que la ventana: se desplaza en horizontal, que es
-	# como se mira un árbol de progreso.
-	var scroll := ScrollContainer.new()
-	# Alto justo: la rama del hogar tiene UNA técnica y con un alto fijo la
-	# ventana dejaba doscientos píxeles de negro debajo.
-	scroll.custom_minimum_size = Vector2(0, 0)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	body.add_child(scroll)
-	var graph := TechGraph.new()
-	scroll.add_child(graph)
-	graph.build(tech, _tech_tab)
-	# Más doce de la barra de desplazamiento horizontal, que si no tapa la
-	# fila de abajo.
-	scroll.custom_minimum_size = Vector2(0, graph.custom_minimum_size.y + 12.0)
-
-	body.add_child(HSeparator.new())
-	_heading(body, "EL HOGAR")
-	_text(body, "No son técnicas que se aprendan: son obras que se levantan en "
-		+ "el abrigo, con su material y sus jornadas.", true)
-	for kind: int in CampProjects.all():
-		_camp_row(body, kind as CampProjects.Kind)
-
-	body.add_child(HSeparator.new())
-	_fishing_block(body)
-	_hunting_block(body)
-	_paintings_block(body)
-
-
-## Una obra del abrigo: qué es, qué cuesta y en qué punto está.
-func _camp_row(body: VBoxContainer, kind: CampProjects.Kind) -> void:
-	if sim == null:
-		return
-	var name_text := CampProjects.project_name(kind)
-	if sim.camp_built.get(kind, false):
-		var state := ""
-		if kind == CampProjects.Kind.HOGAR:
-			state = " · encendido" if sim.hearth_lit else " · APAGADO"
-		_text(body, "◆ %s%s" % [name_text, state])
-		return
-
-	var needs := CampProjects.requires(kind)
-	if needs >= 0 and not sim.camp_built.get(needs, false):
-		_text(body, "· %s — falta %s" % [name_text,
-			CampProjects.project_name(needs as CampProjects.Kind).to_lower()], true)
-		return
-
-	if sim.camp_queue == kind:
-		_bar(body, "▸ %s" % name_text,
-			sim.camp_progress / maxf(CampProjects.labor_days(kind), 0.01))
-	else:
-		_text(body, "▸ %s" % name_text)
-	_text(body, "     %s" % CampProjects.project_desc(kind), true)
-	_text(body, "     %s · %.0f jornadas de hogar" % [
-		_materials_line(CampProjects.materials(kind)),
-		CampProjects.labor_days(kind)], true)
-
-
-## Lo que pide una receta, con lo que hay al lado.
-##
-## «6 piedra, 3 leña» no dice si se puede hacer o no; «6 piedra (hay 14), 3 leña
-## (hay 1)» sí, y de un vistazo. Es la mitad de lo que había que adivinar.
-func _materials_line(recipe: Dictionary) -> String:
-	if sim == null or recipe.is_empty():
-		return "sin material"
-	var parts: Array[String] = []
-	for material: int in recipe:
-		var wanted := float(recipe[material])
-		var have := sim.store.amount(material as Materia.Kind)
-		var mark := "" if have >= wanted else "  ¡faltan %.0f!" % (wanted - have)
-		parts.append("%.0f %s (hay %.0f)%s" % [wanted,
-			Materia.material_name(material as Materia.Kind).to_lower(),
-			have, mark])
-	return " · ".join(parts)
-
-
-## Cómo caza la banda hoy: las tres ramas, lo que rinde cada una y la línea
-## de trampas que hay puesta.
-##
-## Va aquí, al lado de la pesca, porque es la misma pregunta: qué se sabe
-## hacer y qué cambia cuando se aprenda lo siguiente. Sin esto, aprender el
-## propulsor es una línea en una lista y no un cambio en la jornada.
-func _hunting_block(body: VBoxContainer) -> void:
-	if sim == null:
-		return
-	_heading(body, "CAZA")
-
-	for speciality_key: int in [Profession.Speciality.TRAMPAS,
-			Profession.Speciality.CAZA_MENOR, Profession.Speciality.CAZA_MAYOR]:
-		var speciality := speciality_key as Profession.Speciality
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		body.add_child(row)
-
-		var name_label := Label.new()
-		name_label.text = Profession.speciality_name(speciality)
-		name_label.custom_minimum_size = Vector2(150, 0)
-		name_label.add_theme_font_size_override("font_size", 11)
-		name_label.add_theme_color_override("font_color", UISkin.INK)
-		name_label.tooltip_text = Profession.speciality_desc(speciality)
-		row.add_child(name_label)
-
-		var note := Label.new()
-		note.add_theme_font_size_override("font_size", 10)
-		note.add_theme_color_override("font_color", UISkin.INK_SOFT)
-		if speciality == Profession.Speciality.TRAMPAS:
-			note.text = "%d trampas puestas de %d que se pueden atender" % [
-				sim.trampas.traps.size(), sim.trampas.trap_allowance()]
-		else:
-			var known := Hunting.known_improvements(speciality, sim.techs)
-			note.text = "%.1f piezas por jornada%s" % [
-				Hunting.pieces_per_day(speciality, sim.techs),
-				"" if known.is_empty() else "  ·  con " + ", ".join(known).to_lower()]
-		row.add_child(note)
-
-		var pending := Hunting.next_improvement(speciality, sim.techs)
-		if pending >= 0:
-			_text(body, "   falta %s: ×%.2f"
-				% [TechTree.tech_name(pending as TechTree.Tech).to_lower(),
-					_improvement_factor(speciality, pending)], true)
-
-		# Y lo que anda por el coto y NO se puede cobrar por falta de arma. Es
-		# la otra mitad de la puerta de [Fauna.huntable_with]: cerrarla en
-		# silencio deja al jugador con una cuadrilla que vuelve de vacío de un
-		# cotarro lleno de ciervos y ninguna forma de saber por qué.
-		if speciality != Profession.Speciality.TRAMPAS:
-			var coto := sim.parajes.chosen_for(Subsistence.Activity.CAZA)
-			var donde := coto.position if coto != null else sim.home_position
-			var escapa := Hunting.out_of_reach_text(speciality, donde,
-				GameState.season as Subsistence.Season, sim.toolkit)
-			if not escapa.is_empty():
-				_text(body, "   %s" % escapa, true)
-
-	# Y la línea de trampas, una por una. Es lo único que la banda deja
-	# PLANTADO en el mapa, así que merece una lista y no un número.
-	if sim.trampas.traps.is_empty():
-		_text(body, "Sin una sola trampa puesta. Pon a alguien en trampas: "
-			+ "es el único trabajo que rinde mientras la banda hace otra cosa.",
-			true)
-	else:
-		for trap: Trap in sim.trampas.traps:
-			var ready := trap.soaking >= Trap.days_per_catch(trap.kind)
-			_text(body, "   %s %s en %s — %.0f%% de vida, %d piezas%s" % [
-				"◆" if ready else "·",
-				Trap.trap_name(trap.kind),
-				sim.parajes.place_name(trap.position, sim.home_position),
-				trap.condition() * 100.0, trap.taken,
-				"  ·  CEBADA" if ready else ""], not ready)
-
-	body.add_child(HSeparator.new())
-
-
-## Cuánto multiplica una técnica de caza en su rama.
-func _improvement_factor(speciality: Profession.Speciality, tech_key: int) -> float:
-	for entry: Dictionary in (Hunting.MEJORAS.get(speciality, []) as Array):
-		if int(entry["tech"]) == tech_key:
-			return float(entry["factor"])
-	return 1.0
-
-
-## Con qué se pesca hoy y qué falta para el siguiente escalón.
-##
-## Va aquí y no en una ventana propia porque la pesca es la actividad donde
-## la técnica se nota de verdad en la jornada: la misma persona en el mismo
-## río trae doce o ciento cinco según el aparejo que lleve. Sin esto, el
-## jugador ve subir el pescado y no sabe por qué.
-func _fishing_block(body: VBoxContainer) -> void:
-	if sim == null:
-		return
-	_heading(body, "PESCA DE ORILLA")
-
-	var actual := sim.fishing_method() as Fishing.Method
-	for method_key: int in Fishing.ORDER:
-		var method := method_key as Fishing.Method
-		var why := Fishing.blocked_by(method, sim.techs, sim.toolkit, sim.store,
-			sim.taller.workers_in(Subsistence.Activity.PESCA))
-		var pescado: float = float((Fishing.yields_of(method) as Dictionary).get(
-			Materia.Kind.PESCADO, 0.0))
-
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		body.add_child(row)
-
-		var mark := Label.new()
-		mark.text = "◆" if method == actual else ("·" if why == "" else " ")
-		mark.custom_minimum_size = Vector2(12, 0)
-		mark.add_theme_font_size_override("font_size", 11)
-		mark.add_theme_color_override("font_color",
-			UISkin.OCHRE if method == actual else UISkin.INK_FAINT)
-		row.add_child(mark)
-
-		var name_label := Label.new()
-		name_label.text = Fishing.method_name(method)
-		name_label.custom_minimum_size = Vector2(150, 0)
-		name_label.add_theme_font_size_override("font_size", 11)
-		name_label.add_theme_color_override("font_color",
-			UISkin.OCHRE if method == actual else
-			(UISkin.INK if why == "" else UISkin.INK_FAINT))
-		name_label.tooltip_text = Fishing.method_desc(method)
-		row.add_child(name_label)
-
-		var note := Label.new()
-		# La nasa NO se mide en pescado al día: no es una jornada en el agua,
-		# es un aparejo calado. Enseñarla con la cifra del arpón al lado hacía
-		# creer que eran dos maneras de hacer lo mismo, y son dos cosas que se
-		# hacen a la vez. Ver [Nasa].
-		if Fishing.is_passive(method):
-			note.text = "se cala y pesca sola" if why == "" else why
-		else:
-			note.text = "%.0f de pescado al día" % pescado if why == "" else why
-		note.add_theme_font_size_override("font_size", 10)
-		note.add_theme_color_override("font_color",
-			UISkin.INK_SOFT if why == "" else UISkin.INK_FAINT)
-		row.add_child(note)
-
-	_text(body, "Se pesca siempre con lo mejor que se pueda HOY. Si se rompe "
-		+ "el último arpón o se acaba el cebo, se baja un escalón hasta que "
-		+ "el taller reponga.", true)
-
-	# Y la línea de nasas, una por una, igual que la de trampas: es lo otro que
-	# la banda deja plantado en el mapa.
-	if sim.techs != null and sim.techs.has(TechTree.Tech.NASA):
-		if sim.nasas_line.nasas.is_empty():
-			_text(body, "Sin una sola nasa calada. El pescador las revisa por "
-				+ "la mañana y luego pesca: no le quita la jornada.", true)
-		else:
-			for nasa: Nasa in sim.nasas_line.nasas:
-				_text(body, "   %s Nasa en %s — %.0f%% de vida, %d piezas  ·  %s"
-					% ["◆" if nasa.has_catch() else "·",
-						sim.parajes.place_name(nasa.position, sim.home_position),
-						nasa.condition() * 100.0, nasa.taken,
-						nasa.status_text()], not nasa.has_catch())
-	body.add_child(HSeparator.new())
-
-
-## Lo que hay pintado en la pared del fondo.
-##
-## Va con la caza y la pesca porque es de lo mismo: qué sabe hacer la banda y
-## qué cambia. Una pared no es un adorno de la ficha —sube el techo de lo que
-## se puede aprender de oídas sobre esa tarea, y lo sube para siempre— así que
-## el jugador tiene que poder ver qué hay puesto. Ver [Tale].
-func _paintings_block(body: VBoxContainer) -> void:
-	if sim == null:
-		return
-	if sim.techs == null or not sim.techs.has(TechTree.Tech.ARTE):
-		return
-	_heading(body, "LA PARED DEL FONDO")
-
-	if sim.painting_queue != null:
-		_text(body, "Pintando: %s (%.0f%%)" % [sim.painting_queue.title,
-			100.0 * sim.painting_progress / SettlementSim.PINTURA_JORNADAS])
-
-	if sim.paintings.is_empty():
-		var falta := sim.pinturas.painting_blocked_by()
-		_text(body, "La pared está limpia. " + ("Lo que se cuenta dura lo que "
-			+ "dure quien lo cuente." if falta.is_empty()
-			else "Para pintar: %s." % falta), true)
-	else:
-		for tale: Tale in sim.paintings:
-			_text(body, "   · %s — %s" % [tale.title, tale.stamp()])
-		_text(body, "Lo que está en la pared se aprende aunque no quede nadie "
-			+ "que estuviera allí.", true)
-	body.add_child(HSeparator.new())
 
 
 # ------------------------------------------------------------ territorio --
@@ -1640,329 +1264,3 @@ func _why_not(job: Profession.Job, person: Inhabitant) -> String:
 
 
 # ----------------------------------------------------------------- lugar --
-
-# ---------------------------------------------------------------- censo ---
-
-## Qué silueta se está recorriendo, cuál de sus fichas, y qué pieza era.
-##
-## Los tres, y no sólo el número. Las listas se vuelven a pedir en cada
-## repintado y una silueta puede perder piezas por el camino —los props se
-## descargan cuando la cámara se aleja de su bloque—, así que con el número
-## solo la ficha «7/40» acababa enseñando otra cosa sin avisar. Con la
-## identidad se sigue enseñando LA MISMA pieza mientras exista.
-var _census_group := ""
-var _census_index := 0
-var _census_id := ""
-
-## Desde dónde se midió «de más cerca a más lejos» al abrir esta silueta.
-##
-## Se congela al entrar y no se vuelve a tomar, y ahí está la gracia. La ficha
-## lleva la cámara a la pieza, así que midiendo desde la cámara VIVA la pieza
-## que estás mirando vuelve a ser la número uno en cada repintado y la lista se
-## reordena bajo los pies: pulsabas ▶ ocho veces y podías volver al mismo sitio
-## sin haber salido del uno. Congelado, las doscientas fichas son siempre las
-## doscientas más cercanas a donde estabas cuando entraste, y ▶ se aleja.
-var _census_anchor := Vector3.ZERO
-
-## Anchos de la lista de siluetas, medidos contra los 520 útiles de la ventana.
-const CENSUS_NAME := 210
-const CENSUS_COUNT := 64
-
-
-## La lista de lo que hay pintado en el mundo, por familias.
-##
-## Es la puerta de la herramienta: primero se ve QUÉ hay y cuánto, y sólo
-## después se entra a mirar una pieza concreta. Al revés —una ficha suelta a la
-## que se llega pinchando en el mundo— ya existe y no resuelve lo mismo: para
-## pinchar algo en el mundo hay que haberlo encontrado antes, y encontrarlo es
-## justamente lo que aquí se está intentando.
-func show_census() -> void:
-	var body := _window("entidades", "Entidades pintadas")
-	_clear(body)
-	if census == null:
-		_text(body, "No hay mundo montado todavía.")
-		return
-
-	var groups := census.groups()
-	if groups.is_empty():
-		_text(body, "No hay nada pintado.")
-		return
-
-	_text(body, "Lo que el juego tiene puesto en el mundo ahora mismo. Pincha "
-		+ "una silueta para recorrer sus piezas una a una: la cámara va a cada "
-		+ "una y, si es algo que anda, se le pinta el rastro por donde ha "
-		+ "pasado.", true)
-
-	var family := ""
-	for group: Dictionary in groups:
-		if String(group["family"]) != family:
-			family = String(group["family"])
-			_heading(body, family.to_upper())
-		_census_row(body, group)
-
-
-## Una silueta: cómo se llama, cuántas hay y qué significa ese cuántas.
-##
-## La coletilla de la derecha no es decoración. «Sembrados en todo el valle» y
-## «pintados alrededor de la cámara» son dos cifras que no se pueden comparar,
-## y sin decirlo la lista invita a compararlas: doscientas yescas parecerían
-## poquísimo al lado de ciento ochenta mil pinos cuando son cosas distintas.
-func _census_row(body: VBoxContainer, group: Dictionary) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	body.add_child(row)
-
-	var key := String(group["key"])
-	var button := Button.new()
-	button.text = String(group["label"])
-	button.custom_minimum_size = Vector2(CENSUS_NAME, 24)
-	button.add_theme_font_size_override("font_size", 12)
-	button.tooltip_text = "Recorrer las piezas de %s una a una" % group["label"]
-	if _census_group == key:
-		button.add_theme_stylebox_override("normal",
-			UISkin.button_box("pressed"))
-		button.add_theme_color_override("font_color", UISkin.OCHRE)
-	button.pressed.connect(func() -> void:
-		_census_id = ""
-		show_entity(key, 0))
-	row.add_child(button)
-
-	var count := Label.new()
-	count.text = "%d" % int(group["count"])
-	count.custom_minimum_size = Vector2(CENSUS_COUNT, 0)
-	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	count.add_theme_font_size_override("font_size", 13)
-	count.add_theme_color_override("font_color", UISkin.OCHRE)
-	row.add_child(count)
-
-	var note := Label.new()
-	note.text = String(group["note"])
-	note.add_theme_font_size_override("font_size", 10)
-	note.add_theme_color_override("font_color", UISkin.INK_FAINT)
-	row.add_child(note)
-
-
-## La ficha de una pieza concreta, con las flechas para pasar a la siguiente.
-##
-## `focus` distingue las dos formas de llegar aquí, que no quieren lo mismo.
-## Pulsando una flecha se quiere ir a ver la pieza, así que la cámara salta.
-## En el repintado automático NO: enganchar la vista a la entidad cada medio
-## segundo impide apartarse a mirar el alrededor, que es media herramienta —lo
-## que se suele querer saber de un uro es qué tiene alrededor, no el uro—.
-func show_entity(key: String, index: int, focus: bool = true) -> void:
-	var body := _window("entidad", "Ficha")
-	_clear(body)
-	if key != _census_group:
-		_census_group = key
-		_census_anchor = _looking_at()
-	if census == null:
-		_text(body, "No hay mundo montado todavía.")
-		return
-
-	var entries := census.entries(key, _census_anchor)
-	if entries.is_empty():
-		_census_id = ""
-		if trails:
-			trails.stop_following()
-		_text(body, "No queda ninguna a la vista.")
-		_text(body, "Los props y los árboles de malla se descargan cuando la "
-			+ "cámara se aleja de su bloque: acércate a donde deberían estar y "
-			+ "vuelve a entrar.", true)
-		_census_back(body)
-		return
-
-	# Por IDENTIDAD antes que por número: ver `_census_id`. Quien quiere
-	# cambiar de pieza —las flechas, la lista— lo dice borrando la identidad,
-	# y entonces manda el número.
-	var wanted := index
-	if not _census_id.is_empty():
-		for i in range(entries.size()):
-			if String(entries[i].get("id", "")) == _census_id:
-				wanted = i
-				break
-	_census_index = clampi(wanted, 0, entries.size() - 1)
-	var entry: Dictionary = entries[_census_index]
-	_census_id = String(entry.get("id", ""))
-
-	# El título de la ventana es el de la pieza, así que la barra de arriba ya
-	# dice a quién se está mirando sin gastar una línea del cuerpo.
-	_window("entidad", String(entry["title"]))
-
-	_census_nav(body, key, _census_index, entries.size())
-	_census_scope(body, key, entries.size())
-
-	for line: String in (entry["lines"] as Array[String]):
-		_text(body, line)
-
-	# La distancia se calcula AQUÍ y no en el censo, contra la cámara de ahora
-	# mismo y no contra el punto desde el que se ordenó la lista —ver
-	# `_census_anchor`—. Son dos cosas distintas en cuanto el jugador se mueve,
-	# y la que sirve para ir a ver algo es la de ahora.
-	var spot: Vector3 = entry["pos"]
-	var eye := _looking_at()
-	_text(body, "En (%.0f, %.0f), a %.0f m de altura, a %.0f m de la cámara."
-		% [spot.x, spot.z, spot.y,
-			Vector2(spot.x - eye.x, spot.z - eye.z).length()], true)
-
-	_census_trail(body, entry)
-
-	var go := Button.new()
-	go.text = "Llevar la cámara aquí"
-	go.pressed.connect(func() -> void:
-		_look_at_world(spot))
-	body.add_child(go)
-
-	if focus:
-		_look_at_world(spot)
-
-
-## Las flechas y el «3 / 14», que es lo que convierte la ficha en un recorrido.
-func _census_nav(body: VBoxContainer, key: String, shown: int,
-		total: int) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	body.add_child(row)
-
-	# Dan la vuelta al llegar al final. Una lista de piezas iguales no tiene
-	# principio ni final que signifiquen nada, y un botón que se apaga en el
-	# borde sólo obliga a desandar el camino.
-	var back := Button.new()
-	back.text = "◀"
-	back.custom_minimum_size = Vector2(34, 24)
-	back.disabled = total <= 1
-	back.pressed.connect(func() -> void:
-		_census_id = ""
-		show_entity(key, (shown - 1 + total) % total))
-	row.add_child(back)
-
-	var counter := Label.new()
-	counter.text = "%d / %d" % [shown + 1, total]
-	counter.custom_minimum_size = Vector2(84, 0)
-	counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	counter.add_theme_font_size_override("font_size", 14)
-	counter.add_theme_color_override("font_color", UISkin.OCHRE)
-	row.add_child(counter)
-
-	var next := Button.new()
-	next.text = "▶"
-	next.custom_minimum_size = Vector2(34, 24)
-	next.disabled = total <= 1
-	next.pressed.connect(func() -> void:
-		_census_id = ""
-		show_entity(key, (shown + 1) % total))
-	row.add_child(next)
-
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(spacer)
-
-	var list := Button.new()
-	list.text = "Ver la lista"
-	list.custom_minimum_size = Vector2(94, 24)
-	list.add_theme_font_size_override("font_size", 11)
-	list.pressed.connect(show_census)
-	row.add_child(list)
-
-
-## De cuántas de cuántas: el total de la silueta y qué parte se puede recorrer.
-##
-## Van los dos números porque casi nunca son el mismo. De un pinar se pueden
-## recorrer doscientos árboles de ciento ochenta mil, y enseñar sólo el «1/200»
-## haría creer que el valle tiene doscientos pinos, que es la lectura opuesta
-## a la verdadera.
-func _census_scope(body: VBoxContainer, key: String, shown: int) -> void:
-	var whole := shown
-	var note := ""
-	if census != null:
-		for group: Dictionary in census.groups():
-			if String(group["key"]) == key:
-				whole = int(group["count"])
-				note = String(group["note"])
-	if whole > shown:
-		_text(body, "Se pueden recorrer %d. Hay %d %s." % [shown, whole, note],
-			true)
-	else:
-		_text(body, "Hay %d, %s." % [whole, note], true)
-
-
-## El rastro: se enciende solo con la ficha, y se dice cuando no hay ninguno.
-##
-## Decirlo importa. Sin la línea, una yesca sin rastro y un uro cuyo rastro no
-## se está pintando por un fallo se ven exactamente igual —el mapa sin líneas—,
-## y son dos cosas muy distintas.
-func _census_trail(body: VBoxContainer, entry: Dictionary) -> void:
-	if trails == null:
-		return
-	var trail: Callable = entry.get("trail", Callable())
-	if not trail.is_valid():
-		trails.stop_following()
-		_text(body, "Esto no anda: no hay rastro que pintar.", true)
-		return
-
-	var tint: Color = entry.get("tint", Color.WHITE)
-	trails.follow(trail, tint, sim.terrain() if sim else null,
-		String(entry["title"]))
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	body.add_child(row)
-
-	# La pastilla del color de la línea, para emparejar la ficha con el rastro
-	# del mapa sin tener que contar rastros. Es lo mismo que hace la pestaña de
-	# Rastros con cada persona.
-	var chip := ColorRect.new()
-	chip.color = tint
-	chip.custom_minimum_size = Vector2(14, 14)
-	row.add_child(chip)
-
-	var caption := Label.new()
-	caption.text = "Su rastro está pintado en el terreno."
-	caption.add_theme_font_size_override("font_size", 12)
-	caption.add_theme_color_override("font_color", UISkin.INK_SOFT)
-	row.add_child(caption)
-
-
-func _census_back(body: VBoxContainer) -> void:
-	var list := Button.new()
-	list.text = "Ver la lista"
-	list.pressed.connect(show_census)
-	body.add_child(list)
-
-
-## Suelta la pieza que se estaba mirando y apaga su rastro.
-func _forget_entity() -> void:
-	_census_group = ""
-	_census_id = ""
-	_census_index = 0
-	if trails:
-		trails.stop_following()
-
-
-## Desde dónde se mide «cerca».
-##
-## Es el punto que MIRA la cámara, no dónde está la cámara. Con la vista alta
-## los dos quedan a cientos de metros uno del otro, y lo que el jugador tiene
-## delante es el primero: ordenar por el segundo pone las primeras fichas
-## detrás del hombro.
-func _looking_at() -> Vector3:
-	if camera != null:
-		return camera.target_position
-	if sim != null:
-		return sim.home_position
-	return Vector3.ZERO
-
-
-## Lleva la cámara a un punto, y se acerca sólo si estaba lejos.
-##
-## Sólo si estaba lejos porque el zoom es del jugador: si ya está mirando de
-## cerca, reencuadrarle en cada flecha le quita el encuadre que había elegido.
-## Y el tope de acercamiento es el de la cámara del juego —`min_distance`, ver
-## `OrbitalCamera.set_distance_limits`—, no un número puesto aquí: más cerca no
-## se puede ir, ni con este botón ni con la rueda.
-func _look_at_world(point: Vector3) -> void:
-	if camera == null:
-		return
-	camera.set_target(point)
-	var close_enough := camera.min_distance * 1.6
-	if camera.orbit_distance > close_enough:
-		camera.set_distance(close_enough)

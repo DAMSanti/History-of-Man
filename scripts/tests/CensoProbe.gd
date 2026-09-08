@@ -148,7 +148,7 @@ func _init() -> void:
 				best = i
 
 		var aim: Vector3 = entries[best]["pos"]
-		ui.show_entity(key, best)
+		ui.censo.show_entity(key, best)
 
 		# La cámara tiene que haber viajado. Se mira ANTES de dejar correr los
 		# fotogramas: la ficha es de algo que anda, así que si se mide después

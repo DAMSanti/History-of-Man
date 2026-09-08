@@ -19,7 +19,7 @@ const FACHADAS := {
 		"Hogar", "Marcha", "Nasas", "Percances", "Pinturas", "Reconocimiento",
 		"Reparto", "Tajo", "Taller", "Trampas"],
 	"res://scripts/ui/GameUI.gd": ["BarraSuperior", "PanelAlmacen", "PanelRastros",
-		"PanelSitios", "PanelTrabajos"],
+		"PanelCenso", "PanelOficios", "PanelSitios", "PanelTrabajos"],
 	"res://scripts/mundo/TerrainGenerator.gd": ["MallaDelTerreno"],
 	"res://scripts/DemoMain.gd": ["Minimapa"],
 }

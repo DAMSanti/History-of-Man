@@ -153,7 +153,7 @@ func _build_moment_card(moment: Moment) -> Control:
 		var look := Button.new()
 		look.text = "Verlo"
 		look.custom_minimum_size = Vector2(80, 26)
-		look.pressed.connect(func() -> void: ui._look_at_world(moment.where))
+		look.pressed.connect(func() -> void: ui.censo._look_at_world(moment.where))
 		buttons.add_child(look)
 
 	for option: Dictionary in moment.options:

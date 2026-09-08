@@ -45,10 +45,10 @@ Tamaños al día de hoy, para saber dónde duele:
 
 | carpeta | ficheros | líneas |
 |---|---|---|
-| `tests/` | 105 | 21 165 |
+| `tests/` | 106 | 21 238 |
 | `sim/` | 28 | 14 701 |
 | `vista/` | 23 | 7 196 |
-| `ui/` | 11 | 6 460 |
+| `ui/` | 13 | 6 535 |
 | `mundo/` | 12 | 5 081 |
 | `tools/` | 26 | 3 931 |
 | `region/` | 7 | 2 936 |
@@ -85,12 +85,12 @@ var caceria: Caceria = Caceria.new(self)
 
 Ya salieron así `Caceria`, `Cumbres`, `Despensa`, `Hogar`, `Marcha`, `Nasas`,
 `Percances`, `Pinturas`, `Reconocimiento`, `Reparto`, `Tajo`, `Taller` y
-`Trampas`; de `GameUI`, `BarraSuperior`, `PanelAlmacen`, `PanelRastros`,
-`PanelSitios` y `PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de
+`Trampas`; de `GameUI`, `BarraSuperior`, `PanelAlmacen`, `PanelCenso`,
+`PanelOficios`, `PanelRastros`, `PanelSitios` y `PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de
 `DemoMain`, `Minimapa`.
 
 `SettlementSim` ha pasado de **9 276 líneas a 3 100** por ese camino, `GameUI`
-de **5 015 a 1 968**, `TerrainGenerator` de 1 715 a 1 182 y `DemoMain` de 2 007
+de **5 015 a 1 266**, `TerrainGenerator` de 1 715 a 1 182 y `DemoMain` de 2 007
 a 1 485.
 
 **Reglas del troceado:**
@@ -304,6 +304,12 @@ Lo que **sí** se versiona: `data/sites/*.res`, `data/boundaries/*.res` y los
 - **No se mira sólo el número de pruebas.** Una prueba que revienta antes de su
   primer `assert` no falla: pasa. Lo que la delata es el total de
   comprobaciones.
+- **Un cualificador automático no puede tocar lo que va entre comillas.** Al
+  sacar `PanelOficios`, la regla que convierte `tech` en `ui.tech` reescribió
+  también `entry["tech"]` y la ventana de técnicas dejó de encontrar su clave.
+  No dio error de compilación: dio 43 filas donde había 46, y sólo se vio
+  porque había un patrón contra el que comparar. El guardia tuvo el mismo
+  problema al revés y ya lleva `_sin_cadenas`.
 - **Cuidado con `endswith` sobre nombres de fichero.** Un guardia
   `if p.endswith("Despensa.gd"): continue` se salta también
   `TestDespensa.gd`, que es justo el fichero que había que arreglar.

@@ -63,8 +63,8 @@ func _init() -> void:
 	print("")
 	print("=== EL ARBOL, OFICIO A OFICIO ===")
 	for job: int in TechTree.BRANCHES:
-		ui._tech_tab = job
-		ui.show_tech()
+		ui.oficios._tech_tab = job
+		ui.oficios.show_tech()
 		for i in range(6):
 			await process_frame
 		var graph := _find_graph(ui)
@@ -150,8 +150,8 @@ func _init() -> void:
 	for job: int in TechTree.BRANCHES:
 		if wanted.is_empty() or Profession.job_name(
 				job as Profession.Job) == wanted:
-			ui._tech_tab = job
-			ui.show_tech()
+			ui.oficios._tech_tab = job
+			ui.oficios.show_tech()
 			for i in range(10):
 				await process_frame
 			var image := get_root().get_texture().get_image()
