@@ -20,7 +20,8 @@ extends RefCounted
 enum Kind {
 	# Alimento
 	FRUTO_SECO,   ## Avellana con cáscara: la reina de la recolección
-	BELLOTA,      ## Necesita desamargado: agua, recipiente y tiempo
+	BELLOTA,      ## CRUDA: amarga de tanino, no se come. Hay que lavarla
+	BELLOTA_DULCE,## Lavada en el arroyo: la harina del invierno
 	BAYA,         ## Endrina, mora, madroño. Poca caloría, mucha vitamina
 	RAIZ,         ## Tubérculo y raíz. El colchón invisible de la dieta
 	SETA,
@@ -86,9 +87,20 @@ const CATALOGUE := {
 	},
 	Kind.BELLOTA: {
 		"name": "Bellota", "unit": "puñado", "kg": 0.6, "litros": 1.4,
+		# CERO calorías, y no es un descuido. La bellota cruda tiene tanino:
+		# es astringente, sienta mal y en cantidad es tóxica. Estuvo aquí con
+		# 1.300 kcal y un comentario que decía «necesita desamargado» mientras
+		# la banda se la comía cruda, que no es una simplificación: es un error.
+		# Se convierte en comida en el lavadero. Ver [CampProjects.Kind.LAVADERO].
+		"dias": 300, "kcal": 0,
+		"desc": "Amarga de tanino. Cruda no se come: hay que lavarla en agua "
+			+ "corriente varios días hasta que suelta el amargor.",
+	},
+	Kind.BELLOTA_DULCE: {
+		"name": "Bellota lavada", "unit": "puñado", "kg": 0.55, "litros": 1.3,
 		"dias": 300, "kcal": 1300,
-		"desc": "Hay que desamargarla con agua antes de comerla, y eso pide "
-			+ "recipiente y varios días. A cambio aguanta el año.",
+		"desc": "Lavada en el arroyo hasta que suelta el tanino. Es la harina "
+			+ "del invierno: se guarda una estación entera.",
 	},
 	Kind.BAYA: {
 		"name": "Baya", "unit": "puñado", "kg": 0.4, "litros": 0.55,

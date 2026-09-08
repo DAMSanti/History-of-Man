@@ -421,3 +421,77 @@ func _smoke_the_larder() -> void:
 		supervision += person.effectiveness()
 	_dry_meat(supervision, SettlementSim.AHUMADO_BONUS)
 
+
+
+# --------------------------------------------------- el desamargado -----
+
+## Cuántas jornadas tiene que estar la bellota en el agua.
+##
+## Tres. Es lo que tarda el agua corriente en llevarse el tanino de una bellota
+## partida, y es lo que convierte el otoño en una decisión: recoger es fácil,
+## hacerla comestible cuesta. La cifra queda abierta a playtest.
+const REMOJO_JORNADAS := 3.0
+
+## Cuántos puñados caben en un lavadero.
+##
+## Es el CUELLO DE BOTELLA, y es lo único que impide que el otoño sea «recoge y
+## ya»: en un otoño bueno sobra bellota sin tratar. Un cesto lastrado en el
+## remanso son treinta puñados; querer más es levantar otro lavadero.
+const CABE_EN_EL_CESTO := 30.0
+
+## Cuánto merma al lavarse. La bellota suelta el tanino y algo de sustancia con
+## él, y además se parte: de diez puñados puestos salen nueve.
+const MERMA := 0.9
+
+## Lo que hay a remojo ahora mismo, en puñados, y desde cuándo.
+var a_remojo: float = 0.0
+var remojo_dias: float = 0.0
+
+## Lo que salió del lavadero hoy. Para que la crónica y las sondas lo vean.
+var lavado_hoy: float = 0.0
+
+
+## La bellota puesta a lavar. La corriente trabaja sola: esto sólo mira si ya
+## está, y si hay sitio, mete más.
+##
+## Va con el hogar porque es quien atiende lo que hay puesto —igual que
+## [_smoke_the_larder]—, pero NO pide fuego: es agua corriente. Por eso el
+## lavadero es la única obra que se puede levantar sin haber encendido nada.
+func _lavar_bellota() -> void:
+	lavado_hoy = 0.0
+	if not sim.camp_built.get(CampProjects.Kind.LAVADERO, false):
+		return
+
+	# Primero se saca lo que ya está: el cesto tiene que quedar libre para
+	# volver a llenarlo el mismo día, que es como se hace en un otoño.
+	if a_remojo > 0.0:
+		remojo_dias += 1.0
+		if remojo_dias >= REMOJO_JORNADAS:
+			lavado_hoy = a_remojo * MERMA
+			# La cascarilla y la cupula, que es lo que la bellota suelta al
+			# lavarse, van al monton igual que la concha. Ver [Desechos].
+			sim.desechos.tirar_litros(Materia.Kind.BELLOTA,
+				(a_remojo - lavado_hoy) * Materia.litres_per_unit(
+					Materia.Kind.BELLOTA))
+			sim.store.add(Materia.Kind.BELLOTA_DULCE, lavado_hoy)
+			sim.taller.note_production(Materia.Kind.BELLOTA_DULCE, lavado_hoy)
+			a_remojo = 0.0
+			remojo_dias = 0.0
+
+	if a_remojo > 0.0:
+		return
+	var cruda := sim.store.amount(Materia.Kind.BELLOTA)
+	if cruda <= 0.0:
+		return
+	var mete := minf(cruda, CABE_EN_EL_CESTO)
+	sim.store.take(Materia.Kind.BELLOTA, mete)
+	a_remojo = mete
+	remojo_dias = 0.0
+
+
+## Cuánta bellota cruda hay esperando turno de lavadero.
+##
+## Es la cifra que enseña el cuello de botella: si crece y crece, el otoño está
+## trayendo más de lo que se puede tratar y hace falta otro lavadero.
+func bellota_en_cola() -> float:
+	return sim.store.amount(Materia.Kind.BELLOTA)

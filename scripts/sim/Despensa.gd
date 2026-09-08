@@ -150,7 +150,8 @@ func _bivouac(person: Inhabitant) -> void:
 		return
 	person.bivouac_day = sim.day
 	person.bivouac_lack = 0
-	if float(person.load.get(Materia.Kind.PIEL, 0.0)) < SettlementSim.VIVAC_PIEL:
+	person.bivouac_tent = float(person.load.get(Materia.Kind.PIEL, 0.0)) 		>= SettlementSim.VIVAC_PIEL
+	if not person.bivouac_tent:
 		person.bivouac_lack += 1
 	# La leña que se quema es la hoguera, y ahora se ve arder: ver
 	# [BivouacFires]. Sin fuego se sigue durmiendo, pero a oscuras y con el
@@ -181,8 +182,7 @@ func _bivouac(person: Inhabitant) -> void:
 		return
 	var falta := "sin tienda ni hoguera"
 	if person.bivouac_lack == 1:
-		var tent := float(person.load.get(Materia.Kind.PIEL, 0.0)) >= SettlementSim.VIVAC_PIEL
-		falta = "sin hoguera" if tent else "sin tienda"
+		falta = "sin hoguera" if person.bivouac_tent else "sin tienda"
 	sim._note(Chronicle.Kind.PENURIA,
 		"%s pasa la noche %s en %s." % [person.given_name, falta,
 			sim.parajes.place_name(person.position, sim.home_position)], 1)
@@ -570,6 +570,9 @@ func _eat_from_store(rations: float) -> float:
 		var needed := (rations - eaten) / maxf(Materia.nutrition(k), 0.001)
 		var taken := sim.store.take(k, needed)
 		eaten += taken * Materia.nutrition(k)
+		# Lo que se come deja lo que no se come, y eso NO desaparece: va al
+		# monton. Ver [Desechos]; es de donde sale el conchero.
+		sim.desechos.tirar(k, taken * Materia.nutrition(k))
 	return eaten
 
 

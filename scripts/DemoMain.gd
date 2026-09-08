@@ -100,6 +100,10 @@ var hearth_fire: HearthFire
 ## Las hogueras de vivac de quien duerme fuera. Ver [BivouacFires].
 var bivouac_fires: BivouacFires
 
+## El monton de desechos, que crece con la partida y tiñe el suelo. Ver
+## [Conchero] y [Desechos].
+var conchero: Conchero
+
 ## Lo que está haciendo cada cual, sobre su cabeza. Ver [WorkMarkers].
 var craft_markers: WorkMarkers
 var weather_view: WeatherView
@@ -500,6 +504,14 @@ func _levantar_hogar() -> void:
 	bivouac_fires.name = "Vivacs"
 	add_child(bivouac_fires)
 	bivouac_fires.setup(sim, terrain)
+
+	# Y el monton, a un lado del abrigo: donde se tira lo que sobra, que es
+	# cerca pero no en la puerta.
+	conchero = Conchero.new()
+	conchero.name = "Conchero"
+	add_child(conchero)
+	conchero.setup(sim, terrain,
+		sim.home_position + Vector3(14.0, 0.0, 9.0))
 
 
 ## La fauna que anda de verdad por el valle, y el arbol de tecnicas.

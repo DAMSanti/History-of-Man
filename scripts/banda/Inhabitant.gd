@@ -575,6 +575,13 @@ var carried_out: Dictionary = {}
 ## así que dormir con fuego y dormir sin él eran el mismo punto en la oscuridad.
 var bivouac_fire: bool = false
 
+## Si esta noche duerme bajo tienda. Lo pone la simulación al cobrar la noche
+## —hace falta llevar [SettlementSim.VIVAC_PIEL] de piel a la espalda— y lo
+## dibuja [BivouacFires] con una [Tienda]. Se guarda aquí en vez de volver a
+## mirar la carga desde la vista porque la regla de qué cuenta como tienda es
+## de la simulación y tiene que estar en un solo sitio.
+var bivouac_tent: bool = false
+
 ## Destreza por actividad, 0-1. Sube con la practica: es el saber tacito.
 var skill: Dictionary = {}
 

@@ -8,7 +8,7 @@ extends RefCounted
 ## multiplica algo concreto, y el secadero exige el hogar porque ahumar carne
 ## sin fuego no es lento, es imposible.
 
-enum Kind { HOGAR, SECADERO }
+enum Kind { HOGAR, SECADERO, LAVADERO }
 
 ## `requires` es -1 si no depende de nada.
 const INFO := {
@@ -34,6 +34,18 @@ const INFO := {
 		"labor_days": 3.0,
 		"materials": {Materia.Kind.CORTEZA: 4.0, Materia.Kind.FIBRA: 2.0},
 		"requires": Kind.HOGAR,
+	},
+	Kind.LAVADERO: {
+		"name": "Lavadero de bellota",
+		"desc": "Un cesto lastrado en el remanso. La corriente hace el trabajo: "
+			+ "sólo hay que ponerla y volver a por ella tres días después. Sin "
+			+ "esto, la bellota que se recoge en otoño no es comida.",
+		# Dos jornadas: trenzar un cesto grande y buscar el remanso. No depende
+		# del hogar -es agua corriente, no fuego- y ésa es la gracia: es la
+		# primera obra que se puede levantar sin tener fuego encendido.
+		"labor_days": 2.0,
+		"materials": {Materia.Kind.FIBRA: 6.0, Materia.Kind.PIEDRA: 4.0},
+		"requires": -1,
 	},
 }
 

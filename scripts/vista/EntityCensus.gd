@@ -36,6 +36,10 @@ var herds: WildlifeHerds = null
 var props: ResourceProps = null
 var forest: Forest = null
 
+## Lo que la banda PONE -trampas, nasas, obras del abrigo, vivacs-, que es otra
+## pregunta y por eso vive aparte. Ver [CensoDeObras].
+var obras: CensoDeObras = null
+
 
 func setup(settlement: SettlementSim, wildlife: WildlifeHerds,
 		resources: ResourceProps, woods: Forest) -> void:
@@ -43,6 +47,7 @@ func setup(settlement: SettlementSim, wildlife: WildlifeHerds,
 	herds = wildlife
 	props = resources
 	forest = woods
+	obras = CensoDeObras.new(settlement)
 
 
 ## Las siluetas que hay, con cuántas de cada una.
@@ -83,6 +88,9 @@ func groups() -> Array[Dictionary]:
 				"count": int(kind["count"]),
 				"note": "sembrados en todo el valle",
 			})
+
+	if obras != null:
+		out.append_array(obras.groups())
 
 	if props != null:
 		for entry: Dictionary in props.census():
@@ -133,6 +141,8 @@ func entries(key: String, near: Vector3) -> Array[Dictionary]:
 		return _tree_entries(key.substr(6), near)
 	if key.begins_with("prop:"):
 		return _prop_entries(key.substr(5), near)
+	if key.begins_with("obra:"):
+		return obras.entries(key, near) if obras != null else []
 	return []
 
 

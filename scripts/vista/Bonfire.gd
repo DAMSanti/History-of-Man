@@ -141,6 +141,11 @@ func _build_flames() -> void:
 	flame.cull_mode = BaseMaterial3D.CULL_DISABLED
 	flame.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	flame.albedo_color = Color(FIRE_TINT.r, FIRE_TINT.g, FIRE_TINT.b, 0.85)
+	# Con SILUETA, y no un cuadro de color liso. Sin textura, un quad aditivo se
+	# dibuja como lo que es: un RECTÁNGULO naranja de borde recto. De noche y de
+	# lejos colaba porque lo que se leía era el resplandor; en la lámina de
+	# `ObrasAtlas`, al lado de las demás piezas, cantaba. Ver [_textura_de_llama].
+	flame.albedo_texture = _textura_de_llama()
 	flame.disable_receive_shadows = true
 
 	for i in range(3):
@@ -155,6 +160,43 @@ func _build_flames() -> void:
 		node.position = Vector3(_rng.randf_range(-0.12, 0.12),
 			float(i) * 0.16, _rng.randf_range(-0.12, 0.12))
 		_flames.add_child(node)
+
+
+## La silueta de una llama: ancha abajo, estrecha y deshilachada arriba.
+##
+## Se genera una vez para todas las hogueras -es `static`- porque es la misma
+## para todas y son varias por partida.
+static var _llama: ImageTexture = null
+
+static func _textura_de_llama() -> ImageTexture:
+	if _llama != null:
+		return _llama
+	var lado := 64
+	var img := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
+	var ruido := FastNoiseLite.new()
+	ruido.seed = 20260907
+	ruido.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	ruido.frequency = 0.09
+	for y in range(lado):
+		# v=0 es la punta y v=1 la base, que es donde la llama es ancha. La fila
+		# CERO de una imagen es la de ARRIBA, y la esquina (0,0) de un QuadMesh
+		# también: sin invertir, la llama salía ancha arriba y en punta abajo,
+		# con un chorro rojo por debajo de las piedras.
+		var v := float(y) / float(lado - 1)
+		# Ancho de la lengua a esa altura: casi todo abajo, un hilo arriba.
+		var ancho := pow(v, 0.65) * 0.46
+		for x in range(lado):
+			var u := float(x) / float(lado - 1) - 0.5
+			var borde := ruido.get_noise_2d(float(x), float(y) * 0.6) * 0.06
+			var d := absf(u) / maxf(ancho + borde, 0.001)
+			# Desvanecido por el borde y por la punta: una llama no tiene filo.
+			var a := (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.0, 0.22, v)
+			# Y el corazón, más blanco que la punta.
+			var calor := clampf(1.0 - d * 0.8, 0.0, 1.0) * v
+			img.set_pixel(x, y, Color(1.0, 0.55 + 0.42 * calor,
+				0.18 + 0.55 * calor, clampf(a, 0.0, 1.0)))
+	_llama = ImageTexture.create_from_image(img)
+	return _llama
 
 
 func _build_light() -> void:

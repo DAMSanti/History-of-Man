@@ -328,6 +328,9 @@ var taller: Taller = Taller.new(self)
 ## Comer, beber y salir avituallado. Ver [Despensa].
 var despensa: Despensa = Despensa.new(self)
 
+## El monton de lo que se tira, que no desaparece. Ver [Desechos] y [Conchero].
+var desechos: Desechos = Desechos.new()
+
 
 # --- lo que la despensa comparte con el resto ------------------------------
 
@@ -2086,7 +2089,11 @@ func _end_of_day() -> void:
 	# por la mañana ya está curado cuando llega la madrugada, y curarlo después
 	# de aplicar la podredumbre sería ahumar lo que ya se tiró.
 	hogar._smoke_the_larder()
+	# Y el lavadero, que no pide fuego pero se atiende igual: se saca lo que ya
+	# está dulce y se vuelve a llenar el cesto. Ver [Hogar._lavar_bellota].
+	hogar._lavar_bellota()
 	store.age(1)
+	desechos.nuevo_dia()
 	despensa._report_spoilage()
 	hogar._burn_hearth()
 

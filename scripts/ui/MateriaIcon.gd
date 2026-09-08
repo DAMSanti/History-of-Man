@@ -72,6 +72,8 @@ enum Glyph {
 const LOOK := {
 	Materia.Kind.FRUTO_SECO: [Glyph.BAYAS, Color(0.62, 0.45, 0.24)],
 	Materia.Kind.BELLOTA: [Glyph.BELLOTA, Color(0.53, 0.38, 0.20)],
+	# La misma silueta y un tono más claro: es la misma bellota, lavada.
+	Materia.Kind.BELLOTA_DULCE: [Glyph.BELLOTA, Color(0.78, 0.63, 0.38)],
 	Materia.Kind.BAYA: [Glyph.BAYAS, Color(0.42, 0.22, 0.38)],
 	Materia.Kind.RAIZ: [Glyph.RAIZ, Color(0.72, 0.62, 0.42)],
 	Materia.Kind.SETA: [Glyph.SETA, Color(0.74, 0.60, 0.48)],
