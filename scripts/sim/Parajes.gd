@@ -450,11 +450,10 @@ static func _richest_named(paraje: Paraje, sin_relleno: bool = false) -> int:
 ## El desmogue -las cuernas que se le caen al ciervo- es a finales de
 ## invierno, no un recurso permanente del cantizal; la miel es de verano,
 ## la bellota y la seta de otoño, el huevo de la cría en primavera.
-## FRUTO_SECO no está: ya varía por sí solo -da nombre al sitio en otoño,
-## pero `_gathering_yields` le da rendimiento en las cuatro estaciones, solo
-## que mucho menor- y hacerlo desaparecer del todo fuera de otoño chocaría
-## con esa cantidad, que seguiría siendo positiva aunque la fila no
-## estuviera. Aquí solo va lo que de verdad desaparece del todo.
+## FRUTO_SECO SÍ está, desde el repaso del calendario. Antes no estaba porque
+## `_gathering_yields` le daba rendimiento en las cuatro estaciones y la fila
+## habría dicho una cosa mientras el zurrón hacía otra. Ahora las dos dicen lo
+## mismo: la avellana es de otoño y en marzo no hay.
 const SEASONAL_EXTRAS := {
 	Materia.Kind.ASTA: [Subsistence.Season.INVIERNO],
 	Materia.Kind.MIEL: [Subsistence.Season.VERANO],
@@ -462,8 +461,14 @@ const SEASONAL_EXTRAS := {
 	Materia.Kind.SETA: [Subsistence.Season.OTONO],
 	Materia.Kind.HUEVO: [Subsistence.Season.PRIMAVERA],
 	Materia.Kind.CARACOL: [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO],
-	Materia.Kind.BAYA: [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO,
-		Subsistence.Season.OTONO],
+	# La baya YA NO es de primavera: la mora es de agosto, la endrina de
+	# octubre y el madroño de noviembre. En primavera el zarzal está en flor.
+	Materia.Kind.BAYA: [Subsistence.Season.VERANO, Subsistence.Season.OTONO],
+	# Y el fruto seco entra aquí, que es donde tenía que haber estado: la
+	# avellana es de septiembre. Salía las cuatro estaciones -seis puñados por
+	# jornada en marzo- y era la mitad de la comida del año.
+	Materia.Kind.FRUTO_SECO: [Subsistence.Season.OTONO],
+	Materia.Kind.RESINA: [Subsistence.Season.VERANO],
 }
 
 

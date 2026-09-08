@@ -700,45 +700,71 @@ func _yield_materials(activity: Subsistence.Activity) -> Dictionary:
 ##
 ## Esa variacion ES la estacionalidad: sin ella el otono y el invierno serian
 ## el mismo trabajo con distinto multiplicador.
+##
+## ## Lo que se corrigio al repasar el calendario
+##
+## Tres cosas estaban mal de CALENDARIO, no de balanceo, y las tres inflaban la
+## recoleccion:
+##
+##   - **La avellana salia las cuatro estaciones** (6 en primavera, 9 en verano,
+##     4 en invierno). La avellana es de SEPTIEMBRE. Recogerla en marzo no es
+##     una simplificacion, es recoger lo que no hay: el arbol no la tiene.
+##   - **La baya salia en primavera.** La mora es de agosto, la endrina de
+##     octubre, el madrono de noviembre. En primavera el zarzal esta en flor.
+##   - **La cesta de todos los dias era demasiado.** Lena, fibra, yesca, raiz,
+##     corteza y hueso salian TODOS los dias en TODOS los sitios. Un recolector
+##     volvia con seis materiales distintos cada jornada del año, hiciera lo que
+##     hiciera y fuera donde fuera. Se queda lo que de verdad se recoge de paso,
+##     y a la mitad.
+##
+## Medido antes del repaso: 6.306 raciones de fruto seco en un año, con la
+## despensa clavada en su tope y mas de la mitad del trabajo tirandose a la
+## puerta del abrigo. Ver `BandaProbe`.
 func _gathering_yields() -> Dictionary:
-	# Lo que hay todo el ano, pase lo que pase
+	# Lo que se coge DE PASO, vaya uno a lo que vaya. A la mitad de lo que era:
+	# esto es lo que se recoge sin buscarlo, no una cosecha.
 	var yields := {
-		Materia.Kind.LENA: 2.2,
-		Materia.Kind.FIBRA: 3.5,
-		Materia.Kind.YESCA: 0.6,
-		Materia.Kind.RAIZ: 6.0,
-		Materia.Kind.CORTEZA: 0.9,
-		Materia.Kind.HUESO: 0.4,
+		Materia.Kind.LENA: 1.2,
+		Materia.Kind.FIBRA: 1.6,
+		Materia.Kind.YESCA: 0.35,
+		Materia.Kind.CORTEZA: 0.5,
 	}
 
 	match GameState.season:
 		Subsistence.Season.PRIMAVERA:
-			# Todo brota y todo cria: poca caloria, mucha materia prima
-			yields[Materia.Kind.FRUTO_SECO] = 6.0
-			yields[Materia.Kind.HUEVO] = 4.5
-			yields[Materia.Kind.BAYA] = 3.0
-			yields[Materia.Kind.CARACOL] = 5.0
-			yields[Materia.Kind.PLUMA] = 1.2
-			yields[Materia.Kind.RAIZ] = 9.0
-		Subsistence.Season.VERANO:
-			yields[Materia.Kind.BAYA] = 12.0
-			yields[Materia.Kind.MIEL] = 1.2
+			# Todo brota y todo cria: poca caloria, mucha materia prima. Es la
+			# estacion mas floja de la recoleccion y tiene que serlo -entre la
+			# reserva agotada y la cosecha por venir esta el hambre de marzo.
+			yields[Materia.Kind.HUEVO] = 5.5
 			yields[Materia.Kind.CARACOL] = 6.0
+			yields[Materia.Kind.PLUMA] = 1.2
+			# La raiz es el colchon invisible, y en primavera es lo que hay.
+			yields[Materia.Kind.RAIZ] = 7.5
+		Subsistence.Season.VERANO:
+			yields[Materia.Kind.BAYA] = 11.0
+			yields[Materia.Kind.MIEL] = 1.2
+			yields[Materia.Kind.CARACOL] = 3.5
 			yields[Materia.Kind.RESINA] = 1.8
-			yields[Materia.Kind.FRUTO_SECO] = 9.0
+			# La fibra buena es de final de verano: la ortiga y el lino se
+			# cortan cuando el tallo ya esta hecho.
+			yields[Materia.Kind.FIBRA] = 3.2
+			yields[Materia.Kind.RAIZ] = 4.0
 		Subsistence.Season.OTONO:
-			# La cosecha. Lo que se guarde ahora decide el invierno.
-			yields[Materia.Kind.FRUTO_SECO] = 32.0
-			yields[Materia.Kind.BELLOTA] = 22.0
+			# La cosecha. Lo que se guarde ahora decide el invierno, y es la
+			# UNICA estacion en que hay fruto seco y bellota.
+			yields[Materia.Kind.FRUTO_SECO] = 26.0
+			yields[Materia.Kind.BELLOTA] = 20.0
 			yields[Materia.Kind.SETA] = 7.0
 			yields[Materia.Kind.BAYA] = 6.0
+			yields[Materia.Kind.RAIZ] = 6.0
 		_:
-			# Invierno: no hay vegetal. Lena, raiz, y la cuerna de desmogue,
-			# que es la unica materia dura animal que no exige matar.
-			yields[Materia.Kind.FRUTO_SECO] = 4.0
+			# Invierno: NO HAY VEGETAL. Lena, raiz desenterrada y la cuerna de
+			# desmogue, que es la unica materia dura animal que no exige matar.
+			# El ciervo desmoga de febrero a abril.
+			yields[Materia.Kind.RAIZ] = 3.0
 			yields[Materia.Kind.ASTA] = 0.8
-			yields[Materia.Kind.LENA] = 3.2
-			yields[Materia.Kind.HUESO] = 1.0
+			yields[Materia.Kind.LENA] = 2.6
+			yields[Materia.Kind.HUESO] = 0.8
 
 	return yields
 

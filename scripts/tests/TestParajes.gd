@@ -1032,16 +1032,32 @@ func test_el_paraje_enseña_toda_la_cesta_de_la_actividad() -> void:
 	# Y no aparecían: la cosecha da la cesta ENTERA de la especialidad en
 	# cualquier sitio, y la ficha enseñaba el material que bautiza el paraje
 	# y dos extras. Ocho cosas en el zurrón y tres en la ficha.
+	# Y la cesta es LA DE LA ESTACIÓN, que es la otra mitad: pedía avellana y
+	# baya en primavera, y desde el repaso del calendario no las hay. La
+	# avellana es de septiembre y la mora de agosto; en marzo el zarzal está en
+	# flor. La prueba comprueba ahora las dos cosas -que sale todo lo que se
+	# recoge Y que no sale lo que no toca-, que es más fuerte que lo de antes.
 	var field := _field_rico()
 	var paraje := _paraje(4, 4, Materia.Kind.RAIZ, Subsistence.Activity.RECOLECCION)
 	paraje.position = field.cell_center(4, 4)
-	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
 
-	for kind: Materia.Kind in [Materia.Kind.FRUTO_SECO, Materia.Kind.BAYA,
-			Materia.Kind.CARACOL, Materia.Kind.HUEVO, Materia.Kind.CORTEZA,
-			Materia.Kind.RAIZ]:
+	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
+	for kind: Materia.Kind in [Materia.Kind.CARACOL, Materia.Kind.HUEVO,
+			Materia.Kind.CORTEZA, Materia.Kind.RAIZ]:
 		assert_true(paraje.contents.has(int(kind)),
-			"%s se saca de aquí, así que tiene que salir en la ficha"
+			"%s se saca de aquí en primavera, así que tiene que salir en la ficha"
+				% Materia.material_name(kind))
+	for fuera: Materia.Kind in [Materia.Kind.FRUTO_SECO, Materia.Kind.BAYA,
+			Materia.Kind.BELLOTA, Materia.Kind.SETA]:
+		assert_false(paraje.contents.has(int(fuera)),
+			"%s no es de primavera y no puede salir en la ficha"
+				% Materia.material_name(fuera))
+
+	paraje.fill_contents(field, Subsistence.Season.OTONO)
+	for kind: Materia.Kind in [Materia.Kind.FRUTO_SECO, Materia.Kind.BAYA,
+			Materia.Kind.BELLOTA, Materia.Kind.SETA, Materia.Kind.RAIZ]:
+		assert_true(paraje.contents.has(int(kind)),
+			"%s es de otoño y tiene que salir en la ficha"
 				% Materia.material_name(kind))
 
 

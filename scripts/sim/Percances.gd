@@ -54,9 +54,12 @@ func _check_mishaps() -> void:
 		if away < 300.0:
 			continue
 
+		# Con el encharcamiento: resbalar en el barro de noviembre es la mitad
+		# de los percances de andar por el monte. Ver [Temporada].
 		var ground := Traversal.classify_ground(
 			sim._terrain.get_slope_at(person.position),
-			sim._terrain.crossing_difficulty_at(person.position))
+			sim._terrain.crossing_difficulty_at(person.position),
+			sim.temporada.encharcamiento() if sim.temporada != null else 0.0)
 		var risk := Mishap.chance(ground, person.fatigue, away) 			* sim.weather.risk_factor()
 		# Dormir mal a la intemperie no es sólo cansancio: es la noche de la
 		# que se vuelve con un tobillo o no se vuelve con la carga. Ver

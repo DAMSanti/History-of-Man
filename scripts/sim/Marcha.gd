@@ -291,14 +291,26 @@ func _terrain_speed(person: Inhabitant, direction: Vector3, hours: float = 0.0) 
 	var rise := sim._terrain.get_height_at(ahead) - person.position.y
 	var slope := rise / probe
 
+	# Con el encharcamiento de la estacion: en enero hay barro donde en agosto
+	# habia prado. Ver [Traversal.classify_ground] y [Temporada].
 	var ground := Traversal.classify_ground(
-		absf(slope), sim._terrain.crossing_difficulty_at(person.position))
+		absf(slope), sim._terrain.crossing_difficulty_at(person.position),
+		sim.temporada.encharcamiento() if sim.temporada != null else 0.0)
 	var load := clampf(person.carrying / maxf(sim.carry_capacity, 0.001), 0.0, 1.0)
 
 	# La curva de Tobler da km/h; aqui interesa la PROPORCION respecto al llano
 	# de vacio, para no tocar la escala de tiempo que ya estaba calibrada
 	var reference := Traversal.travel_speed(0.0, Traversal.Ground.PASTO, 0.0)
 	var here := Traversal.travel_speed(slope, ground, load)
+
+	# Y LA NIEVE, que es lo que pone el calendario encima de todo lo demas. No
+	# es un tinte en el terreno: por encima de la cota se anda como por barro
+	# -cada paso hay que sacar el pie- y eso es lo que cierra el monte alto en
+	# invierno y baja a la banda al fondo del valle. Ver [Temporada].
+	if sim.temporada != null and sim._terrain != null:
+		var techo := maxf(sim._terrain.max_height, 1.0)
+		here *= sim.temporada.freno_por_nieve(
+			clampf(person.position.y / techo, 0.0, 1.0))
 
 	var swim := 1.0
 	if ground == Traversal.Ground.MARISMA:
@@ -472,7 +484,9 @@ func route_risk(person: Inhabitant) -> float:
 	var worst := 0.0
 	for point: Vector3 in person.route:
 		var ground := Traversal.classify_ground(
-			sim._terrain.get_slope_at(point), sim._terrain.crossing_difficulty_at(point))
+			sim._terrain.get_slope_at(point),
+			sim._terrain.crossing_difficulty_at(point),
+			sim.temporada.encharcamiento() if sim.temporada != null else 0.0)
 		var risk := 0.0
 		match ground:
 			Traversal.Ground.CANCHAL: risk = 1.0

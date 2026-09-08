@@ -513,6 +513,14 @@ func _levantar_hogar() -> void:
 	conchero.setup(sim, terrain,
 		sim.home_position + Vector3(14.0, 0.0, 9.0))
 
+	# El paisaje sigue al calendario: la cota de nieve baja en invierno y se
+	# retira en verano. Se asienta ya en la estacion de arranque -si no, la
+	# partida empieza con la nieve de la estacion anterior y tarda doce
+	# jornadas en corregirse- y luego se mueve sola. Ver [Temporada].
+	sim.temporada.asentar(GameState.season as Subsistence.Season)
+	sim.day_passed.connect(_on_dia_para_el_paisaje)
+	_on_dia_para_el_paisaje(sim.day)
+
 
 ## La fauna que anda de verdad por el valle, y el arbol de tecnicas.
 func _levantar_fauna_y_tecnica() -> void:
@@ -1503,3 +1511,20 @@ func _first_world_environment(node: Node) -> WorldEnvironment:
 		if deeper:
 			return deeper
 	return null
+
+
+## Lleva al terreno lo que la estacion ha hecho con el paisaje.
+##
+## Una vez por JORNADA y no por fotograma: mover un uniform del shader es
+## barato, pero hacerlo sesenta veces por segundo para poner el mismo numero es
+## trabajo tirado. Ver [Temporada].
+func _on_dia_para_el_paisaje(_day: int) -> void:
+	if terrain == null or sim == null or sim.temporada == null:
+		return
+	terrain.set_snow_line(sim.temporada.cota_de_nieve())
+	# Y el caudal, que es lo que de verdad cierra el paso: un rio crecido no es
+	# un rio con mas azul, es un rio que no se vadea.
+	terrain.caudal = sim.temporada.caudal()
+	# Y el color: el pasto y la hojarasca se apagan con el año. Solo las capas
+	# VIVAS -la caliza es igual de gris en enero que en agosto-.
+	terrain.set_season_tint(sim.temporada.tinte_del_pasto())

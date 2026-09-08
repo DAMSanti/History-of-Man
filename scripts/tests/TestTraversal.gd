@@ -207,3 +207,38 @@ func test_el_suelo_de_marcha_no_toca_la_pendiente_normal() -> void:
 	var llano := Traversal.hiking_speed(0.0)
 	assert_gt(llano, Traversal.MIN_SPEED * 10.0,
 		"en llano, la marcha va muy por encima del suelo de emergencia")
+
+
+# ----------------------------------------------- el barro de la estacion --
+
+func test_en_seco_una_vaguada_humeda_no_es_barro() -> void:
+	# 0,03 de vado es suelo húmedo, no barrizal. En agosto se cruza andando.
+	assert_eq(Traversal.classify_ground(0.05, 0.03, 0.0), Traversal.Ground.PASTO,
+		"con el suelo seco, un poco de agua somera sigue siendo prado")
+
+
+func test_encharcado_la_misma_vaguada_es_barro() -> void:
+	# Y en enero, con el suelo saturado, la MISMA vaguada del MISMO mapa de
+	# vados es un barrizal. Eso es el barro: no cambia el terreno, cambia
+	# cuánta agua hace falta para que el pie se hunda.
+	assert_eq(Traversal.classify_ground(0.05, 0.03, 0.85),
+		Traversal.Ground.MARISMA,
+		"con el suelo encharcado, la misma vaguada es barro")
+
+
+func test_el_barro_frena_pero_no_tapia() -> void:
+	# La distinción que importa: el barro cansa, no cierra el paso. Si cerrara,
+	# un invierno dejaría a la banda encerrada en el fondo del valle.
+	assert_lt(Traversal.travel_speed(0.05, Traversal.Ground.MARISMA, 0.0),
+		Traversal.travel_speed(0.05, Traversal.Ground.PASTO, 0.0),
+		"por barro se anda mas despacio")
+	assert_true(Traversal.is_passable(0.05, 0.03, false, false),
+		"y aun asi se pasa: lo que cierra el paso es el vado, no el barro")
+
+
+func test_el_camino_horneado_se_clasifica_en_seco() -> void:
+	# `Navgrid` hornea la rejilla UNA vez y llama sin estación. Si el valor por
+	# defecto no fuera seco, cada cambio de estación obligaría a rehacerla.
+	assert_eq(Traversal.classify_ground(0.05, 0.03),
+		Traversal.classify_ground(0.05, 0.03, 0.0),
+		"sin decir estacion se clasifica en seco, que es lo que hornea Navgrid")

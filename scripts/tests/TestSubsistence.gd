@@ -177,3 +177,79 @@ func test_volcarse_en_la_berrea_manda_gente_a_la_caza_mayor() -> void:
 		if person.job == Profession.Job.CAZA:
 			hunters += 1
 	assert_gt(float(hunters), 0.0, "la decision mueve gente de verdad")
+
+
+# ------------------------------------------- el color del año en el valle --
+
+func test_solo_se_apagan_las_capas_vivas() -> void:
+	# La caliza es igual de gris en enero que en agosto. Teñir la piedra con el
+	# calendario seria pintar el año encima de la roca.
+	var verano := TerrainLayers.tints_in_order_tinted(
+		TerrainLayers.tint_of_season(Subsistence.Season.VERANO))
+	var invierno := TerrainLayers.tints_in_order_tinted(
+		TerrainLayers.tint_of_season(Subsistence.Season.INVIERNO))
+	for capa: int in [TerrainLayers.Layer.ROQUEDO, TerrainLayers.Layer.CANCHAL,
+			TerrainLayers.Layer.CANTOS, TerrainLayers.Layer.NIEVE]:
+		assert_true(verano[capa].is_equal_approx(invierno[capa]),
+			"la capa %d no es viva y no cambia con la estacion" % capa)
+
+
+func test_el_pasto_se_apaga_en_invierno() -> void:
+	var primavera := TerrainLayers.tints_in_order_tinted(
+		TerrainLayers.tint_of_season(Subsistence.Season.PRIMAVERA))
+	var invierno := TerrainLayers.tints_in_order_tinted(
+		TerrainLayers.tint_of_season(Subsistence.Season.INVIERNO))
+	var verde_primavera: float = primavera[TerrainLayers.Layer.PRADERA].y
+	var verde_invierno: float = invierno[TerrainLayers.Layer.PRADERA].y
+	assert_lt(verde_invierno, verde_primavera,
+		"en invierno queda menos verde en el pasto que en primavera")
+
+
+func test_el_otono_tira_a_pardo() -> void:
+	# Pardo es mas rojo que azul. En otoño la hojarasca amarillea, no se apaga
+	# a gris: eso es el invierno.
+	var otono := TerrainLayers.tint_of_season(Subsistence.Season.OTONO)
+	assert_gt(otono.r, otono.b, "el otoño tira a pardo, no a gris")
+
+
+func test_el_paisaje_no_cambia_de_golpe_a_medianoche() -> void:
+	# La primera nevada no deja el puerto cerrado. Doce jornadas de transicion.
+	var t := Temporada.new()
+	t.asentar(Subsistence.Season.VERANO)
+	var antes := t.cota_de_nieve()
+	t.nuevo_dia(Subsistence.Season.INVIERNO)
+	var despues := t.cota_de_nieve()
+	assert_lt(despues, antes, "la cota de nieve empieza a bajar")
+	assert_gt(despues, Temporada.COTA_DE_NIEVE[Subsistence.Season.INVIERNO],
+		"pero no llega a la del invierno en una sola jornada")
+
+
+func test_asentar_deja_la_estacion_puesta_del_todo() -> void:
+	# Para arrancar partida y para las sondas: sin esto medirian doce jornadas
+	# de la estacion anterior.
+	var t := Temporada.new()
+	t.asentar(Subsistence.Season.INVIERNO)
+	assert_near(t.cota_de_nieve(),
+		Temporada.COTA_DE_NIEVE[Subsistence.Season.INVIERNO], 0.001,
+		"asentar pone la cota del invierno ya")
+	assert_near(t.caudal(), Temporada.CAUDAL[Subsistence.Season.INVIERNO],
+		0.001, "y el caudal del invierno")
+
+
+func test_el_rio_crecido_cierra_vados() -> void:
+	var t := Temporada.new()
+	t.asentar(Subsistence.Season.INVIERNO)
+	var crecido := t.vado(0.30)
+	t.asentar(Subsistence.Season.VERANO)
+	var bajo := t.vado(0.30)
+	assert_gt(crecido, bajo,
+		"el mismo paso del rio cuesta mas en invierno que en el estiaje")
+
+
+func test_la_nieve_frena_solo_por_encima_de_la_cota() -> void:
+	var t := Temporada.new()
+	t.asentar(Subsistence.Season.INVIERNO)
+	assert_near(t.freno_por_nieve(0.10), 1.0, 0.001,
+		"en el fondo del valle no hay nieve y no frena")
+	assert_lt(t.freno_por_nieve(1.0), 0.5,
+		"en la cumbre la nieve frena como el barro")

@@ -104,13 +104,36 @@ static func is_passable(slope: float, ford_difficulty: float,
 	return Hydrography.can_cross(ford_difficulty, has_boat, has_bridge)
 
 
+## Desde cuánta agua somera el suelo es barro, en seco y encharcado.
+##
+## El umbral BAJA con la estación, y ahí está el barro: en agosto una vaguada
+## húmeda se cruza andando y en enero es un barrizal. La misma vaguada, el
+## mismo mapa de vados —lo que cambia es cuánta agua hace falta para que el pie
+## se hunda, y en suelo saturado hace falta muy poca.
+##
+## Sólo cambia la VELOCIDAD, nunca si se pasa o no: eso lo decide
+## [is_passable] con el vado, y un invierno que cerrara media comarca de golpe
+## dejaría a la banda encerrada. El barro cansa, no tapia.
+const MOJADO_EN_SECO := 0.05
+const MOJADO_ENCHARCADO := 0.012
+
+
 ## Deduce el suelo del propio terreno: pendiente y cuánta agua hay.
 ##
 ## No hace falta un mapa de tipos de suelo aparte. Donde el agua es somera hay
 ## barro; donde la pendiente pasa de lo que aguanta el suelo hay derrubio; y
 ## donde pasa de lo que aguanta el derrubio, la roca ya está a la vista.
-static func classify_ground(slope: float, ford_difficulty: float) -> Ground:
-	if ford_difficulty > 0.05:
+##
+## `encharcado` es lo que dice [Temporada.encharcamiento], de 0 a 1. Va con
+## valor por defecto a propósito: [Navgrid] hornea la rejilla de caminos UNA
+## vez y tiene que seguir clasificando en seco, o cada cambio de estación
+## obligaría a rehacerla. Los caminos no cambian con la lluvia; lo que cambia
+## es lo que cuesta andarlos.
+static func classify_ground(slope: float, ford_difficulty: float,
+		encharcado: float = 0.0) -> Ground:
+	var mojado := lerpf(MOJADO_EN_SECO, MOJADO_ENCHARCADO,
+		clampf(encharcado, 0.0, 1.0))
+	if ford_difficulty > mojado:
 		return Ground.MARISMA
 	# Los umbrales no son de gusto: el derrubio suelto se sostiene hasta su
 	# angulo de reposo, unos 34 grados -tangente 0,67-, que es la misma

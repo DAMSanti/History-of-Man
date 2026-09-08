@@ -166,3 +166,23 @@ func scale_height_bands(k: float) -> void:
 			"rock_min_height", "rock_max_height", "snow_min_height"]:
 		var value: float = _material.get_shader_parameter(name)
 		_material.set_shader_parameter(name, value * k)
+
+
+## Mueve SOLO la cota de nieve, sin tocar las demas bandas.
+##
+## Existe aparte de `set_height_bands` porque la nieve es lo unico que cambia
+## con el calendario: las otras cuatro bandas describen de que esta hecho el
+## monte y no se mueven en todo el año. Ver [Temporada].
+func set_snow_line(snow_min: float) -> void:
+	if _material:
+		_material.set_shader_parameter("snow_min_height", snow_min)
+
+
+## Vuelve a graduar el color de las capas VIVAS con el tinte de la estacion.
+##
+## Barato: es un array de ocho vec3 al shader, no una textura. Se puede llamar
+## una vez por jornada sin pensarlo. Ver [TerrainLayers.tints_in_order_tinted].
+func set_season_tint(estacional: Color) -> void:
+	if _material:
+		_material.set_shader_parameter("layer_tint",
+			TerrainLayers.tints_in_order_tinted(estacional))

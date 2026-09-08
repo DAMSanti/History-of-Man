@@ -927,6 +927,15 @@ func extend_height_ceiling(new_top: float) -> void:
 ##
 ## Es lo que convierte el rio en obstaculo en vez de en textura: sin esto la
 ## gente cruzaba el Nansa en linea recta como si no estuviera.
+## El caudal de hoy, en veces lo normal. Lo pone [Temporada] al cerrar la
+## jornada: con el rio crecido, lo que en agosto era un vado deja de serlo.
+##
+## Va aqui y no en quien pregunta porque `crossing_difficulty_at` tiene ciento
+## sesenta y ocho llamadas -es la cara publica del terreno-, y multiplicar en
+## cada una de ellas seria pedir que nadie se olvide nunca.
+var caudal: float = 1.0
+
+
 func crossing_difficulty_at(world_pos: Vector3) -> float:
 	if _ford_map.is_empty() or resolution <= 1:
 		return 0.0
@@ -935,7 +944,7 @@ func crossing_difficulty_at(world_pos: Vector3) -> float:
 		0, resolution - 1)
 	var z := clampi(int(round(world_pos.z / float(terrain_size.y) * float(resolution - 1))),
 		0, resolution - 1)
-	return _ford_map[z * resolution + x]
+	return _ford_map[z * resolution + x] * caudal
 
 
 ## Si un trayecto recto se puede recorrer a pie de principio a fin.
@@ -1179,3 +1188,20 @@ func refresh_material_bands(sea_level_meters: float) -> void:
 	if _height_range.y <= _height_range.x:
 		return
 	_apply_shader_height_setup()
+
+
+## Mueve la cota de nieve del terreno. La llama [DemoMain] con lo que dice
+## [Temporada]: la nieve baja en invierno y se retira en verano, y eso es lo
+## que hace que el valle no sea el mismo en enero que en agosto.
+func set_snow_line(fraction: float) -> void:
+	if _material_manager == null:
+		return
+	_material_manager.set_snow_line(clampf(fraction, 0.0, 2.0))
+
+
+## Vuelve a graduar el color de las capas vivas con el tinte de la estacion.
+## La llama [DemoMain] con lo que dice [Temporada].
+func set_season_tint(estacional: Color) -> void:
+	if _material_manager == null:
+		return
+	_material_manager.set_season_tint(estacional)

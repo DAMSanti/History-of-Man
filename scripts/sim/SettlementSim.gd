@@ -339,6 +339,9 @@ var desechos: Desechos = Desechos.new()
 ## sembrar la fauna. Ver [Poblaciones].
 var poblaciones: Poblaciones = null
 
+## Lo que la estacion le hace al PAISAJE: nieve, barro y caudal. Ver [Temporada].
+var temporada: Temporada = Temporada.new()
+
 ## Lo esquilmado se deja descansar y se busca en otra parte. Ver [Barbecho].
 var barbecho: Barbecho = Barbecho.new(self)
 
@@ -2117,6 +2120,9 @@ func _end_of_day() -> void:
 	# Y revista a los parajes: lo que baja del veinte por ciento se deja
 	# descansar solo, sin que el jugador tenga que estar mirandolo.
 	barbecho.revisar()
+	# Y el paisaje se mueve: la cota de nieve baja, las vegas se encharcan y el
+	# rio crece o baja. No es pintura -frena y cierra vados-. Ver [Temporada].
+	temporada.nuevo_dia(GameState.season as Subsistence.Season)
 	# Y la fauna cria, con techo. Sin esto la caza solo resta y el valle se
 	# vacia; con crecimiento sin techo, no se vacia nunca.
 	if poblaciones != null:

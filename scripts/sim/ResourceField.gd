@@ -51,26 +51,45 @@ static func seasonal_factor(activity: Subsistence.Activity,
 		season: Subsistence.Season) -> float:
 	match activity:
 		Subsistence.Activity.PESCA:
-			# Remonte del salmón: primavera y arranque del verano
+			# El REMONTE manda: el salmón atlántico sube el Deva y el Nansa de
+			# primavera a principios de verano, y ésa es la ventana. El otoño
+			# baja más de lo que estaba: con las crecidas el río va turbio y
+			# alto, y en agua turbia no se ve la pieza ni se clava el arpón.
 			match season:
 				Subsistence.Season.PRIMAVERA: return 1.85
 				Subsistence.Season.VERANO: return 1.15
-				Subsistence.Season.OTONO: return 0.85
+				Subsistence.Season.OTONO: return 0.60
 				_: return 0.40
 		Subsistence.Activity.CAZA:
-			# La berrea junta los ciervos y llegan gordos del verano
+			# Dos picos y no uno, que es lo que faltaba:
+			#
+			#   OTOÑO   la berrea. Los ciervos se juntan, braman -o sea que se
+			#           les oye desde lejos- y llegan gordos del verano.
+			#   INVIERNO la trasterminancia. Cabra, rebeco y ciervo BAJAN de la
+			#           montaña a los valles huyendo de la nieve, y la nieve
+			#           delata el rastro y agota a la pieza. La caza mayor
+			#           invernal está atestiguada en los yacimientos cantábricos
+			#           y aquí valía 1,05, o sea «un mes más».
+			#
+			# Y una penalización de verdad en primavera: los animales están
+			# flacos, las hembras preñadas o con cría, y matarlas hipoteca el
+			# año siguiente. Ahora eso se nota también en la población, no sólo
+			# en el rendimiento. Ver [Poblaciones].
 			match season:
 				Subsistence.Season.OTONO: return 1.70
-				Subsistence.Season.INVIERNO: return 1.05
-				Subsistence.Season.VERANO: return 0.85
-				_: return 0.65
+				Subsistence.Season.INVIERNO: return 1.35
+				Subsistence.Season.VERANO: return 0.80
+				_: return 0.55
 		Subsistence.Activity.RECOLECCION:
-			# Avellana, bellota y fruto de otoño; en invierno no queda nada
+			# El otoño es LA cosecha y el invierno es el vacío. Se separan más
+			# que antes: con 1,80 contra 0,25 el invierno ya era flojo, pero la
+			# avellana salía las cuatro estaciones y lo tapaba. Ver
+			# [Tajo._gathering_yields], que es donde estaba el error de verdad.
 			match season:
-				Subsistence.Season.OTONO: return 1.80
-				Subsistence.Season.VERANO: return 1.30
-				Subsistence.Season.PRIMAVERA: return 0.75
-				_: return 0.25
+				Subsistence.Season.OTONO: return 1.90
+				Subsistence.Season.VERANO: return 1.10
+				Subsistence.Season.PRIMAVERA: return 0.70
+				_: return 0.20
 		Subsistence.Activity.MARISQUEO:
 			# Lapa y mejillón aguantan todo el año y son el colchón del invierno
 			match season:

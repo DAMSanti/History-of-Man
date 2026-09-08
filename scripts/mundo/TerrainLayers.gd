@@ -155,3 +155,52 @@ static func saturations_in_order() -> PackedFloat32Array:
 
 static func display_name(layer: Layer) -> String:
 	return CATALOGUE[layer]["name"] as String
+
+
+# ------------------------------------------------- la vuelta del año --
+
+## Qué capas se apagan con el año, y cuánto.
+##
+## Sólo las VIVAS. La caliza es igual de gris en enero que en agosto, y el
+## canchal también: pintarlos de otoño sería pintar el año encima de la piedra.
+## Lo que amarillea y se moja es la hierba y la hojarasca.
+const SE_APAGAN := [Layer.PRADERA, Layer.BOSQUE]
+
+## El tinte de cada estación, como multiplicador sobre el de la capa.
+##
+## No se cambia la textura ni la saturación: se GRADÚA el mismo color, igual
+## que hace `tint` con la fotogrametría inglesa —la biblioteca está fotografiada
+## en un prado de junio y ya se corrige para la época; esto es la segunda
+## corrección, la del mes—.
+##
+##   PRIMAVERA  el verde nuevo, y es el más vivo del año
+##   VERANO     agostado: en el Cantábrico el pasto se seca en agosto
+##   OTOÑO      pardo de hojarasca
+##   INVIERNO   apagado y encharcado, con el verde casi fuera
+const POR_ESTACION := {
+	Subsistence.Season.PRIMAVERA: Color(0.98, 1.06, 0.92),
+	Subsistence.Season.VERANO: Color(1.08, 1.00, 0.80),
+	Subsistence.Season.OTONO: Color(1.06, 0.88, 0.68),
+	Subsistence.Season.INVIERNO: Color(0.84, 0.82, 0.76),
+}
+
+
+## La graduación de color de cada capa CON la estación puesta.
+##
+## Se pasa un color y no una estación para que la transición sea continua:
+## quien llama interpola entre el de ayer y el de hoy —ver [Temporada]— y el
+## valle vira en unas jornadas en vez de cambiar de golpe a medianoche.
+static func tints_in_order_tinted(estacional: Color) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for i in range(COUNT):
+		var tint: Color = CATALOGUE[i]["tint"]
+		if SE_APAGAN.has(i):
+			tint = Color(tint.r * estacional.r, tint.g * estacional.g,
+				tint.b * estacional.b)
+		out.append(Vector3(tint.r, tint.g, tint.b))
+	return out
+
+
+## El color de una estación, para quien tenga que interpolar hacia él.
+static func tint_of_season(season: Subsistence.Season) -> Color:
+	return POR_ESTACION.get(season, Color.WHITE)
