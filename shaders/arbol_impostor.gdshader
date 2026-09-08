@@ -97,9 +97,28 @@ uniform float billboard : hint_range(0.0, 1.0) = 1.0;
 // Lo usan las tablas de cerca, que son el relevo del impostor.
 uniform float invert_fade : hint_range(0.0, 1.0) = 0.0;
 
+// Cuánta hoja le queda al árbol, de 0 a 1.
+//
+// Uno es la copa llena y cero el árbol desnudo. NO es un tinte: baja el alfa de
+// la copa, y como el recorte es a 0,35, lo primero que desaparece es el borde
+// blando de la lámina -las hojas sueltas- y lo último la masa densa del centro,
+// que es donde están las ramas. O sea que la copa se vacía DE FUERA HACIA
+// DENTRO, que es como se cae la hoja.
+//
+// El pino no la usa: es perennifolio y se queda en uno todo el año. Quien
+// decide qué especie la mueve es [Forest], no el shader.
+uniform float hoja : hint_range(0.0, 1.0) = 1.0;
+
+// De qué color es lo que queda cuando cae la hoja.
+//
+// Corteza mojada de abedul en invierno: ni negro ni blanco, un pardo grisáceo.
+// El abedul tira a claro y por eso no se va a marrón oscuro.
+uniform vec3 rama : source_color = vec3(0.42, 0.38, 0.34);
+
 uniform vec3 tint : source_color = vec3(1.0, 1.0, 1.0);
 uniform float brightness : hint_range(0.2, 2.0) = 1.0;
 
+varying vec2 v_local;
 varying vec2 v_uv;
 varying vec2 v_uv_top;
 varying float v_flat;
@@ -204,6 +223,9 @@ void vertex() {
 	// La copa recibe más luz que el pie, que es lo que le da volumen a algo que
 	// no lo tiene.
 	v_lit = mix(0.72, 1.0, clamp(UV.y < 0.5 ? 1.0 : 0.35, 0.0, 1.0));
+	// La UV de la lámina, sin desplazar a su celda: es la que dice qué parte
+	// del árbol se está pintando. `v_uv` ya viene movida al atlas y no sirve.
+	v_local = UV;
 }
 
 
@@ -212,10 +234,21 @@ void fragment() {
 	// funde en el fragmento, que es lo que hace que el paso de una a otra no
 	// tenga costura.
 	vec4 cut = mix(texture(atlas, v_uv), texture(atlas, v_uv_top), v_flat);
-	ALPHA = cut.a;
+
+	// LA COPA es la mitad de arriba de la lámina de perfil -y la foto cenital
+	// es copa entera-. El pie del árbol no pierde hoja porque no la tiene: es
+	// tronco, y el tronco se queda en invierno.
+	float copa = mix(smoothstep(0.62, 0.30, v_local.y), 1.0, v_flat);
+	float desnudo = (1.0 - hoja) * copa;
+
+	// Se cae la hoja: baja el alfa y el recorte va agujereando la copa desde el
+	// borde. 0,42 y no menos porque por debajo de ahí no queda ni la rama.
+	ALPHA = cut.a * mix(1.0, 0.42, desnudo);
 	ALPHA_SCISSOR_THRESHOLD = 0.35;
 
-	ALBEDO = cut.rgb * tint * brightness * v_lit;
+	// Y lo que aguanta vira a corteza, que es lo que se ve de un abedul pelado.
+	vec3 color = mix(cut.rgb * tint, rama, desnudo * 0.8);
+	ALBEDO = color * brightness * v_lit;
 	// La luz que cruza la copa. Ver `leaf_wrap`: sin esto la tabla que queda de
 	// espaldas al sol se apaga del todo.
 	BACKLIGHT = ALBEDO * leaf_wrap;

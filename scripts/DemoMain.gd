@@ -1528,3 +1528,18 @@ func _on_dia_para_el_paisaje(_day: int) -> void:
 	# Y el color: el pasto y la hojarasca se apagan con el año. Solo las capas
 	# VIVAS -la caliza es igual de gris en enero que en agosto-.
 	terrain.set_season_tint(sim.temporada.tinte_del_pasto())
+	# Y EL BOSQUE. El pino apenas cambia -es perennifolio-; el abedul amarillea
+	# en octubre y se queda desnudo en enero. Se le pasa cuanto se ha entrado en
+	# la estacion para que la hoja no caiga de golpe el dia del calendario: un
+	# abedular tarda tres semanas en pelarse. Ver [Forest.set_season].
+	if forest != null:
+		var dentro := clampf(
+			float(sim.season_day) / float(Subsistence.DAYS_PER_SEASON) * 2.0,
+			0.0, 1.0)
+		forest.set_season(GameState.season as Subsistence.Season,
+			_estacion_previa(GameState.season as Subsistence.Season), dentro)
+
+
+## La estacion de la que se viene, para poder mezclar entre las dos.
+func _estacion_previa(season: Subsistence.Season) -> Subsistence.Season:
+	return ((int(season) + 3) % 4) as Subsistence.Season

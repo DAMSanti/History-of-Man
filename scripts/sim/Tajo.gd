@@ -723,6 +723,17 @@ func _yield_materials(activity: Subsistence.Activity) -> Dictionary:
 func _gathering_yields() -> Dictionary:
 	# Lo que se coge DE PASO, vaya uno a lo que vaya. A la mitad de lo que era:
 	# esto es lo que se recoge sin buscarlo, no una cosecha.
+	#
+	# LAS CIFRAS DE COMIDA SE SUBIERON DESPUES, y hace falta decir por que. El
+	# primer repaso del calendario -avellana solo en otoño, baya fuera de
+	# primavera, cesta diaria a la mitad- dejo a la banda produciendo 2.151
+	# raciones al año contra las 4.572 que come: hambre al 100 nueve meses de
+	# doce y despensa a cero. Medido con `BandaProbe`, no supuesto.
+	#
+	# El calendario NO se toco al arreglarlo -la avellana sigue siendo de
+	# septiembre- porque el calendario no era el error. El error fue bajar la
+	# cantidad Y quitar las temporadas de mas a la vez, y eso se corrige con la
+	# cantidad, que es lo que es de balanceo.
 	var yields := {
 		Materia.Kind.LENA: 1.2,
 		Materia.Kind.FIBRA: 1.6,
@@ -735,33 +746,33 @@ func _gathering_yields() -> Dictionary:
 			# Todo brota y todo cria: poca caloria, mucha materia prima. Es la
 			# estacion mas floja de la recoleccion y tiene que serlo -entre la
 			# reserva agotada y la cosecha por venir esta el hambre de marzo.
-			yields[Materia.Kind.HUEVO] = 5.5
-			yields[Materia.Kind.CARACOL] = 6.0
+			yields[Materia.Kind.HUEVO] = 8.0
+			yields[Materia.Kind.CARACOL] = 10.0
 			yields[Materia.Kind.PLUMA] = 1.2
 			# La raiz es el colchon invisible, y en primavera es lo que hay.
-			yields[Materia.Kind.RAIZ] = 7.5
+			yields[Materia.Kind.RAIZ] = 15.0
 		Subsistence.Season.VERANO:
-			yields[Materia.Kind.BAYA] = 11.0
-			yields[Materia.Kind.MIEL] = 1.2
-			yields[Materia.Kind.CARACOL] = 3.5
+			yields[Materia.Kind.BAYA] = 18.0
+			yields[Materia.Kind.MIEL] = 1.8
+			yields[Materia.Kind.CARACOL] = 6.0
 			yields[Materia.Kind.RESINA] = 1.8
 			# La fibra buena es de final de verano: la ortiga y el lino se
 			# cortan cuando el tallo ya esta hecho.
 			yields[Materia.Kind.FIBRA] = 3.2
-			yields[Materia.Kind.RAIZ] = 4.0
+			yields[Materia.Kind.RAIZ] = 9.0
 		Subsistence.Season.OTONO:
 			# La cosecha. Lo que se guarde ahora decide el invierno, y es la
 			# UNICA estacion en que hay fruto seco y bellota.
-			yields[Materia.Kind.FRUTO_SECO] = 26.0
-			yields[Materia.Kind.BELLOTA] = 20.0
-			yields[Materia.Kind.SETA] = 7.0
-			yields[Materia.Kind.BAYA] = 6.0
-			yields[Materia.Kind.RAIZ] = 6.0
+			yields[Materia.Kind.FRUTO_SECO] = 42.0
+			yields[Materia.Kind.BELLOTA] = 30.0
+			yields[Materia.Kind.SETA] = 10.0
+			yields[Materia.Kind.BAYA] = 9.0
+			yields[Materia.Kind.RAIZ] = 10.0
 		_:
 			# Invierno: NO HAY VEGETAL. Lena, raiz desenterrada y la cuerna de
 			# desmogue, que es la unica materia dura animal que no exige matar.
 			# El ciervo desmoga de febrero a abril.
-			yields[Materia.Kind.RAIZ] = 3.0
+			yields[Materia.Kind.RAIZ] = 7.0
 			yields[Materia.Kind.ASTA] = 0.8
 			yields[Materia.Kind.LENA] = 2.6
 			yields[Materia.Kind.HUESO] = 0.8

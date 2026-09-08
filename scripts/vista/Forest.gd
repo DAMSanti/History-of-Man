@@ -89,6 +89,36 @@ const ATLAS_GRID := 3
 ## Va delante la especie de nicho MÁS ESTRECHO: la que sólo puede estar en un
 ## sitio lo reclama primero, y la de nicho ancho ocupa lo que queda, que es lo
 ## que hace la competencia de verdad en un bosque.
+## Qué le hace el año a cada árbol.
+##
+## `tinte` gradúa el color y `hoja` es cuánta le queda, de 0 a 1. Las dos filas
+## no son un gusto: son la diferencia entre un perennifolio y un caducifolio,
+## que es la única que se ve de verdad en un bosque cantábrico.
+##
+##   PINO     apenas cambia. Un pino en enero es un pino en agosto un poco más
+##            oscuro, y NO pierde la hoja: la muda poco a poco todo el año.
+##   ABEDUL   verde tierno en primavera, verde hecho en verano, AMARILLO en
+##            octubre y desnudo de noviembre a marzo. Es de los primeros en
+##            perderla y de los últimos en echarla.
+##
+## Lo que decide cuál de las dos filas se usa es `caduco` en [KINDS].
+const PERENNE := {
+	Subsistence.Season.PRIMAVERA: {"tinte": Color(0.94, 1.04, 0.92), "hoja": 1.0},
+	Subsistence.Season.VERANO: {"tinte": Color(1.00, 1.00, 0.94), "hoja": 1.0},
+	Subsistence.Season.OTONO: {"tinte": Color(0.96, 0.94, 0.86), "hoja": 1.0},
+	Subsistence.Season.INVIERNO: {"tinte": Color(0.82, 0.86, 0.86), "hoja": 1.0},
+}
+
+const CADUCO := {
+	Subsistence.Season.PRIMAVERA: {"tinte": Color(0.88, 1.10, 0.78), "hoja": 0.85},
+	Subsistence.Season.VERANO: {"tinte": Color(0.96, 1.02, 0.82), "hoja": 1.0},
+	# El amarillo del abedular en octubre es de las cosas que más se ven de un
+	# valle cantábrico desde lejos, y ya empieza a clarear.
+	Subsistence.Season.OTONO: {"tinte": Color(1.30, 1.02, 0.42), "hoja": 0.55},
+	Subsistence.Season.INVIERNO: {"tinte": Color(0.90, 0.86, 0.80), "hoja": 0.05},
+}
+
+
 const KINDS: Array[Dictionary] = [
 	{
 		# Abedular de vaguada: hoja caduca en lo hondo y húmedo. Es la otra
@@ -97,6 +127,10 @@ const KINDS: Array[Dictionary] = [
 		"model": "abedul", "cell": 2, "name": "Abedular",
 		"slope": Vector2(0.0, 0.38), "humidity": Vector2(0.50, 1.0),
 		"height": Vector2(0.0, 0.52), "chance": 0.95,
+		# CADUCO. Es la única de las tres, y por eso el bosque cambia de forma
+		# con el año en vez de sólo cambiar de color: en enero la vaguada se
+		# queda pelada y la ladera de pinos sigue verde. Ver [POR_ESTACION].
+		"caduco": true,
 	},
 	{
 		# Pinar de umbría: la masa principal del bosque de refugio. Ladera con
@@ -172,6 +206,10 @@ var _centre := Vector2i(999999, 999999)
 ## El naipe cruzado del árbol de cerca y su material por especie.
 var _crossed: ArrayMesh
 var _near_material: Array[ShaderMaterial] = []
+
+## El material del impostor de cada especie. Es UNO por especie y lo comparten
+## todas sus teselas, asi que teñir el bosque entero es tocar tres materiales.
+var _far_material: Array[ShaderMaterial] = []
 
 var _total := 0
 
@@ -412,6 +450,7 @@ func _raise_impostors() -> void:
 	var quad := _card_mesh()
 	_crossed = _crossed_mesh()
 	_near_material.clear()
+	_far_material.clear()
 	for k in range(KINDS.size()):
 		var kind: Dictionary = KINDS[k]
 		var size: Vector2 = _sizes[k]
@@ -434,6 +473,7 @@ func _raise_impostors() -> void:
 		near.set_shader_parameter("billboard", 0.0)
 		near.set_shader_parameter("invert_fade", 1.0)
 		_near_material.append(near)
+		_far_material.append(material)
 
 		var per_tile := _tiles_of(k)
 		for tile: Vector2i in per_tile:
@@ -720,3 +760,34 @@ func _tile_reach(tile: Vector2i, point: Vector3) -> float:
 	var centre := Vector3(
 		(float(tile.x) + 0.5) * BLOCK_M, 0.0, (float(tile.y) + 0.5) * BLOCK_M)
 	return centre.distance_squared_to(point)
+
+
+# ------------------------------------------------- la vuelta del año --
+
+## Le pone al bosque la estacion que toca: color y hoja.
+##
+## `avance` es cuanto se ha entrado en la estacion, de 0 a 1, y sirve para que
+## la hoja no caiga de golpe el dia que cambia el calendario. Un abedular tarda
+## tres semanas en pelarse.
+##
+## Es BARATO: tres materiales y dos uniformes cada uno, o sea seis numeros al
+## shader. Se puede llamar una vez por jornada sin pensarlo dos veces.
+func set_season(season: Subsistence.Season, previa: Subsistence.Season,
+		avance: float) -> void:
+	if _far_material.is_empty():
+		return
+	var t := clampf(avance, 0.0, 1.0)
+	for k in range(KINDS.size()):
+		var kind: Dictionary = KINDS[k]
+		var tabla: Dictionary = CADUCO if bool(kind.get("caduco", false)) 			else PERENNE
+		var desde: Dictionary = tabla[previa]
+		var hasta: Dictionary = tabla[season]
+		var tinte: Color = (desde["tinte"] as Color).lerp(
+			hasta["tinte"] as Color, t)
+		var hoja := lerpf(float(desde["hoja"]), float(hasta["hoja"]), t)
+		for material: ShaderMaterial in [_far_material[k], _near_material[k]]:
+			if material == null:
+				continue
+			material.set_shader_parameter("tint",
+				Vector3(tinte.r, tinte.g, tinte.b))
+			material.set_shader_parameter("hoja", hoja)

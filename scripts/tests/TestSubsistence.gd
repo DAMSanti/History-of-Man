@@ -253,3 +253,41 @@ func test_la_nieve_frena_solo_por_encima_de_la_cota() -> void:
 		"en el fondo del valle no hay nieve y no frena")
 	assert_lt(t.freno_por_nieve(1.0), 0.5,
 		"en la cumbre la nieve frena como el barro")
+
+
+# --------------------------------------------- el bosque a lo largo del año --
+
+func test_el_pino_no_pierde_la_hoja() -> void:
+	# Es perennifolio: la muda poco a poco todo el año, no la tira en octubre.
+	# Si el pinar se pelara en invierno, la ladera de umbria desapareceria.
+	for season: int in Subsistence.Season.values():
+		assert_near(float(Forest.PERENNE[season]["hoja"]), 1.0, 0.001,
+			"el pino conserva la hoja en %s"
+				% Subsistence.season_name(season as Subsistence.Season))
+
+
+func test_el_abedul_se_queda_desnudo_en_invierno() -> void:
+	assert_lt(float(Forest.CADUCO[Subsistence.Season.INVIERNO]["hoja"]), 0.15,
+		"en enero el abedular esta pelado")
+	assert_gt(float(Forest.CADUCO[Subsistence.Season.VERANO]["hoja"]), 0.9,
+		"y en agosto esta lleno")
+
+
+func test_el_abedul_amarillea_en_otono() -> void:
+	# Amarillo es rojo y verde altos con el azul bajo. Es de las cosas que mas
+	# se ven de un valle cantabrico en octubre.
+	var otono: Color = Forest.CADUCO[Subsistence.Season.OTONO]["tinte"]
+	assert_gt(otono.r, otono.b * 2.0, "el otoño del abedul tira a amarillo")
+	assert_gt(otono.g, otono.b * 2.0, "y no a rojo solo")
+
+
+func test_solo_el_abedul_es_caduco() -> void:
+	# Si algun dia entra otro caducifolio hay que darle su fila; esta prueba
+	# esta para que no se cuele uno sin ella.
+	var caducos := 0
+	for kind: Dictionary in Forest.KINDS:
+		if bool(kind.get("caduco", false)):
+			caducos += 1
+			assert_eq(String(kind["model"]), "abedul",
+				"el unico caducifolio del catalogo es el abedul")
+	assert_eq(caducos, 1, "y hay uno")
