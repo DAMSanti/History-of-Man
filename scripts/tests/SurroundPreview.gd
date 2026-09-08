@@ -106,7 +106,6 @@ func _init() -> void:
 		"contorno": demo.get_node_or_null("Alrededores"),
 		"props de recurso": _first(demo, "ResourceProps"),
 		"terreno jugable": _first(demo, "TerrainGenerator"),
-		"chunk": _first(demo, "Chunk"),
 	}
 	# Los dos a la vez: lo que quede es coste fijo, ni geometria ni shader
 	var both_a: Node = demo.get_node_or_null("Alrededores")

@@ -10,6 +10,5 @@ terrain_resolution = 825
 max_height = 30.0
 seed_value = 12345
 show_debug_ui = false
-spawn_test_buildings = true
 
 [node name="WorldEnvironment" parent="." instance=ExtResource("2_env")]

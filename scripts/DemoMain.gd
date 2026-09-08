@@ -1,6 +1,9 @@
 extends Node3D
-## Demo principal que integra todos los sistemas:
-## TerrainGenerator, Chunk, Architecto y WorldEnvironment
+## La partida local: el valle, la banda y la interfaz.
+##
+## Monta el terreno, el campo de recursos, la fauna, la vegetacion, la
+## simulacion -[SettlementSim]- y la interfaz -[GameUI]-, y los conecta. Es el
+## unico sitio donde se cablean unos con otros.
 
 @export_group("Demo Settings")
 @export var terrain_size: Vector2i = Vector2i(2048, 2048)
@@ -32,12 +35,9 @@ extends Node3D
 ## las pestanas -fecha y estado en Cronica, controles en su propio boton- y en
 ## la esquina solo estorbaba la vista del terreno.
 @export var show_debug_ui: bool = false
-@export var spawn_test_buildings: bool = true
 
 ## Referencias a nodos
 var terrain: TerrainGenerator
-var chunk: Chunk
-var architecto: Architecto
 var camera: OrbitalCamera
 var debug_label: Label
 var sim: SettlementSim
@@ -77,9 +77,6 @@ var ui: GameUI
 ## Entidades. Ver [EntityCensus].
 var census: EntityCensus
 
-## Con el modo construccion activo el clic levanta en vez de seleccionar
-var _build_mode: bool = false
-
 ## Bocas de cueva y demas elementos pinchables del mundo
 var _caves: Array[CaveMouth] = []
 
@@ -104,12 +101,6 @@ var craft_markers: WorkMarkers
 var weather_view: WeatherView
 var nav_overlay: NavOverlay
 
-## Materiales cargados
-var materials: Dictionary = {}
-
-## Bloques constructivos cargados desde buildings/, indexados por categoria
-var blocks: Dictionary = {}
-
 ## Dimensiones de la cabana de demostracion, en metros
 const HUT_SIZE := 3.0
 const HUT_HEIGHT := 2.2
@@ -132,15 +123,11 @@ func _ready() -> void:
 	var t_ready0 := Time.get_ticks_msec()
 	print("=== Iniciando Demo ===")
 	_phase_start(); _apply_expedition(); _phase_end("_apply_expedition")
-	_phase_start(); _load_materials(); _phase_end("_load_materials")
-	_phase_start(); _load_blocks(); _phase_end("_load_blocks")
 	_phase_start(); _setup_terrain(); _phase_end("_setup_terrain")
-	_phase_start(); _setup_chunk(); _phase_end("_setup_chunk")
 	# Vegetacion desactivada: los arboles se colocaban con base_scale de 1
 	# unidad sobre un mapa donde 1 unidad = 1 m, o sea arbolitos de un metro
 	# que desde la camara solo se leian como manchas oscuras en el suelo.
 	# Vuelve cuando haya especies de verdad con porte y altura por era.
-	_phase_start(); _setup_architecto(); _phase_end("_setup_architecto")
 	_phase_start(); _setup_camera(); _phase_end("_setup_camera")
 	_phase_start(); _setup_ui(); _phase_end("_setup_ui")
 	_phase_start(); _setup_performance_overlay(); _phase_end("_setup_performance_overlay")
@@ -173,10 +160,6 @@ func _ready() -> void:
 
 	# La gente. El mapa local corre por dias; el regional, por estaciones.
 	_phase_start(); _start_settlement(); _phase_end("_start_settlement")
-
-	# Spawn edificios de prueba
-	if spawn_test_buildings:
-		_phase_start(); _spawn_test_buildings(); _phase_end("_spawn_test_buildings")
 
 	print("[TIMING] === _ready() TOTAL: %d ms ===" % (Time.get_ticks_msec() - t_ready0))
 	print("=== Demo inicializado correctamente ===")
@@ -480,11 +463,19 @@ func _start_settlement() -> void:
 	# `WildlifeHerds.sim`.
 	herds.sim = sim
 	# Y la banda caza LO QUE ANDA POR AHI, no una media. Sin esta linea la caza
-	# se resuelve con la tabla de [Hunting], que es lo que pasa en las pruebas
-	# headless; con ella, el cazador acecha a un ciervo de los que se ven. Ver
-	# [Hunt] y `SettlementSim._hunt_step`.
-	if sim:
-		sim.wildlife = herds
+	# se resuelve con la tabla de [Hunting] -el respaldo de `Caceria._hunt_step`
+	# para las pruebas sin valle-; con ella, el cazador acecha a un ciervo de
+	# los que se ven. Ver [Hunt] y [Caceria].
+	#
+	# La fauna cuelga de [Caceria] y no del simulador. Estuvo puesta como
+	# `sim.wildlife` -de cuando la caceria vivia dentro de `SettlementSim`- y
+	# al sacarla nadie corrigio esta linea: GDScript no avisa de asignar una
+	# propiedad que no existe hasta que corre, las pruebas montan la fauna a
+	# mano y las sondas la piden por `sim.caceria.wildlife`, asi que EN LA
+	# PARTIDA DE VERDAD la caza llevaba resolviendose por la tabla vieja sin
+	# que se notara. Aparecio al limpiar el proyecto.
+	if sim and sim.caceria:
+		sim.caceria.wildlife = herds
 
 	tech = TechTree.new()
 	# La simulacion consulta el arbol de verdad, no solo la ficha: con que se
@@ -782,11 +773,11 @@ func _on_day_passed(_day: int) -> void:
 		var grid := sim._navgrid()
 		paraje_markers.refresh(sim.parajes, terrain,
 			func(a: Vector3, b: Vector3) -> bool: return grid.connected(a, b))
-		paraje_markers.refresh_peaks(sim.peaks(), terrain)
+		paraje_markers.refresh_peaks(sim.cumbres.peaks(), terrain)
 	if trap_markers and sim:
-		trap_markers.refresh(sim.traps, terrain)
+		trap_markers.refresh(sim.trampas.traps, terrain)
 	if nasa_markers and sim:
-		nasa_markers.refresh(sim.nasas, terrain)
+		nasa_markers.refresh(sim.nasas_line.nasas, terrain)
 	# La baliza de exploracion colgaba del guardia de las TRAMPAS, que no pinta
 	# nada aqui: sin marcador de trampas no se veia adonde se habia mandado
 	# mirar. Va con las chapas de paraje, que es de lo que es.
@@ -835,44 +826,6 @@ func _return_to_region() -> void:
 	get_tree().change_scene_to_file(Expedition.REGION_SCENE)
 
 
-func _load_materials() -> void:
-	# Cargar todos los materiales
-	var material_files := [
-		"res://materials/Iron.tres",
-		"res://materials/Stone.tres",
-		"res://materials/Straw.tres",
-		"res://materials/Coal.tres",
-		"res://materials/Wood.tres",
-		"res://materials/Copper.tres",
-		"res://materials/Clay.tres"
-	]
-	
-	for path in material_files:
-		if ResourceLoader.exists(path):
-			var mat := load(path) as RawMaterial
-			if mat:
-				var key := mat.display_name.to_lower()
-				materials[key] = mat
-				print("Material cargado: ", mat.display_name)
-
-
-func _load_blocks() -> void:
-	var block_files := [
-		"res://buildings/StoneWall.tres",
-		"res://buildings/WoodenFloor.tres",
-		"res://buildings/StrawRoof.tres"
-	]
-
-	for path in block_files:
-		if not ResourceLoader.exists(path):
-			continue
-		var block := load(path) as BlockData
-		if block:
-			blocks[block.category.to_lower()] = block
-			print("Bloque cargado: %s (%.0f kg, dureza %.1f)" % [
-				block.block_name, block.get_effective_weight(), block.get_hardness()])
-
-
 func _setup_terrain() -> void:
 	terrain = TerrainGenerator.new()
 	terrain.name = "TerrainGenerator"
@@ -900,19 +853,6 @@ func _setup_terrain() -> void:
 		push_warning("No existe %s, se usa el terreno procedural" % heightmap_path)
 
 	add_child(terrain)
-
-
-func _setup_chunk() -> void:
-	chunk = Chunk.new()
-	chunk.name = "MainChunk"
-	chunk.chunk_size = terrain_size
-	chunk.cell_size = 1.0
-	add_child(chunk)
-func _setup_architecto() -> void:
-	architecto = Architecto.new()
-	architecto.name = "Architecto"
-	add_child(architecto)
-	architecto.initialize(chunk, terrain)
 
 
 func _setup_camera() -> void:
@@ -1005,12 +945,6 @@ func _setup_performance_overlay() -> void:
 func _connect_signals() -> void:
 	# Conectar señales del TerrainGenerator
 	terrain.generation_complete.connect(_on_terrain_generated)
-	
-	# Conectar señales del Architecto
-	architecto.building_placed.connect(_on_building_placed)
-	architecto.building_collapsed.connect(_on_building_collapsed)
-	architecto.placement_denied.connect(_on_placement_denied)
-	
 
 
 ## Aparta un punto del agua hasta la orilla seca más cercana.
@@ -1055,168 +989,6 @@ func _on_terrain_generated() -> void:
 	# Inicializar vegetación después de generar terreno
 	# Solo si hay vegetacion: esta desactivada mientras no haya especies con
 	# porte de verdad, y estas llamadas se quedaban colgando de un nodo nulo
-
-
-
-
-func _spawn_test_buildings() -> void:
-	# Posiciones relativas al tamano del mundo, sobre tierra firme
-	var world_x := float(terrain_size.x)
-	var world_z := float(terrain_size.y)
-	var test_positions := [
-		Vector3(world_x * 0.15, 0, world_z * 0.50),
-		Vector3(world_x * 0.30, 0, world_z * 0.15),
-		Vector3(world_x * 0.88, 0, world_z * 0.12),
-		Vector3(world_x * 0.22, 0, world_z * 0.85),
-	]
-
-	for pos in test_positions:
-		_place_hut_at(pos)
-
-
-## Busca en anillos concéntricos un punto donde el Architecto permita construir
-func _find_buildable_spot_near(origin: Vector3, weight: float, search_radius: float = 14.0) -> Variant:
-	if _is_buildable(origin, weight):
-		return origin
-
-	var step := maxf(2.0, search_radius / 12.0)
-	var radius := step
-	while radius <= search_radius:
-		for i in range(16):
-			var angle := float(i) / 16.0 * TAU
-			var candidate := origin + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
-			if _is_buildable(candidate, weight):
-				return candidate
-		radius += step
-
-	return null
-
-
-## Un sitio vale si el Architecto lo aprueba y no esta bajo el agua
-func _is_buildable(world_pos: Vector3, weight: float) -> bool:
-	if terrain and terrain.is_underwater(world_pos):
-		return false
-	return architecto.can_place_at_world(world_pos, weight)["can_place"]
-
-
-## Coloca una cabana. Si allow_search es true y el punto exacto no vale,
-## busca un llano cerca (util para el spawn automatico, no para un click).
-func _place_hut_at(world_pos: Vector3, allow_search: bool = true) -> void:
-	var built := _build_hut()
-	var hut: Node3D = built["node"]
-	var weight: float = built["weight"]
-
-	var spot: Variant = world_pos
-	if allow_search:
-		# Radio proporcional al mundo: 14 m sobre un mapa de 2 km no encuentra
-		# nada si el punto de partida cae en el agua o en una ladera
-		spot = _find_buildable_spot_near(world_pos, weight, maxf(14.0, float(terrain_size.x) * 0.06))
-
-	if spot == null:
-		print("Sin sitio construible cerca de %s para %.0f kg" % [world_pos, weight])
-		hut.queue_free()
-		return
-
-	if architecto.place_building_node(spot, hut, weight):
-		add_child(hut)
-	else:
-		hut.queue_free()
-
-
-## Ensambla una cabana con los bloques de la biblioteca: suelo, cuatro muros y
-## techo. El peso sale de los BlockData reales via Architecto.calculate_structure_weight()
-## en vez de un numero inventado.
-func _build_hut() -> Dictionary:
-	var hut := Node3D.new()
-	hut.name = "Hut"
-
-	var parts: Array[Dictionary] = []
-	var half := HUT_SIZE * 0.5
-
-	var floor_block: BlockData = blocks.get("floor")
-	if floor_block:
-		var thickness: float = floor_block.dimensions.y
-		hut.add_child(_make_block_body(
-			floor_block,
-			Vector3(HUT_SIZE, thickness, HUT_SIZE),
-			Vector3(0, thickness * 0.5, 0)))
-		parts.append({"weight": floor_block.get_effective_weight() * _block_units(floor_block, HUT_SIZE * HUT_SIZE)})
-
-	var wall_block: BlockData = blocks.get("wall")
-	if wall_block:
-		var t: float = wall_block.dimensions.z
-		var wall_area := HUT_SIZE * HUT_HEIGHT
-		var y := HUT_HEIGHT * 0.5
-		var placements := [
-			[Vector3(0, y, -half), Vector3(HUT_SIZE, HUT_HEIGHT, t)],
-			[Vector3(0, y, half), Vector3(HUT_SIZE, HUT_HEIGHT, t)],
-			[Vector3(-half, y, 0), Vector3(t, HUT_HEIGHT, HUT_SIZE)],
-			[Vector3(half, y, 0), Vector3(t, HUT_HEIGHT, HUT_SIZE)],
-		]
-		for placement in placements:
-			hut.add_child(_make_block_body(wall_block, placement[1], placement[0]))
-			parts.append({"weight": wall_block.get_effective_weight() * _block_units(wall_block, wall_area)})
-
-	var roof_block: BlockData = blocks.get("roof")
-	if roof_block:
-		var rt: float = roof_block.dimensions.y
-		hut.add_child(_make_block_body(
-			roof_block,
-			Vector3(HUT_SIZE + 0.5, rt, HUT_SIZE + 0.5),
-			Vector3(0, HUT_HEIGHT + rt * 0.5, 0)))
-		parts.append({"weight": roof_block.get_effective_weight() * _block_units(roof_block, HUT_SIZE * HUT_SIZE)})
-
-	return {"node": hut, "weight": Architecto.calculate_structure_weight(parts)}
-
-
-## Cuantas piezas de un bloque hacen falta para cubrir un area, usando su cara mayor
-func _block_units(block: BlockData, area_m2: float) -> float:
-	var d := block.dimensions
-	var face := maxf(maxf(d.x * d.y, d.x * d.z), d.y * d.z)
-	return area_m2 / maxf(face, 0.01)
-
-
-## Crea el cuerpo fisico de un bloque: malla + colision en la capa "buildings".
-## Antes los edificios no tenian CollisionShape3D, asi que el raycast de
-## colocacion los atravesaba y se podian solapar sin detectarlo.
-func _make_block_body(block: BlockData, size: Vector3, offset: Vector3) -> StaticBody3D:
-	var body := StaticBody3D.new()
-	body.name = block.block_name.replace(" ", "")
-	body.position = offset
-	# Capas declaradas en project.godot: 1 = terrain, 2 = buildings
-	body.collision_layer = 2
-	body.collision_mask = 1
-
-	var mesh_instance := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = size
-	mesh_instance.mesh = box
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = block.primary_material.color if block.primary_material else Color(0.7, 0.6, 0.5)
-	material.roughness = 0.9
-	mesh_instance.material_override = material
-	body.add_child(mesh_instance)
-
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = size
-	collision.shape = shape
-	body.add_child(collision)
-
-	return body
-
-
-func _on_building_placed(world_pos: Vector3, _building: Node3D) -> void:
-	print("Edificio colocado en: ", world_pos)
-
-
-func _on_building_collapsed(world_pos: Vector3, _building: Node3D) -> void:
-	print("¡Edificio colapsado en: ", world_pos, "!")
-
-
-func _on_placement_denied(world_pos: Vector3, reason: String) -> void:
-	print("No se puede colocar edificio en ", world_pos, ": ", reason)
 
 
 ## Minimapa: sombreado del relieve del recuadro, con la gente encima.
@@ -1474,7 +1246,6 @@ func _refresh_resource_overlay() -> void:
 	material.set_shader_parameter("use_overlay", true)
 
 
-
 ## Revisa qué cuevas ha encontrado ya la banda.
 ##
 ## Una cueva sin descubrir no se dibuja: no es que esté oculta, es que para el
@@ -1666,7 +1437,6 @@ func _refresh_debug_label() -> void:
 	debug_label.text += "Hora: %02d:%02d\n" % [
 		int(sim.hour), int((sim.hour - float(int(sim.hour))) * 60.0)]
 	debug_label.text += "Velocidad: x%s\n" % str(sim.time_scale)
-	debug_label.text += "Edificios: %d\n" % architecto.get_all_buildings().size()
 
 func _on_season_changed(_season: int, season_name: String) -> void:
 	print("Nueva estación: ", season_name)
@@ -1800,7 +1570,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 			# Y las cumbres, con el mismo alfiler: también son un sitio al
 			# que se manda gente, aunque no se trabaje en ellas
-			var peak := paraje_markers.pick_peak(sim.peaks(),
+			var peak := paraje_markers.pick_peak(sim.cumbres.peaks(),
 				camera.project_ray_origin(event.position),
 				camera.project_ray_normal(event.position))
 			if not peak.is_empty():
@@ -1842,7 +1612,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Y por ultimo el propio suelo. Es lo que faltaba para que el clic sea
 		# un verbo en todas partes: hasta ahora el terreno desnudo no consumia
 		# el clic y no habia forma de decir «id a mirar alli».
-		if ui and camera and terrain and not _build_mode:
+		if ui and camera and terrain:
 			var ground := _pick_ground(event.position)
 			if ground != Vector3.INF:
 				# Todavia puede caer dentro de la mancha de un paraje: la chapa
@@ -1895,11 +1665,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					if on:
 						print("   " + NavOverlay.tally_text(
 							sim.navgrid(), sim.home_position))
-			KEY_B:
-				# Modo construccion: mientras esta activo el clic levanta, y
-				# mientras no, selecciona
-				_build_mode = not _build_mode
-				print("Modo construccion: %s" % ("activo" if _build_mode else "apagado"))
 			# El teclado mueve LA MISMA velocidad que los botones del reloj.
 			# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
 			# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
@@ -1913,32 +1678,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				if sim: sim.time_scale = 3.0
 			KEY_F3:
 				if sim: sim.time_scale = 5.0
-	
-	# Construir pasa a ser un MODO, no lo que hace el clic por defecto. Con el
-	# UI orientado a raton el clic izquierdo sirve para seleccionar -pinchar
-	# una cueva y ver su ficha-, y dejarlo tambien construyendo significaba
-	# levantar una cabana cada vez que el jugador miraba algo.
-	if event is InputEventMouseButton and _build_mode:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_try_place_building_at_mouse()
-
-
-func _try_place_building_at_mouse() -> void:
-	if not camera:
-		return
-	
-	var mouse_pos := get_viewport().get_mouse_position()
-	var from := camera.project_ray_origin(mouse_pos)
-	var to := from + camera.project_ray_normal(mouse_pos) * 1000
-	
-	var space_state := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	var result := space_state.intersect_ray(query)
-	
-	if result:
-		var hit_pos: Vector3 = result.position
-		# Sin busqueda de alternativa: donde el jugador hace click, o nada
-		_place_hut_at(hit_pos, false)
 
 
 ## Donde toca el terreno el rayo del cursor, o INF si no lo toca.
