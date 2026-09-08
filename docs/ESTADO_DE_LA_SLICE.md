@@ -40,58 +40,62 @@ aprenden 5 técnicas de 20 en un año.
 
 ---
 
-## 2. El hallazgo central: la banda vive de la avellana
+## 2. El hallazgo central: la caza está cerrada con llave
 
-Lo que produjo la banda en 45 jornadas (`AnoProbe`, reparto por defecto):
+**Aviso sobre las cifras anteriores.** La versión previa de esta sección daba
+una tabla de «lo que produjo la banda en 45 jornadas» que estaba mal:
+`produced_days` es una **ventana rodante de 30 días** (`CONSUMO_DIAS`), y
+`AnoProbe` la sumaba al final creyendo que era la partida entera y luego dividía
+entre 180. Además el divisor contaba a quien tenía el oficio **al final**, no
+las jornadas-persona trabajadas. Las dos sondas están arregladas —se apunta cada
+jornada al cerrarse— y lo que sigue sale de la contabilidad nueva.
 
-| material | raciones | aguanta |
-|---|---|---|
-| **Fruto seco** | **2 080** | 360 días |
-| Raíz | 681 | 60 días |
-| Huevo | 143 | 14 días |
-| Baya | 141 | 8 días |
-| Caracol | 115 | 3 días |
-| **Carne** | **13** | 4 días |
-| **Pescado / marisco** | **0** | — |
+Un año entero, 4 recolectores · 3 cazadores · 2 pescadores y el resto repartido
+entre hogar y taller (`BandaProbe`):
 
-La banda come 1 125 raciones en ese periodo. **La recolección sola trae el
-triple de lo que hace falta**, y casi todo es avellana, que aguanta un año.
+| oficio | jornadas-persona | raciones | % | por persona y día |
+|---|---|---|---|---|
+| **Recolección** | 716 | **10 232** | 93 % | **14,29** |
+| Ribera | 358 | 639 | 6 % | 1,79 |
+| **Caza** | 537 | **147** | 1 % | **0,27** |
 
-La caza aporta el **0,4 %**. Y no es un detalle de balance: es que el sistema
-más elaborado de todo el código —la cacería por fases, con su fauna viva, sus
-alcances de arma y su despiece— es irrelevante para la supervivencia. El propio
-docstring de `Hunting.gd` dice *«una banda cantábrica del Magdaleniense vivía de
-la carne, no de la avellana»*. El juego hace exactamente lo contrario.
-
-Medido por persona y día (`JornadaCazadorProbe`, `CazaEscalonProbe`,
-`RendimientoProbe`):
-
-| oficio | raciones por persona y día |
-|---|---|
-| Recolección | ~15 |
-| Caza mayor (40 jornadas, pericia crecida) | ~1,5 |
-| Lo que come una persona | 2,0 |
+Lo que entró, por material: fruto seco 6 306 raciones, raíz 2 066, bellota 741,
+pescado 639, baya 399, grasa 236, miel 204, caracol 186, **carne 147**, huevo 68,
+seta 27. Por estación: primavera 2 231, verano 3 656, **otoño 4 397, invierno
+735**.
 
 **Un recolector alimenta a siete personas; un cazador no se alimenta ni a sí
-mismo.** Esa es la partida hoy.
+mismo.** Eso sigue siendo la partida.
 
-### Por qué pasa
+### Por qué la caza da 0,27
 
-Tres causas, y sólo la tercera es un error:
+No es calibración. Es una **cadena de prerrequisitos**:
 
-1. **La avellana es demasiado buena.** 1 700 kcal por puñado de 0,55 kg y 360
-   días de vida. Es la mejor relación caloría/riesgo/conservación del catálogo
-   y no tiene contrapartida.
-2. **La recolección no falla casi nunca.** Es «la mitad callada de la dieta»
-   por diseño, pero sin variabilidad no hay decisión: siempre es la respuesta
-   correcta.
-3. **La cacería paga el desplome de la cadena y la recolección no.** Las dos
-   multiplican seis factores que dan ~0,04, pero la recolección lo compensa con
-   `HARVEST_SCALE = 26` y la caza tuvo que esperar a
-   `Caceria.ESCALA_DEL_RASTREO`. Aun con ella, un cazador está el **5,9 % de su
-   existencia** en estado de trabajo: el resto duerme (49 %) y anda (32 %).
+```
+Tech.AZAGAYA → needs Tech.HOJA → needs Tech.NUCLEO → needs Tech.LASCA
+```
 
----
+`AZAGAYA` se practica cazando (140 jornadas) pero cuelga de `HOJA`, que se
+practica en **materia prima** (110 jornadas). En el año medido se aprendieron
+Lazo, Cepo, Red de aves, Foso y Núcleo preparado: **nunca llegó la talla
+laminar, así que nunca llegó la azagaya, así que no hubo caza mayor en todo el
+año**. Los tres cazadores vivieron de trampas y acabaron con dos azagayas de un
+utillaje que ni siquiera sabían diseñar.
+
+Una banda con uno o dos en el taller no llega a la caza mayor en un año de
+partida. Ése es el nudo, y está antes de cualquier número de rendimiento.
+
+### Y el otro hallazgo: se tira más de lo que se come
+
+La banda produjo **11 018 raciones y se comió 4 572**. La despensa se queda
+clavada en 937 durante otoño e invierno temprano porque **no cabe más**: con el
+tope por recipientes (ver §5.11), más de la mitad del trabajo de los recolectores
+se pierde en la puerta. El mecanismo limita como debe; lo que está descalibrado
+es la recolección, que produce el doble de lo que la banda puede comer *y*
+guardar.
+
+Los cestos son la mitad de esa cifra: **7,53 raciones/día sin taller, 14,29 con
+seis cestos**. Es el multiplicador declarado de `Tool.Kind.CESTO`.
 
 ## 3. Lo que está construido y funciona
 
@@ -122,7 +126,7 @@ Comprobado por búsqueda en todo el código: **cero coincidencias** para cada un
 
 | pedido en SLICE_PALEOLITICO | estado |
 |---|---|
-| **El conchero crece** y modifica el terreno | no existe |
+| **El conchero crece** y modifica el terreno | **hecho** — `Desechos` + `Conchero` |
 | **Vestido** como necesidad (piel curtida) | no existe |
 | **Plazas de cueva** (cuánta gente cabe en el abrigo) | no existe |
 | **Sílex importado / intercambio** | no existe |
@@ -163,10 +167,30 @@ Nada de lo demás importa hasta que exista un modo de fracasar.
 5. **El otoño como pico.** La berrea ya multiplica ×1,70 la caza. Hace falta
    que además sea **la única ventana** en la que se puede acumular carne seca
    para el invierno, y que el secadero sea el cuello de botella.
-6. **Pesca y marisqueo, que hoy dan cero.** En 45 jornadas con el reparto por
-   defecto no entró ni un pescado. Hay que averiguar por qué antes de tocar
-   nada: puede ser que el tajo de ribera quede lejos, o que el oficio no se
-   asigne, o que `food_is_capped` lo cierre.
+6. **La pesca se agota en un mes y nadie se muda.** Medido con `ParajesProbe`,
+   dos pescadores y un año: el tajo de ribera baja al 75 % en **8 jornadas**, al
+   50 % en 15, al 25 % en 24 y al **1 % en 32**, y ahí se queda el resto del año
+   —sube al 3 % y no pasa de ahí—. Eso explica por sí solo que la ribera dé 1,79
+   raciones por persona y día en un año cuando en las diez primeras jornadas
+   daba 13,26: no está mal calibrada, está **esquilmada**.
+
+   Y lo que lo convierte en un callejón sin salida: **el resto del río está al
+   93,9 %**. Hay dónde pescar; la banda no va. `_rank_known_spots` sólo ofrece
+   celdas con familiaridad ≥ 0,35, o sea **sitios ya conocidos**, y en un año
+   con nadie en exploración la banda descubre **4 parajes en total**. El
+   agotamiento sin alternativas no es una decisión, es un tope disfrazado.
+
+   La recolección, en cambio, está bien: baja hasta el 63 % en otoño y se
+   recupera al 85 %. Es el único recurso que hace lo que tiene que hacer.
+
+   Dos apuntes del mismo sitio:
+   - **`ResourceField.deplete_at` no lo llama nadie del juego**, sólo dos
+     pruebas. Lo que gasta de verdad es `take_from_cell`, proporcional a lo
+     recogido. Es código muerto que además documenta un modelo que no está en
+     uso.
+   - **La curva de reposición no deja volver de casi cero.** A 1 % de carga
+     crece un 0,18 % de la capacidad al día: de 1 % a 50 % son unas 275
+     jornadas **si se le deja en paz**, y no se le deja.
 
 ### Tercero: lo que el diseño pidió y falta
 
@@ -183,9 +207,14 @@ Nada de lo demás importa hasta que exista un modo de fracasar.
 
 ### Cuarto: depurar
 
-11. **`food_cap` arranca en 0 = sin tope.** El jugador tiene que descubrir el
-    control para que la banda deje de acumular. Debería arrancar en algo
-    razonable (30 días) y ser una decisión, no un descubrimiento.
+11. ~~**`food_cap` arranca en 0 = sin tope.**~~ **Hecho, y de otra manera.** Un
+    tope en raciones no es una mecánica: es un número, y nada en el mundo
+    impedía a la banda seguir amontonando. Ahora lo que limita es **en qué se
+    guarda** —`Storehouse.capacidad_de_comida`: a granel más lo que cabe en los
+    cestos y odres que haya, recalculado al cerrar cada jornada porque los
+    cestos se rompen—. La banda arranca sin cestos, con unos 30 días de
+    capacidad, y ampliarla cuesta jornadas de cordelería. `food_cap` sigue
+    existiendo en cero y pasa a ser sólo lo que pida el jugador.
 12. **El atasco «llegó y el estado no se enteró»**, 2–5 por partida. Es viejo y
     sigue ahí.
 13. **20–30 % de salidas vuelven de vacío** en recolección. Puede ser correcto
@@ -206,15 +235,16 @@ Lo que hay está bien documentado y con fuentes. Tres cosas que retocaría:
 peldaño que más sube la caza en la escalera. O se quita, o se marca
 explícitamente como el salto que abre la época siguiente.
 
-**La bellota necesita su proceso.** Está en el catálogo con 1 300 kcal y su
-comentario dice «necesita desamargado: agua, recipiente y tiempo», pero se come
-directamente. El desamargado de la bellota es trabajo real y sin él la bellota
-es tóxica: es una receta esperando a existir.
+~~**La bellota necesita su proceso.**~~ **Hecho.** La bellota cruda pasa a 0 kcal
+y aparece `BELLOTA_DULCE`; en medio, el `LAVADERO`, con tres jornadas de remojo
+y un tope de 30 puñados que es el cuello de botella del otoño. Ver
+[PERRO_Y_BELLOTA.md](PERRO_Y_BELLOTA.md) §2.
 
-**Falta el perro.** El lobo está en la fauna sólo como competidor. La
-domesticación del perro está atestiguada en el Paleolítico superior europeo
-(~15.000 a.C.) y es exactamente el tipo de cambio que transforma la caza. Sería
-la mejor técnica «de época» que se puede añadir sin salirse del Magdaleniense.
+~~**Falta el perro.**~~ **Hecho, y no como técnica.** No es un peldaño del árbol:
+es una relación con la manada que arranca en el montón de desechos —la hipótesis
+comensal— y va por cinco decisiones hasta el perro o hasta la manada en contra.
+Medido: perro en la jornada 161 eligiendo lo amable, manada hostil en la 12
+eligiendo matar. Ver [PERRO_Y_BELLOTA.md](PERRO_Y_BELLOTA.md) §1.
 
 ---
 
