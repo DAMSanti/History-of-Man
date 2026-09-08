@@ -871,7 +871,12 @@ func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: floa
 	# El reparto de oficios NO va aqui: necesita que los tajos esten montados,
 	# y en este punto todavia no lo estan. Lo llama la escena despues.
 
-
+	# El tope de comida arranca puesto, no en cero: sin el la banda acumula
+	# sin fin y la partida no tiene forma. Ver [DIAS_DE_TOPE_AL_EMPEZAR].
+	var bocas := 0.0
+	for person: Inhabitant in people:
+		bocas += person.daily_food()
+	food_cap = bocas * DIAS_DE_TOPE_AL_EMPEZAR
 ## Muda la banda a otro abrigo.
 ##
 ## Lo que se lleva es lo que cabe en la espalda; lo que se queda es el abrigo.
@@ -1241,6 +1246,37 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 ## lineas y doscientas cuarenta eran esto. Arriba queda LA NOCHE -acampar o
 ## dormir en casa- y aqui el dia: dos cosas que no se parecen en nada y que
 ## estaban en las dos ramas del mismo `if`.
+## Cuanta destreza se gana por hora de trabajo.
+##
+## Estuvo en 0,0008, o sea 0,0072 al dia con las nueve horas utiles, y con eso
+## un recolector pasaba de 0,096 a 0,505 de pericia EN CUARENTA Y CINCO DIAS y
+## tocaba el techo hacia el 120. Medido con `scripts/tests/AnoProbe.gd`:
+##
+##   dia  1   pericia 0,096 · efectividad 0,218 · despensa 6 dias
+##   dia 16   pericia 0,293 · efectividad 0,301 · despensa 17
+##   dia 31   pericia 0,395 · efectividad 0,373 · despensa 72
+##   dia 46   pericia 0,505 · efectividad 0,462 · despensa 94
+##
+## Eso es lo que hacia explotar la despensa: el rendimiento de la recoleccion
+## se multiplicaba por 2,4 en mes y medio -de 4,0 raciones por persona y dia a
+## 9,5- cuando el objetivo que este mismo fichero declara es «cerca del doble
+## de lo que come», o sea 3,4.
+##
+## Y ademas dejaba sin sentido dos sistemas: si un adulto domina su oficio en
+## cuatro meses, la transmision nocturna -`_knowledge_transmission`- no tiene
+## a quien enseñar, y el relevo generacional no es un problema.
+##
+## Puesto para que la pericia suba del orden de 0,25 EN UN AÑO de juego: se
+## nota en la campaña, y dominar un oficio sigue siendo cosa de vida entera,
+## que es lo que dicen los datos de rendimiento por edad en forrajeadores
+## -Kaplan y otros: el rendimiento de un cazador ache no llega a su techo
+## hasta los treinta y tantos-.
+##
+## Pendiente de playtest: lo medido es la curva vieja; lo decidido es que
+## aprender lleve una campaña y no una estacion.
+const APRENDE_POR_HORA := 0.00015
+
+
 func _tick_daylight(person: Inhabitant, hours: float) -> void:
 	match person.state:
 		Inhabitant.State.DURMIENDO, Inhabitant.State.OCIOSO:
@@ -1352,13 +1388,12 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 					trampas._trapline(person, hours)
 				else:
 					tajo._harvest(person, hours)
-				# La practica mejora la destreza: es el saber tacito
 				# La practica mejora la TAREA que se esta haciendo, no la
-				# actividad entera: quien talla no aprende a curtir pieles
+				# actividad entera: quien talla no aprende a curtir pieles.
 				var task := person.current_task()
 				var current: float = person.skill_in(task)
 				person.skill[task] = minf(
-					current + hours * 0.0008 * person.learn_rate(), 0.95)
+					current + hours * APRENDE_POR_HORA * person.learn_rate(), 0.95)
 
 				# Se vuelve cuando no se puede cargar mas, no por un numero
 				# fijo: es lo que hace que los recipientes cambien la jornada.
@@ -2599,6 +2634,22 @@ func _lament(person: Inhabitant, where: Vector3) -> void:
 ## abre tajo nuevo, pero el que vuelve cargado entrega, y una pieza abatida se
 ## acaba de traer. Tirar carne para respetar un tope seria absurdo.
 var food_cap: float = 0.0
+
+## Con cuantos dias de comida arranca puesto el tope.
+##
+## Estuvo SIN TOPE -cero es sin tope- y el jugador tenia que descubrir el
+## control en el almacen para que la banda dejara de acumular. Medido con
+## `scripts/tests/AnoProbe.gd`, sin tope la despensa iba de 6 dias de comida a
+## 120 en medio año y no bajaba nunca: la partida no tenia forma.
+##
+## Treinta dias es lo que cabe en una cueva sin que se pudra y lo que hace que
+## el invierno importe: da margen para una mala racha pero no para dos
+## estaciones. Al llegar al tope la banda deja de salir a por comida y se pone
+## a otra cosa -que es la decision que el tope existe para provocar- y no
+## vuelve hasta haberse comido un tercio. Ver [REANUDAR_COMIDA].
+##
+## Pendiente de playtest: lo decidido es que HAYA tope de salida, no cuanto.
+const DIAS_DE_TOPE_AL_EMPEZAR := 30.0
 
 
 ## Hasta donde tiene que bajar la despensa para volver a salir a por comida,

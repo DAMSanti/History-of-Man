@@ -85,10 +85,89 @@ func _init() -> void:
 			if p.hurt_days > 0:
 				heridos += 1
 		var n := maxf(float(sim.people.size()), 1.0)
+		var per := 0.0
+		var efi := 0.0
+		var cuantos := 0
+		for p3: Inhabitant in sim.people:
+			if p3.job != Profession.Job.RECOLECCION:
+				continue
+			per += p3.skill_in(p3.current_task())
+			efi += p3.effectiveness()
+			cuantos += 1
+		if cuantos > 0:
+			print("        pericia media del recolector %.3f · efectividad %.3f" % [
+				per / float(cuantos), efi / float(cuantos)])
 		print("%-6d %-11s %5d %7.0f %7.1f %6.0f %6.0f %7d  %d" % [
 			sim.day, est, sim.people.size(), sim.store.food_rations(),
 			sim.store.food_rations() / maxf(comen, 0.01),
 			hambre / n, cansa / n, heridos, sim.techs.known.size()])
+
+	# Lo que decide la calibracion: raciones por PERSONA Y DIA de cada oficio,
+	# contra las 2,0 que come una persona. Un oficio que no llega a 2 no se
+	# mantiene a si mismo; uno que pasa de 6 hace irrelevantes a los demas.
+	print("")
+	print("--- POR QUE CADA CUAL HACE LO QUE HACE ---")
+	print("   tajos montados:")
+	for act: int in sim.work_sites:
+		print("      %-16s a %5.0f m del abrigo" % [
+			Subsistence.activity_name(act as Subsistence.Activity),
+			sim.home_position.distance_to(sim.work_sites[act])])
+	for act: int in [Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+			Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		if not sim.work_sites.has(act):
+			print("      %-16s SIN TAJO" % Subsistence.activity_name(
+				act as Subsistence.Activity))
+	print("   por que se bloquea cada tarea (para el primero que pueda):")
+	for job: int in Profession.Job.values():
+		if job == Profession.Job.OCIOSO:
+			continue
+		for tarea: int in Profession.tasks_of(job as Profession.Job):
+			for quien: Inhabitant in sim.people:
+				if not Profession.can_do(job as Profession.Job, quien):
+					continue
+				var motivo: String = sim.task_blocked_by(quien, tarea)
+				print("      %-26s %s" % [
+					Profession.task_name(tarea),
+					motivo if not motivo.is_empty() else "se puede"])
+				break
+
+	print("")
+	print("--- LO QUE RINDE CADA OFICIO ---")
+	var jornadas: Dictionary = {}
+	for p2: Inhabitant in sim.people:
+		var j := Profession.job_name(p2.job as Profession.Job)
+		jornadas[j] = int(jornadas.get(j, 0)) + 1
+	var come := 0.0
+	for p2: Inhabitant in sim.people:
+		come += p2.daily_food()
+	come /= maxf(float(sim.people.size()), 1.0)
+	print("   una persona come %.2f raciones al dia" % come)
+	var por_actividad: Dictionary = {}
+	for a_day: Dictionary in sim.taller.produced_days:
+		for k: int in a_day:
+			# Las claves negativas son piezas de utillaje, no materiales: la
+			# produccion lleva las dos en el mismo registro. Ver `logged_name`.
+			if k < 0:
+				continue
+			var kk := k as Materia.Kind
+			if not Materia.is_food(kk):
+				continue
+			var act := "otros"
+			if kk in [Materia.Kind.CARNE, Materia.Kind.CARNE_SECA]:
+				act = "Caza"
+			elif kk in [Materia.Kind.PESCADO, Materia.Kind.PESCADO_SECO,
+					Materia.Kind.MARISCO]:
+				act = "Ribera"
+			else:
+				act = "Recolección"
+			por_actividad[act] = float(por_actividad.get(act, 0.0)) 				+ float(a_day[k]) * Materia.nutrition(kk)
+	var dias_corridos := maxf(float(sim.day - primero), 1.0)
+	for oficio: String in ["Recolección", "Caza", "Ribera"]:
+		var gente: int = int(jornadas.get(oficio, 0))
+		var rac: float = float(por_actividad.get(oficio, 0.0))
+		print("   %-14s %2d personas · %7.0f raciones · %6.2f por persona y dia" % [
+			oficio, gente, rac, rac / maxf(float(gente) * dias_corridos, 1.0)])
 
 	print("")
 	print("--- QUE HAY EN LA DESPENSA AL FINAL ---")
@@ -117,6 +196,8 @@ func _init() -> void:
 	orden.assign(total.keys())
 	orden.sort_custom(func(a: int, b: int) -> bool: return total[a] > total[b])
 	for k: int in orden:
+		if k < 0:
+			continue
 		var nombre := Materia.material_name(k as Materia.Kind)
 		var rac := ""
 		if Materia.is_food(k as Materia.Kind):

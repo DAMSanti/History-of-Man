@@ -637,8 +637,21 @@ func food_is_capped() -> bool:
 ## La manufactura gasta materia prima y el sim.hogar no sale del campamento: el
 ## tope no les toca. La exploracion tampoco, que no trae comida sino mapa.
 func _feeds_the_band(job: Profession.Job) -> bool:
-	return job == Profession.Job.CAZA or job == Profession.Job.RIBERA \
-		or job == Profession.Job.RECOLECCION
+	# SOLO LA RECOLECCION, y es una correccion importante.
+	#
+	# El tope existe para cortar el circulo vicioso de las salidas a por
+	# comida -llegar al maximo, comer, bajar, volver a salir- y ese circulo es
+	# de la recoleccion: lo que trae aguanta un año en la cueva y se apila.
+	#
+	# Cortar tambien la caza y la ribera hacia algo que no queria nadie: con la
+	# despensa llena de avellana los cazadores se quedaban en el abrigo, y como
+	# la recoleccion la llena antes que nada, la caza no llegaba a jugar NUNCA.
+	# Medido: 209 salidas de caza, 193 vacias y CERO carne entregada.
+	#
+	# Y ademas no hace falta cortarlas: la carne fresca aguanta cuatro dias y
+	# el pescado tres, asi que se limitan solas. Es justamente por eso por lo
+	# que secar y ahumar importa, que es la mecanica de la epoca.
+	return job == Profession.Job.RECOLECCION
 
 
 ## Cuantos dias de comida da el tope puesto, para poder decirselo al jugador

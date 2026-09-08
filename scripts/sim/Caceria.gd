@@ -303,7 +303,35 @@ func _pick_quarry(person: Inhabitant, species: Array) -> Dictionary:
 ## caceria en el acecho -ocho de rastro frio, cuatro de vista- contra cinco
 ## cobradas. El cuello de botella ya no es el rastreo ni el lance, es
 ## [Hunt.ACECHO_HORAS].
-const ESCALA_DEL_RASTREO := 16.4
+const ESCALA_DEL_RASTREO := 31.0
+
+## --- por que 31 y no 16,4, que era lo de antes ---------------------------
+##
+## Con 16,4 y la curva de pericia ya corregida -ver
+## [SettlementSim.APRENDE_POR_HORA]-, medido con `CazaEscalonProbe`, treinta
+## jornadas y cinco cazadores con azagaya:
+##
+##   191 salidas · 15 caceria levantadas · 4 cobradas
+##   1,99 raciones por cazador y dia · cubre el 39 % de lo que come la banda
+##
+## Y la recoleccion, con el mismo arreglo, esta en las 3,4 que declara
+## `Tajo._daily_yield` como objetivo -«cerca del doble de lo que come»-. O sea
+## que cazar rendia el sesenta por ciento de recoger, cuando el registro dice
+## lo contrario: una banda cantabrica del Magdaleniense vivia de la carne.
+##
+## LA RAZON DE QUE HAGA FALTA MAS ESCALA QUE LA RECOLECCION, y es lo que
+## justifica el numero: de quince caceria levantadas solo se cobran cuatro.
+## La caza pierde el 73 % de lo que empieza -el rastro se enfria, la pieza se
+## va de vista- y la recoleccion no pierde nada. Para entregar las mismas
+## raciones, su escala tiene que ser proporcionalmente mayor.
+##
+## Puesto para que un cazador ande por las 3,5-4 raciones: algo por encima de
+## un recolector, que es lo que compensa el riesgo, la variabilidad y las
+## jornadas fuera. Lo que la caza da ADEMAS -piel, asta, hueso, tendon,
+## grasa- no entra en esta cuenta y es la mitad de su valor.
+##
+## Pendiente de playtest: lo medido son las 1,99 y el 73 % de perdida; lo
+## decidido es que la carne sea la base de la dieta y no el complemento.
 
 ## --- de donde sale el 16,4, y contra que se ha contrastado ----------------
 ##
