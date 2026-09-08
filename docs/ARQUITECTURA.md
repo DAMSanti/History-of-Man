@@ -95,6 +95,12 @@ a 5 153 por ese camino.
 2. **Bloque contiguo antes que funciones sueltas.** Un candidato de 850 líneas
    seguidas es mejor apuesta que uno de 960 repartido en once trozos, aunque
    sea más pequeño. Los trozos sueltos es donde se cuelan los errores.
+
+   Si un sistema merece la pena pero está repartido, se **agrupa primero** en
+   un commit que NO cambie una sola letra: se mueven los bloques y se comprueba
+   que el texto de cada función es idéntico y que no ha desaparecido ninguna
+   línea. Después, el corte es uno solo. Así se hizo con la marcha, que estaba
+   en doce trozos.
 3. **El simulador se queda de fachada.** No se reescriben las llamadas de
    fuera: se dejan pasamanos.
 
@@ -202,6 +208,12 @@ Tres cosas que cuestan tiempo si se olvidan:
 - **Las medidas no se corren en paralelo** ni se solapan con edición de
   ficheros: cada proceso de Godot parsea todos los scripts al arrancar, y tocar
   un `.gd` a mitad de una tanda la rompe por dentro.
+- **Hay sondas que NO son deterministas, y hay que saber cuales.** Las que
+  corren un numero fijo de fotogramas -`MarchaProbe`- avanzan menos horas de
+  juego si la maquina va cargada, porque la simulacion acumula tiempo real con
+  tope (`PASOS_POR_CUADRO`). Dos corridas seguidas del mismo codigo dieron 35,8
+  y 48,9 raciones. Antes de leer una diferencia como una regresion, hay que
+  correr la sonda DOS VECES sobre el mismo codigo.
 - **Compilar no es funcionar.** Antes de dar algo por hecho hay que correr el
   juego (`VistaProbe`) o el panel (`PanelProbe`). GDScript no avisa en
   compilación de asignar una propiedad que no existe: `sim.wildlife = herds`
