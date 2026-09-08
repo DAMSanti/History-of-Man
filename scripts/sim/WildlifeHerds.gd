@@ -17,8 +17,13 @@ extends Node3D
 ## y esa rama nunca necesitó verlas correr por el monte para funcionar. Aquí
 ## se dibujan de todos modos, con lo que hay: no existe malla CC0 descargable
 ## de liebre ni conejo -águila, pájaro pequeño y pato sí, y `FaunaAtlas.gd` ya
-## los horneó-, así que liebre y conejo TOMAN PRESTADO el esqueleto del lobo,
-## a una escala minúscula y sin ningún parecido más allá del tamaño. Es el
+## los horneó-.
+##
+## Estuvieron tomando prestado EL ESQUELETO DEL LOBO a escala 0,028 y 0,022: un
+## lobo del tamaño de una liebre, con silueta de lobo. Ahora llevan el gato del
+## mismo pack -Quaternius Vol.2, CC0, con ciclo de marcha propio-, que tampoco
+## es una liebre pero es un cuadrúpedo pequeño de lomo curvo y paso corto, y a
+## la distancia a la que se juega eso ya no se lee como «lobo diminuto». Es el
 ## mismo apaño que uro/ciervo/corzo/rebeco, declarado igual de a la vista.
 
 ## --- Cuánta fauna hay en el valle ---------------------------------------
@@ -95,6 +100,11 @@ enum State { VAGANDO, BEBIENDO, CAZANDO, HUYENDO }
 ## contra el tamaño real de la especie -no es un número puesto a ojo-, igual
 ## que `BandaCrowd.HEIGHT_SCALE`.
 const SPECIES_VISUAL := {
+	# Y el PERRO, que es una especie aparte y no un lobo teñido: desde que hay
+	# camino del perro -ver [ElLobo]- el hito de la partida es justo que el
+	# lobo deja de ser lobo, y enseñarlo con la misma silueta se lo come.
+	"perro": {"model": "dog", "scale": 0.15, "tint": Color(0.62, 0.54, 0.42),
+		"diet": "carnivoro", "speed": 8.0, "herd": 1, "groups": 1},
 	"lobo": {"model": "wolf", "scale": 0.16, "tint": Color(0.55, 0.53, 0.48),
 		"diet": "carnivoro", "speed": 8.5, "herd": 2, "groups": 3},
 	"caballo": {"model": "horse", "scale": 0.29, "tint": Color(0.55, 0.42, 0.30),
@@ -116,9 +126,13 @@ const SPECIES_VISUAL := {
 		"diet": "herbivoro", "speed": 6.0, "herd": 3, "groups": 2},
 	# --- pieza menuda: se cazan con trampa, no al acecho, pero se dibujan
 	# igual -ver el docstring para de dónde sale cada malla-.
-	"liebre": {"model": "wolf", "scale": 0.028, "tint": Color(0.58, 0.46, 0.32),
+	# La liebre y el conejo eran un LOBO encogido al 2,8 % y al 2,2 %: la
+	# silueta de un lobo del tamaño de una liebre. El gato no es una liebre
+	# -queda anotado en CREDITOS- pero es un cuadrupedo pequeño de lomo curvo y
+	# paso corto, que a la distancia a la que se juega es otra cosa.
+	"liebre": {"model": "cat", "scale": 0.30, "tint": Color(0.58, 0.46, 0.32),
 		"diet": "herbivoro", "speed": 5.0, "herd": 4, "groups": 2},
-	"conejo": {"model": "wolf", "scale": 0.022, "tint": Color(0.42, 0.34, 0.26),
+	"conejo": {"model": "cat", "scale": 0.23, "tint": Color(0.42, 0.34, 0.26),
 		"diet": "herbivoro", "speed": 4.5, "herd": 5, "groups": 2},
 	"urogallo": {"model": "eagle", "scale": 0.11, "tint": Color(0.15, 0.13, 0.12),
 		"diet": "herbivoro", "speed": 4.0, "herd": 2, "groups": 2},
@@ -141,6 +155,8 @@ const WATERSIDE_SPECIES := ["anade"]
 ## Animated Animals», que traen marcha y galope de verdad. Ver `FaunaAtlas.gd`.
 const MOVE_CLIP := {
 	"wolf": {"slow": "walk", "fast": "walk"},
+	"dog": {"slow": "walk", "fast": "walk"},
+	"cat": {"slow": "walk", "fast": "walk"},
 	"horse": {"slow": "walk", "fast": "run"},
 	"cow": {"slow": "walk", "fast": "run"},
 	"deer": {"slow": "walk", "fast": "run"},
@@ -320,6 +336,10 @@ func _raise_groups() -> void:
 static func _clip_table(model: String) -> Dictionary:
 	match model:
 		"wolf": return {"idle": [0, 20], "walk": [20, 20]}
+		# Del mismo pack y con el mismo horneado que el lobo, asi que la misma
+		# tabla. Ver la salida de `FaunaAtlas.gd`, que la imprime.
+		"dog": return {"idle": [0, 20], "walk": [20, 20]}
+		"cat": return {"idle": [0, 20], "walk": [20, 20]}
 		"horse": return {"idle": [0, 75], "walk": [75, 33], "run": [108, 10]}
 		"cow": return {"idle": [0, 75], "walk": [75, 40], "run": [115, 17]}
 		"pig": return {"idle": [0, 75]}

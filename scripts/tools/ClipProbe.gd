@@ -7,6 +7,8 @@ extends SceneTree
 ## comprobar si el ciclo de marcha estaba ahí y no se cableó.
 
 const SOURCES := [
+	"res://models/animals/source/Dog.fbx",
+	"res://models/animals/source/Cat.fbx",
 	"res://models/animals/source/Deer.fbx",
 	"res://models/animals/source/Stag.fbx",
 	"res://models/animals/source/Bull.fbx",

@@ -41,6 +41,25 @@ const MODELS := [
 		"clips": {"idle": "WolfArmature|Idle", "walk": "WolfArmature|Walking"},
 	},
 	{
+		# EL PERRO, que hasta ahora era un lobo con otra tinta. Desde que hay
+		# camino del perro -ver [ElLobo]- la diferencia importa: el hito de la
+		# partida es que el lobo DEJA de ser lobo, y enseñarlo con la misma
+		# silueta se lo come. Del mismo pack Vol.2 que el lobo, o sea CC0.
+		"prefix": "dog", "source": "res://models/animals/source/Dog.fbx",
+		"armature": "DogArmature", "mesh": "DogArmature/Skeleton3D/Dog",
+		"clips": {"idle": "DogArmature|Idle", "walk": "DogArmature|Walking"},
+	},
+	{
+		# Y LA LIEBRE. Era un lobo encogido al 2,8 % -y el conejo al 2,2 %-, o
+		# sea un lobo del tamaño de una liebre con la silueta de un lobo. El
+		# gato es un cuadrúpedo pequeño de lomo curvo y paso corto: no es una
+		# liebre, pero de las mallas que hay es la única que a la distancia a
+		# la que se juega no se lee como «lobo diminuto».
+		"prefix": "cat", "source": "res://models/animals/source/Cat.fbx",
+		"armature": "CatArmature", "mesh": "CatArmature/Skeleton3D/Cat",
+		"clips": {"idle": "CatArmature|Idle", "walk": "CatArmature|Walking"},
+	},
+	{
 		"prefix": "horse", "source": "res://models/animals/source/Horse.fbx",
 		"armature": "Armature", "mesh": "Armature/Skeleton3D/Horse",
 		"clips": {"idle": "Armature|Idle", "walk": "Armature|Walk", "run": "Armature|Run"},
