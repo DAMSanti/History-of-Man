@@ -1131,26 +1131,6 @@ func _apply_basic_material() -> void:
 	_terrain_mesh.material_override = material
 
 
-func _get_vertex_color(height_normalized: float, humidity: float) -> Color:
-	# Gradiente de color basado en altura y humedad
-	var base_color: Color
-	
-	if height_normalized < 0.2:
-		# Agua/arena
-		base_color = Color(0.76, 0.7, 0.5)
-	elif height_normalized < 0.5:
-		# Hierba
-		base_color = Color(0.2, 0.5, 0.2).lerp(Color(0.1, 0.35, 0.1), humidity)
-	elif height_normalized < 0.75:
-		# Roca
-		base_color = Color(0.5, 0.45, 0.4)
-	else:
-		# Nieve
-		base_color = Color(0.95, 0.95, 0.98)
-	
-	return base_color
-
-
 ## Los mapas en crudo, para quien necesite HORNEARLOS en vez de consultarlos.
 ##
 ## Existe por [GroundCover]. La hierba se coloca en el shader, y para eso el
