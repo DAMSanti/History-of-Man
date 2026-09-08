@@ -559,7 +559,7 @@ func _levantar_interfaz() -> void:
 	# Y que la interfaz se entere de los momentos: hallazgos que enseñar y
 	# decisiones que pedir. Ver [Moment].
 	if sim != null:
-		ui.watch_moments(sim)
+		ui.barra.watch_moments(sim)
 
 	minimapa._build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo

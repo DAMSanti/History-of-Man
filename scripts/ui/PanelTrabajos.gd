@@ -597,7 +597,7 @@ func _who_goes(body: VBoxContainer, job: Profession.Job) -> void:
 		var line := "   %s — %s" % [
 			Profession.speciality_name(
 				person.current_speciality as Profession.Speciality).to_lower(),
-			ui._person_card_line(person)]
+			ui.barra._person_card_line(person)]
 		ui._text(body, line, person.hurt_days <= 0)
 func show_band() -> void:
 	var body := ui._window("banda", "La banda")

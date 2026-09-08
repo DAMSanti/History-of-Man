@@ -18,7 +18,8 @@ const FACHADAS := {
 	"res://scripts/sim/SettlementSim.gd": ["Caceria", "Cumbres", "Despensa",
 		"Hogar", "Marcha", "Nasas", "Percances", "Pinturas", "Reconocimiento",
 		"Reparto", "Tajo", "Taller", "Trampas"],
-	"res://scripts/ui/GameUI.gd": ["PanelAlmacen", "PanelRastros", "PanelTrabajos"],
+	"res://scripts/ui/GameUI.gd": ["BarraSuperior", "PanelAlmacen", "PanelRastros",
+		"PanelTrabajos"],
 	"res://scripts/mundo/TerrainGenerator.gd": ["MallaDelTerreno"],
 	"res://scripts/DemoMain.gd": ["Minimapa"],
 }

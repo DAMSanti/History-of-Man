@@ -196,10 +196,10 @@ func _init() -> void:
 	# la banda se come lo perecedero antes de que se pudra -no sobra nada-, asi
 	# que la cifra se pone a mano y se mira si la barra la recoge.
 	sim.spoiled_rations_today = 3.7
-	ui._update_band_gauge()
+	ui.barra._update_band_gauge()
 	print("con merma puesta a mano: %s" % ui._band_label.text)
 	sim.spoiled_rations_today = 0.0
-	ui._update_band_gauge()
+	ui.barra._update_band_gauge()
 	print("y sin ella:              %s" % ui._band_label.text)
 
 	print("=== LA BARRA DE ARRIBA ===")
