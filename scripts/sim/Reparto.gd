@@ -225,6 +225,82 @@ func _choose_speciality(person: Inhabitant) -> int:
 ## cuando falta piedra. Es la diferencia entre mirar el almacen y mirar lo que
 ## la banda necesita de verdad, y es lo que evita al tallador trenzando cordel
 ## mientras se acaban las puntas.
+## Hasta donde se considera «la comarca» al medir lo que queda por explorar.
+##
+## Kilometro y medio: lo que una expedicion de dos o tres dias cubre de verdad.
+## Es la escala con la que se compara contra la batida, no un limite de a donde
+## se puede ir. Pendiente de playtest.
+const ALCANCE_DE_EXPEDICION := 1500.0
+
+
+## Que parte de los oficios de la banda tiene donde trabajar, de 0 a 1.
+##
+## Es la necesidad que sirve explorar: se sale a abrir mapa cuando faltan
+## sitios. Con todo cubierto, explorar es un lujo y la banda prefiere acabar de
+## conocer lo que ya tiene -que es lo que hace la batida.
+func _sitios_cubiertos() -> float:
+	var con_sitio := 0
+	for actividad: int in Querencia.OFICIOS:
+		if not sim.barbecho.sin_sitio(actividad as Subsistence.Activity):
+			con_sitio += 1
+	return float(con_sitio) / float(Querencia.OFICIOS.size())
+
+
+const EXPLORAR := [
+	Profession.Speciality.BATIDA,
+	Profession.Speciality.EXPEDICION,
+	Profession.Speciality.ASCENSION,
+]
+
+## Lo que cubre cada salida de explorar, calculado UNA VEZ AL DIA.
+##
+## Las tres cuentas barren el mapa entero -la niebla de la comarca, las cumbres
+## del relieve, lo sabido de cada paraje- y `_speciality_pressure` se llama una
+## vez por persona y por tarea candidata dentro de `apply_priorities`. Sin
+## guardarlas, una jornada tardaba mas que las treinta juntas.
+var _cobertura: Dictionary = {}
+var _cobertura_del_dia: int = -1
+
+
+## Cuanto de hecho esta lo suyo, para cada una de las tres formas de explorar.
+##
+## Ninguna PRODUCE un material, asi que las tres caian en `speciality_outputs`
+## vacio y devolvian 1,0. Empatadas a uno, `apply_priorities` se quedaba con la
+## primera de la lista -la batida- y la banda no salia de expedicion JAMAS.
+##
+## Medido con `HallazgoProbe`, treinta jornadas con dos exploradores: los dos en
+## batida las treinta, sin pasar nunca de 583 m del abrigo. Y como un sitio solo
+## se bautiza donde la banda conoce, no nacia un paraje nuevo desde el primer
+## dia: es la queja del jugador entera.
+func _cobertura_de_explorar(speciality: Profession.Speciality) -> float:
+	if _cobertura_del_dia != sim.day:
+		_cobertura_del_dia = sim.day
+		_cobertura = {
+			# La batida: acabar de conocer lo que ya se ha encontrado.
+			int(Profession.Speciality.BATIDA): sim.parajes.fraccion_sabida(),
+			# La expedicion y la ascension sirven LA MISMA necesidad -abrir
+			# sitio nuevo- por dos caminos, asi que cubren lo mismo: cuantos
+			# oficios de la banda tienen donde trabajar. Se explora cuando
+			# hacen falta sitios, no por deporte.
+			#
+			# Las dos primeras escalas que probe estaban mal, y las dos por lo
+			# mismo -medir el MAPA en vez de la necesidad-: con la niebla del
+			# valle entero la expedicion se queda pegada a cero para siempre y
+			# gana todos los empates el resto de la partida (medido: los dos
+			# exploradores dejaron de batir y en treinta jornadas terminaron
+			# DOS reconocimientos, porque una expedicion dura dias); y con las
+			# cumbres coronadas de veinticinco que hay, la ascension devuelve
+			# cero medio juego y no se hace otra cosa.
+			int(Profession.Speciality.EXPEDICION): _sitios_cubiertos(),
+			# La ascension, ademas, necesita cumbre sin coronar. Sin ella no
+			# hay nada que hacer, y decir que esta «cubierta» es la forma de
+			# no elegirla.
+			int(Profession.Speciality.ASCENSION):
+				_sitios_cubiertos() if sim.cumbres.fraccion_coronada() < 1.0 else 1.0,
+		}
+	return float(_cobertura.get(int(speciality), 1.0))
+
+
 func _speciality_pressure(speciality: Profession.Speciality) -> float:
 	var makes: Array = SettlementSim.SPECIALITY_MAKES.get(speciality, [])
 	if not makes.is_empty():
@@ -247,6 +323,23 @@ func _speciality_pressure(speciality: Profession.Speciality) -> float:
 		var larder: float = sim.food_cap if sim.food_cap > 0.0 else mouths * DIAS_DE_RESERVA
 		return sim.store.food_rations() / maxf(larder, 0.001)
 
+	# --- explorar --------------------------------------------------------
+	#
+	# Las tres de explorar no PRODUCEN un material, asi que caian todas en
+	# `speciality_outputs` vacio y devolvian 1,0 las tres. Empatadas a uno,
+	# `_choose_speciality` se quedaba siempre con la PRIMERA de la lista -la
+	# batida- y la banda no salia de expedicion jamas.
+	#
+	# Medido con `HallazgoProbe`, treinta jornadas con dos exploradores: los
+	# dos en batida las treinta, sin pasar nunca de 583 m del abrigo, y el mapa
+	# del valle sin abrir. Y como un sitio solo se bautiza donde la banda
+	# conoce, no nacia un paraje nuevo desde el primer dia: es la queja del
+	# jugador entera.
+	#
+	# Cada una tiene su cobertura, que es lo que la funcion pide: cuanto de
+	# hecho esta LO SUYO.
+	if EXPLORAR.has(speciality):
+		return _cobertura_de_explorar(speciality)
 	# El HOGAR ya no tiene especialidades -lo hace todo, ver
 	# `Profession.SPECIALITIES`-, asi que aqui no llega ninguna suya. Tenia tres
 	# ramas -yesquero, ahumado, cuidado- y se han ido con ellas.
@@ -618,17 +711,30 @@ func apply_priorities() -> void:
 			# exploracion no se reparte sola... es una decision del
 			# jugador". Si la ha puesto al mismo nivel que otro oficio, gana
 			# ella sin mas vuelta -para eso ha tocado el mando.
-			var explore_candidate := -1
+			# Pero CUAL de las tres salidas de explorar se hace no lo decide
+			# el jugador: eso se elige como todo lo demas, por lo que mas
+			# falte. Aqui se cogia la PRIMERA tarea de exploracion de la lista
+			# -la batida, que va primera en `Profession.SPECIALITIES`- y se
+			# dejaba de mirar, asi que la banda no salia de expedicion JAMAS.
+			#
+			# Medido con `HallazgoProbe`, treinta jornadas con dos
+			# exploradores: los dos en batida las treinta, sin pasar de 583 m
+			# del abrigo. Y como un sitio solo se bautiza donde la banda
+			# conoce, no nacia un paraje nuevo desde el primer dia.
+			#
+			# Lo que se hace es quedarse SOLO con las de explorar -asi sigue
+			# ganando el empate entre oficios- y dejar que el bloque de
+			# siempre elija entre ellas.
+			var solo_explorar: Array[int] = []
 			for task: int in candidates:
 				if Profession.task_job(task) == Profession.Job.EXPLORACION:
-					explore_candidate = task
-					break
+					solo_explorar.append(task)
+			if not solo_explorar.is_empty():
+				candidates = solo_explorar
+				best = candidates[0]
 
-			if explore_candidate >= 0:
-				best = explore_candidate
-			else:
-				# Si no hay exploracion de por medio, gana lo que mas falte,
-				# con dos correcciones.
+			if candidates.size() > 1:
+				# Gana lo que mas falte, con dos correcciones.
 				#
 				# Una: lo que ya se estaba haciendo sale con ventaja -no se
 				# cambia de tajo cada jornada por deportividad-. Antes era

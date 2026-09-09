@@ -113,6 +113,36 @@ func near(activity: Subsistence.Activity, point: Vector3,
 	return best
 
 
+## Si este punto YA ES un paraje de este oficio, devuelve cuál.
+##
+## Es la pregunta de «¿esto es un sitio nuevo o el de siempre?», y la contesta
+## LA FORMA del paraje —ver [Huella]— en vez de un radio fijo de trescientos
+## veinte metros.
+##
+## El radio fijo era el motivo de que no naciera un paraje nuevo NUNCA. Con
+## ocho parajes repartidos en seiscientos metros alrededor del abrigo, un
+## círculo de fusión de 320 m alrededor de cada uno tapaba todo lo que un
+## batidor podía alcanzar: medido con `HallazgoProbe`, treinta jornadas con
+## CERO celdas libres para bautizar, por muy bien que se conociera el monte.
+##
+## Y la forma contesta mejor, además. Es autocorrectora: un avellanar ancho
+## tiene una huella ancha y se traga las celdas de al lado —que son él mismo—,
+## mientras que dos manchas separadas de verdad no se tapan aunque estén a
+## doscientos metros. Un paraje recién nacido, que todavía no tiene forma
+## sacada, cae al disco de su radio; ver [Paraje.contains].
+func cubre(activity: Subsistence.Activity, point: Vector3,
+		same_patch: Callable = Callable()) -> Paraje:
+	for paraje: Paraje in list:
+		if not paraje.serves(activity):
+			continue
+		if not paraje.contains(point):
+			continue
+		if same_patch.is_valid() and not same_patch.call(paraje.position, point):
+			continue
+		return paraje
+	return null
+
+
 ## A qué distancia dos hallazgos son EL MISMO SITIO, aunque sean de oficios
 ## distintos, en metros.
 ##
@@ -244,7 +274,7 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				# vez de bautizar el vecino. Varios avellanares a un tiro de
 				# piedra son un solo avellanar; uno al otro lado del rio,
 				# aunque quede cerca en linea recta, es otro.
-				if near(activity, centre, MERGE_RANGE, same_patch) != null:
+				if cubre(activity, centre, same_patch) != null:
 					continue
 
 				# Y si lo que hay en este punto es un paraje de OTRO oficio,
@@ -359,6 +389,21 @@ func retocar_huellas(field: ResourceField, terrain: TerrainGenerator) -> int:
 		list[_por_retocar].retocar(field, terrain)
 		hechas += 1
 	return hechas
+
+
+## Qué parte de lo ya encontrado se sabe, de 0 a 1.
+##
+## Es la cobertura DE LA BATIDA: su trabajo es acabar de conocer los sitios que
+## la banda ya ha bautizado, así que cuando no queda incógnita, no hace falta.
+## Sin ningún paraje todavía no hay nada que batir y devuelve uno. Ver
+## `Reparto._speciality_pressure`.
+func fraccion_sabida() -> float:
+	if list.is_empty():
+		return 1.0
+	var suma := 0.0
+	for paraje: Paraje in list:
+		suma += paraje.known_fraction()
+	return clampf(suma / float(list.size()), 0.0, 1.0)
 
 
 ## Por debajo de esto una veta se da por agotada. No es cero: el ultimo 4%

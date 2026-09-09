@@ -104,16 +104,41 @@ func _scout_target(person: Inhabitant) -> Vector3:
 const BATIDA_RADIUS := 380.0
 
 
-func _batida_target(person: Inhabitant) -> Vector3:
-	# Lo primero, un paraje a medio investigar. Es lo que de verdad hace una
-	# batida: no descubrir monte nuevo -eso es la expedicion- sino acabar de
-	# conocer lo que ya se ha encontrado. Un avellanar del que solo se sabe
-	# que tiene avellanas es un avellanar a medias.
-	var pending := sim._paraje_to_survey(person)
-	if pending != null:
-		return pending.position
+## Cada cuántas batidas se sale a peinar monte SIN NOMBRE.
+##
+## Una de cada tres, y no es un adorno: sin ella la banda no encuentra un sitio
+## nuevo JAMÁS. Una batida elegía siempre el paraje pendiente más conveniente, y
+## mientras quede uno con incógnitas siempre hay pendiente, así que todo lo que
+## la banda llegaba a conocer caía dentro de un paraje que ya existía —y un
+## sitio sólo se bautiza donde no hay otro a menos de [Parajes.MERGE_RANGE].
+##
+## Medido con `HallazgoProbe`, treinta jornadas: siete parajes el día uno, ocho
+## el día seis, y ni uno más. Cero celdas libres para bautizar en todo el mes.
+##
+## Una de cada tres deja la batida siendo lo que es —trabajar a fondo lo ya
+## encontrado— sin cerrar la puerta a lo siguiente. Pendiente de playtest.
+const UNA_DE_CADA := 3
 
-	# Y si no queda ninguno, se peina el entorno buscando sim.parajes nuevos
+## Cuántas batidas lleva cada cual. Por persona, para que dos batidores no
+## salgan el mismo día a lo mismo.
+var _batidas: Dictionary = {}
+
+
+func _batida_target(person: Inhabitant) -> Vector3:
+	var cuantas := int(_batidas.get(person.id, 0))
+	_batidas[person.id] = cuantas + 1
+
+	# Una de cada tres, a monte sin nombre. Ver [UNA_DE_CADA].
+	if cuantas % UNA_DE_CADA != UNA_DE_CADA - 1:
+		# Lo normal: un paraje a medio investigar. Es lo que de verdad hace una
+		# batida: no descubrir monte nuevo -eso es la expedicion- sino acabar
+		# de conocer lo que ya se ha encontrado. Un avellanar del que solo se
+		# sabe que tiene avellanas es un avellanar a medias.
+		var pending := sim._paraje_to_survey(person)
+		if pending != null:
+			return pending.position
+
+	# Se peina el entorno buscando sitios nuevos.
 	return _least_known_around(sim.home_position, BATIDA_RADIUS * 0.35,
 		BATIDA_RADIUS, person)
 
@@ -457,6 +482,20 @@ func _survey(person: Inhabitant, hours: float) -> void:
 		_finish_survey(person)
 
 
+## A qué nivel deja una jornada de reconocimiento lo que ha batido.
+##
+## Se pone para que EL BORDE de lo batido caiga justo en el listón de bautizar
+## —[Parajes.NAMED_AT]— y el centro quede por encima. No es un número suelto:
+## es la traducción de «una jornada reconociendo deja el sitio conocido».
+##
+## Con el listón a secas —0,32— no servía de nada, y ése fue mi propio error al
+## repartir lo aprendido por el área: la caída hasta el borde
+## ([BandKnowledge.SE_APRENDE_MENOS_LEJOS], 0,55) dejaba el filo en 0,176, o sea
+## por debajo del umbral, y sólo pasaban las celdillas a menos de treinta y seis
+## metros del punto. Una. Exactamente lo que había antes de repartir nada.
+const LO_QUE_DEJA_UNA_JORNADA := BandKnowledge.KNOWN_ENOUGH 	/ BandKnowledge.SE_APRENDE_MENOS_LEJOS + 0.02
+
+
 ## Se acabo el sim.reconocimiento: se cuenta lo visto y se vuelve.
 ## Cuantos materiales como mucho se resuelven en una sola visita, por buena
 ## que sea la destreza. Sin tope, un batidor muy bueno vaciaba un paraje
@@ -498,6 +537,38 @@ func _finish_survey(person: Inhabitant) -> void:
 	# BATIDA: la expedicion no vuelve a un paraje a resolver lo que le
 	# falta, eso es justo lo que distingue a las dos.
 	var here := sim._paraje_at(person.work_centre)
+
+	# APRENDER EL TERRENO SE HACE SIEMPRE, se esté sobre un paraje o no.
+	#
+	# Estaba metido en un `elif here == null`, o sea que sólo se aprendía monte
+	# cuando la jornada caía FUERA de un sitio con nombre. Y como una batida
+	# elige siempre un paraje a medio investigar —[SettlementSim._paraje_to_survey]
+	# devuelve uno mientras quede alguno con incógnitas—, esa rama no corría
+	# casi nunca y la banda no aprendía el valle.
+	#
+	# Son dos cosas distintas y ninguna es el «si no» de la otra: una jornada
+	# reconociendo RESUELVE una incógnita del sitio, si está en uno, y ADEMÁS
+	# enseña la vuelta entera, que es lo que se ve desde allí.
+	#
+	# Lo que sigue distinguiendo al explorador es el ALCANCE de lo que aprende:
+	# él abre el sitio para todos los oficios —para eso bate la comarca— y los
+	# demás sólo para el suyo. Ver `_activities_for_learning`.
+	if sim.knowledge:
+		# Primero la niebla: no se puede APRENDER lo que no se ha visto -de eso
+		# se encarga [BandKnowledge.reveal_around]-, y terminar una jornada
+		# batiendo un circulo es haberlo visto entero. Se hacia solo por el
+		# camino, tick a tick, asi que dependia de por donde hubieran pasado
+		# los pasos en vez de por donde se ha batido.
+		sim.knowledge.see_from(person.work_centre, SettlementSim.SURVEY_RADIUS)
+		# TODO LO BATIDO, no la celda que se pisa. Ver
+		# [BandKnowledge.reveal_around]: una jornada reconociendo un círculo de
+		# doscientos sesenta metros revelaba un cuadrado de sesenta y cuatro, y
+		# el valle se quedaba en blanco para siempre.
+		for activity: int in sim._activities_for_learning(person):
+			sim.knowledge.reveal_around(activity as Subsistence.Activity,
+				person.work_centre, SettlementSim.SURVEY_RADIUS,
+				LO_QUE_DEJA_UNA_JORNADA)
+
 	var discovered: Array[String] = []
 	if here != null and here.has_unknowns():
 		var reveals := 1
@@ -514,30 +585,11 @@ func _finish_survey(person: Inhabitant) -> void:
 					BATIDA_MATERIAL_CEILING)
 				if sim._rng.randf() < person.skill_in(batida_task) * CHAIN_REVEAL_FACTOR:
 					reveals += 1
-	elif here == null:
-		# Monte sin nombre. RECONOCER ES DESCUBRIR, y lo es para cualquiera.
-		#
-		# Esto sólo lo hacía la exploración, y el efecto era que un recolector
-		# podía pasarse la vida trabajando un avellanar sin que el sitio llegara
-		# a tener nombre nunca: la banda tenía que mandar aparte a un explorador
-		# a "descubrir" un sitio en el que ya estaba trabajando. Ahora una
-		# jornada entera batiendo un sitio nuevo basta para saber qué hay allí,
-		# lo mismo que ya valía para el batidor.
-		#
-		# Lo que sigue distinguiendo al explorador es el ALCANCE de lo que
-		# aprende: él abre el sitio para todos los oficios -para eso bate la
-		# comarca entera- y los demás sólo para el suyo. Ver
-		# `_activities_for_learning`.
-		if sim.knowledge:
-			for activity: int in sim._activities_for_learning(person):
-				sim.knowledge.reveal(activity as Subsistence.Activity,
-					person.work_centre, BandKnowledge.KNOWN_ENOUGH + 0.02)
-
-		# El hito de exploración sí es sólo suyo: `_credit_new_ground` premia
-		# destreza DE EXPLORACIÓN, y dársela a un recolector por recoger sería
-		# pagarle dos veces por la misma jornada.
-		if is_batida or opens_ground:
-			sim._new_ground_surveys_today.append({"person": person,
+	# Y el hito de abrir MONTE NUEVO sigue siendo sólo del explorador:
+	# `_credit_new_ground` premia destreza DE EXPLORACIÓN, y dársela a un
+	# recolector por recoger sería pagarle dos veces por la misma jornada.
+	if here == null and (is_batida or opens_ground):
+		sim._new_ground_surveys_today.append({"person": person,
 				"position": person.work_centre, "speciality": speciality})
 
 	# Que contar. Encontrar algo en un paraje manda siempre sobre el repaso

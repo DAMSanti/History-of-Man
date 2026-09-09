@@ -1427,3 +1427,67 @@ func test_batir_un_paraje_no_se_sale_de_el() -> void:
 		assert_lt(batidor.forage_target.distance_to(paraje.position),
 			paraje.extent + 1.0,
 			"la vuelta de la batida se queda dentro del paraje")
+
+
+## Una jornada de reconocimiento enseña TODO LO BATIDO, no la celda que se pisa.
+##
+## Es el fallo que dejaba el valle en blanco para siempre. Las celdas de
+## conocimiento miden sesenta y cuatro metros y se revelaba UNA —la de debajo de
+## los pies— tras batir un círculo de doscientos sesenta de radio. Medido con
+## `HallazgoProbe`, treinta jornadas con dos exploradores: la banda conocía
+## VEINTISÉIS celdas de cuatro mil noventa y seis.
+func test_reconocer_ensena_toda_la_vuelta_y_no_una_celda() -> void:
+	var sim := _sim_on_fake()
+	sim.knowledge = BandKnowledge.new()
+	sim.knowledge.setup(64, 64, Vector2(2048.0, 2048.0))
+
+	var person := Inhabitant.create(0, sim.home_position, sim._rng)
+	person.job = Profession.Job.EXPLORACION
+	person.current_speciality = Profession.Speciality.BATIDA
+	person.position = Vector3(700.0, 200.0, 700.0)
+	person.work_centre = person.position
+	person.forage_target = person.position
+
+	sim.reconocimiento._finish_survey(person)
+
+	# El centro y un punto a media vuelta, los dos por encima del umbral de
+	# bautizar: si sólo pasara el centro, no se puede descubrir nada nuevo.
+	var medio := person.work_centre + Vector3(SettlementSim.SURVEY_RADIUS * 0.5, 0.0, 0.0)
+	assert_gt(sim.knowledge.familiarity_at(Subsistence.Activity.RECOLECCION, medio),
+		BandKnowledge.KNOWN_ENOUGH,
+		"a media vuelta del punto tambien se ha aprendido")
+
+	# Y fuera de lo batido, nada: reconocer no es adivinar.
+	var fuera := person.work_centre + Vector3(SettlementSim.SURVEY_RADIUS * 2.0, 0.0, 0.0)
+	assert_eq(sim.knowledge.familiarity_at(Subsistence.Activity.RECOLECCION, fuera), 0.0,
+		"mas alla de lo batido no se aprende nada")
+
+
+## Y las tres formas de explorar compiten por lo que cubren, no por el orden
+## en que estan escritas.
+##
+## `speciality_outputs` devuelve vacio para las tres, asi que las tres daban
+## presion 1,0 y `apply_priorities` se quedaba con la primera de la lista -la
+## batida-: la banda no salia de expedicion JAMAS. Medido con `HallazgoProbe`,
+## treinta jornadas con dos exploradores, los dos en batida las treinta.
+func test_las_tres_formas_de_explorar_no_empatan_a_uno() -> void:
+	var sim := _sim_on_fake()
+	sim.knowledge = BandKnowledge.new()
+	sim.knowledge.setup(64, 64, Vector2(2048.0, 2048.0))
+
+	# Un paraje con todo por saber: es lo que le da trabajo a la batida.
+	_paraje_con_incognitas(sim, 4)
+
+	var batida := sim.reparto._speciality_pressure(Profession.Speciality.BATIDA)
+	assert_lt(batida, 1.0,
+		"la batida tiene cobertura propia: lo que se sabe de los parajes")
+
+	# Y en cuanto se sabe todo de ese paraje, la batida deja de hacer falta.
+	# La cuenta se guarda por jornada -barre el mapa entero, ver
+	# [Reparto._cobertura_de_explorar]- asi que hay que pasar de dia.
+	var paraje: Paraje = sim.parajes.list[0]
+	for kind: int in paraje.contents:
+		(paraje.contents[kind] as Dictionary)["sabido"] = true
+	sim.day += 1
+	assert_eq(sim.reparto._speciality_pressure(Profession.Speciality.BATIDA), 1.0,
+		"sin incognitas que resolver, batir esta cubierto")

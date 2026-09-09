@@ -303,6 +303,22 @@ func peaks() -> Array[Dictionary]:
 	return _find_peaks()
 
 
+## Qué parte de las cumbres al alcance se ha coronado ya, de 0 a 1.
+##
+## Es la cobertura DE LA ASCENSIÓN, y sin ella devolvía cero fijo mientras
+## quedara una sola cumbre: o sea que ganaba todos los empates de exploración y
+## nadie hacía otra cosa. Ver `Reparto._speciality_pressure`.
+func fraccion_coronada() -> float:
+	var todas := _find_peaks()
+	if todas.is_empty():
+		return 1.0
+	var hechas := 0
+	for peak: Dictionary in todas:
+		if _already_climbed(peak["pos"] as Vector3):
+			hechas += 1
+	return clampf(float(hechas) / float(todas.size()), 0.0, 1.0)
+
+
 ## Quién de la banda se atreve con esta cumbre, o null si nadie.
 ##
 ## Se mira la pericia de ASCENSION de cada cual contra la dureza del pico

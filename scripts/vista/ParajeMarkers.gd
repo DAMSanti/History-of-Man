@@ -54,19 +54,25 @@ func setup(camera: Camera3D, sim: SettlementSim = null,
 ## Rehace los marcadores a partir del registro. Se llama de tarde en tarde:
 ## los parajes se bautizan una vez por jornada, no por fotograma.
 ##
-## Un marcador por SITIO, no por paraje: varios oficios pueden coincidir en
-## el mismo trozo de monte -un cotarro con caza, avellanas y buena piedra a
-## la vez-, y antes salían tres chapas superpuestas en el mismo punto. Se
-## agrupan por cercanía -y por estar en el mismo lado de un río o cantil,
-## si se da `same_patch`- y solo el primero de cada grupo pone chapa; los
-## demás se leen en su ficha, que los junta -ver `GameUI._paraje_group`.
-func refresh(parajes: Parajes, terrain: TerrainGenerator,
-		same_patch: Callable = Callable()) -> void:
+## ## Un alfiler por paraje, sin agrupar
+##
+## Aquí se volvían a fusionar los parajes por cercanía —320 m,
+## [Parajes.MERGE_RANGE]— y SIN MIRAR EL OFICIO, así que una pesquera
+## desaparecía debajo de un cantizal por estar a doscientos metros. Medido con
+## `HallazgoProbe`: ocho parajes en el registro y CUATRO alfileres pintados,
+## que es exactamente lo que veía el jugador —«no son visibles con sus
+## markers»—.
+##
+## Y sobraba, además. El caso que la agrupación quería resolver —un cotarro con
+## caza, avellanas y buena piedra a la vez— ya no llega hasta aquí: cuando
+## varios oficios caen en el mismo trozo de monte se juntan AL BAUTIZAR, en un
+## solo paraje con varias actividades (ver [Parajes.near] y `activity_fits`,
+## que sí miran el oficio y el lado del río). Lo que llega aquí como dos
+## parajes distintos es que de verdad son dos sitios, y los dos tienen que
+## verse.
+func refresh(parajes: Parajes, terrain: TerrainGenerator) -> void:
 	var seen := {}
-
 	for paraje: Paraje in parajes.list:
-		if _grouped_under(paraje, parajes.list, same_patch) != paraje:
-			continue
 		seen[paraje.id()] = true
 		if _markers.has(paraje.id()):
 			_paint(_markers[paraje.id()], paraje)
@@ -169,22 +175,6 @@ func pick_peak(peaks: Array, origin: Vector3, direction: Vector3) -> Dictionary:
 			best = peak
 
 	return best
-
-
-## A qué paraje "representa" -pone chapa por- uno dado: el primero de la
-## lista, en orden de creación, entre él y todos los que están en su mismo
-## sitio. Determinista por orden de lista, así que dos parajes del mismo
-## grupo siempre eligen al mismo representante sin tener que acordarlo.
-func _grouped_under(paraje: Paraje, list: Array[Paraje], same_patch: Callable) -> Paraje:
-	for other: Paraje in list:
-		if other == paraje:
-			return paraje
-		if other.position.distance_to(paraje.position) > Parajes.MERGE_RANGE:
-			continue
-		if same_patch.is_valid() and not same_patch.call(other.position, paraje.position):
-			continue
-		return other
-	return paraje
 
 
 ## A que distancia de camara el marcador tiene su tamano natural, en metros.

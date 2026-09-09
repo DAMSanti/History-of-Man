@@ -866,9 +866,7 @@ func _on_day_passed(_day: int) -> void:
 	# Los parajes se bautizan al cerrar la jornada: es el momento de poner o
 	# quitar sus chapas
 	if paraje_markers and sim:
-		var grid := sim.marcha._navgrid()
-		paraje_markers.refresh(sim.parajes, terrain,
-			func(a: Vector3, b: Vector3) -> bool: return grid.connected(a, b))
+		paraje_markers.refresh(sim.parajes, terrain)
 		paraje_markers.refresh_peaks(sim.cumbres.peaks(), terrain)
 	if trap_markers and sim:
 		trap_markers.refresh(sim.trampas.traps, terrain)

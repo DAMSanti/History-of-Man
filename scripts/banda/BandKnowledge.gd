@@ -220,6 +220,113 @@ func reveal(activity: Subsistence.Activity, world_position: Vector3, level: floa
 	familiarity[activity] = grid
 
 
+## Qué parte del valle se lleva vista, de 0 a 1.
+##
+## La niebla, no la familiaridad: es «cuánto mapa hay abierto», que es lo que
+## mide si a la banda le queda comarca por reconocer. Lo usa [Reparto] para
+## decidir si hace falta salir de expedición. Ver `_speciality_pressure`.
+func explored_fraction() -> float:
+	if explored.is_empty():
+		return 1.0
+	var suma := 0.0
+	for value: float in explored:
+		suma += value
+	return clampf(suma / float(explored.size()), 0.0, 1.0)
+
+
+## Lo mismo, pero sólo en la vuelta que de verdad se pisa.
+##
+## La media del mapa entero incluye rincones a los que la banda no va a ir
+## nunca, así que se queda pegada a cero para siempre. Medida en un radio, dice
+## lo que se quiere saber: si a esta banda le queda comarca que reconocer.
+func explored_fraction_near(centre: Vector3, radius: float) -> float:
+	if explored.is_empty() or width <= 0 or height <= 0:
+		return 1.0
+	var cell_w := world_size.x / float(width)
+	var cell_h := world_size.y / float(height)
+	var suma := 0.0
+	var cuantas := 0
+	for z in range(height):
+		for x in range(width):
+			var punto := Vector2((float(x) + 0.5) * cell_w,
+				(float(z) + 0.5) * cell_h)
+			if punto.distance_to(Vector2(centre.x, centre.z)) > radius:
+				continue
+			suma += explored[z * width + x]
+			cuantas += 1
+	if cuantas <= 0:
+		return 1.0
+	return clampf(suma / float(cuantas), 0.0, 1.0)
+
+
+## Cuánto se aprende del borde de lo batido, respecto al centro.
+##
+## Poco más de la mitad. Reconocer un trozo de monte no es conocerlo por igual:
+## por el medio se pasa y se rebusca, y el borde se ve de lejos. Con esto, sólo
+## la mitad interior de lo batido llega al listón de bautizar un sitio
+## —[Parajes.NAMED_AT]—, y la orla queda en «visto», que es lo que de verdad
+## pasa. Pendiente de playtest.
+const SE_APRENDE_MENOS_LEJOS := 0.55
+
+
+## Revela TODO lo batido, no la celda que se pisa. Devuelve cuántas se tocaron.
+##
+## Es el fallo que dejaba el valle en blanco para siempre. [reveal] y [observe]
+## tocan UNA celda —la de debajo de los pies— y las celdas de conocimiento miden
+## sesenta y cuatro metros, así que una jornada entera batiendo un círculo de
+## doscientos sesenta de radio revelaba un cuadrado de sesenta y cuatro.
+##
+## Medido con `HallazgoProbe`, treinta jornadas con dos exploradores: la banda
+## conocía VEINTISÉIS celdas de cuatro mil noventa y seis, con la familiaridad
+## media del valle en 0,004. Y como sólo se puede bautizar un sitio donde se
+## conoce, no nacía ni un paraje nuevo después del primer día: las pocas celdas
+## sabidas caían todas dentro de un paraje que ya existía.
+##
+## Un valle no se aprende pisando cada cuadrado: se aprende MIRÁNDOLO. Se sube
+## al alto de al lado, se baja al arroyo, y al final de la tarde se sabe dónde
+## hay avellanos en toda la vuelta. Es lo mismo que ya hacía
+## [Cumbres._reveal_from_summit] desde una cima, con menos alcance.
+##
+## Sólo lo que se ha VISTO: la niebla manda, y lo que no se ha llegado a ver no
+## se aprende por mucho que se pase cerca.
+func reveal_around(activity: Subsistence.Activity, centre: Vector3,
+		radius: float, level: float) -> int:
+	if not familiarity.has(activity) or width <= 0 or height <= 0:
+		return 0
+	var cell_w := world_size.x / float(width)
+	var cell_h := world_size.y / float(height)
+	var reach_x := int(ceil(radius / maxf(cell_w, 0.001)))
+	var reach_z := int(ceil(radius / maxf(cell_h, 0.001)))
+	var cx := clampi(int(centre.x / world_size.x * float(width)), 0, width - 1)
+	var cz := clampi(int(centre.z / world_size.y * float(height)), 0, height - 1)
+
+	var grid: PackedFloat32Array = familiarity[activity]
+	var tocadas := 0
+	for dz in range(-reach_z, reach_z + 1):
+		var z := cz + dz
+		if z < 0 or z >= height:
+			continue
+		for dx in range(-reach_x, reach_x + 1):
+			var x := cx + dx
+			if x < 0 or x >= width:
+				continue
+			var punto := Vector3((float(x) + 0.5) * cell_w, 0.0,
+				(float(z) + 0.5) * cell_h)
+			var lejos := Vector2(punto.x - centre.x, punto.z - centre.z).length()
+			if lejos > radius:
+				continue
+			if explored_at(punto) <= 0.0:
+				continue
+			var cuanto := level * lerpf(1.0, SE_APRENDE_MENOS_LEJOS,
+				clampf(lejos / maxf(radius, 1.0), 0.0, 1.0))
+			var i := z * width + x
+			if cuanto > grid[i]:
+				grid[i] = clampf(cuanto, 0.0, 1.0)
+			tocadas += 1
+	familiarity[activity] = grid
+	return tocadas
+
+
 ## Anota que la banda ya ha vivido esa temporada para esa actividad.
 func record_season(activity: Subsistence.Activity, season: Subsistence.Season) -> void:
 	if not seasons_seen.has(activity):

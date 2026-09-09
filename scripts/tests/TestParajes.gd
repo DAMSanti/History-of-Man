@@ -503,7 +503,15 @@ func test_un_paraje_fundido_sale_en_la_lista_de_cada_oficio() -> void:
 
 # --- un marcador por sitio, no por paraje ----------------------------------
 
-func test_un_marcador_por_grupo() -> void:
+## Cada paraje del registro pone SU alfiler, esten cerca o lejos.
+##
+## Antes se agrupaban al pintar por cercania -320 m- y sin mirar el oficio, asi
+## que una pesquera desaparecia debajo de un cantizal por estar a doscientos
+## metros. Medido con `HallazgoProbe`: ocho parajes y CUATRO alfileres, que es
+## lo que el jugador veia. Lo que llega aqui como dos parajes distintos es que
+## de verdad son dos sitios -si fueran el mismo se habrian juntado al bautizar,
+## ver [Parajes.cubre]- y los dos tienen que verse.
+func test_cada_paraje_pone_su_alfiler() -> void:
 	var markers := ParajeMarkers.new()
 	var registro := Parajes.new()
 	var uno := _paraje(3, 4, Materia.Kind.FRUTO_SECO, Subsistence.Activity.RECOLECCION)
@@ -518,8 +526,8 @@ func test_un_marcador_por_grupo() -> void:
 	for paraje: Paraje in registro.list:
 		if markers._markers.has(paraje.id()):
 			con_chapa += 1
-	assert_eq(con_chapa, 1,
-		"dos parajes en el mismo sitio comparten una sola chapa")
+	assert_eq(con_chapa, 2,
+		"dos sitios distintos, dos chapas, aunque esten cerca")
 	markers.free()
 
 
