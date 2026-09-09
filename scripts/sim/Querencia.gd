@@ -62,7 +62,12 @@ const SABIDO := 0.62
 ## Uno de cada, y de las cuatro que dan de comer o de trabajar. Con uno basta
 ## para que la banda empiece a trabajar el primer día; el segundo y el tercero
 ## hay que encontrarlos.
-const DE_CADA := 1
+## Cuanto se conoce alrededor del sitio elegido, en metros.
+##
+## Ciento veinte: la mancha de un paraje, no la comarca. Lo que se conoce de
+## acampar aqui una semana es DONDE ESTAN LAS COSAS, no todo lo que hay entre
+## medias.
+const MANCHA := 120.0
 
 const OFICIOS := [
 	Subsistence.Activity.RECOLECCION,
@@ -80,26 +85,40 @@ func _init(settlement: SettlementSim) -> void:
 
 ## Siembra lo que la banda ya sabe. Se llama UNA vez, al fundar.
 ##
-## Devuelve cuántos parajes salieron, que no tienen por qué ser cuatro: si en
-## esos doscientos ochenta metros no hay río, no hay paraje de pesca, y está
-## bien que no lo haya. Lo que se siembra es el conocimiento del terreno, no el
-## terreno.
+## UNO DE CADA OFICIO, no todo lo que haya. La primera version revelaba el
+## terreno entero del radio y dejaba que [Parajes.refresh] bautizara lo que
+## pasara del umbral: salian NUEVE parajes y LOS NUEVE DE RECOLECCION, porque
+## es la actividad que mas celdas tiene por encima del listón. La banda
+## empezaba sin saber donde pescar ni donde cazar, que es justo lo que habia
+## que arreglar.
+##
+## Ahora se busca EL MEJOR SITIO DE CADA OFICIO dentro del radio y se conoce
+## solo su entorno. El resto del valle sigue en blanco y se gana explorando.
 func asentarse() -> int:
 	if sim.field == null or sim.knowledge == null or sim.parajes == null:
 		return 0
 
-	# Primero el TERRENO: la vuelta al abrigo, actividad por actividad. Es lo
-	# que hace que `Tajo._rank_known_spots` -que sólo ofrece celdas con
-	# familiaridad por encima de 0,35- tenga algo que ofrecer el primer día.
 	for actividad: int in OFICIOS:
 		var act := actividad as Subsistence.Activity
-		for celda: Vector2i in sim.field.cells_within(sim.home_position, RADIO):
+		# Se busca en la vuelta corta y, SI NO HAY NADA, se ensancha.
+		#
+		# Hace falta y no es un capricho: medido en el sitio 56, el rio queda a
+		# 290 m del abrigo y el radio era 280, asi que la banda se asentaba
+		# junto a un rio SIN SABER DONDE ESTABA EL AGUA. Lo primero que
+		# reconoce cualquiera que acampa es donde beber y donde pescar, y si
+		# esta un poco mas lejos se anda un poco mas.
+		var donde := _el_mejor(act, RADIO)
+		if donde == Vector3.ZERO:
+			donde = _el_mejor(act, RADIO * 2.0)
+		if donde == Vector3.ZERO:
+			continue
+		# Solo su entorno, no el radio entero: lo que se conoce es UN SITIO,
+		# no la comarca.
+		for celda: Vector2i in sim.field.cells_within(donde, MANCHA):
 			var centre := sim.field.cell_center(celda.x, celda.y)
 			if sim.field.abundance_cell(act, celda.x, celda.y) <= 0.0:
 				continue
-			# Menos cuanto más lejos: lo de la puerta se conoce mejor que lo
-			# del filo del radio, que es como se conoce un sitio de verdad.
-			var lejos := sim.home_position.distance_to(centre) / RADIO
+			var lejos := donde.distance_to(centre) / MANCHA
 			sim.knowledge.reveal(act, centre,
 				SABIDO * lerpf(1.0, 0.75, clampf(lejos, 0.0, 1.0)))
 
@@ -121,3 +140,37 @@ func asentarse() -> int:
 				% salieron
 			+ "sitios con nombre: lo que se ve desde la boca de la cueva.", 2)
 	return salieron
+
+
+## El mejor sitio de un oficio dentro del radio, o cero si no hay ninguno.
+##
+## Se pide ADEMAS que se pueda llegar: un avellanar al otro lado del rio no es
+## un sitio que la banda «conozca de acampar aqui», es un sitio que ve.
+func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
+	var mejor := Vector3.ZERO
+	var mejor_nota := 0.0
+	var grid := sim.marcha._navgrid()
+	for celda: Vector2i in sim.field.cells_within(sim.home_position, hasta):
+		var centre := sim.field.cell_center(celda.x, celda.y)
+		var hay := sim.field.abundance_cell(act, celda.x, celda.y)
+		# EL MISMO LISTON QUE BAUTIZA, no el de «aqui hay algo».
+		#
+		# `threshold_for` da 0,08 para la pesca y `refresh` pide ademas
+		# [Parajes.WORTH_NAMING] -0,18-, asi que elegir por el primero podia
+		# quedarse con un hilo de agua a doscientos metros que luego no daba
+		# paraje: la banda acababa sin sitio de pesca teniendo un remanso al
+		# 0,98 a quinientos metros. Medido en el sitio 56.
+		if hay <= maxf(Parajes.WORTH_NAMING, sim.parajes.threshold_for(act)):
+			continue
+		if grid != null and grid.is_ready() 				and not grid.connected(sim.home_position, centre):
+			continue
+		# Lo que hay, contra lo que cuesta llegar. Cerca y bueno gana a lejos y
+		# mejor: es la vuelta al abrigo, no una expedicion.
+		var lejos := sim.home_position.distance_to(centre)
+		var nota := hay * (1.0 - clampf(lejos / hasta, 0.0, 1.0) * 0.5)
+		if nota > mejor_nota:
+			mejor_nota = nota
+			if sim._terrain:
+				centre.y = sim._terrain.get_height_at(centre)
+			mejor = centre
+	return mejor

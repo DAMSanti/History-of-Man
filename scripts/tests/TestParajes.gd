@@ -1237,3 +1237,41 @@ func test_el_tanteo_no_manda_a_cruzar_el_valle() -> void:
 	assert_lt(Tanteo.VUELTA, 400.0, "la vuelta de tanteo es corta")
 	assert_lt(Barbecho.BUSCAR_HASTA, 400.0,
 		"y buscar sitio nuevo tampoco cruza el valle")
+
+
+# ------------------------------------ cada paraje, de lo suyo y en su medio --
+
+func test_un_paraje_de_agua_no_se_funde_en_uno_de_tierra() -> void:
+	# LA QUEJA: «los parajes de pesca tambien abarcan parte de tierra, o
+	# parajes de recoleccion cruzan el rio».
+	#
+	# Salia de la fusion: un sitio con caza, raiz y cuerna caida es UN sitio
+	# donde se hacen tres cosas -y eso esta bien-, pero la regla no miraba el
+	# MEDIO, asi que el remanso del rio se sumaba como oficio del avellanar de
+	# la orilla si quedaba a menos de ciento cincuenta metros.
+	assert_false(Parajes.activity_fits(Subsistence.Activity.PESCA, 0.0),
+		"en tierra seca no se pesca, asi que no se le suma la pesca")
+	assert_false(Parajes.activity_fits(Subsistence.Activity.RECOLECCION, 0.76),
+		"y en el cauce no se recolecta")
+
+
+func test_la_tierra_de_un_paraje_de_recoleccion_es_seca() -> void:
+	# Estuvo admitiendo hasta el limite de VADEAR -0,35- y eso deja bautizar
+	# avellanares con el agua por el tobillo: un sitio que se puede CRUZAR no
+	# es un sitio donde CRECE algo.
+	assert_true(Parajes.activity_fits(Subsistence.Activity.RECOLECCION,
+		Parajes.SUELO_SECO), "hasta el limite de suelo seco, si")
+	assert_false(Parajes.activity_fits(Subsistence.Activity.RECOLECCION,
+		Parajes.SUELO_SECO + 0.05), "pasado de ahi, no")
+
+
+func test_el_nombre_de_un_paraje_es_de_su_oficio() -> void:
+	# Salia «El raizal de la vega - Caza»: bautizado por la caza y llamado por
+	# la raiz, porque el nombre lo ponia lo que mas abundara fuera de la
+	# actividad que fuera. El jugador lee una cosa y manda alli a otra.
+	assert_eq(Parajes.material_que_da_nombre(Subsistence.Activity.CAZA),
+		int(Materia.Kind.CARNE), "un sitio de caza se llama por la caza")
+	assert_eq(Parajes.material_que_da_nombre(Subsistence.Activity.PESCA),
+		int(Materia.Kind.PESCADO), "y uno de pesca por el pescado")
+	assert_eq(Parajes.material_que_da_nombre(Subsistence.Activity.MATERIA_PRIMA),
+		int(Materia.Kind.PIEDRA), "y una cantera por la piedra")

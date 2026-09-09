@@ -261,10 +261,27 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 					terrain.crossing_difficulty_at(centre)):
 					continue
 
+				# Y NO SE MEZCLAN MEDIOS.
+				#
+				# Un sitio con caza, raiz y cuerna caida es UN sitio donde se
+				# hacen tres cosas, y por eso se suma el oficio al que ya
+				# estaba en vez de abrir otro. Pero eso vale entre oficios DE
+				# TIERRA: el remanso del rio y el avellanar de la orilla no son
+				# el mismo sitio aunque queden a cien metros, y fundirlos daba
+				# justo lo que se veia en la partida -un paraje de pesca que
+				# abarca tierra, o un avellanar que cruza el rio-.
+				#
+				# El criterio es el suelo del anfitrion: si la actividad nueva
+				# no se puede hacer donde el esta, no es su sitio. Ver
+				# [activity_fits].
 				var host := at_site(centre, same_patch)
-				if host != null:
+				if host != null and activity_fits(activity, host.ford):
 					host.add_activity(activity)
 					continue
+				if host != null:
+					# Hay un paraje al lado pero es de otro medio. Se abre uno
+					# nuevo, que es lo correcto: son dos sitios distintos.
+					pass
 
 				if terrain:
 					centre.y = terrain.get_height_at(centre)
@@ -383,6 +400,15 @@ func prune_exhausted(field: ResourceField) -> Array[Dictionary]:
 		# agotado sobrevivia como «el leñero del alto»: un sitio nuevo con
 		# nombre nuevo que no le importa a nadie, justo donde el jugador
 		# tenia que notar una perdida.
+		# EL OFICIO PRINCIPAL PASA AL QUE SOBREVIVE, y ANTES de renombrar.
+		#
+		# Sin esto, el cantizal agotado que ademas era pasto seguia teniendo
+		# `activity` en materia prima mientras se le buscaba nombre nuevo, y
+		# desde que el nombre sale del oficio -«un sitio de caza se llama por
+		# la caza»- se quedaba con el nombre de lo que acababa de agotarse.
+		if not paraje.activities.is_empty():
+			paraje.activity = paraje.activities[0] as Subsistence.Activity
+
 		var richest := _richest_named(paraje, true)
 		if richest < 0:
 			var orphan := list.find(paraje)
@@ -423,10 +449,50 @@ static func threshold_for(activity: Subsistence.Activity) -> float:
 ## para decidir si al paraje le queda ALGO que lo nombre, donde «un poco de
 ## leña» no es respuesta.
 static func _richest_named(paraje: Paraje, sin_relleno: bool = false) -> int:
+	# DOS VUELTAS: primero lo que es DE SU OFICIO y, si no hay nada, lo que
+	# haya.
+	#
+	# El nombre salia de lo que mas abundara, fuera de la actividad que fuera, y
+	# de ahi «El raizal de la vega - Caza»: un sitio bautizado por la caza y
+	# llamado por la raiz. Un paraje de caza es un sitio DONDE SE CAZA y se
+	# tiene que llamar como lo que se caza; que ademas tenga raiz se ve en su
+	# ficha, que para eso esta.
+	var suyo := _mas_abundante(paraje, sin_relleno, true)
+	if suyo >= 0:
+		return suyo
+	# Y si de lo suyo todavia no se sabe nada -un cotarro recien encontrado
+	# tiene la caza por descubrir-, se llama POR SU OFICIO igual. Un sitio de
+	# caza es «el pasto» aunque no se sepa todavia que anda por el; lo que no
+	# puede es llamarse «el raizal», porque entonces el jugador lee una cosa y
+	# manda alli a otra.
+	return material_que_da_nombre(paraje.activity)
+
+
+## El material con el que se bautiza un oficio cuando no hay nada mejor.
+##
+## Es el material CARACTERISTICO de la actividad, no el mas abundante del sitio.
+## Ver [Paraje.APODOS], que es quien lo convierte en nombre.
+static func material_que_da_nombre(activity: Subsistence.Activity) -> int:
+	match activity:
+		Subsistence.Activity.CAZA: return Materia.Kind.CARNE
+		Subsistence.Activity.PESCA: return Materia.Kind.PESCADO
+		Subsistence.Activity.MARISQUEO: return Materia.Kind.MARISCO
+		Subsistence.Activity.MATERIA_PRIMA: return Materia.Kind.PIEDRA
+		_:
+			# La recoleccion cambia de cara con el año: en otoño un avellanar y
+			# en invierno un raizal. Ver [RECOLECCION_NAMING_BY_SEASON].
+			return int(RECOLECCION_NAMING_BY_SEASON.get(
+				GameState.season, Materia.Kind.RAIZ))
+
+
+static func _mas_abundante(paraje: Paraje, sin_relleno: bool,
+		solo_del_oficio: bool) -> int:
 	var best := -1
 	var best_amount := -1.0
 	for kind_key: int in paraje.contents:
 		if not Paraje.APODOS.has(kind_key):
+			continue
+		if solo_del_oficio and activity_for_kind(kind_key as Materia.Kind) 				!= int(paraje.activity):
 			continue
 		var relleno := kind_key == Materia.Kind.LENA or kind_key == Materia.Kind.FIBRA
 		if relleno and sin_relleno:
@@ -620,8 +686,15 @@ static func activity_fits(activity: Subsistence.Activity, ford: float) -> bool:
 			# Hace falta agua, aunque sea la del borde.
 			return ford > 0.05
 		Subsistence.Activity.RECOLECCION, Subsistence.Activity.CAZA:
-			# Y aqui hace falta suelo que pisar.
-			return ford <= EN_EL_AGUA
+			# Y aqui hace falta suelo SECO, no solo suelo que se pueda vadear.
+			#
+			# Estuvo en [EN_EL_AGUA] -0,35, el limite de cruzar sin nadar- y eso
+			# deja bautizar avellanares con el agua por el tobillo: un sitio que
+			# se puede CRUZAR no es un sitio donde CRECE algo. La queja del
+			# jugador -«parajes de recoleccion que cruzan el rio»- sale de aqui.
+			# El umbral bueno es el mismo con el que se decide si una planta se
+			# ahoga. Ver [SUELO_SECO].
+			return ford <= SUELO_SECO
 		_:
 			# La materia prima sale de los dos: cantos del vado y cuarcita del
 			# canchal son la misma columna del almacen.
