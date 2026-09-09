@@ -29,6 +29,18 @@ func _init(panel: GameUI) -> void:
 ## crecian hacia abajo y se comian el valle. La informacion que se mira sin
 ## dejar de jugar -que hora es, como esta la banda, como va el invierno- cabe
 ## en una linea a lo ancho, y a lo ancho hay sitio de sobra.
+## Cuanto sitio se le guarda al minimapa en la barra, en pixeles.
+##
+## El minimapa se mete DENTRO de la barra de arriba, pero la barra no engorda
+## entera: se queda fina y solo baja en el trozo que ocupa el mapa. Para eso el
+## mapa vive en su propia capa, pegado arriba a la derecha y sin margen, y aqui
+## se le reserva su ancho para que los medidores no acaben tapados.
+##
+## Son los 256 px del minimapa mas el borde del panel. Ver
+## [Minimapa._build_minimap].
+const HUECO_DEL_MAPA := 268.0
+
+
 func _build_clock() -> void:
 	var margin := MarginContainer.new()
 	# Pegada arriba y estirada a los dos lados: es una BARRA, no un cartel.
@@ -49,8 +61,17 @@ func _build_clock() -> void:
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(strip)
 
+	# LOS BOTONES DE VELOCIDAD, A LA IZQUIERDA DEL TODO.
+	#
+	# Estaban al final, empujados a la derecha, y ahi es donde ahora se mete el
+	# minimapa. Ademas es lo que mas se pulsa: la mano va sola a la esquina.
+	_build_speed_buttons(strip)
+
+	# El reloj se crea aqui pero se muda DEBAJO DEL MINIMAPA en cuanto ese se
+	# construye -ver [Minimapa._build_minimap]-. Si no llega a haber minimapa,
+	# se queda en la barra, que es lo que hacia siempre.
 	ui._clock = Label.new()
-	ui._clock.add_theme_font_size_override("font_size", 14)
+	ui._clock.add_theme_font_size_override("font_size", 13)
 	ui._clock.add_theme_color_override("font_color", UISkin.INK)
 	ui._clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	ui._clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -58,12 +79,18 @@ func _build_clock() -> void:
 
 	_build_band_gauge(strip)
 	_build_winter_gauge(strip)
-	# Los botones de velocidad al final, empujados a la derecha.
+
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.add_child(gap)
-	_build_speed_buttons(strip)
+
+	# Y un hueco a la derecha del ancho del minimapa, para que los medidores no
+	# se metan debajo de el: el minimapa vive en su propia capa, encima.
+	var sitio_del_mapa := Control.new()
+	sitio_del_mapa.custom_minimum_size = Vector2(HUECO_DEL_MAPA, 0)
+	sitio_del_mapa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(sitio_del_mapa)
 	_update_clock()
 
 

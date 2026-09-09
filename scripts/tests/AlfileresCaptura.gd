@@ -53,6 +53,24 @@ func _init() -> void:
 			print("   %-16s %7.1f uds · %6.1f raciones" % [
 				Materia.material_name(k), sim.store.amount(k),
 				sim.store.amount(k) * Materia.nutrition(k)])
+	print("")
+	print("--- LAS TECNICAS, POR OFICIO ---")
+	for job: int in TechTree.BRANCHES:
+		print("   %-14s %5.0f jornadas" % [
+			Profession.job_name(job as Profession.Job),
+			demo.tech.days_in(job as Profession.Job)])
+		for t: int in (TechTree.BRANCHES[job] as Array):
+			var tech := t as TechTree.Tech
+			if demo.tech.has(tech):
+				print("      %-22s APRENDIDA" % TechTree.tech_name(tech))
+				continue
+			if not demo.tech.is_available(tech):
+				continue
+			var falta: Array[String] = demo.tech.missing_for(tech)
+			print("      %-22s %3.0f %% %s" % [
+				TechTree.tech_name(tech), demo.tech.progress(tech) * 100.0,
+				"" if falta.is_empty() else "· parada, falta " + ", ".join(falta)])
+
 	print("parajes: %d · alfileres: %d" % [
 		sim.parajes.list.size(),
 		(demo.paraje_markers._markers as Dictionary).size()])

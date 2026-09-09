@@ -596,6 +596,10 @@ func _levantar_interfaz() -> void:
 	ui.camera = camera
 	ui.cave_action.connect(_on_cave_action)
 	add_child(ui)
+	# El reloj se cuelga debajo del minimapa, que ya esta montado: el minimapa
+	# se construye antes que la interfaz -necesita el relieve generado- asi que
+	# la mudanza no puede hacerse alli. Ver [Minimapa.colgar_el_reloj].
+	minimapa.colgar_el_reloj()
 	# Y que la interfaz se entere de los momentos: hallazgos que enseñar y
 	# decisiones que pedir. Ver [Moment].
 	if sim != null:

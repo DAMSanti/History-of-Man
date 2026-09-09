@@ -22,6 +22,37 @@ func _init(escena: Node3D) -> void:
 ## Se pinta del heightmap ya generado y no con una segunda camara: una
 ## SubViewport cenital costaria un pase de render entero por frame para algo
 ## que no cambia nunca.
+## La columna del bloque del minimapa, para poder colgarle cosas debajo.
+var _columna: VBoxContainer
+var _ancho: int = 256
+
+
+## Cuelga el reloj JUSTO DEBAJO DEL MAPA.
+##
+## La hora, el día, el mes, la estación y el año leídos bajo el mapa son la
+## ficha del sitio y del momento; en la fila de arriba competían con los
+## medidores. Lo crea [BarraSuperior._build_clock] y aquí se muda.
+##
+## Aparte de `_build_minimap` porque el minimapa se construye ANTES que la
+## interfaz —el relieve tiene que estar generado, y la banda no— así que
+## llamándolo desde allí `demo.ui` todavía es nulo y la mudanza no pasaba. Lo
+## llama [DemoMain] en cuanto la barra existe.
+func colgar_el_reloj() -> void:
+	if _columna == null or demo.ui == null or demo.ui._clock == null:
+		return
+	var reloj: Label = demo.ui._clock
+	if reloj.get_parent() == _columna:
+		return
+	if reloj.get_parent() != null:
+		reloj.get_parent().remove_child(reloj)
+	reloj.custom_minimum_size = Vector2(_ancho, 0)
+	reloj.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	reloj.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Encima del rótulo de capas y del botón, que es donde se mira la hora.
+	_columna.add_child(reloj)
+	_columna.move_child(reloj, 1)
+
+
 func _build_minimap(canvas: CanvasLayer) -> void:
 	if demo.terrain == null:
 		return
@@ -74,23 +105,41 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 	demo._minimap_clear = image
 	demo._minimap_base = image.duplicate() as Image
 
+	# EL MINIMAPA VA DENTRO DE LA BARRA DE ARRIBA.
+	#
+	# Pedido asi: «quiero integrar el minimapa en la barra superior; no la hagas
+	# mas ancha, simplemente mete el minimapa en la barra, haciendola mas ancha
+	# SOLO en la zona que coge el mapa».
+	#
+	# Y por eso no se mete en la fila de la barra: metiendolo ahi, la barra
+	# entera engordaria hasta la altura del mapa. Lo que se hace es pegarlo
+	# arriba a la derecha SIN margen y con la misma piel, de forma que se lee
+	# como la barra bajando solo en ese trozo. [BarraSuperior.HUECO_DEL_MAPA] le
+	# guarda el ancho en la fila para que los medidores no queden debajo.
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	margin.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	margin.add_theme_constant_override("margin_top", 10)
-	margin.add_theme_constant_override("margin_right", 10)
+	margin.add_theme_constant_override("margin_top", 0)
+	margin.add_theme_constant_override("margin_right", 0)
 	canvas.add_child(margin)
+
+	var panel := PanelContainer.new()
+	if demo.ui and demo.ui._skin:
+		panel.theme = demo.ui._skin
+	margin.add_child(panel)
 
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 4)
-	margin.add_child(column)
+	panel.add_child(column)
 
-	var panel := PanelContainer.new()
-	column.add_child(panel)
 	demo._minimap = TextureRect.new()
 	demo._minimap.custom_minimum_size = Vector2(size, size)
 	demo._minimap.texture = ImageTexture.create_from_image(image)
-	panel.add_child(demo._minimap)
+	column.add_child(demo._minimap)
+
+	_columna = column
+	_ancho = size
+	colgar_el_reloj()
 
 	# Rotulo del overlay. Deja claro que lo que se pinta es lo que la banda
 	# CONOCE: al empezar esta casi en blanco, y esa es la informacion.
