@@ -298,6 +298,29 @@ var journey: Dictionary = {}
 ## explorador; mas no cabe en un panel que se lee de un vistazo.
 const JOURNEY_LIMIT := 40
 
+## Y cuantas JORNADAS dura un rastro pintado en el terreno.
+##
+## Diez. El tope de cuarenta salidas es de la FICHA -lo que se puede leer- y no
+## servia para el mapa: cuarenta salidas de un explorador son casi dos meses de
+## lineas encima del valle, y lo que se ve es una maraña que no dice nada.
+##
+## Lo que interesa mirar sobre el terreno es por donde se anda AHORA: por donde
+## se sale, por donde se vuelve, si hay un vado que todos usan. Diez jornadas
+## son suficientes para eso y pocas para que se lea.
+const RASTRO_DIAS := 10
+
+
+## Las salidas que todavia se pintan en el terreno.
+##
+## Las viejas siguen en `journeys` -la ficha las cuenta y la cronica las lee-:
+## lo que caduca es el DIBUJO, no el recuerdo.
+func rastros_recientes(today: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for trip: Dictionary in journeys:
+		if today - int(trip.get("ended", trip.get("day", 0))) <= RASTRO_DIAS:
+			out.append(trip)
+	return out
+
 
 ## Empieza a contar una salida.
 func begin_journey(what: String, day_value: int, hour_value: float,
@@ -595,6 +618,17 @@ var bivouac_fire: bool = false
 ## de la simulación y tiene que estar en un solo sitio.
 var bivouac_tent: bool = false
 
+## Cuanta falta de PROTEINA se lleva encima, de 0 a 100.
+##
+## No es hambre. Se puede estar lleno de raiz y avellana y aun asi flaquear: la
+## proteina no la sustituye ninguna caloria, y por debajo de lo que hace falta
+## se pierde musculo, se cura peor y se trabaja menos. Ver [Materia.protein] y
+## [Despensa], que es quien la sube y la baja.
+##
+## Pesa como el frio -entre las cuatro cosas que gastan a una persona- y por eso
+## va con el mismo divisor: es una cosa que se arrastra, no un golpe.
+var flaqueza: float = 0.0
+
 ## Destreza por actividad, 0-1. Sube con la practica: es el saber tacito.
 var skill: Dictionary = {}
 
@@ -790,7 +824,7 @@ func can_work() -> bool:
 
 ## Cuanto rinde: destreza por estado. Alguien hambriento o agotado cunde menos.
 func effectiveness() -> float:
-	var condition := 1.0 - (hunger / 220.0) - (fatigue / 260.0) - (cold / 300.0) 		- hurt_factor()
+	var condition := 1.0 - (hunger / 220.0) - (fatigue / 260.0) - (cold / 300.0) 		- hurt_factor() - (flaqueza / 260.0)
 	return clampf(skill_in(current_task()) * 1.4, 0.2, 1.4) * clampf(condition, 0.15, 1.0)
 
 

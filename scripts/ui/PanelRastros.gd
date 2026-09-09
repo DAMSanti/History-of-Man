@@ -69,7 +69,8 @@ func show_trails() -> void:
 				UISkin.button_box("pressed"))
 			button.add_theme_color_override("font_color", UISkin.OCHRE)
 		button.pressed.connect(func() -> void:
-			ui.trails.show_job(job_key, ui.sim.people, ui.sim.terrain())
+			ui.trails.show_job(job_key, ui.sim.people, ui.sim.terrain(),
+				ui.sim.day)
 			show_trails())
 		row.add_child(button)
 

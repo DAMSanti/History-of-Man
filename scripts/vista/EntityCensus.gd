@@ -169,7 +169,11 @@ func _band_entries(near: Vector3) -> Array[Dictionary]:
 ## el rombo caía en un sitio por donde ya no anda nadie.
 func _person_trail(person: Inhabitant) -> Array:
 	var paths: Array = [person.journey.get("path", PackedVector3Array())]
-	for trip: Dictionary in person.journeys:
+	# Y solo las de los ultimos diez dias: lo viejo se recuerda en la ficha
+	# pero deja de pintarse. Ver [Inhabitant.RASTRO_DIAS].
+	var dia := sim.day if sim != null else -1
+	for trip: Dictionary in (person.journeys if dia < 0
+			else person.rastros_recientes(dia)):
 		paths.append(trip.get("path", PackedVector3Array()))
 	return paths
 

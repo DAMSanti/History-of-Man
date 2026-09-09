@@ -581,11 +581,24 @@ func _finish_survey(person: Inhabitant) -> void:
 ## parece que la persona no sabe lo que hace. En abanico se ve que esta
 ## rodeando el sitio.
 func _next_survey_leg(person: Inhabitant) -> void:
+	# Cuanto se abre la vuelta. Reconocer monte nuevo es abrirse; batir UN
+	# PARAJE es lo contrario, y era el segundo motivo de que los batidores
+	# parecieran no hacer nada: se les mandaba a 260 m del centro -el radio de
+	# reconocer comarca- estando el paraje a 120 de radio, asi que la tarde se
+	# iba en salirse del sitio al que habian ido a mirar y volver a entrar.
+	#
+	# Medido con `BatidaProbe`: 48 % del tiempo andando contra 13 %
+	# reconociendo, y 0,6 hallazgos por batidor y jornada.
+	var vuelta := SettlementSim.SURVEY_RADIUS
+	var aqui := sim._paraje_at(person.work_centre)
+	if aqui != null:
+		vuelta = aqui.extent
+
 	for attempt in range(3):
 		# Al trozo de alrededor que menos se conozca: reconocer es rellenar
 		# los huecos del mapa, no dar vueltas por lo ya visto
 		var candidate := _least_known_around(person.work_centre,
-			SettlementSim.SURVEY_RADIUS * 0.45, SettlementSim.SURVEY_RADIUS, person)
+			vuelta * 0.45, vuelta, person)
 
 		# El camino se traza de nuevo. Es lo que suelta el hito viejo que
 		# tenia a la persona clavada donde llego: `next_waypoint` devuelve el

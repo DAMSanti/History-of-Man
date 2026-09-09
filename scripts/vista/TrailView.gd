@@ -27,6 +27,10 @@ var _people: Array[Inhabitant] = []
 var _terrain: TerrainGenerator
 var _since_redraw: float = 0.0
 
+## En que jornada va la partida, para poder tirar los rastros viejos. Menos de
+## cero es «no se sabe»: entonces se pintan todos, que es lo que hacia antes.
+var _today: int = -1
+
 ## El rastro de UNA entidad suelta, que es lo que mira el censo.
 ##
 ## Va por su lado y no reutiliza `_job` porque contesta otra pregunta. El
@@ -65,10 +69,11 @@ func clear() -> void:
 
 ## Pinta el rastro de todo el que hace este oficio.
 func show_job(job: int, people: Array[Inhabitant],
-		terrain: TerrainGenerator) -> void:
+		terrain: TerrainGenerator, today: int = -1) -> void:
 	_people = people
 	_terrain = terrain
 	_job = job
+	_today = today
 	_repaint()
 
 
@@ -171,7 +176,13 @@ func _draw_person(person: Inhabitant) -> void:
 	# reparto saca a todo el mundo de la recoleccion a la vez y los rastros
 	# de recoleccion desaparecian de golpe, como si nadie hubiera pisado el
 	# monte en toda la partida.
-	for trip: Dictionary in person.journeys:
+	# SOLO LAS DE LOS ULTIMOS DIEZ DIAS. El tope de cuarenta salidas es de la
+	# ficha -lo que se puede leer- y no vale para el mapa: cuarenta salidas de
+	# un explorador son casi dos meses de lineas encima del valle, y lo que se
+	# ve es una maraña. Lo que interesa mirar sobre el terreno es por donde se
+	# anda AHORA. Ver [Inhabitant.RASTRO_DIAS].
+	var recientes: Array[Dictionary] = person.journeys if _today < 0 		else person.rastros_recientes(_today)
+	for trip: Dictionary in recientes:
 		if int(trip.get("job", person.job)) != _job:
 			continue
 		_draw_path(trip.get("path", PackedVector3Array()) as PackedVector3Array,

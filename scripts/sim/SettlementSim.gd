@@ -1359,7 +1359,17 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 ##
 ## Pendiente de playtest: lo medido es la curva vieja; lo decidido es que
 ## aprender lleve una campaña y no una estacion.
-const APRENDE_POR_HORA := 0.00015
+## Estuvo en 0,00015 y era INVISIBLE: a ocho horas de trabajo al dia son doce
+## milesimas por jornada, o sea que ir del 0,50 de partida al 0,95 de tope
+## costaba TRESCIENTOS SETENTA Y CINCO DIAS, mas de dos años de juego. El
+## jugador no veia subir la pericia de nadie porque, a efectos practicos, no
+## subia.
+##
+## Con 0,0005 una estacion de trabajo diario mueve unos veinte puntos, que es lo
+## que se nota sin que la banda se vuelva experta en un mes. Queda a playtest
+## como toda cifra que decide el rendimiento.
+##
+const APRENDE_POR_HORA := 0.0005
 
 
 func _tick_daylight(person: Inhabitant, hours: float) -> void:
@@ -2225,6 +2235,9 @@ func _end_of_day() -> void:
 	hogar._lavar_bellota()
 	store.age(1)
 	desechos.nuevo_dia()
+	# Y la cuenta de la PROTEINA del dia: comer no es lo mismo que comer bien.
+	# Ver [Despensa.pasar_cuenta_de_proteina].
+	despensa.pasar_cuenta_de_proteina()
 	lobo.nuevo_dia()
 	# Y revista a los parajes: lo que baja del veinte por ciento se deja
 	# descansar solo, sin que el jugador tenga que estar mirandolo.
@@ -2889,6 +2902,28 @@ const SUELO_MALO := "estaba metido donde no se pisa"
 var lost_loads: int = 0
 
 
+## Cuanto pesa la distancia al elegir paraje que batir, contra lo que falta
+## por saber de el.
+##
+## Es el numero que decide si una batida sale o se pierde, y estaba puesto de
+## forma que no decidia nada: la distancia se dividia entre CUATRO MIL metros
+## cuando una batida alcanza trescientos ochenta. Un paraje a seiscientos
+## metros costaba 0,15 de nota, o sea casi nada, y ganaba siempre por estar
+## entero por conocer.
+##
+## Medido con `BatidaProbe`, diez jornadas de dos batidores: «El pasto de la
+## boca», a 598 m, salia elegido cinco dias de diez y no se llego a el NI UNA
+## VEZ -se sale, se andan cuatrocientos setenta metros, se acaba el dia y se
+## vuelve-. Los dos pasaban el 51 % del tiempo andando y el 8 % reconociendo, y
+## de cincuenta incognitas se resolvieron seis.
+##
+## Con 0,60, un paraje en el filo del alcance tiene que estar 0,6 mas por
+## conocer que uno a la puerta de casa para que compense ir. Pendiente de
+## playtest: subirlo ata la batida al campamento, bajarlo la manda lejos otra
+## vez.
+const CUESTA_LLEGAR := 0.60
+
+
 ## El paraje a medio investigar mas conveniente para una batida.
 ##
 ## Se prefiere el que MENOS se sepa y mas cerca este, en ese orden: acabar de
@@ -2900,10 +2935,20 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 	if parajes == null:
 		return null
 
+	# Hasta donde llega ESTA salida. La batida va y vuelve el mismo dia, asi
+	# que un paraje mas alla de su radio no es un destino: es una jornada
+	# entera andando para volver sin nada. La expedicion si puede ir, y por eso
+	# no lleva tope.
+	var alcance := INF
+	if person.current_speciality == Profession.Speciality.BATIDA:
+		alcance = Reconocimiento.BATIDA_RADIUS
+
 	var best: Paraje = null
 	var best_score := -INF
 	for paraje: Paraje in parajes.list:
 		if not paraje.has_unknowns():
+			continue
+		if paraje.distance_from(home_position) > alcance:
 			continue
 		if not marcha._navgrid().connected(person.position, paraje.position):
 			continue
@@ -2923,8 +2968,13 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 		if taken:
 			continue
 
+		# La distancia se mide contra LO QUE SE ALCANZA, no contra una cifra
+		# suelta: es lo que hace que «cerca y a medias» gane a «lejos y sin
+		# tocar», que es como se bate de verdad.
 		var away := paraje.distance_from(home_position)
-		var score := (1.0 - paraje.known_fraction()) - away / 4000.0
+		var cuesta := clampf(away / minf(alcance, Despensa.REGIONAL_DISTANCE),
+			0.0, 1.0)
+		var score := (1.0 - paraje.known_fraction()) - cuesta * CUESTA_LLEGAR
 		if score > best_score:
 			best_score = score
 			best = paraje

@@ -82,6 +82,7 @@ const CATALOGUE := {
 	Kind.FRUTO_SECO: {
 		"name": "Fruto seco", "unit": "puñado", "kg": 0.55, "litros": 1.6,
 		"dias": 360, "kcal": 1700,
+		"prot": 20.0,
 		"desc": "Avellana y bellota con cáscara. La cáscara abulta, pero es lo "
 			+ "que hace que aguante el año entero.",
 	},
@@ -99,42 +100,49 @@ const CATALOGUE := {
 	Kind.BELLOTA_DULCE: {
 		"name": "Bellota lavada", "unit": "puñado", "kg": 0.55, "litros": 1.3,
 		"dias": 300, "kcal": 1300,
+		"prot": 7.0,
 		"desc": "Lavada en el arroyo hasta que suelta el tanino. Es la harina "
 			+ "del invierno: se guarda una estación entera.",
 	},
 	Kind.BAYA: {
 		"name": "Baya", "unit": "puñado", "kg": 0.4, "litros": 0.55,
 		"dias": 8, "kcal": 200,
+		"prot": 2.0,
 		"desc": "Endrina, mora, madroño. Alimenta poco y se pasa enseguida, "
 			+ "pero es de lo poco fresco que hay en verano.",
 	},
 	Kind.RAIZ: {
 		"name": "Raíz", "unit": "manojo", "kg": 0.7, "litros": 0.7,
 		"dias": 60, "kcal": 630,
+		"prot": 6.0,
 		"desc": "Tubérculos y raíces. Es el colchón invisible de la dieta "
 			+ "forrajera: rinde poco, no falla casi nunca y hay todo el año.",
 	},
 	Kind.SETA: {
 		"name": "Seta", "unit": "puñado", "kg": 0.3, "litros": 1.2,
 		"dias": 5, "kcal": 80,
+		"prot": 2.5,
 		"desc": "Poca energía y mucho riesgo. Interesa más por la yesca que "
 			+ "sale de los hongos de tronco que por lo que da de comer.",
 	},
 	Kind.HUEVO: {
 		"name": "Huevo", "unit": "docena", "kg": 0.6, "litros": 0.9,
 		"dias": 14, "kcal": 870,
+		"prot": 72.0,
 		"desc": "Pulso corto de primavera y muy rentable. Vaciar la colonia "
 			+ "hunde la del año siguiente.",
 	},
 	Kind.MIEL: {
 		"name": "Miel", "unit": "panal", "kg": 0.5, "litros": 0.35,
 		"dias": 720, "kcal": 1520,
+		"prot": 0.0,
 		"desc": "Azúcar puro, valoradísimo en toda sociedad forrajera y con "
 			+ "riesgo de por medio. No se estropea nunca.",
 	},
 	Kind.CARACOL: {
 		"name": "Caracol", "unit": "puñado", "kg": 1.1, "litros": 1.6,
 		"dias": 3, "kcal": 350,
+		"prot": 22.0,
 		"desc": "Con concha, así que pesa para lo que da. Recolecta de críos, "
 			+ "y aparece en cantidad en algunos yacimientos.",
 	},
@@ -158,22 +166,26 @@ const CATALOGUE := {
 	Kind.CARNE: {
 		"name": "Carne fresca", "unit": "tajada", "kg": 0.45, "litros": 0.45,
 		"dias": 4, "kcal": 680,
+		"prot": 90.0,
 		"desc": "Se pudre en días. Toda la caza es una carrera contra esto.",
 	},
 	Kind.CARNE_SECA: {
 		"name": "Carne seca", "unit": "tira", "kg": 0.18, "litros": 0.25,
 		"dias": 180, "kcal": 680,
+		"prot": 95.0,
 		"desc": "Curada al humo. Pierde tres cuartos del peso y gana media año "
 			+ "de vida: es el mejor negocio del Paleolítico.",
 	},
 	Kind.PESCADO: {
 		"name": "Pescado", "unit": "pieza", "kg": 0.5, "litros": 0.5,
 		"dias": 3, "kcal": 600,
+		"prot": 70.0,
 		"desc": "Aún más perecedero que la carne.",
 	},
 	Kind.PESCADO_SECO: {
 		"name": "Pescado seco", "unit": "pieza", "kg": 0.2, "litros": 0.2,
 		"dias": 200, "kcal": 600,
+		"prot": 75.0,
 		"desc": "Abierto, sin espina y colgado sobre el humo. Un salmón "
 			+ "fresco dura tres días; ahumado, media vuelta al año. Es la "
 			+ "razón entera de plantarse en el río cuando sube el remonte: "
@@ -182,6 +194,7 @@ const CATALOGUE := {
 	Kind.MARISCO: {
 		"name": "Marisco", "unit": "capazo", "kg": 2.4, "litros": 3.2,
 		"dias": 2, "kcal": 380,
+		"prot": 48.0,
 		"desc": "Con concha. Pesa cinco veces lo que la carne para la misma "
 			+ "comida, y por eso se come en la orilla y no se transporta.",
 	},
@@ -241,6 +254,7 @@ const CATALOGUE := {
 	Kind.GRASA: {
 		"name": "Grasa", "unit": "porción", "kg": 0.9, "litros": 1.0,
 		"dias": 120, "kcal": 8100,
+		"prot": 2.0,
 		"desc": "Combustible de lámpara y el alimento más denso que hay.",
 	},
 	Kind.OCRE: {
@@ -340,6 +354,65 @@ static func kcal(kind: Kind) -> float:
 ## racion signifique lo mismo en todas partes.
 static func nutrition(kind: Kind) -> float:
 	return kcal(kind) / KCAL_RACION
+
+
+## Proteina APROVECHABLE que da una unidad, en gramos.
+##
+## Aprovechable y no total, y la diferencia es la mitad del asunto: la proteina
+## vegetal es INCOMPLETA. A la avellana le falta lisina, a la bellota tambien, y
+## el cuerpo solo puede usar del orden de la mitad de lo que trae. La animal
+## -carne, pescado, huevo, marisco- si tiene el juego entero de aminoacidos y se
+## aprovecha casi toda.
+##
+## Es la razon de fondo de que ninguna sociedad cazadora recolectora haya vivido
+## de fruto seco por muchas calorias que tenga, y sin ella el modelo no sale: con
+## la proteina BRUTA, un puñado de avellana da veintisiete gramos por racion
+## contra los treinta que hacen falta, o sea que casi bastaba. Con la
+## aprovechable da quince, y entonces la carne vale lo que vale.
+##
+## Un adulto necesita unos sesenta gramos al dia y no se sustituyen con nada.
+##
+## ## Por que hacen falta DOS numeros y no uno
+##
+## Con las calorias solas, un puñado de avellana alimenta como tres pescados y
+## pico. Y es verdad -avellana 3.090 kcal/kg contra 1.200 del pescado, los datos
+## estan bien- pero la conclusion que sale de ahi es falsa: NO SE PUEDE VIVIR DE
+## AVELLANAS.
+##
+## Lo que limita la dieta de un forrajeador no es la energia, es la PROTEINA. Un
+## adulto necesita unos sesenta gramos al dia y no se sustituyen con nada: por
+## debajo de eso se pierde musculo, se cura peor y se trabaja menos, por muchas
+## calorias que entren. Es la razon por la que ninguna sociedad cazadora
+## recolectora ha vivido de fruto seco, y por la que el propio `Hunting.gd` dice
+## que «una banda cantabrica del Magdaleniense vivia de la carne».
+##
+## Con este segundo numero, la carne y el pescado valen lo que valen sin tocar
+## ni una caloria: para los sesenta gramos del dia hacen falta 0,7 tajadas de
+## carne, o 0,9 pescados, o 1,6 puñados de avellana... o CUATRO MANOJOS Y MEDIO
+## de raiz. Ahi esta la diferencia, y es real.
+static func protein(kind: Kind) -> float:
+	return float(CATALOGUE[kind].get("prot", 0.0))
+
+
+## Proteina que necesita un adulto al dia, en gramos.
+##
+## Sesenta: el orden de magnitud que dan las recomendaciones para un adulto
+## activo -0,8 a 1 g por kilo de peso-. En una banda que anda quince kilometros
+## al dia esta en el limite bajo, y por eso queda a playtest como todo lo que
+## decide si se pasa hambre.
+const PROTEINA_DIA := 60.0
+
+
+## Cuanta proteina lleva una racion de esto.
+##
+## Es la cifra que se lee de un vistazo: una racion de carne trae 66 g y una de
+## raiz 28. Sirve para la ficha del almacen, donde la columna de calorias sola
+## no dice por que la carne importa.
+static func protein_per_ration(kind: Kind) -> float:
+	var raciones := nutrition(kind)
+	if raciones <= 0.0:
+		return 0.0
+	return protein(kind) / raciones
 
 
 ## Volumen SIEMPRE en metros cúbicos.

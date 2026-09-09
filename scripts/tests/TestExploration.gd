@@ -1354,3 +1354,76 @@ func test_volver_de_noche_cansa_mas_que_volver_de_dia() -> void:
 	# el descanso va por horas dormidas.
 	assert_gt(SettlementSim.CANSA_DE_NOCHE, 0.0,
 		"andar de noche cansa: se ve peor y no se para a descansar")
+
+
+## Una batida no elige un paraje al que no puede llegar y volver.
+##
+## Es el fallo que midio `BatidaProbe`: «El pasto de la boca», a 598 m, salia
+## elegido cinco de cada diez jornadas y no se llego a el NI UNA VEZ. La nota
+## dividia la distancia entre cuatro mil metros cuando una batida alcanza
+## trescientos ochenta, asi que estar lejos no costaba practicamente nada y
+## ganaba siempre el que estaba entero por conocer.
+func test_la_batida_no_persigue_un_paraje_fuera_de_alcance() -> void:
+	var sim := _sim_on_fake()
+	var cerca := _paraje_con_incognitas(sim, 3)
+	# El cercano, ya a medias; el lejano, entero por conocer y fuera de
+	# alcance. Con la nota vieja ganaba el lejano por goleada.
+	(cerca.contents[0] as Dictionary)["sabido"] = true
+
+	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
+		Materia.Kind.CARNE, sim.home_position + Vector3(900.0, 0.0, 0.0), 1)
+	lejos.contents = {}
+	for i in range(3):
+		lejos.contents[i] = {"abundancia": 0.5, "sabido": false}
+	sim.parajes.add(lejos)
+
+	var batidor := Inhabitant.create(0, sim.home_position, sim._rng)
+	batidor.job = Profession.Job.EXPLORACION
+	batidor.current_speciality = Profession.Speciality.BATIDA
+	sim.people = [batidor]
+
+	assert_true(lejos.distance_from(sim.home_position) > Reconocimiento.BATIDA_RADIUS,
+		"el lejano tiene que estar de verdad fuera del alcance de una batida")
+	assert_eq(sim._paraje_to_survey(batidor), cerca,
+		"la batida va al que alcanza, no al que mas le falta por saber")
+
+
+## La expedicion si puede ir lejos: es lo que la distingue de la batida.
+func test_la_expedicion_si_va_al_paraje_lejano() -> void:
+	var sim := _sim_on_fake()
+	var cerca := _paraje_con_incognitas(sim, 3)
+	(cerca.contents[0] as Dictionary)["sabido"] = true
+
+	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
+		Materia.Kind.CARNE, sim.home_position + Vector3(900.0, 0.0, 0.0), 1)
+	lejos.contents = {}
+	for i in range(3):
+		lejos.contents[i] = {"abundancia": 0.5, "sabido": false}
+	sim.parajes.add(lejos)
+
+	var explorador := Inhabitant.create(0, sim.home_position, sim._rng)
+	explorador.job = Profession.Job.EXPLORACION
+	explorador.current_speciality = Profession.Speciality.EXPEDICION
+	sim.people = [explorador]
+
+	assert_eq(sim._paraje_to_survey(explorador), lejos,
+		"la expedicion no tiene tope de alcance: va a lo que mas falta por saber")
+
+
+## Batir UN PARAJE no es abrirse por la comarca: la vuelta cabe dentro.
+##
+## La otra mitad de «los batidores no hacen nada»: se les mandaba a 260 m del
+## centro -el radio de reconocer comarca- estando el paraje a 120 de radio, y
+## la tarde se iba en salirse del sitio y volver a entrar.
+func test_batir_un_paraje_no_se_sale_de_el() -> void:
+	var sim := _sim_on_fake()
+	var paraje := _paraje_con_incognitas(sim, 3)
+	var batidor := _batidor(sim, paraje, 0.3)
+	sim.people = [batidor]
+	batidor.state = Inhabitant.State.RECONOCIENDO
+
+	for intento in range(12):
+		sim.reconocimiento._next_survey_leg(batidor)
+		assert_lt(batidor.forage_target.distance_to(paraje.position),
+			paraje.extent + 1.0,
+			"la vuelta de la batida se queda dentro del paraje")

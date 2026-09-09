@@ -264,3 +264,75 @@ func test_el_pronostico_sigue_existiendo_para_el_taller() -> void:
 		"de lo que hay en despensa si se preve comer")
 	assert_eq(sim.taller.material_forecast(Materia.Kind.SETA), 0.0,
 		"y de lo que no hay, no")
+
+
+# ------------------------------- comer no es lo mismo que comer bien --
+
+func test_la_carne_da_mucha_mas_proteina_por_racion_que_la_raiz() -> void:
+	# LA PREGUNTA DEL JUGADOR: «las kcal hacen que un fruto seco alimente como 3
+	# pescados y pico, me parece que no esta bien».
+	#
+	# Y los datos SI estan bien -avellana 3.090 kcal/kg contra 1.200 del
+	# pescado-. Lo que esta mal es la medida: una racion no es una caloria. Lo
+	# que limita la dieta de un forrajeador es la PROTEINA, y ahi la cosa se da
+	# la vuelta.
+	var carne := Materia.protein_per_ration(Materia.Kind.CARNE)
+	var raiz := Materia.protein_per_ration(Materia.Kind.RAIZ)
+	var fruto := Materia.protein_per_ration(Materia.Kind.FRUTO_SECO)
+	assert_gt(carne, raiz * 2.0,
+		"una racion de carne da mas del doble de proteina que una de raiz")
+	assert_gt(carne, fruto,
+		"y mas que una de fruto seco, que por calorias le ganaba de largo")
+
+
+func test_de_avellana_sola_no_se_vive() -> void:
+	# Es la frase que el propio `Hunting.gd` lleva escrita -«una banda cantabrica
+	# del Magdaleniense vivia de la carne, no de la avellana»- y hasta ahora el
+	# juego hacia lo contrario.
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
+	sim.store.add(Materia.Kind.FRUTO_SECO, 4000.0)
+
+	for dia in range(20):
+		sim.day = dia + 1
+		sim.despensa._eat_from_store(30.0)
+		sim.despensa.pasar_cuenta_de_proteina()
+
+	var flaco := 0
+	for person: Inhabitant in sim.people:
+		if person.flaqueza > 5.0:
+			flaco += 1
+	assert_gt(float(flaco), 0.0,
+		"veinte dias de solo avellana y la banda flaquea, por llena que este")
+
+
+func test_con_carne_no_se_flaquea() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
+	sim.store.add(Materia.Kind.CARNE, 4000.0)
+
+	for dia in range(20):
+		sim.day = dia + 1
+		sim.despensa._eat_from_store(30.0)
+		sim.despensa.pasar_cuenta_de_proteina()
+
+	for person: Inhabitant in sim.people:
+		assert_near(person.flaqueza, 0.0, 0.001,
+			"comiendo carne no se flaquea")
+
+
+func test_la_flaqueza_baja_el_rendimiento() -> void:
+	# Es lo que la hace importar: se puede estar lleno y trabajar mal.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.hunger = 0.0
+	person.fatigue = 0.0
+	var entero := person.effectiveness()
+	person.flaqueza = 80.0
+	assert_lt(person.effectiveness(), entero,
+		"quien flaquea rinde menos aunque no tenga hambre")

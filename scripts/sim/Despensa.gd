@@ -570,10 +570,58 @@ func _eat_from_store(rations: float) -> float:
 		var needed := (rations - eaten) / maxf(Materia.nutrition(k), 0.001)
 		var taken := sim.store.take(k, needed)
 		eaten += taken * Materia.nutrition(k)
+		# La PROTEINA de lo que se ha comido, aparte de la energia. Sin esto,
+		# comer raiz y comer carne es lo mismo mientras las calorias cuadren, y
+		# no lo es. Ver [Materia.protein].
+		proteina_hoy += taken * Materia.protein(k)
 		# Lo que se come deja lo que no se come, y eso NO desaparece: va al
 		# monton. Ver [Desechos]; es de donde sale el conchero.
 		sim.desechos.tirar(k, taken * Materia.nutrition(k))
 	return eaten
+
+
+## La proteina que ha entrado hoy en la banda, en gramos.
+##
+## Va aqui y no en cada persona porque la despensa es comun: se come del mismo
+## monton, asi que lo que falta le falta a todos. Ver [pasar_cuenta_de_proteina].
+var proteina_hoy: float = 0.0
+
+
+## Cuanto sube y baja la flaqueza en una jornada.
+##
+## SUBE mas despacio de lo que BAJA a proposito: la falta de proteina se
+## arrastra durante semanas -no es hambre, que se quita comiendo esta noche- y
+## se recupera algo antes en cuanto vuelve a entrar carne. Las dos cifras
+## quedan a playtest.
+const FLAQUEA_AL_DIA := 4.5
+const SE_REPONE_AL_DIA := 7.0
+
+
+## Pasa cuenta de la proteina del dia y reparte la flaqueza. Se llama al cerrar
+## la jornada.
+##
+## Se reparte por igual: la banda come del mismo monton y nadie se guarda la
+## carne. Si algun dia hay reparto desigual -al enfermo, al que sale de
+## expedicion- este es el sitio.
+func pasar_cuenta_de_proteina() -> void:
+	var hace_falta := 0.0
+	for person: Inhabitant in sim.people:
+		# Lo mismo que se escala la comida por edad, se escala la proteina: un
+		# crio necesita menos porque es mas pequeno.
+		hace_falta += Materia.PROTEINA_DIA * (person.daily_food() / 2.0)
+	var cubierto := clampf(proteina_hoy / maxf(hace_falta, 0.001), 0.0, 1.0)
+	for person: Inhabitant in sim.people:
+		if cubierto >= 0.95:
+			person.flaqueza = maxf(person.flaqueza - SE_REPONE_AL_DIA, 0.0)
+		else:
+			person.flaqueza = clampf(
+				person.flaqueza + FLAQUEA_AL_DIA * (1.0 - cubierto),
+				0.0, 100.0)
+	if cubierto < 0.5 and sim.day % 15 == 0:
+		sim._note(Chronicle.Kind.PENURIA,
+			"La banda come, pero come mal: falta carne. Con raiz y avellana se "
+			+ "llena el estomago y aun asi se flaquea.", 2)
+	proteina_hoy = 0.0
 
 
 ## Redacta el parte del día y lo anota. Se llama justo después de `store.age`,

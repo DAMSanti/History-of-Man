@@ -644,15 +644,27 @@ func _band_person_row(body: VBoxContainer, person: Inhabitant) -> void:
 	body.add_child(frame)
 
 	# Hambre y fatiga son escalas 0-100, no fracciones; la pericia si es
-	# una fraccion, y va por actividad
+	# una fraccion, y va POR TAREA, no por actividad.
+	#
+	# Se leia `person.skill.get(person.activity, 0.5)` y ahi estaba el fallo:
+	# `skill` esta indexado por TAREA -ver [Inhabitant.current_task]- asi que la
+	# busqueda no acertaba nunca y devolvia el valor por defecto. Resultado:
+	# TODA la banda con «pericia 50 %», siempre, sin moverse jamas. No es que no
+	# subiera: es que no se estaba mirando.
+	#
+	# Y se dice en que, ademas del numero: «pericia 62 %» sin decir en que no
+	# significa nada cuando la misma persona talla, recolecta y cuida el fuego.
 	var nota := " · criando" if person.nursing else ""
+	var tarea := person.current_task()
+	var pericia := person.skill_in(tarea)
 	var label := Label.new()
-	label.text = "  %s (%s %s, %d)%s · %s · hambre %d · fatiga %d · pericia %d%%" % [
+	label.text = "  %s (%s %s, %d)%s · %s · hambre %d · fatiga %d · %s en %s (%d %%)" % [
 		person.given_name,
 		"mujer" if person.sex == Inhabitant.Sex.MUJER else "hombre",
 		person.age_name(), person.age_years, nota,
 		person.state_name(), int(person.hunger), int(person.fatigue),
-		int(float(person.skill.get(person.activity, 0.5)) * 100.0)]
+		person.skill_label(pericia), Profession.task_name(tarea).to_lower(),
+		int(pericia * 100.0)]
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.custom_minimum_size = Vector2(
 		maxf(body.custom_minimum_size.x - 45.0, 200.0), 0)
