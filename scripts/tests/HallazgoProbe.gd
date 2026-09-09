@@ -21,6 +21,7 @@ extends SceneTree
 const SITE_ID := 56
 
 var _reconocimientos := 0
+var _cuando: Array[String] = []
 var _sin_paraje := 0
 
 
@@ -55,8 +56,18 @@ func _init() -> void:
 	var primero: int = sim.day
 	var visto := -1
 	var estaba: Dictionary = {}
+	var vistos := {}
 	while sim.day < primero + dias:
 		await process_frame
+		# La hora a la que sale cada chapa: es la queja -«aparecen todos a la
+		# vez cuando llegan las 12 de la noche».
+		for paraje: Paraje in sim.parajes.list:
+			if vistos.has(paraje.id()):
+				continue
+			vistos[paraje.id()] = true
+			_cuando.append("dia %2d %s  %-27s %s" % [
+				sim.day, Diario.reloj(sim.hour), paraje.name_text,
+				Subsistence.activity_name(paraje.activity)])
 		# Cada reconocimiento que TERMINA, y si fue sobre un paraje o no: es lo
 		# que dice quien esta abriendo monte de verdad.
 		for p: Inhabitant in sim.people:
@@ -71,6 +82,30 @@ func _init() -> void:
 		visto = sim.day
 		if sim.day % 2 == 1 or sim.day - primero < 4:
 			_parte(sim, demo)
+
+	print("")
+	print("--- CUANDO APARECE CADA UNO ---")
+	for fila: String in _cuando:
+		print("   %s" % fila)
+
+	print("")
+	print("--- Y SI ALGUNO DE TIERRA COGE RIO ---")
+	var sucios := 0
+	for paraje: Paraje in sim.parajes.list:
+		if paraje.activity == Subsistence.Activity.PESCA 				or paraje.activity == Subsistence.Activity.MARISQUEO:
+			continue
+		var mojadas := 0
+		if paraje.huella != null:
+			for centro: Vector3 in paraje.huella.celdas():
+				if sim._terrain.crossing_difficulty_at(centro) > 0.05:
+					mojadas += 1
+		if mojadas > 0:
+			sucios += 1
+			print("   %-27s %-14s · %d celdillas con agua" % [
+				paraje.name_text,
+				Subsistence.activity_name(paraje.activity), mojadas])
+	if sucios == 0:
+		print("   ninguno")
 
 	print("")
 	print("--- QUIEN ABRE MONTE ---")

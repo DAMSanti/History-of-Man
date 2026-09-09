@@ -1444,6 +1444,11 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 				person.work_centre = person.position
 				person.forage_target = person.position
 				person.state = Inhabitant.State.TRABAJANDO
+				# Dar con lo que se venia a buscar ES descubrir el sitio, y la
+				# chapa tiene que salir AHORA y no a medianoche. Ver
+				# [Reconocimiento.bautizar_lo_descubierto].
+				reconocimiento.bautizar_lo_descubierto(
+					person.position, Reconocimiento.FORAGE_RADIUS)
 			elif person.search_hours > 5.0:
 				# Aqui no hay nada. Se prueba en otro sitio.
 				marcha._send_to(person, tajo._search_target(person))
@@ -2179,8 +2184,27 @@ func _learn_from(person: Inhabitant, delta: float) -> void:
 	# lleve jornadas y no segundos
 	var pace := delta / maxf(seconds_per_day, 0.001)
 	var intensity := pace * (1.0 if working else 0.18)
+	# Y SE MIRA SI SE CRUZA EL LISTON DE BAUTIZAR, para poner la chapa en el
+	# momento en que la banda conoce el sitio.
+	#
+	# «Los parajes deben aparecer a medida que se descubran; ahora mismo
+	# aparecen todos a la vez cuando llegan las 12 de la noche». Con el repaso
+	# de fin de jornada como unico bautizo, un recolector que se pasa el dia
+	# aprendiendo un avellanar no lo ve aparecer hasta medianoche, y salian
+	# nueve chapas de golpe: medido, el dia 2 a las 00:00.
+	#
+	# La comprobacion es barata a proposito: solo se barre el entorno cuando
+	# una celda ACABA de cruzar el umbral, que pasa un puñado de veces al dia.
+	var cruzado := false
 	for activity: int in _activities_for_learning(person):
-		knowledge.observe(activity as Subsistence.Activity, person.position, intensity)
+		var act := activity as Subsistence.Activity
+		var antes := knowledge.familiarity_at(act, person.position)
+		knowledge.observe(act, person.position, intensity)
+		if antes < Parajes.NAMED_AT 				and knowledge.familiarity_at(act, person.position) >= Parajes.NAMED_AT:
+			cruzado = true
+	if cruzado:
+		reconocimiento.bautizar_lo_descubierto(
+			person.position, Reconocimiento.FORAGE_RADIUS)
 
 	# Trabajar un paraje ensena tambien lo que se ve alrededor: quien pasa el
 	# dia recogiendo avellana ve el avellanar entero, no solo la mata que tiene

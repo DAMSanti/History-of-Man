@@ -46,16 +46,13 @@ func _init() -> void:
 		await process_frame
 
 	print("")
-	print("despensa: %.1f de energia · %.1f completas · %.0f g de proteina" % [
-		sim.store.food_rations(), sim.store.raciones_completas(),
-		sim.store.food_protein()])
+	print("despensa: %.1f raciones" % sim.store.food_rations())
 	for kind: int in Materia.Kind.values():
 		var k := kind as Materia.Kind
 		if Materia.is_food(k) and sim.store.amount(k) > 0.05:
-			print("   %-16s %7.1f uds · %5.1f r energia · %5.1f r proteina" % [
+			print("   %-16s %7.1f uds · %6.1f raciones" % [
 				Materia.material_name(k), sim.store.amount(k),
-				sim.store.amount(k) * Materia.nutrition(k),
-				sim.store.amount(k) * Materia.raciones_de_proteina(k)])
+				sim.store.amount(k) * Materia.nutrition(k)])
 	print("parajes: %d · alfileres: %d" % [
 		sim.parajes.list.size(),
 		(demo.paraje_markers._markers as Dictionary).size()])

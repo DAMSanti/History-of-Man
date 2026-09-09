@@ -136,17 +136,29 @@ static func de(paraje: Paraje, field: ResourceField,
 	huella.origen.y = 0.0
 
 	var crudo := huella._sembrar(paraje, field, terrain, alcance, lejos)
+	# La celdilla del CENTRO entra siempre. El paraje está ahí —lo comprobó
+	# `Parajes.activity_fits` al bautizarlo— y sin ella `_solo_lo_pegado` no
+	# tiene de dónde partir: devolvía la mancha vacía y se caía al disco.
+	crudo[alcance * huella.lado + alcance] = 1
 	var crecido := huella._filtrar(paraje, terrain,
 		huella._ensanchar(crudo), alcance, lejos)
 	var cuerpo := huella._solo_lo_pegado(crecido, alcance)
 	huella._tapar_claros(cuerpo)
-	huella.dentro = cuerpo
+	# Y OTRA VEZ EL FILTRO, porque tapar claros tampoco mira el suelo.
+	#
+	# Es la tercera vez que hace falta y por el mismo motivo que las otras dos.
+	# Un avellanar en la vuelta de un meandro deja el río dentro como si fuera
+	# un claro, y taparlo le mete el cauce en medio: medido, dos parajes de
+	# recolección con once y cinco celdillas de agua dentro después de haberlas
+	# quitado. Un claro en mitad del avellanar sigue siendo avellanar; un río en
+	# mitad del avellanar es un río.
+	huella.dentro = huella._filtrar(paraje, terrain, cuerpo, alcance, lejos)
 
 	# Un paraje sin forma no existe para nadie: si el campo no da ni una
 	# celdilla —pasa con un sitio recién bautizado en el filo del umbral— se
 	# cae al disco de siempre en vez de dejar un sitio al que no se puede ir.
 	if huella.vacia():
-		huella._disco(paraje, alcance)
+		huella._disco(paraje, alcance, terrain)
 	return huella
 
 
@@ -182,15 +194,26 @@ func _sembrar(paraje: Paraje, field: ResourceField, terrain: TerrainGenerator,
 	return mask
 
 
-## El disco de siempre, para cuando no hay campo del que sacar la forma.
-func _disco(paraje: Paraje, alcance: int) -> void:
+## El disco de siempre, para cuando no hay forma que sacar.
+##
+## Y RESPETANDO EL TERRENO, que era por donde se colaba el río. Este disco es la
+## red de seguridad —un paraje sin forma no existe para nadie— y estaba puesto a
+## pelo, sin filtro: en cuanto la celdilla del centro caía rechazada, la mancha
+## salía vacía, se caía aquí y volvía a aparecer el cauce dentro de un
+## avellanar. Medido: «El raizal del regato», once celdillas con agua.
+func _disco(paraje: Paraje, alcance: int, terrain: TerrainGenerator) -> void:
 	dentro = PackedByteArray()
 	dentro.resize(lado * lado)
 	for dz in range(-alcance, alcance + 1):
 		for dx in range(-alcance, alcance + 1):
 			var away := Vector2(float(dx), float(dz)).length() * CELDILLA
-			if away <= paraje.extent:
-				dentro[(dz + alcance) * lado + (dx + alcance)] = 1
+			if away > paraje.extent:
+				continue
+			var centre := paraje.position + Vector3(
+				float(dx) * CELDILLA, 0.0, float(dz) * CELDILLA)
+			if not _cuadra_el_terreno(paraje, centre, terrain):
+				continue
+			dentro[(dz + alcance) * lado + (dx + alcance)] = 1
 
 
 ## Si esta celdilla es terreno que de verdad pertenece al paraje.
@@ -217,7 +240,23 @@ static func _cuadra_el_terreno(paraje: Paraje, centre: Vector3,
 			or paraje.activity == Subsistence.Activity.MARISQUEO:
 		return _moja_la_celdilla(centre, terrain)
 
-	if not Hydrography.can_cross(ford, false, false):
+	# Y LO QUE NO ES DE PESCA NO COGE NADA DE RIO. Ni una celdilla.
+	#
+	# Aqui se pedia solo `Hydrography.can_cross` -o sea hasta 0,35, el limite
+	# de vadear sin nadar- mientras que bautizar un sitio exige suelo SECO
+	# -0,15, ver [Parajes.activity_fits]-. Las dos reglas discrepaban, y por
+	# eso seguian saliendo avellanares con el agua por el tobillo: el punto
+	# del centro pasaba el filtro estricto y la MANCHA se metia en el cauce
+	# con el permisivo.
+	#
+	# Y se pregunta por la celdilla ENTERA y no por su centro, por el mismo
+	# motivo que en el agua: el cauce mide entre cuarenta y ochenta metros y
+	# la celdilla veinticinco, asi que hay celdillas que el rio cruza por una
+	# esquina y cuyo centro esta seco. Media celdilla de rio dentro de un
+	# avellanar sigue siendo rio dentro de un avellanar.
+	if _moja_la_celdilla(centre, terrain):
+		return false
+	if not Parajes.activity_fits(paraje.activity, ford):
 		return false
 	if paraje.serves(Subsistence.Activity.MATERIA_PRIMA):
 		return true
@@ -295,6 +334,8 @@ func _filtrar(paraje: Paraje, terrain: TerrainGenerator, mask: PackedByteArray,
 				continue
 			var centre := paraje.position + Vector3(
 				float(dx) * CELDILLA, 0.0, float(dz) * CELDILLA)
+			if dx == 0 and dz == 0:
+				continue
 			if Vector2(centre.x - paraje.position.x,
 					centre.z - paraje.position.z).length() > lejos:
 				mask[index] = 0

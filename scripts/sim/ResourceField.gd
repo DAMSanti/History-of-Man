@@ -459,6 +459,15 @@ func dry_cell(activity: Subsistence.Activity, x: int, z: int) -> bool:
 	return true
 
 
+## En qué celda cae un punto del mundo.
+func cell_of(point: Vector3) -> Vector2i:
+	if width <= 0 or height <= 0:
+		return Vector2i.ZERO
+	return Vector2i(
+		clampi(int(point.x / world_size.x * float(width)), 0, width - 1),
+		clampi(int(point.z / world_size.y * float(height)), 0, height - 1))
+
+
 ## Centro del mundo de una celda
 func cell_center(x: int, z: int) -> Vector3:
 	if width <= 0 or height <= 0:

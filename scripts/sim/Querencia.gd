@@ -98,6 +98,7 @@ func asentarse() -> int:
 	if sim.field == null or sim.knowledge == null or sim.parajes == null:
 		return 0
 
+	var salen: Array[Paraje] = []
 	for actividad: int in OFICIOS:
 		var act := actividad as Subsistence.Activity
 		# Se busca en la vuelta corta y, SI NO HAY NADA, se ensancha.
@@ -118,28 +119,49 @@ func asentarse() -> int:
 			var centre := sim.field.cell_center(celda.x, celda.y)
 			if sim.field.abundance_cell(act, celda.x, celda.y) <= 0.0:
 				continue
+			# El SITIO se conoce; su alrededor, sólo se ha visto.
+			#
+			# Caía de 0,62 a 0,46 y las dos cifras pasan el listón de bautizar
+			# —0,30—, así que la mancha entera quedaba lista para nombrarse y el
+			# primer repaso de medianoche sacaba NUEVE parajes de golpe. Es la
+			# queja del jugador por partida doble: ni salían cuatro el primer
+			# día ni salían a medida que se descubren.
+			#
+			# Ahora el borde se queda por debajo del listón: hay dónde ir a
+			# trabajar desde el primer día, y el sitio de al lado se bautiza
+			# cuando alguien lo trabaje lo bastante.
 			var lejos := donde.distance_to(centre) / MANCHA
-			sim.knowledge.reveal(act, centre,
-				SABIDO * lerpf(1.0, 0.75, clampf(lejos, 0.0, 1.0)))
+			sim.knowledge.reveal(act, centre, lerpf(SABIDO,
+				Parajes.NAMED_AT * 0.8, clampf(lejos, 0.0, 1.0)))
 
-	# Y con el terreno conocido, los parajes salen SOLOS: `Parajes.refresh` es
-	# quien bautiza, y lo hace con las mismas reglas que cuando los encuentra
-	# un explorador. No se fabrica ninguno a mano.
-	var antes := sim.parajes.list.size()
-	# El mismo criterio de «dos sitios son el mismo» que usa el explorador: si
-	# hay camino de uno a otro, es el mismo trozo de monte.
-	var grid := sim.marcha._navgrid()
-	var mismo_trozo := func(a: Vector3, b: Vector3) -> bool:
-		return grid.connected(a, b)
-	sim.parajes.refresh(sim.field, sim.knowledge, sim.day, OFICIOS,
-		sim._terrain, mismo_trozo)
-	var salieron := sim.parajes.list.size() - antes
-	if salieron > 0:
-		sim._note(Chronicle.Kind.HALLAZGO,
-			"La banda se asienta. De la primera vuelta al abrigo salen %d "
-				% salieron
-			+ "sitios con nombre: lo que se ve desde la boca de la cueva.", 2)
-	return salieron
+		# UNO, y de ESTE oficio. Se bautiza a mano y no se deja que lo haga el
+		# barrido de [Parajes.refresh].
+		#
+		# El barrido abre TODOS los sitios que pasen el liston dentro de lo
+		# conocido, asi que revelar cuatro manchas sacaba doce parajes el primer
+		# dia y de los oficios que cayeran. Lo pedido es uno de caza, uno de
+		# pesca, uno de recoleccion y uno de materia prima: cuatro, y el resto
+		# se descubren andando.
+		var celda := sim.field.cell_of(donde)
+		var nacido := sim.parajes.bautizar(sim.field, act, celda.x, celda.y,
+			sim.field.cell_center(celda.x, celda.y), sim.day, sim._terrain)
+		if nacido != null:
+			salen.append(nacido)
+
+	if salen.is_empty():
+		return 0
+
+	# Estos cuatro NO levantan tarjeta de hallazgo uno por uno: se cuentan de
+	# una vez, abajo. Cuatro «un sitio con nombre» seguidos en el primer minuto
+	# de partida son ruido, no noticias.
+	sim.parajes.just_found.clear()
+
+	sim._note(Chronicle.Kind.HALLAZGO,
+		"La banda se asienta. De la primera vuelta al abrigo salen %d "
+			% salen.size()
+		+ "sitios con nombre: uno de cada oficio, lo que se ve desde la boca "
+		+ "de la cueva.", 2)
+	return salen.size()
 
 
 ## El mejor sitio de un oficio dentro del radio, o cero si no hay ninguno.

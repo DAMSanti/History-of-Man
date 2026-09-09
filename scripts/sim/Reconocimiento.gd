@@ -277,6 +277,37 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 	return pick["pos"]
 
 
+## Cuántos sitios trae como mucho quien vuelve de mirar el monte.
+##
+## UNO. Una jornada de reconocimiento cubre doscientos sesenta metros de radio y
+## ahí caben siete sitios con nombre, así que sin tope el jugador ve siete
+## chapas aparecer de golpe —medido: cuatro «pastos» y tres más, todos a las
+## 16:10 del día 2—, que es la misma queja que con las de medianoche. Quien
+## vuelve del monte trae UN sitio; los demás se quedan para la siguiente vuelta.
+const DE_UNA_VUELTA := 1
+
+
+## Bautiza lo que se acabe de descubrir alrededor de un punto, EN EL MOMENTO.
+##
+## La otra mitad de [_name_new_parajes], que es el repaso de fin de jornada.
+## Esta corre cuando alguien descubre algo y sólo mira su vuelta, para que la
+## chapa aparezca cuando el hallazgo, y no todas juntas a medianoche.
+func bautizar_lo_descubierto(centro: Vector3, radio: float) -> int:
+	if sim.field == null or sim.knowledge == null:
+		return 0
+	var grid := sim.marcha._navgrid()
+	var mismo_trozo := func(a: Vector3, b: Vector3) -> bool:
+		return grid.connected(a, b)
+	var salieron := sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
+		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
+		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
+		centro, radio, DE_UNA_VUELTA)
+	if salieron > 0:
+		_contar_los_nuevos()
+	return salieron
+
+
 ## Bautiza los sim.parajes que se hayan ganado un nombre y los cuenta.
 func _name_new_parajes() -> void:
 	if sim.field == null or sim.knowledge == null:
@@ -308,11 +339,33 @@ func _name_new_parajes() -> void:
 	var grid := sim.marcha._navgrid()
 	var same_patch := func(a: Vector3, b: Vector3) -> bool:
 		return grid.connected(a, b)
+	# CON TOPE, igual que el hallazgo de quien vuelve del monte.
+	#
+	# Este repaso es la red de seguridad: recoge lo que se ha ganado un nombre y
+	# no ha saltado en el momento -una vuelta de reconocimiento levanta un
+	# circulo de doscientos sesenta metros de golpe y solo bautiza uno-. Sin
+	# tope lo soltaba TODO a la vez y a medianoche, que es la queja: «aparecen
+	# todos a la vez cuando llegan las 12 de la noche». Medido: nueve chapas a
+	# las 00:10 del dia 2.
+	#
+	# Con tope, la cola se va vaciando de una en una y los sitios aparecen poco
+	# a poco, que es como se descubren.
 	sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
 		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
-		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, same_patch)
+		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, same_patch,
+		Vector3.ZERO, 0.0, DE_UNA_VUELTA)
 
+	_contar_los_nuevos()
+	sim._new_ground_surveys_today.clear()
+
+
+## Cuenta los sitios recien bautizados y vacia la lista.
+##
+## Vive aparte porque bautizan DOS: el hallazgo de quien vuelve de mirar -ver
+## [bautizar_lo_descubierto]- y el repaso de fin de jornada. Los dos tienen que
+## contarlo igual, y ninguno debe volver a contar lo que ya conto el otro.
+func _contar_los_nuevos() -> void:
 	for paraje: Paraje in sim.parajes.just_found:
 		sim._note(Chronicle.Kind.HALLAZGO,
 			"La banda ya conoce bien un sitio y le ha puesto nombre: %s, %s a %d m."
@@ -329,7 +382,7 @@ func _name_new_parajes() -> void:
 			+ "para volver sola.", paraje.position))
 
 	_credit_new_ground(sim.parajes.just_found)
-	sim._new_ground_surveys_today.clear()
+	sim.parajes.just_found.clear()
 
 
 ## Premia con destreza a quien de verdad ha abierto cada paraje de
@@ -568,6 +621,19 @@ func _finish_survey(person: Inhabitant) -> void:
 			sim.knowledge.reveal_around(activity as Subsistence.Activity,
 				person.work_centre, SettlementSim.SURVEY_RADIUS,
 				LO_QUE_DEJA_UNA_JORNADA)
+
+		# Y SE BAUTIZA AHORA, no al cierre de la jornada.
+		#
+		# «Los parajes deben aparecer a medida que se descubran; ahora mismo
+		# aparecen todos a la vez cuando llegan las 12 de la noche». Salian de
+		# golpe porque el unico que bautizaba era el repaso de medianoche. Un
+		# sitio se descubre cuando alguien vuelve de mirarlo, y es entonces
+		# cuando tiene que aparecer su chapa en el valle.
+		#
+		# Acotado a lo que esta persona acaba de aprender: el barrido completo
+		# recorre las 4.096 celdas del campo y hacerlo a cada hallazgo se
+		# comeria el rendimiento.
+		bautizar_lo_descubierto(person.work_centre, SettlementSim.SURVEY_RADIUS)
 
 	var discovered: Array[String] = []
 	if here != null and here.has_unknowns():

@@ -135,7 +135,15 @@ func cubre(activity: Subsistence.Activity, point: Vector3,
 	for paraje: Paraje in list:
 		if not paraje.serves(activity):
 			continue
-		if not paraje.contains(point):
+		# Dentro de su forma, o dentro de su radio nominal: lo que sea mayor.
+		#
+		# El radio hace falta además de la forma. La forma la recorta el
+		# terreno, así que dos celdas del mismo pastizal separadas por un
+		# reguero salen fuera la una de la otra y se bautizan por separado:
+		# medido, CUATRO «pastos» naciendo a la vez dentro del mismo círculo de
+		# doscientos sesenta metros. Un paraje no empieza a doscientos metros
+		# del anterior; su radio es lo que mide el sitio.
+		if not paraje.contains(point) 				and paraje.distance_from(point) > paraje.extent:
 			continue
 		if same_patch.is_valid() and not same_patch.call(paraje.position, point):
 			continue
@@ -248,13 +256,28 @@ func clear_choice(activity: Subsistence.Activity) -> void:
 ##
 ## `same_patch`, si se da, se pasa tal cual a [near]: ver la nota de ahí
 ## para por qué la fusión necesita algo más que una distancia.
+## Repasa el mapa y bautiza lo que se haya ganado un nombre.
+##
+## `centro` y `radio` acotan el barrido a un trozo. Sirve para bautizar EN EL
+## MOMENTO en que alguien descubre algo —al terminar de reconocer, al dar con lo
+## que se venía a buscar— en vez de esperar al cierre de la jornada.
+##
+## Hacía falta y era la queja del jugador: «los parajes deben aparecer a medida
+## que se descubran; ahora mismo aparecen todos a la vez cuando llegan las 12 de
+## la noche». Salían de golpe porque el único que bautizaba era el repaso de fin
+## de día. Sin acotar, el barrido recorre las 4.096 celdas del campo y hacerlo
+## a cada hallazgo se comería el rendimiento; acotado a la vuelta de quien lo ha
+## encontrado son unas pocas decenas.
 func refresh(field: ResourceField, knowledge: BandKnowledge,
 		day: int, activities: Array, terrain: TerrainGenerator = null,
-		same_patch: Callable = Callable()) -> int:
+		same_patch: Callable = Callable(),
+		centro: Vector3 = Vector3.ZERO, radio: float = 0.0,
+		tope: int = 0) -> int:
 	if field == null or knowledge == null:
 		return 0
 
 	var added := 0
+	var candidatas: Array[Dictionary] = []
 	for activity_key: int in activities:
 		var activity := activity_key as Subsistence.Activity
 		# La caza pide mas abundancia que las demas para siquiera nombrarse:
@@ -266,87 +289,76 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				if field.abundance_cell(activity, x, z) < worth:
 					continue
 				var centre := field.cell_center(x, z)
+				if radio > 0.0 and Vector2(centre.x - centro.x,
+						centre.z - centro.z).length() > radio:
+					continue
 				if knowledge.familiarity_at(activity, centre) < NAMED_AT:
 					continue
 
-				# Si ya hay uno del mismo oficio cerca Y EN EL MISMO TROZO DE
-				# MONTE, es EL MISMO sitio: se deja crecer el que estaba en
-				# vez de bautizar el vecino. Varios avellanares a un tiro de
-				# piedra son un solo avellanar; uno al otro lado del rio,
-				# aunque quede cerca en linea recta, es otro.
-				if cubre(activity, centre, same_patch) != null:
-					continue
+				candidatas.append({"act": activity, "x": x, "z": z,
+					"centre": centre,
+					"hay": field.abundance_cell(activity, x, z)})
 
-				# Y si lo que hay en este punto es un paraje de OTRO oficio,
-				# tampoco se bautiza otro: se le suma el oficio al que ya
-				# está. Un recodo con caza, raíz y cuerna caída es UN sitio
-				# donde se hacen tres cosas, no tres parajes pisándose -«el
-				# pasto del recodo», «el raizal del recodo» y «el desmogadero
-				# del recodo» eran el mismo trozo de monte tres veces.
-				# Y en el agua no se bautizan avellanares. Se mira ANTES de buscarle
-				# sitio: si el suelo no da para esta actividad, no hay paraje que abrir
-				# ni al que sumarsela.
-				if terrain and not activity_fits(activity,
-					terrain.crossing_difficulty_at(centre)):
-					continue
+	# Y AHORA se bautiza, de lo mejor a lo peor y con tope.
+	#
+	# El tope es lo que hace que los sitios salgan de uno en uno y no en
+	# racimo: una jornada de reconocimiento cubre doscientos sesenta metros y
+	# ahi caben siete sitios con nombre, asi que sin tope el jugador ve siete
+	# chapas aparecer de golpe -medido: cuatro «pastos» y tres mas, todos a las
+	# 16:10 del dia 2-. Quien vuelve de mirar el monte trae UN sitio, y los
+	# demas se quedan para la siguiente vuelta.
+	#
+	# Sin tope -el repaso de fin de jornada- se bautiza todo lo que quede.
+	candidatas.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["hay"]) > float(b["hay"]))
+	for c: Dictionary in candidatas:
+		if tope > 0 and added >= tope:
+			break
+		var activity := c["act"] as Subsistence.Activity
+		var centre: Vector3 = c["centre"]
+		# Si ya hay uno del mismo oficio cerca Y EN EL MISMO TROZO DE MONTE,
+		# es EL MISMO sitio: se deja crecer el que estaba en vez de bautizar
+		# el vecino. Varios avellanares a un tiro de piedra son un solo
+		# avellanar; uno al otro lado del rio, aunque quede cerca en linea
+		# recta, es otro.
+		if cubre(activity, centre, same_patch) != null:
+			continue
 
-				# Y NO SE MEZCLAN MEDIOS.
-				#
-				# Un sitio con caza, raiz y cuerna caida es UN sitio donde se
-				# hacen tres cosas, y por eso se suma el oficio al que ya
-				# estaba en vez de abrir otro. Pero eso vale entre oficios DE
-				# TIERRA: el remanso del rio y el avellanar de la orilla no son
-				# el mismo sitio aunque queden a cien metros, y fundirlos daba
-				# justo lo que se veia en la partida -un paraje de pesca que
-				# abarca tierra, o un avellanar que cruza el rio-.
-				#
-				# El criterio es el suelo del anfitrion: si la actividad nueva
-				# no se puede hacer donde el esta, no es su sitio. Ver
-				# [activity_fits].
-				var host := at_site(centre, same_patch)
-				if host != null and activity_fits(activity, host.ford):
-					host.add_activity(activity)
-					continue
-				if host != null:
-					# Hay un paraje al lado pero es de otro medio. Se abre uno
-					# nuevo, que es lo correcto: son dos sitios distintos.
-					pass
+		# Y en el agua no se bautizan avellanares. Se mira ANTES de buscarle
+		# sitio: si el suelo no da para esta actividad, no hay paraje que abrir
+		# ni al que sumarsela.
+		if terrain and not activity_fits(activity,
+				terrain.crossing_difficulty_at(centre)):
+			continue
 
-				if terrain:
-					centre.y = terrain.get_height_at(centre)
+		# Si lo que hay en este punto es un paraje de OTRO oficio, tampoco se
+		# bautiza otro: se le suma el oficio al que ya esta. Un recodo con
+		# caza, raiz y cuerna caida es UN sitio donde se hacen tres cosas, no
+		# tres parajes pisandose -«el pasto del recodo», «el raizal del recodo»
+		# y «el desmogadero del recodo» eran el mismo trozo de monte tres
+		# veces.
+		#
+		# Pero eso vale entre oficios DE TIERRA: el remanso del rio y el
+		# avellanar de la orilla no son el mismo sitio aunque queden a cien
+		# metros, y fundirlos daba justo lo que se veia en la partida -un
+		# paraje de pesca que abarca tierra, o un avellanar que cruza el rio-.
+		# El criterio es el suelo del anfitrion: si la actividad nueva no se
+		# puede hacer donde el esta, no es su sitio. Ver [activity_fits].
+		var host := at_site(centre, same_patch)
+		if host != null and activity_fits(activity, host.ford):
+			host.add_activity(activity)
+			continue
 
-				var kind := _kind_for(activity, centre, GameState.season)
-				var paraje := Paraje.create(x, z, activity, kind, centre, day)
-				# El suelo de debajo, que decide QUE puede haber aqui. Ver
-				# `Parajes.material_fits`.
-				if terrain:
-					paraje.ford = terrain.crossing_difficulty_at(centre)
-				# Se rellena lo que hay ahi al bautizarlo, aunque casi todo
-				# quede como incognita: la lista de lo que FALTA por saber es
-				# la que le da sentido a volver
-				paraje.fill_contents(field, GameState.season)
+		if bautizar(field, activity, int(c["x"]), int(c["z"]),
+				centre, day, terrain) != null:
+			added += 1
 
-				# Y el nombre lo pone lo que MAS ABUNDA, no lo que tocaba por
-				# actividad: un sitio con cuatro veces mas raiz que avellana
-				# es un raizal aunque se bautizara mirando la recoleccion en
-				# otoño. Se hace antes de `add`, que es quien fija el rotulo.
-				# Sin contar la leña y la fibra, que se meten en TODOS los
-				# parajes con una pizca fija de nada: un sitio cuyo unico
-				# nombre posible es «el leñero» no es un sitio, es una celda
-				# que ha pasado el umbral de otra cosa que ahora mismo no
-				# esta -cuerna caida en verano, por ejemplo. Se deja sin
-				# bautizar y ya se bautizara cuando de verdad tenga algo.
-				var richest := _richest_named(paraje, true)
-				if richest < 0:
-					continue
-				paraje.kind = richest as Materia.Kind
-				if add(paraje):
-					added += 1
-
-	# Y la forma de todos, al dia. No es solo de los recien nacidos: la mancha
-	# cambia con la estacion -un avellanar en enero no ocupa lo que en octubre-
-	# y con lo que se saca, asi que se repasa entera cada vez.
-	retocar_huellas(field, terrain)
+	# Y la forma de todos, al dia. No es solo de los recien nacidos -esos ya la
+	# sacan en `bautizar`-: la mancha cambia con la estacion -un avellanar en
+	# enero no ocupa lo que en octubre- y con lo que se saca. Solo en el repaso
+	# COMPLETO: los acotados son muchos al dia y esto se reparte por jornadas.
+	if radio <= 0.0:
+		retocar_huellas(field, terrain)
 	return added
 
 
@@ -404,6 +416,50 @@ func fraccion_sabida() -> float:
 	for paraje: Paraje in list:
 		suma += paraje.known_fraction()
 	return clampf(suma / float(list.size()), 0.0, 1.0)
+
+
+## Abre un paraje en una celda. Devuelve el paraje, o null si no merecio nombre.
+##
+## Vive aqui y no dentro de `refresh` porque son DOS quienes bautizan: el
+## descubrimiento de todos los dias y la vuelta al abrigo del primero -ver
+## [Querencia]-. Con el codigo dentro del barrido, la siembra del dia uno tenia
+## que llamar al barrido entero para abrir un sitio, y el barrido abre todos los
+## que pasen el liston: por eso el jugador veia salir doce parajes el primer dia
+## cuando lo pedido era uno de cada oficio.
+func bautizar(field: ResourceField, activity: Subsistence.Activity,
+		x: int, z: int, centre: Vector3, day: int,
+		terrain: TerrainGenerator = null) -> Paraje:
+	var punto := centre
+	if terrain:
+		punto.y = terrain.get_height_at(punto)
+
+	var kind := _kind_for(activity, punto, GameState.season)
+	var paraje := Paraje.create(x, z, activity, kind, punto, day)
+	# El suelo de debajo, que decide QUE puede haber aqui. Ver
+	# `Parajes.material_fits`.
+	if terrain:
+		paraje.ford = terrain.crossing_difficulty_at(punto)
+	# Se rellena lo que hay ahi al bautizarlo, aunque casi todo quede como
+	# incognita: la lista de lo que FALTA por saber es la que le da sentido a
+	# volver.
+	paraje.fill_contents(field, GameState.season)
+
+	# Y el nombre lo pone lo que MAS ABUNDA, no lo que tocaba por actividad: un
+	# sitio con cuatro veces mas raiz que avellana es un raizal aunque se
+	# bautizara mirando la recoleccion en otoño. Se hace antes de `add`, que es
+	# quien fija el rotulo. Sin contar la leña y la fibra, que se meten en TODOS
+	# los parajes con una pizca fija de nada: un sitio cuyo unico nombre posible
+	# es «el leñero» no es un sitio, es una celda que ha pasado el umbral de otra
+	# cosa que ahora mismo no esta -cuerna caida en verano, por ejemplo. Se deja
+	# sin bautizar y ya se bautizara cuando de verdad tenga algo.
+	var richest := _richest_named(paraje, true)
+	if richest < 0:
+		return null
+	paraje.kind = richest as Materia.Kind
+	if not add(paraje):
+		return null
+	paraje.retocar(field, terrain)
+	return paraje
 
 
 ## Por debajo de esto una veta se da por agotada. No es cero: el ultimo 4%

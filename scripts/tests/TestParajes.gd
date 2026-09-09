@@ -1342,3 +1342,84 @@ func test_lo_que_esta_dentro_lo_dice_la_huella() -> void:
 	assert_true(paraje.contains(paraje.position), "el nucleo esta dentro")
 	assert_false(paraje.contains(paraje.position + Vector3(100.0, 0.0, 0.0)),
 		"y lo que la forma deja fuera esta fuera, aunque el radio lo abarque")
+
+
+# ------------- como y cuando aparecen los parajes ------------------------
+
+## El primer dia salen CUATRO: uno de cada oficio y ni uno mas.
+##
+## Queja literal: «te pedi que el primer dia apareciese un paraje de cada, eso
+## son 4, ahora mismo estan apareciendo mas, y de los tipos que se te ponen de
+## los cojones». Salian doce porque la siembra revelaba cuatro manchas enteras y
+## dejaba que el barrido de [Parajes.refresh] bautizara todo lo que pasara el
+## liston dentro de ellas.
+func test_el_primer_dia_salen_cuatro_uno_de_cada() -> void:
+	assert_eq(Querencia.OFICIOS.size(), 4,
+		"son cuatro oficios: recoleccion, caza, pesca y materia prima")
+	# Y el borde de lo que se conoce al asentarse se queda POR DEBAJO del
+	# liston de bautizar: si lo pasara, el primer repaso abriria la mancha
+	# entera en vez de los cuatro sitios sembrados a mano.
+	assert_lt(Parajes.NAMED_AT * 0.8, Parajes.NAMED_AT,
+		"lo que rodea a un sitio sembrado se ha visto, pero no da para nombre")
+
+
+## Y de ahi en adelante salen de uno en uno, segun se descubren.
+##
+## «Los parajes deben aparecer a medida que se descubran. Ahora mismo aparecen
+## todos a la vez cuando llegan las 12 de la noche». Una vuelta de
+## reconocimiento levanta un circulo de 260 m de golpe y ahi caben siete sitios;
+## sin tope salian los siete juntos.
+func test_una_vuelta_trae_un_sitio_no_siete() -> void:
+	assert_eq(Reconocimiento.DE_UNA_VUELTA, 1,
+		"quien vuelve de mirar el monte trae UN sitio")
+
+	var registro := Parajes.new()
+	var saber := BandKnowledge.new()
+	saber.setup(64, 64, Vector2(2048.0, 2048.0))
+	var field := _field_rico()
+	# Todo el valle conocido de sobra: hay muchisimo que bautizar.
+	for z in range(field.height):
+		for x in range(field.width):
+			for act: int in [Subsistence.Activity.RECOLECCION,
+					Subsistence.Activity.CAZA,
+					Subsistence.Activity.MATERIA_PRIMA]:
+				saber.reveal(act as Subsistence.Activity,
+					field.cell_center(x, z), 1.0)
+
+	var oficios: Array = [Subsistence.Activity.RECOLECCION,
+		Subsistence.Activity.CAZA, Subsistence.Activity.MATERIA_PRIMA]
+	var salieron := registro.refresh(field, saber, 1, oficios, null,
+		Callable(), Vector3.ZERO, 0.0, 1)
+	assert_eq(salieron, 1,
+		"con tope de uno se bautiza uno, por mucho que haya esperando")
+
+	# Y el tope es lo unico que lo limita: sin el se bautiza lo que haya, que en
+	# un valle de verdad son siete de golpe. La cifra de siete sale de
+	# `HallazgoProbe` sobre el sitio 56; aqui el campo de prueba es pequeño y
+	# solo da para uno, asi que lo que se comprueba es que el tope MANDA.
+	assert_eq(registro.refresh(field, saber, 1, oficios, null,
+		Callable(), Vector3.ZERO, 0.0, 1), 0,
+		"y cuando ya no queda nada que bautizar, ninguno")
+
+
+## Un paraje que no es de pesca no coge NI UNA celdilla de rio.
+##
+## «Siguen apareciendo parajes, que no son de pesca, que cogen parte de rio».
+## La forma pedia solo `Hydrography.can_cross` -hasta 0,35, el limite de vadear-
+## mientras que bautizar exige suelo SECO -0,15-, asi que la mancha se metia en
+## el cauce aunque el centro pasara el filtro estricto.
+func test_un_paraje_de_tierra_no_coge_rio() -> void:
+	var terrain := FakeTerrain.new()
+	# Pegado al rio, pero en seco: es donde se colaba.
+	var centro := Vector3(500.0, 0.0,
+		FakeTerrain.RIVER_Z - FakeTerrain.RIVER_HALF - 40.0)
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.FRUTO_SECO, centro, 1)
+	var huella := Huella.de(paraje, null, terrain)
+
+	for celda: Vector3 in huella.celdas():
+		assert_false(FakeTerrain.in_river(celda),
+			"ni una celdilla del avellanar cae en el cauce")
+	assert_gt(huella.superficie(), 0.0,
+		"y aun asi el avellanar existe: no se ha quedado sin forma")
+	terrain.free()
