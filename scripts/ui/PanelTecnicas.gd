@@ -107,6 +107,9 @@ func _arbol(body: VBoxContainer) -> void:
 
 	var graph := TechGraph.new()
 	scroll.add_child(graph)
+	graph.tech_selected.connect(func(tech: TechTree.Tech) -> void:
+		ui.show_tech_video(tech)
+	)
 	graph.build(ui.tech, _tab, _util())
 	# Doce más de la barra horizontal, que si no tapa la fila de abajo.
 	scroll.custom_minimum_size = Vector2(0, graph.custom_minimum_size.y + 12.0)
@@ -117,7 +120,8 @@ func _arbol(body: VBoxContainer) -> void:
 func _leyenda(body: VBoxContainer) -> void:
 	_escrito(body, "La casilla se llena de ocre según se avanza. Llena del todo, "
 		+ "dominada; a medias, en marcha; con el filo en carbón, todavía "
-		+ "fuera de alcance. Pon el ratón encima para ver qué pide.", true)
+		+ "fuera de alcance. Pon el ratón encima para ver qué pide. "
+		+ "Haz clic sobre una técnica dominada para ver su hito en acción.", true)
 
 
 ## Lo que sólo le pasa a este oficio y no cabe en el árbol.

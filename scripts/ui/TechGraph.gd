@@ -1,5 +1,7 @@
 class_name TechGraph
 extends Control
+
+signal tech_selected(tech: TechTree.Tech)
 ## El árbol de técnicas de un oficio, dibujado como un árbol y hacia abajo.
 ##
 ## Era una lista sangrada con puntitos: «· Arpón — falta red». Se leía el
@@ -161,6 +163,14 @@ func _node_box(tech: TechTree.Tech) -> Control:
 	Pigmento.escribir(state, UISkin.GROUND.darkened(0.2) if pintada
 		else UISkin.INK_FAINT, 14, Pigmento.carbon())
 	text.add_child(state)
+
+	if pintada and tech != TechTree.Tech.LASCA:
+		frame.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		frame.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				tech_selected.emit(tech)
+		)
+
 	return frame
 
 

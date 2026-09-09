@@ -138,6 +138,9 @@ var tecnicas: PanelTecnicas = PanelTecnicas.new(self)
 ## Que hay pintado en el mundo. Ver [PanelCenso].
 var censo: PanelCenso = PanelCenso.new(self)
 
+## Celebración y presentación de hitos tecnológicos con vídeo.
+var popup_hito: PopupHitoTecnico = null
+
 
 ## Las cuatro ventanas que se abren desde la barra de abajo y desde el mundo.
 func show_professions() -> void:
@@ -198,7 +201,21 @@ func _ready() -> void:
 	_skin = UISkin.build_theme()
 	barra._build_clock()
 	_build_taskbar()
+	popup_hito = PopupHitoTecnico.new()
+	add_child(popup_hito)
 	set_process(true)
+
+
+## Muestra o encola el hito técnico tras desbloquearlo.
+func show_tech_milestone(tech_kind: TechTree.Tech) -> void:
+	if popup_hito:
+		popup_hito.queue_tech(tech_kind)
+
+
+## Muestra directamente el vídeo de una técnica desde la interfaz.
+func show_tech_video(tech_kind: TechTree.Tech) -> void:
+	if popup_hito:
+		popup_hito.show_tech(tech_kind)
 
 
 ## Las ventanas abiertas se repintan solas.

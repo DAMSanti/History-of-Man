@@ -36,6 +36,7 @@ func _init() -> void:
 		TestLobo.new(),
 		TestCaceria.new(),
 		TestRelato.new(),
+		(load("res://scripts/tests/TestTechMilestones.gd") as GDScript).new(),
 	]
 
 	var passed := 0

@@ -921,6 +921,8 @@ func _on_day_passed(_day: int) -> void:
 					sim.has_boat = true
 				elif learned == TechTree.Tech.PASARELA:
 					sim.has_bridge = true
+				if ui != null:
+					ui.show_tech_milestone(learned)
 
 
 ## Vuelve al mapa regional, llevandose el estado de la banda
