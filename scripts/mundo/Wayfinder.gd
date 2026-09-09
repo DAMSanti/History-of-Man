@@ -216,6 +216,18 @@ static func find(grid: Navgrid, from_point: Vector3,
 						continue
 					if costs[nz * wide + cx] <= Navgrid.BLOCKED:
 						continue
+					# Y EL AGUA NO SE CRUZA EN DIAGONAL.
+					#
+					# Una celda de agua se abre porque tiene una linea vadeable
+					# de lado a lado -la fila o la columna de en medio, ver
+					# [Navgrid._vado_de_verdad]-. Una diagonal la atraviesa de
+					# esquina a esquina, o sea POR FUERA de esa linea, y eso es
+					# el cauce. El camino prometia un paso que sobre el terreno
+					# es agua honda, y quien lo seguia se plantaba en la orilla
+					# a barrerla -y varios en el mismo punto, porque el vado
+					# falso era siempre la misma celda.
+					if grid.vado.size() == costs.size() 							and (grid.vado[current] != 0 or grid.vado[neighbour] != 0):
+						continue
 
 				var step := Navgrid.CELL * (1.414 if dx != 0 and dz != 0 else 1.0)
 				var total := here + cost * step

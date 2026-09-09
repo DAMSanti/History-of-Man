@@ -151,6 +151,7 @@ static func preparar(terrain: TerrainGenerator, has_boat: bool,
 	grid.tall = int(grid.world.y / CELL) + 1
 	grid.cost.resize(grid.wide * grid.tall)
 	grid.area.resize(grid.wide * grid.tall)
+	grid.vado.resize(grid.wide * grid.tall)
 	return grid
 
 
@@ -168,14 +169,31 @@ func amasar(terrain: TerrainGenerator, filas: int) -> bool:
 		for x in range(wide):
 			var centre := Vector3(
 				(float(x) + 0.5) * CELL, 0.0, (float(_fila) + 0.5) * CELL)
-			cost[_fila * wide + x] = _measure(
+			var i := _fila * wide + x
+			cost[i] = _measure(
 				terrain, centre, built_with_boat, built_with_bridge,
 				built_with_caudal)
+			# Y si esta celda es AGUA. Ver [vado].
+			if terrain != null and cost[i] > BLOCKED:
+				centre.y = terrain.get_height_at(centre)
+				if terrain.crossing_difficulty_with(centre, built_with_caudal) > 0.05:
+					vado[i] = 1
 		_fila += 1
 	if _fila >= tall:
 		_flood_areas()
 		return true
 	return false
+
+
+## Qué celdas son AGUA, aunque se pasen. Índice `z * wide + x`.
+##
+## Se marcan para que el trazado no las cruce EN DIAGONAL. Una celda de agua se
+## abre porque tiene una línea vadeable de lado a lado —la fila o la columna de
+## en medio, ver [_vado_de_verdad]—, y un camino que la atraviesa de esquina a
+## esquina no va por esa línea: va por el cauce. El planificador prometía un
+## paso que sobre el terreno es agua honda, y quien lo seguía se plantaba en la
+## orilla a barrerla.
+var vado: PackedByteArray = PackedByteArray()
 
 
 func horneada() -> bool:
@@ -186,6 +204,51 @@ func horneada() -> bool:
 ##
 ## Las nueve muestras son un tres en raya; se mira la fila de en medio y la
 ## columna de en medio. Si alguna de las dos se vadea entera, hay paso.
+## Cada cuantos metros se cata la linea del vado.
+##
+## Tres, que es EXACTAMENTE lo que cata el andador dentro de un paso -ver
+## [Marcha.CATA_DEL_PASO]-, y ahi estaba el desajuste que dejaba a media banda
+## peleandose con la orilla.
+##
+## Las nueve muestras de la celda estan a veinte metros unas de otras, y un
+## cauce mas estrecho que eso se cuela entre dos: la rejilla veia una linea
+## vadeable donde el andador se encontraba el rio. La rejilla trazaba el camino
+## por ese vado que no existe, la gente llegaba a la orilla y se pasaba la
+## jornada barriendola. Y todos en EL MISMO PUNTO, porque el vado falso era
+## siempre la misma celda.
+##
+## Se cata fino solo cuando la cata gruesa dice que hay paso, que es en las
+## pocas celdas del cauce: el resto ni entra aqui.
+const CATA_DEL_VADO := 3.0
+
+
+## Si por esta celda se puede cruzar el agua de lado a lado, de verdad.
+##
+## Dos pasadas: la de las nueve muestras, que es barata y descarta la inmensa
+## mayoria de las celdas, y una fina por la linea que aquella daba por buena.
+static func _vado_de_verdad(terrain: TerrainGenerator, centre: Vector3,
+		fords: PackedFloat32Array, has_boat: bool, has_bridge: bool,
+		con_caudal: float) -> bool:
+	if not _has_ford(fords, has_boat, has_bridge):
+		return false
+	if terrain == null:
+		return true
+
+	var catas := maxi(int(ceil(CELL / CATA_DEL_VADO)), 2)
+	for a_lo_ancho: bool in [true, false]:
+		var hondo := 0.0
+		for i in range(catas + 1):
+			var t := -0.5 + float(i) / float(catas)
+			var point := Vector3(
+				centre.x + (t * CELL if a_lo_ancho else 0.0), 0.0,
+				centre.z + (0.0 if a_lo_ancho else t * CELL))
+			point.y = terrain.get_height_at(point)
+			hondo = maxf(hondo, terrain.crossing_difficulty_with(point, con_caudal))
+		if Hydrography.can_cross(hondo, has_boat, has_bridge):
+			return true
+	return false
+
+
 static func _has_ford(fords: PackedFloat32Array, has_boat: bool,
 		has_bridge: bool) -> bool:
 	# La fila y la columna de en medio de la malla de muestras.
@@ -332,10 +395,14 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 	#
 	# No basta con que un punto suelto sea somero: eso abriría la celda por un
 	# charco de una esquina y mandaría a la gente a cruzar por lo hondo. Lo que
-	# hace falta es una línea que la atraviese de lado a lado —la fila de en
-	# medio o la columna de en medio de las nueve muestras—, que es lo que de
+	# hace falta es una línea que la atraviese de lado a lado, que es lo que de
 	# verdad significa «aquí hay vado».
-	if not _has_ford(fords, has_boat, has_bridge):
+	#
+	# Y comprobada FINA, cada tres metros: con las nueve muestras a solas, un
+	# cauce más estrecho que veinte metros se cuela entre dos y la celda se
+	# abría por un vado que no existe. Ver [_vado_de_verdad].
+	if not _vado_de_verdad(terrain, centre, fords, has_boat, has_bridge,
+			con_caudal):
 		return BLOCKED
 
 	return lerpf(total / float(PROBES.size()), worst, WORST_BIAS)

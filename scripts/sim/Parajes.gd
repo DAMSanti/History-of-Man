@@ -285,7 +285,7 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 		day: int, activities: Array, terrain: TerrainGenerator = null,
 		same_patch: Callable = Callable(),
 		centro: Vector3 = Vector3.ZERO, radio: float = 0.0,
-		tope: int = 0) -> int:
+		tope: int = 0, abrigo: Vector3 = Vector3.INF) -> int:
 	if field == null or knowledge == null:
 		return 0
 
@@ -306,6 +306,22 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 						centre.z - centro.z).length() > radio:
 					continue
 				if knowledge.familiarity_at(activity, centre) < NAMED_AT:
+					continue
+
+				# UN SITIO AL QUE NO SE PUEDE IR NO SE BAUTIZA.
+				#
+				# Es la queja del jugador: «uno de los parajes mostrados al
+				# principio está más allá del río, en un sitio que en esta época
+				# del año no pueden acceder; un trabajador no debe ni siquiera
+				# considerar un paraje no alcanzable».
+				#
+				# Y es lo honesto además: la banda pone nombre a los sitios a
+				# los que va. Un avellanar al otro lado de un río que este mes
+				# no se vadea es un sitio que se VE, no uno que se conoce.
+				#
+				# `same_patch` es «hay camino de aquí a allí» —la misma
+				# pregunta— así que se le pasa el abrigo y contesta.
+				if abrigo.x < INF and same_patch.is_valid() 						and not same_patch.call(abrigo, centre):
 					continue
 
 				candidatas.append({"act": activity, "x": x, "z": z,

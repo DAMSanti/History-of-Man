@@ -25,6 +25,7 @@ var _cortas := 0
 var _instantaneas := 0
 var _contra_el_rio: Dictionary = {}
 var _sin_acercarse := 0
+var _cuadros_yendo := 0
 var _hace_un_rato: Dictionary = {}
 var _ruta_vacia: Dictionary = {}
 var _lejos_del_rio: Dictionary = {}
@@ -128,6 +129,7 @@ func _init() -> void:
 				continue
 			var ahora := p3.position.distance_to(p3.target)
 			var antes2 := float(_hace_un_rato.get(p3.given_name, ahora + 1.0))
+			_cuadros_yendo += 1
 			if ahora >= antes2 - 1.0:
 				_sin_acercarse += 1
 			_hace_un_rato[p3.given_name] = minf(antes2, ahora)
@@ -171,6 +173,22 @@ func _init() -> void:
 		print("   TODO JUNTO                            %.2f" % (_suma_total / n))
 	print("")
 	print("")
+	print("--- PARAJES: ¿SE LLEGA A ELLOS HOY? ---")
+	var rej: Navgrid = sim.marcha._navgrid()
+	var sueltos := 0
+	for paraje: Paraje in sim.parajes.list:
+		var llega: bool = rej != null and rej.is_ready() 			and rej.connected(sim.home_position, paraje.position)
+		if not llega:
+			sueltos += 1
+		print("   dia %2d %-27s %-14s a %4.0f m · %s" % [
+			paraje.found_day, paraje.name_text,
+			Subsistence.activity_name(paraje.activity),
+			sim.home_position.distance_to(paraje.position),
+			"SE LLEGA" if llega else "NO SE LLEGA"])
+	print("   parajes a los que no se llega: %d de %d" % [
+		sueltos, sim.parajes.list.size()])
+
+	print("")
 	print("--- ATASCOS RECOGIDOS ---")
 	if sim.stuck_tally.is_empty():
 		print("   ninguno")
@@ -179,8 +197,9 @@ func _init() -> void:
 
 	print("")
 	print("--- ANDAR SIN ACERCARSE (el ovillo de la orilla) ---")
-	print("   cuadros en YENDO sin haberse acercado en la ultima media hora: %d"
-		% _sin_acercarse)
+	print("   %d de %d cuadros en YENDO sin acercarse: %.1f %%" % [
+		_sin_acercarse, _cuadros_yendo,
+		100.0 * float(_sin_acercarse) / maxf(float(_cuadros_yendo), 1.0)])
 
 	print("")
 	print("--- QUIEN ANDA HACIA DONDE NO HAY CAMINO ---")

@@ -304,7 +304,7 @@ func repasar_rezagados() -> int:
 		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
-		Vector3.ZERO, 0.0, DE_UNA_VUELTA)
+		Vector3.ZERO, 0.0, DE_UNA_VUELTA, sim.home_position)
 	if salieron > 0:
 		_contar_los_nuevos()
 	return salieron
@@ -325,7 +325,7 @@ func bautizar_lo_descubierto(centro: Vector3, radio: float) -> int:
 		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
-		centro, radio, DE_UNA_VUELTA)
+		centro, radio, DE_UNA_VUELTA, sim.home_position)
 	if salieron > 0:
 		_contar_los_nuevos()
 	return salieron

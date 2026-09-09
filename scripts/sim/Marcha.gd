@@ -298,6 +298,18 @@ func _lane_shift(person: Inhabitant, to_target: Vector3) -> Vector3:
 		/ (sim.arrive_radius * 3.0), 0.0, 1.0)
 	if fade < 0.01:
 		return to_target
+	# EN EL AGUA NO HAY CARRILES. Se cruza por el vado, en fila.
+	#
+	# El carril aparta a cada uno hasta dos metros y medio del eje, y el eje es
+	# justo la linea que la rejilla ha comprobado que se vadea -el camino va de
+	# centro a centro de celda, o sea por la fila o la columna de en medio, que
+	# es donde se mide el vado, ver [Navgrid._vado_de_verdad]-. Dos metros y
+	# medio a un lado de un vado estrecho es el rio, y ahi el andador se planta:
+	# es el ovillo pegado al agua que se veia en los rastros, y con varios a la
+	# vez porque cada carril daba en un sitio distinto de la misma orilla.
+	if sim._terrain != null 			and sim._terrain.crossing_difficulty_at(person.position) > 0.05:
+		return to_target
+
 	var lane := (fmod(float(person.id) * 0.618, 1.0) - 0.5) * 2.0 * SettlementSim.LANE_SPREAD
 	var side := Vector3(-to_target.z, 0.0, to_target.x) / reach
 	return to_target + side * lane * fade

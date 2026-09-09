@@ -60,6 +60,20 @@ func _rank_known_spots() -> void:
 						else 900.0):
 					continue
 
+				# Y QUE SE PUEDA LLEGAR HOY. No se ofrece como tajo un sitio
+				# al que no hay camino: «un trabajador no debe ni siquiera
+				# considerar un paraje no alcanzable».
+				#
+				# Se pregunta aqui y no solo al salir porque la rejilla cambia
+				# con la estacion -ver [HornoDeRejillas]-: un avellanar que en
+				# agosto se vadeaba deja de estar al alcance cuando el rio
+				# crece, y hasta que alguien no se pasa media jornada contra el
+				# agua nadie se entera. La rejilla lo sabe sin buscar nada:
+				# trae las zonas comunicadas marcadas.
+				var rejilla := sim.marcha._navgrid()
+				if rejilla != null and rejilla.is_ready() 						and not rejilla.connected(sim.home_position, centre):
+					continue
+
 				if sim._terrain:
 					centre.y = sim._terrain.get_height_at(centre)
 

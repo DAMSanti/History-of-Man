@@ -1423,3 +1423,37 @@ func test_un_paraje_de_tierra_no_coge_rio() -> void:
 	assert_gt(huella.superficie(), 0.0,
 		"y aun asi el avellanar existe: no se ha quedado sin forma")
 	terrain.free()
+
+
+## Un sitio al que no se puede ir NO SE BAUTIZA.
+##
+## Queja literal: «uno de los parajes mostrados al principio está más allá del
+## río, en un sitio que en esta época del año no pueden acceder; un trabajador no
+## debe ni siquiera considerar un paraje no alcanzable». Medido en el sitio 56
+## con semilla fija: uno de once quedaba al otro lado.
+func test_no_se_bautiza_lo_que_no_se_alcanza() -> void:
+	var field := _field_rico()
+	var saber := BandKnowledge.new()
+	saber.setup(64, 64, Vector2(2048.0, 2048.0))
+	for z in range(field.height):
+		for x in range(field.width):
+			saber.reveal(Subsistence.Activity.RECOLECCION,
+				field.cell_center(x, z), 1.0)
+
+	var abrigo := Vector3(64.0, 0.0, 64.0)
+	var oficios: Array = [Subsistence.Activity.RECOLECCION]
+
+	# Con todo comunicado sale al menos uno.
+	var suelto := Parajes.new()
+	var todo_vale := func(_a: Vector3, _b: Vector3) -> bool: return true
+	assert_gt(float(suelto.refresh(field, saber, 1, oficios, null, todo_vale,
+		Vector3.ZERO, 0.0, 0, abrigo)), 0.0,
+		"si se llega, se bautiza")
+
+	# Y con el abrigo incomunicado de todo, ninguno.
+	var aislado := Parajes.new()
+	var nada_vale := func(a: Vector3, _b: Vector3) -> bool:
+		return a != abrigo
+	assert_eq(aislado.refresh(field, saber, 1, oficios, null, nada_vale,
+		Vector3.ZERO, 0.0, 0, abrigo), 0,
+		"si no se llega desde el abrigo, no hay sitio que nombrar")
