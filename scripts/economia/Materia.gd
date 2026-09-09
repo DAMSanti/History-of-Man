@@ -408,6 +408,30 @@ const PROTEINA_DIA := 60.0
 ## Es la cifra que se lee de un vistazo: una racion de carne trae 66 g y una de
 ## raiz 28. Sirve para la ficha del almacen, donde la columna de calorias sola
 ## no dice por que la carne importa.
+## Proteína de MEDIA jornada, en gramos: la otra mitad de lo que es una ración.
+##
+## Una ración es lo que come una persona en media jornada, y media jornada no es
+## sólo energía: son 1.250 kcal Y treinta gramos de proteína aprovechable. Con
+## una sola de las dos cuentas, un puñado de avellana «alimenta» 1,36 raciones y
+## una tajada de carne 0,54, y el jugador —con razón— lee que el fruto seco vale
+## más que la carne.
+##
+## Las dos cifras de energía son correctas, y por kilo también: la avellana con
+## cáscara da 3.091 kcal/kg y el venado magro 1.511, que es lo que dan de verdad.
+## Lo que faltaba no era corregir un dato, era enseñar el otro.
+const PROTEINA_RACION := PROTEINA_DIA * 0.5
+
+
+## Cuántas raciones da una unidad POR SU PROTEÍNA.
+##
+## La pareja de [nutrition], que las da por su energía. Juntas dicen lo que una
+## unidad es de verdad: un puñado de avellana son 1,4 raciones de energía y 0,7
+## de proteína; una tajada de carne, 0,5 de energía y 3,0 de proteína. Ahí se ve
+## de un vistazo para qué sirve cada una, y por qué no se vive de ninguna sola.
+static func raciones_de_proteina(kind: Kind) -> float:
+	return protein(kind) / PROTEINA_RACION
+
+
 static func protein_per_ration(kind: Kind) -> float:
 	var raciones := nutrition(kind)
 	if raciones <= 0.0:

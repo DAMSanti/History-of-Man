@@ -637,21 +637,28 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 		Materia.format_volume(Materia.litres_per_unit(kind))], true)
 
 	if Materia.is_food(kind):
-		ui._text(body, "Alimenta %.2f raciones por %s: %.0f kcal de las %.0f que "
-			% [Materia.nutrition(kind), Materia.unit_name(kind),
-				Materia.kcal(kind), Materia.KCAL_DIA]
-			+ "come una persona al día.", true)
-		# La segunda cuenta, y sin ella no se entiende el juego: con sólo las
-		# calorías un puñado de avellana alimenta como tres pescados y pico, y
-		# la banda debería poder vivir de fruto seco. No puede, y el motivo es
-		# éste. Ver [Materia.protein].
-		var prot := Materia.protein(kind)
-		if prot > 0.0:
-			ui._text(body, "Y da %.0f g de proteína aprovechable: %.0f %% de "
-				% [prot, 100.0 * prot / Materia.PROTEINA_DIA]
-				+ "lo que hace falta al día.", true)
-		else:
+		# LAS DOS raciones, no una. Con la de energía sola, un puñado de
+		# avellana da 1,36 y una tajada de carne 0,54, y se lee que el fruto
+		# seco alimenta más que la carne. Las dos cifras son correctas —y por
+		# kilo también—, lo que faltaba era la otra columna.
+		ui._text(body, "Por %s: %.1f raciones de energía y %.1f de proteína." % [
+			Materia.unit_name(kind), Materia.nutrition(kind),
+			Materia.raciones_de_proteina(kind)], true)
+		ui._text(body, "Son %.0f kcal de las %.0f y %.0f g de proteína "
+			% [Materia.kcal(kind), Materia.KCAL_DIA, Materia.protein(kind)]
+			+ "aprovechable de los %.0f que come una persona al día."
+				% Materia.PROTEINA_DIA, true)
+		# Y para qué sirve cada una. La proteína vegetal cuenta a la mitad
+		# porque es incompleta —ver [Materia.protein]—, y ésa es la razón de
+		# fondo de que no se viva de fruto seco por muchas calorías que tenga.
+		if Materia.protein(kind) <= 0.0:
 			ui._text(body, "No da proteína: llena, pero no sostiene.", true)
+		elif Materia.raciones_de_proteina(kind) > Materia.nutrition(kind):
+			ui._text(body, "Sostiene más de lo que llena: es de lo que hace "
+				+ "falta para que las demás raciones sirvan de algo.", true)
+		else:
+			ui._text(body, "Llena más de lo que sostiene. La proteína vegetal "
+				+ "es incompleta y cuenta a la mitad.", true)
 	var life := Materia.shelf_life(kind)
 	if life <= 0:
 		ui._text(body, "No se estropea.", true)

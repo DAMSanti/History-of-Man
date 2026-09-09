@@ -362,9 +362,16 @@ func winter_stock() -> Dictionary:
 	for person: Inhabitant in sim.people:
 		mouths += person.daily_food()
 	var needed := mouths * float(Subsistence.DAYS_PER_SEASON)
-	var have := sim.store.food_rations()
+	# COMIDAS COMPLETAS, no energía a secas. Ver [Storehouse.raciones_completas].
+	#
+	# La cuenta de cara al invierno es la que decide si se sobrevive, y una
+	# despensa de puro fruto seco da energía para el invierno entero y comidas
+	# de verdad para la mitad. Contando sólo energía, el medidor decía que se
+	# llegaba y la banda flaqueaba en enero sin que nada lo hubiera avisado.
+	var have := sim.store.raciones_completas()
 	return {
 		"have": have, "needed": needed,
+		"energia": sim.store.food_rations(),
 		"share": have / maxf(needed, 0.001),
 	}
 
