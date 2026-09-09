@@ -384,6 +384,12 @@ func _dry_meat(fraction: float, skill: float) -> void:
 			continue
 		sim.store.take(raw, dried)
 		sim.store.add(CURADO[raw] as Materia.Kind, dried)
+		# Y AL LIBRO, que si no la cecina no existe para el almacén: se apuntaba
+		# la carne fresca gastada -eso lo hace `take` solo- pero no la seca
+		# producida, así que su «produce/mes» salía en cero por muchas tiras que
+		# se colgaran. Ahumar es producir: el lavadero de bellota, que es la
+		# misma clase de faena, ya lo apuntaba.
+		sim.taller.note_production(CURADO[raw] as Materia.Kind, dried)
 		var cured := int(CURADO[raw])
 		smoked_today[cured] = float(smoked_today.get(cured, 0.0)) + dried
 		capacity -= dried

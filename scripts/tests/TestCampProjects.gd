@@ -49,6 +49,31 @@ func test_el_secadero_ahuma_el_pescado() -> void:
 		"y sale del montón de fresco")
 
 
+## Lo que sale del secadero cuenta como PRODUCIDO.
+##
+## Queja literal: «la producción de carne seca, o pescado seco no se cuenta
+## como producido/30 días». La carne fresca GASTADA sí se apuntaba —eso lo hace
+## `Storehouse.take` solo— pero la seca producida no, así que su columna salía
+## en cero por muchas tiras que se colgaran. El lavadero de bellota, que es la
+## misma clase de faena, ya lo apuntaba.
+func test_lo_ahumado_cuenta_como_producido() -> void:
+	# Cada uno por su lado: el secadero cura primero lo que antes se pudre, asi
+	# que con pescado delante no le llega el turno a la carne.
+	var con_carne := SettlementSim.new()
+	con_carne.store.add(Materia.Kind.CARNE, 40.0)
+	con_carne.hogar._dry_meat(1.0, 1.0)
+	assert_gt(float(con_carne.taller.produced_today.get(
+		int(Materia.Kind.CARNE_SECA), 0.0)),
+		0.0, "la cecina que sale del secadero entra en el libro")
+
+	var con_pescado := SettlementSim.new()
+	con_pescado.store.add(Materia.Kind.PESCADO, 40.0)
+	con_pescado.hogar._dry_meat(1.0, 1.0)
+	assert_gt(float(con_pescado.taller.produced_today.get(
+		int(Materia.Kind.PESCADO_SECO), 0.0)),
+		0.0, "y el pescado seco tambien")
+
+
 func test_se_cura_antes_lo_que_antes_se_pudre() -> void:
 	# Con las dos cosas en el abrigo y un secadero que no da para todo, se
 	# salva primero el pescado, que aguanta tres días contra los cuatro de la

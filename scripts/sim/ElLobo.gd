@@ -172,6 +172,17 @@ var _preguntado: Dictionary = {}
 var sim: SettlementSim
 
 
+## Mete algo en el almacén Y en el libro de producción.
+##
+## Lo que entra por aquí es carne y piel de verdad, así que tiene que contar en
+## el «produce/mes» igual que la que trae un cazador. Haciendo `store.add` a
+## secas, una pieza cobrada al lobo aparecía en la despensa sin que nada dijera
+## de dónde había salido.
+func _al_libro(kind: Materia.Kind, units: float) -> void:
+	sim.store.add(kind, units)
+	sim.taller.note_production(kind, units)
+
+
 func _init(settlement: SettlementSim) -> void:
 	sim = settlement
 
@@ -363,8 +374,8 @@ func _preguntar_merodean() -> void:
 			"hint": "Es carne y es una piel. Y se acaba el problema.",
 			"on_pick": func() -> void:
 				matar()
-				sim.store.add(Materia.Kind.CARNE, 6.0)
-				sim.store.add(Materia.Kind.PIEL, 1.0)
+				_al_libro(Materia.Kind.CARNE, 6.0)
+				_al_libro(Materia.Kind.PIEL, 1.0)
 				sim._note(Chronicle.Kind.TIERRA,
 					"Cae uno junto al montón. La manada aúlla toda la noche.", 2),
 		},
@@ -403,8 +414,8 @@ func _preguntar_se_queda() -> void:
 			"hint": "A tiro de azagaya y quieto. No habrá otro igual de fácil.",
 			"on_pick": func() -> void:
 				matar()
-				sim.store.add(Materia.Kind.CARNE, 8.0)
-				sim.store.add(Materia.Kind.PIEL, 1.0)
+				_al_libro(Materia.Kind.CARNE, 8.0)
+				_al_libro(Materia.Kind.PIEL, 1.0)
 				sim._note(Chronicle.Kind.TIERRA,
 					"Cae el que no huía. Los demás dejan de venir.", 3),
 		},
