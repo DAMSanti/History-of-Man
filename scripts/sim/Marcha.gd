@@ -508,6 +508,9 @@ func _send_to(person: Inhabitant, destination: Vector3) -> void:
 	# mandando gente a tajos que la rejilla da por cerrados.
 	destination = _firm_ground(destination)
 	person.target = destination
+	# Destino nuevo, cuenta nueva de lo cerca que se ha estado. Ver
+	# [Inhabitant.lo_mas_cerca].
+	person.lo_mas_cerca = person.position.distance_to(destination)
 
 	# Si el destino esta en otra ZONA del mapa no hay camino, y saberlo no
 	# cuesta nada: la rejilla trae marcados los trozos comunicados entre si.
@@ -749,7 +752,27 @@ func _watch_for_stuck(person: Inhabitant, hours: float) -> void:
 	# El caso que `arrived` venía a resolver -llegar y que el estado no se
 	# entere- sigue saliendo por su rama: quien ha llegado y no se mueve tampoco
 	# supera `SettlementSim.STUCK_SLACK`, así que el reloj corre igual y lo recoge abajo.
-	if person.position.distance_to(person.stuck_where) > SettlementSim.STUCK_SLACK:
+	# QUIEN SE ACERCA NO ESTA ATASCADO. Y quien no se acerca, si.
+	#
+	# La vara de antes era el DESPLAZAMIENTO: moverse doce metros reiniciaba el
+	# reloj. Eso deja fuera el atasco mas aparatoso que hay, y es el que se ve
+	# en los rastros como un ovillo pegado al agua: alguien que camina la
+	# orilla de un rio de un lado para otro buscando por donde pasar. Se mueve
+	# muchisimo -asi que nunca contaba como plantado- y no se acerca nada.
+	#
+	# Pasa porque la rejilla y el andador no dicen lo mismo del agua: la celda
+	# de cuarenta metros se abre en cuanto hay UNA linea vadeable dentro -ver
+	# [Navgrid._has_ford]- y el andador pregunta por el punto concreto que pisa
+	# -ver `_can_step_into`-, que casi nunca es esa linea. La rejilla traza el
+	# camino por el vado y quien anda no lo encuentra.
+	var falta := person.position.distance_to(person.target)
+	if is_inf(person.lo_mas_cerca):
+		# Marca sin estrenar: solo se toma la referencia. Reiniciando aqui el
+		# reloj, quien llega y se queda colgado no se detecta nunca, porque
+		# cada mirada seria la primera.
+		person.lo_mas_cerca = falta
+	elif falta < person.lo_mas_cerca - SettlementSim.STUCK_SLACK:
+		person.lo_mas_cerca = falta
 		person.stuck_hours = 0.0
 		person.stuck_where = person.position
 		return
@@ -821,6 +844,15 @@ func _watch_for_stuck(person: Inhabitant, hours: float) -> void:
 			'%s se quedo atascado %s: %s. Vuelve al abrigo.'
 				% [person.given_name,
 					sim.parajes.place_name(person.position, sim.home_position), why], 0)
+
+	# Y en SU diario, que es donde el jugador mira cuando una jornada no ha
+	# dado nada. Sin esto, un dia entero peleandose con la orilla de un rio se
+	# lee como «salio, decidio volver de vacio» y no dice por que.
+	sim.cronista.apuro(person,
+		"Llevaba %.0f horas sin poder acercarse a donde iba (%s, a %.0f m) y "
+			% [SettlementSim.STUCK_HOURS, why,
+				person.position.distance_to(person.target)]
+		+ "lo dejo por imposible: manana se le repartira otro sitio.")
 
 	if not person.journey.is_empty():
 		person.end_journey(sim.day,

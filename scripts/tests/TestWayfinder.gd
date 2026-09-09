@@ -405,10 +405,16 @@ func test_se_deja_de_insistir_contra_la_misma_pared() -> void:
 		"ni se pasa la tarde intentandolo")
 
 
-func test_moverse_reinicia_el_reloj_de_atasco_aunque_estes_llegando() -> void:
-	# El fallo: al acercarse a menos de arrive_radius*1,5 del tajo el reloj
-	# dejaba de reiniciarse aunque la persona siguiera andando, y a las dos
-	# horas se la daba por enganchada.
+func test_acercarse_reinicia_el_reloj_de_atasco() -> void:
+	# El fallo original: al acercarse a menos de arrive_radius*1,5 del tajo el
+	# reloj dejaba de reiniciarse aunque la persona siguiera andando, y a las
+	# dos horas se la daba por enganchada -medido, 72 atascos en tres jornadas
+	# sin que nadie estuviera parado.
+	#
+	# La vara pasó de MOVERSE a ACERCARSE, y por un motivo: moverse doce metros
+	# reiniciaba el reloj, y eso deja fuera el atasco más aparatoso que hay
+	# —quien camina la orilla de un río de un lado a otro buscando por dónde
+	# pasar—. Se mueve muchísimo y no se acerca nada.
 	var sim := SettlementSim.new()
 	sim._terrain = FakeTerrain.new()
 	var rng := RandomNumberGenerator.new()
@@ -421,11 +427,22 @@ func test_moverse_reinicia_el_reloj_de_atasco_aunque_estes_llegando() -> void:
 	person.stuck_hours = 0.0
 	sim.people = [person]
 
-	# Anda de sobra, pero pegado a su destino
-	person.position = Vector3(720.0, 200.0, 700.0)
+	# Lejos y acercandose: el reloj se reinicia por mucho que siga sin llegar.
+	person.target = Vector3(900.0, 200.0, 700.0)
+	person.lo_mas_cerca = 200.0
+	person.stuck_hours = 1.5
+	person.position = Vector3(760.0, 200.0, 700.0)
 	sim.marcha._watch_for_stuck(person, 1.0)
 	assert_eq(person.stuck_hours, 0.0,
-		"quien se ha movido veinte metros no esta atascado, este donde este")
+		"quien se ha acercado cuarenta metros no esta atascado")
+
+	# Y quien anda mucho SIN acercarse -la orilla del rio- si lo esta.
+	person.lo_mas_cerca = 140.0
+	person.stuck_hours = 0.0
+	person.position = Vector3(760.0, 200.0, 780.0)
+	sim.marcha._watch_for_stuck(person, 1.0)
+	assert_gt(person.stuck_hours, 0.0,
+		"andar la orilla sin acercarse SI cuenta como atasco")
 
 
 func test_quien_llega_y_no_se_mueve_si_se_detecta() -> void:

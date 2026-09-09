@@ -23,6 +23,11 @@ var _partes: Array[String] = []
 var _cerradas := 0
 var _cortas := 0
 var _instantaneas := 0
+var _contra_el_rio: Dictionary = {}
+var _sin_acercarse := 0
+var _hace_un_rato: Dictionary = {}
+var _ruta_vacia: Dictionary = {}
+var _lejos_del_rio: Dictionary = {}
 var _muestras := 0
 var _suma_slope := 0.0
 var _suma_tobler := 0.0
@@ -113,6 +118,33 @@ func _init() -> void:
 				_viaje[p.given_name] = v
 			elif previo == int(Inhabitant.State.YENDO):
 				_cerrar(sim, p)
+		# QUIEN VA HACIA UN SITIO AL QUE NO HAY CAMINO. Es la queja: «intentan
+		# llegar al otro lado de un rio que no pueden cruzar y se pasan la
+		# jornada andando contra el rio».
+		# Cuantos cuadros pasa alguien en YENDO sin acercarse a su destino.
+		for p3: Inhabitant in sim.people:
+			if int(p3.state) != int(Inhabitant.State.YENDO):
+				_hace_un_rato.erase(p3.given_name)
+				continue
+			var ahora := p3.position.distance_to(p3.target)
+			var antes2 := float(_hace_un_rato.get(p3.given_name, ahora + 1.0))
+			if ahora >= antes2 - 1.0:
+				_sin_acercarse += 1
+			_hace_un_rato[p3.given_name] = minf(antes2, ahora)
+
+		var rejilla: Navgrid = sim.marcha._navgrid()
+		if rejilla != null and rejilla.is_ready():
+			for p2: Inhabitant in sim.people:
+				if int(p2.state) != int(Inhabitant.State.YENDO):
+					continue
+				if rejilla.connected(p2.position, p2.target):
+					continue
+				var clave := "%s %s" % [p2.given_name,
+					Profession.job_name(p2.job as Profession.Job)]
+				_contra_el_rio[clave] = int(_contra_el_rio.get(clave, 0)) + 1
+				_ruta_vacia[clave] = p2.route.size()
+				_lejos_del_rio[clave] = sim.home_position.distance_to(p2.target)
+
 		if _partes.size() >= 18:
 			break
 
@@ -137,6 +169,27 @@ func _init() -> void:
 		print("   factor por la carga                   %.2f" % (_suma_carga / n))
 		print("   factor por el tiempo que hace         %.2f" % (_suma_clima / n))
 		print("   TODO JUNTO                            %.2f" % (_suma_total / n))
+	print("")
+	print("")
+	print("--- ATASCOS RECOGIDOS ---")
+	if sim.stuck_tally.is_empty():
+		print("   ninguno")
+	for causa: String in sim.stuck_tally:
+		print("   %-34s %d" % [causa, int(sim.stuck_tally[causa])])
+
+	print("")
+	print("--- ANDAR SIN ACERCARSE (el ovillo de la orilla) ---")
+	print("   cuadros en YENDO sin haberse acercado en la ultima media hora: %d"
+		% _sin_acercarse)
+
+	print("")
+	print("--- QUIEN ANDA HACIA DONDE NO HAY CAMINO ---")
+	if _contra_el_rio.is_empty():
+		print("   nadie")
+	for clave: String in _contra_el_rio:
+		print("   %-24s %5d cuadros · ruta %d hitos · destino a %.0f m del abrigo"
+			% [clave, int(_contra_el_rio[clave]), int(_ruta_vacia[clave]),
+				float(_lejos_del_rio[clave])])
 	print("")
 	print("salidas cerradas %d · descartadas por cortas %d · por instantaneas %d"
 		% [_cerradas, _cortas, _instantaneas])

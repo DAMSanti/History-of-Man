@@ -1420,6 +1420,15 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 const APRENDE_POR_HORA := 0.0005
 
 
+## Y su tope, en metros.
+##
+## Treinta: unas cuantas zancadas. Sin tope, un tick largo -acelerando el juego-
+## da zancadas de cientos de metros y entonces «he llegado» valdria desde medio
+## valle. No hace falta que valga: el paso se recorta al destino, asi que quien
+## lo tenia a tiro cae encima y el tick siguiente lo ve a cero.
+const LLEGADA_MAXIMA := 30.0
+
+
 ## Cuanto cuenta como «he llegado», en metros.
 ##
 ## No es un numero fijo: es lo que se anda de una zancada, o el radio de
@@ -1430,7 +1439,8 @@ const APRENDE_POR_HORA := 0.0005
 ## llegaba nunca a ningun sitio: se pasaba de largo, se volvia a trazar el
 ## camino y se pasaba otra vez.
 func _radio_de_llegada(hours: float) -> float:
-	return maxf(arrive_radius, walk_speed * hours * seconds_per_day / 24.0)
+	return clampf(walk_speed * hours * seconds_per_day / 24.0,
+		arrive_radius, LLEGADA_MAXIMA)
 
 
 func _tick_daylight(person: Inhabitant, hours: float) -> void:

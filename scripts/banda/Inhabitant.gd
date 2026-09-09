@@ -252,6 +252,14 @@ func work_summary() -> Array[Dictionary]:
 	return rows
 
 
+## Lo más cerca que se ha llegado a estar del destino en esta salida.
+##
+## Es la vara con la que se mide si alguien está atascado. La de antes era el
+## DESPLAZAMIENTO —moverse doce metros bastaba para reiniciar el reloj— y eso
+## deja fuera el atasco más aparatoso que hay: el que anda la orilla de un río
+## de un lado para otro sin cruzarlo. Se mueve muchísimo y no se acerca nada.
+var lo_mas_cerca: float = INF
+
 ## Cuanto lleva sin moverse yendo a algun sitio, y desde donde.
 ##
 ## Lo usa el vigilante de plantados. Ver [SettlementSim._watch_for_stuck].
