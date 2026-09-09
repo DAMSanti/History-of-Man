@@ -1008,6 +1008,22 @@ func _setup_ui() -> void:
 	canvas.name = "UI"
 	add_child(canvas)
 
+	# El minimapa va en SU PROPIO lienzo, y por encima de la barra -que va en la
+	# capa 10, ver [GameUI._ready]-.
+	#
+	# Va metido DENTRO de la barra: se ancla arriba a la derecha en y=0 y la
+	# barra le guarda el hueco. Con la barra dibujandose encima, los primeros
+	# cuarenta y cinco pixeles del mapa quedaban tapados, y con ellos el boton
+	# de la comarca, que va en esa misma esquina.
+	#
+	# Y en un lienzo aparte y no subiendo el de la interfaz: en ese cuelga
+	# tambien la ficha de depuracion, y subirla entera la pondria por encima de
+	# las ventanas del juego.
+	var lienzo_del_mapa := CanvasLayer.new()
+	lienzo_del_mapa.name = "Minimapa"
+	lienzo_del_mapa.layer = 11
+	add_child(lienzo_del_mapa)
+
 	# El panel de la esquina es SOLO de depuracion, y va aparte del resto.
 	# Antes el `return` que lo apagaba estaba al principio de esta funcion, asi
 	# que quitarlo se llevaba por delante el minimapa y todo lo demas.
@@ -1030,7 +1046,7 @@ func _setup_ui() -> void:
 	# `terrain.generate()` todavia no ha corrido, asi que `get_height_at`
 	# devuelve la misma cota en todas partes y el mapa sale de un verde plano.
 	# Se guarda el lienzo y se construye tras generar.
-	_minimap_canvas = canvas
+	_minimap_canvas = lienzo_del_mapa
 
 	# El panel de banda de la esquina se ha quitado: lo que decia esta ahora en
 	# las pestanas de Banda y Almacen, que ademas lo dicen mejor. Tener las dos

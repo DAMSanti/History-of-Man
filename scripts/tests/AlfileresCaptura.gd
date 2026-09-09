@@ -74,6 +74,16 @@ func _init() -> void:
 	print("parajes: %d · alfileres: %d" % [
 		sim.parajes.list.size(),
 		(demo.paraje_markers._markers as Dictionary).size()])
+	# Donde ha quedado el boton de la comarca, para saber si se ve.
+	var mapa: Control = demo._minimap
+	if mapa != null and mapa.get_parent() != null:
+		for hijo: Node in mapa.get_parent().get_children():
+			if hijo is Button:
+				var b := hijo as Button
+				print("boton comarca: rect %s · visible %s · dentro del mapa %s" % [
+					str(b.get_global_rect()), str(b.visible),
+					str(mapa.get_global_rect())])
+
 	var shot := get_root().get_texture().get_image()
 	if shot != null:
 		shot.save_png("user://alfileres.png")

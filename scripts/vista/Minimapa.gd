@@ -22,6 +22,51 @@ func _init(escena: Node3D) -> void:
 ## Se pinta del heightmap ya generado y no con una segunda camara: una
 ## SubViewport cenital costaria un pase de render entero por frame para algo
 ## que no cambia nunca.
+## Cuanta piel de la barra se ve alrededor del mapa, en pixeles.
+##
+## Seis: lo justo para que se lea como un marco y no como un hueco. Es lo que
+## hace que la barra RODEE al minimapa en vez de tenerlo pegado encima.
+const MARCO := 6
+
+## El lado del boton de la comarca, en pixeles.
+const BOTON := 26
+
+
+## Pone el boton de volver a la comarca en la esquina del mapa.
+##
+## Icono y no texto, y DENTRO del mapa: «el boton de volver a comarca debe ser
+## un icono en lugar de texto y estar dentro del minimapa en la esquina superior
+## derecha». Un rotulo de catorce caracteres debajo del mapa ocupaba una fila
+## entera de la barra para decir algo que se entiende con cuatro flechas.
+##
+## Antes de vivir aqui esto era la tecla ESC, y salirse del valle entero por
+## pulsar ESC daba un susto cada vez.
+func _poner_boton_de_comarca(encima: Control) -> void:
+	# Anclado a mano y no con un preset: el preset deja los desplazamientos a
+	# cero y el boton se iba fuera del mapa, invisible.
+	var back := Button.new()
+	back.anchor_left = 1.0
+	back.anchor_right = 1.0
+	back.anchor_top = 0.0
+	back.anchor_bottom = 0.0
+	back.offset_left = -BOTON - 5.0
+	back.offset_right = -5.0
+	back.offset_top = 5.0
+	back.offset_bottom = 5.0 + BOTON
+	back.tooltip_text = "Ver la comarca: vuelve al mapa regional de Cantabria"
+	if demo.ui and demo.ui._skin:
+		back.theme = demo.ui._skin
+	back.pressed.connect(func() -> void:
+		if Expedition.is_active():
+			demo._return_to_region())
+	encima.add_child(back)
+
+	var icono := IconoComarca.make(BOTON)
+	icono.tint = UISkin.OCHRE
+	icono.set_anchors_preset(Control.PRESET_FULL_RECT)
+	back.add_child(icono)
+
+
 ## La columna del bloque del minimapa, para poder colgarle cosas debajo.
 var _columna: VBoxContainer
 var _ancho: int = 256
@@ -128,14 +173,34 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 		panel.theme = demo.ui._skin
 	margin.add_child(panel)
 
+	# La barra RODEA el mapa: un margen por dentro del panel deja ver la misma
+	# piel de la barra por los cuatro lados, de forma que el minimapa no se
+	# pega encima sino que queda metido dentro. Es lo que se pidio: «que el
+	# minimapa este dentro de ella, haciendo que solo aumente su anchura para
+	# abarcar el minimapa».
+	var marco := MarginContainer.new()
+	for lado: String in ["margin_left", "margin_right", "margin_bottom"]:
+		marco.add_theme_constant_override(lado, MARCO)
+	# Arriba no: por arriba el bloque tiene que pegarse a la barra sin costura,
+	# que es lo que hace que se lea como la barra bajando y no como un cartel
+	# aparte apoyado debajo.
+	marco.add_theme_constant_override("margin_top", 0)
+	panel.add_child(marco)
+
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 4)
-	panel.add_child(column)
+	marco.add_child(column)
+
+	# El mapa, con el boton de la comarca ENCIMA de su esquina.
+	var sobre_el_mapa := Control.new()
+	sobre_el_mapa.custom_minimum_size = Vector2(size, size)
+	column.add_child(sobre_el_mapa)
 
 	demo._minimap = TextureRect.new()
-	demo._minimap.custom_minimum_size = Vector2(size, size)
+	demo._minimap.set_anchors_preset(Control.PRESET_FULL_RECT)
 	demo._minimap.texture = ImageTexture.create_from_image(image)
-	column.add_child(demo._minimap)
+	sobre_el_mapa.add_child(demo._minimap)
+	_poner_boton_de_comarca(sobre_el_mapa)
 
 	_columna = column
 	_ancho = size
@@ -152,19 +217,7 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 	demo._overlay_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label_panel.add_child(demo._overlay_label)
 
-	# El boton de volver al mapa regional. Va aqui, junto al minimapa, que es
-	# donde uno mira cuando piensa «quiero ver el mapa grande». Antes esto era
-	# ESC, y salirse del valle entero por pulsar ESC daba un susto cada vez.
-	var back := Button.new()
-	back.text = "Ver la comarca"
-	back.custom_minimum_size = Vector2(size, 26)
-	back.tooltip_text = "Vuelve al mapa regional de Cantabria"
-	if demo.ui and demo.ui._skin:
-		back.theme = demo.ui._skin
-	back.pressed.connect(func() -> void:
-		if Expedition.is_active():
-			demo._return_to_region())
-	column.add_child(back)
+
 
 
 ## Repinta gente y tajos sobre el relieve del minimapa
