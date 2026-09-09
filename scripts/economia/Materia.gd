@@ -172,7 +172,10 @@ const CATALOGUE := {
 	Kind.CARNE_SECA: {
 		"name": "Carne seca", "unit": "tira", "kg": 0.18, "litros": 0.25,
 		"dias": 180, "kcal": 680,
-		"prot": 95.0,
+		# LA MISMA proteina que la fresca, igual que las mismas calorias: curar
+		# quita agua y peso, no crea comida. Con 95 contra 90, la unidad de
+		# cecina alimentaba mas que la de carne y ahumar salia gratis.
+		"prot": 90.0,
 		"desc": "Curada al humo. Pierde tres cuartos del peso y gana media año "
 			+ "de vida: es el mejor negocio del Paleolítico.",
 	},
@@ -185,7 +188,8 @@ const CATALOGUE := {
 	Kind.PESCADO_SECO: {
 		"name": "Pescado seco", "unit": "pieza", "kg": 0.2, "litros": 0.2,
 		"dias": 200, "kcal": 600,
-		"prot": 75.0,
+		# La misma que el fresco, por lo mismo que la cecina.
+		"prot": 70.0,
 		"desc": "Abierto, sin espina y colgado sobre el humo. Un salmón "
 			+ "fresco dura tres días; ahumado, media vuelta al año. Es la "
 			+ "razón entera de plantarse en el río cuando sube el remonte: "
@@ -350,10 +354,47 @@ static func kcal(kind: Kind) -> float:
 	return float(CATALOGUE[kind]["kcal"])
 
 
-## Cuantas RACIONES da una unidad. Derivado, no escrito: es lo que hace que la
-## racion signifique lo mismo en todas partes.
+## Cuánto vale de UNA unidad de nutriente sobrante, de 0 a 1.
+##
+## Una ración no es energía ni proteína: es LAS DOS. Hacen falta 1.250 kcal y
+## treinta gramos de proteína aprovechable, y lo que sobra de una no sustituye a
+## lo que falta de la otra.
+##
+## De ahí la forma de [nutrition]: la parte en la que las dos van juntas hace
+## raciones enteras, y lo que sobra de una sola cuenta a un cuarto. No es cero
+## —la grasa es energía de verdad aunque no traiga proteína, y con la miel pasa
+## igual— pero tampoco es uno, que es lo que hacía que un puñado de avellana
+## «alimentara» más que una tajada de carne.
+##
+## Pendiente de playtest: subirlo acerca la ración a contar sólo calorías,
+## bajarlo la acerca a exigir dieta completa en cada bocado.
+const EXCEDENTE := 0.25
+
+
+## Cuantas RACIONES da una unidad. UN solo número, sacado de las dos cuentas.
+##
+## Derivado, no escrito: es lo que hace que la ración signifique lo mismo en
+## todas partes.
+##
+## Con la energía sola, un puñado de avellana daba 1,36 raciones y una tajada de
+## carne 0,54, y el juego decía que el fruto seco alimenta más que la carne. Las
+## dos cifras de kcal son correctas —la avellana con cáscara da 3.091 kcal/kg y
+## el venado magro 1.511—; lo que estaba mal era medir la comida con una sola de
+## las dos cuentas que un cuerpo lleva.
+##
+## Ahora se cuenta lo que una ración CONSUME, que son las dos:
+##
+##   Fruto seco    1,4 de energía y 0,7 de proteína  ->  0,8 raciones
+##   Carne fresca  0,5 de energía y 3,0 de proteína  ->  1,2 raciones
+##   Grasa         6,5 de energía y 0,1 de proteína  ->  1,7 raciones
+##
+## Un tajada de carne da más que un puñado de avellana, que es lo que pasa de
+## verdad, y sigue sin hacer falta falsear ni una caloría.
 static func nutrition(kind: Kind) -> float:
-	return kcal(kind) / KCAL_RACION
+	var por_energia := kcal(kind) / KCAL_RACION
+	var por_proteina := protein(kind) / PROTEINA_RACION
+	var juntas := minf(por_energia, por_proteina)
+	return juntas + (maxf(por_energia, por_proteina) - juntas) * EXCEDENTE
 
 
 ## Proteina APROVECHABLE que da una unidad, en gramos.
@@ -420,16 +461,6 @@ const PROTEINA_DIA := 60.0
 ## cáscara da 3.091 kcal/kg y el venado magro 1.511, que es lo que dan de verdad.
 ## Lo que faltaba no era corregir un dato, era enseñar el otro.
 const PROTEINA_RACION := PROTEINA_DIA * 0.5
-
-
-## Cuántas raciones da una unidad POR SU PROTEÍNA.
-##
-## La pareja de [nutrition], que las da por su energía. Juntas dicen lo que una
-## unidad es de verdad: un puñado de avellana son 1,4 raciones de energía y 0,7
-## de proteína; una tajada de carne, 0,5 de energía y 3,0 de proteína. Ahí se ve
-## de un vistazo para qué sirve cada una, y por qué no se vive de ninguna sola.
-static func raciones_de_proteina(kind: Kind) -> float:
-	return protein(kind) / PROTEINA_RACION
 
 
 static func protein_per_ration(kind: Kind) -> float:

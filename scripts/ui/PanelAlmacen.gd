@@ -423,7 +423,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 	# material, que no es lo mismo. Una ración de miel no es una unidad de
 	# miel: la miel alimenta 1,6 y la seta 0,3. Sin decirlo, la fila parece
 	# la suma de la columna y no cuadra nunca.
-	label.text = "Comidas completas (raciones)"
+	label.text = "Tope de comida (raciones)"
 	label.custom_minimum_size = Vector2(GameUI.COL_ICON + GameUI.COL_NAME, 0)
 	label.add_theme_font_size_override("font_size", 12)
 	row.add_child(label)
@@ -433,16 +433,9 @@ func _food_cap_row(body: VBoxContainer) -> void:
 	now.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	now.add_theme_font_size_override("font_size", 12)
 	row.add_child(now)
-	# COMPLETAS, no de energía a secas. Ver [Storehouse.raciones_completas]:
-	# una despensa de puro fruto seco tiene energía para un mes y comidas para
-	# dos semanas, y es donde se ve para qué sirve la carne. Al lado, entre
-	# paréntesis, la energía, que es lo que se contabiliza al comer.
 	ui._bind(now, func() -> void:
-		var completas := ui.sim.store.raciones_completas()
-		var energia := ui.sim.store.food_rations()
-		now.text = "%.1f" % completas
-		if energia > completas + 0.05:
-			now.text += " de %.1f" % energia
+		var rations := ui.sim.store.food_rations()
+		now.text = "%.1f" % rations
 		now.add_theme_color_override("font_color",
 			UISkin.OCHRE if ui.sim.despensa.food_is_capped() else UISkin.INK))
 
@@ -676,21 +669,17 @@ func _uses_of(kind: Materia.Kind) -> String:
 		# que no hay quien lo cuadre -ver el encabezado de [Materia.CATALOGUE]-
 		# y ademas no decia contra que se compara: las columnas del almacen van
 		# en raciones y una persona come dos al dia.
-		lines.append("Se come: 1 %s da %.1f raciones de energía y %.1f de "
+		lines.append("Se come: 1 %s da %.1f raciones (%.0f kcal y %.0f g de "
 			% [Materia.unit_name(kind), Materia.nutrition(kind),
-				Materia.raciones_de_proteina(kind)]
-			+ "proteína (%.0f kcal, %.0f g)."
-				% [Materia.kcal(kind), Materia.protein(kind)])
+				Materia.kcal(kind), Materia.protein(kind)]
+			+ "proteína aprovechable).")
 		lines.append("Una persona come %.0f raciones al día, y el almacén "
 			% (Materia.KCAL_DIA / Materia.KCAL_RACION)
 			+ "cuenta en raciones, no en bultos.")
 		# Y la proteína, que es la cuenta que las raciones no llevan: hacen
 		# falta sesenta gramos al día y no se sustituyen con nada.
-		# Las dos raciones y no una: con la de energía sola, un puñado de
-		# avellana da 1,4 y una tajada de carne 0,5, y se lee que el fruto seco
-		# alimenta más. Las dos cifras son correctas —la avellana con cáscara
-		# da 3.091 kcal/kg y el venado magro 1.511—; lo que faltaba era la otra
-		# columna. La proteína vegetal cuenta a la mitad porque es incompleta.
+		# La ración sale de LAS DOS cuentas -ver [Materia.nutrition]-, así que
+		# no hace falta una segunda columna: el número ya lo dice.
 		if Materia.protein(kind) <= 0.0:
 			lines.append("No da proteína. Llena, pero no sostiene.")
 	if not uses.is_empty():

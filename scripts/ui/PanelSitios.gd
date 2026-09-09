@@ -637,28 +637,23 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 		Materia.format_volume(Materia.litres_per_unit(kind))], true)
 
 	if Materia.is_food(kind):
-		# LAS DOS raciones, no una. Con la de energía sola, un puñado de
-		# avellana da 1,36 y una tajada de carne 0,54, y se lee que el fruto
-		# seco alimenta más que la carne. Las dos cifras son correctas —y por
-		# kilo también—, lo que faltaba era la otra columna.
-		ui._text(body, "Por %s: %.1f raciones de energía y %.1f de proteína." % [
-			Materia.unit_name(kind), Materia.nutrition(kind),
-			Materia.raciones_de_proteina(kind)], true)
-		ui._text(body, "Son %.0f kcal de las %.0f y %.0f g de proteína "
+		# UN número, sacado de las dos cuentas. Ver [Materia.nutrition].
+		ui._text(body, "Alimenta %.1f raciones por %s." % [
+			Materia.nutrition(kind), Materia.unit_name(kind)], true)
+		ui._text(body, "Trae %.0f kcal de las %.0f y %.0f g de proteína "
 			% [Materia.kcal(kind), Materia.KCAL_DIA, Materia.protein(kind)]
 			+ "aprovechable de los %.0f que come una persona al día."
 				% Materia.PROTEINA_DIA, true)
-		# Y para qué sirve cada una. La proteína vegetal cuenta a la mitad
-		# porque es incompleta —ver [Materia.protein]—, y ésa es la razón de
-		# fondo de que no se viva de fruto seco por muchas calorías que tenga.
-		if Materia.protein(kind) <= 0.0:
-			ui._text(body, "No da proteína: llena, pero no sostiene.", true)
-		elif Materia.raciones_de_proteina(kind) > Materia.nutrition(kind):
+		# Y por qué sale ese número y no otro: lo que sobra de un nutriente no
+		# sustituye a lo que falta del otro. Ver [Materia.EXCEDENTE].
+		var energia := Materia.kcal(kind) / Materia.KCAL_RACION
+		var proteina := Materia.protein(kind) / Materia.PROTEINA_RACION
+		if proteina > energia * 1.2:
 			ui._text(body, "Sostiene más de lo que llena: es de lo que hace "
-				+ "falta para que las demás raciones sirvan de algo.", true)
-		else:
-			ui._text(body, "Llena más de lo que sostiene. La proteína vegetal "
-				+ "es incompleta y cuenta a la mitad.", true)
+				+ "falta para que lo demás sirva de algo.", true)
+		elif energia > proteina * 1.2:
+			ui._text(body, "Llena más de lo que sostiene, y lo que sobra de "
+				+ "una cosa no tapa lo que falta de la otra.", true)
 	var life := Materia.shelf_life(kind)
 	if life <= 0:
 		ui._text(body, "No se estropea.", true)

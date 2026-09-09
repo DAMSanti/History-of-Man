@@ -338,43 +338,48 @@ func test_la_flaqueza_baja_el_rendimiento() -> void:
 		"quien flaquea rinde menos aunque no tenga hambre")
 
 
-# ------------- la racion son DOS cuentas, no una -------------------------
+# ------------- la racion es UNA, sacada de las dos cuentas ---------------
 
-## Un puñado de avellana llena más que una tajada de carne, y sostiene menos.
+## Una tajada de carne alimenta MAS que un puñado de avellana.
 ##
-## Queja literal: «sigue marcando que un fruto seco vale más que carne fresca...
-## uno sigue siendo 1.36 raciones y el otro 0.54 raciones». Las dos cifras de
-## energía son CORRECTAS, y por kilo también —la avellana con cáscara da 3.091
-## kcal/kg y el venado magro 1.511—: lo que faltaba no era corregir un dato,
-## era enseñar el otro.
-func test_cada_alimento_tiene_sus_dos_raciones() -> void:
-	assert_gt(Materia.nutrition(Materia.Kind.FRUTO_SECO),
-		Materia.nutrition(Materia.Kind.CARNE),
-		"el fruto seco LLENA mas: eso es cierto y se sigue diciendo")
-	assert_gt(Materia.raciones_de_proteina(Materia.Kind.CARNE),
-		Materia.raciones_de_proteina(Materia.Kind.FRUTO_SECO) * 3.0,
-		"y la carne SOSTIENE mucho mas, que es la cuenta que faltaba")
-
-
-## Y en el montón es donde se ve para qué sirve la carne.
+## Queja literal: «no quiero que haya dos valores de ración, uno para proteína y
+## uno para kcal. QUIERO QUE SOLO HAYA UN VALOR, QUE DEBES CALCULAR CON AMBOS DE
+## LO QUE UNA RACION CONSUME, Y DEBE DAR MAS LA CARNE QUE LOS FRUTOS SECOS».
 ##
-## Es donde la pregunta tiene respuesta: no por unidad, sino en la despensa.
-## Echar carne a un montón de avellana casi no sube la energía y duplica las
-## comidas completas; echar más avellana no las sube nada.
-func test_la_carne_dobla_las_comidas_de_una_despensa_de_avellana() -> void:
-	var solo_avellana := Storehouse.new()
-	solo_avellana.add(Materia.Kind.FRUTO_SECO, 100.0)
-	var antes := solo_avellana.raciones_completas()
-	assert_lt(antes, solo_avellana.food_rations(),
-		"con avellana sola, las comidas completas son menos que la energia")
+## Las dos cifras de kcal son correctas -la avellana con cascara da 3.091 kcal/kg
+## y el venado magro 1.511-; lo que estaba mal era medir la comida con una sola
+## de las dos cuentas que lleva un cuerpo.
+func test_la_carne_alimenta_mas_que_el_fruto_seco() -> void:
+	assert_gt(Materia.nutrition(Materia.Kind.CARNE),
+		Materia.nutrition(Materia.Kind.FRUTO_SECO),
+		"una tajada de carne da mas raciones que un puñado de avellana")
+	assert_gt(Materia.nutrition(Materia.Kind.PESCADO),
+		Materia.nutrition(Materia.Kind.FRUTO_SECO),
+		"y el pescado tambien")
 
-	var con_carne := Storehouse.new()
-	con_carne.add(Materia.Kind.FRUTO_SECO, 100.0)
-	con_carne.add(Materia.Kind.CARNE, 20.0)
-	assert_gt(con_carne.raciones_completas(), antes * 1.5,
-		"veinte tajadas de carne casi doblan las comidas del monton")
 
-	var mas_avellana := Storehouse.new()
-	mas_avellana.add(Materia.Kind.FRUTO_SECO, 120.0)
-	assert_lt(mas_avellana.raciones_completas(), con_carne.raciones_completas(),
-		"y mas avellana no: por eso hace falta cazar")
+## Y sigue habiendo UN solo numero: nadie tiene una racion aparte de proteina.
+func test_no_hay_dos_raciones() -> void:
+	assert_false(Storehouse.new().has_method("raciones_completas"),
+		"no hay una segunda cuenta de raciones en el almacen")
+	# La racion del almacen es la suma de las raciones de lo que hay, sin
+	# ninguna cuenta paralela por encima.
+	var despensa := Storehouse.new()
+	despensa.add(Materia.Kind.CARNE, 10.0)
+	despensa.add(Materia.Kind.FRUTO_SECO, 10.0)
+	assert_near(despensa.food_rations(),
+		10.0 * Materia.nutrition(Materia.Kind.CARNE)
+			+ 10.0 * Materia.nutrition(Materia.Kind.FRUTO_SECO), 0.01,
+		"lo que hay en la despensa son raciones, y una sola clase de ellas")
+
+
+## Lo que sobra de un nutriente no tapa lo que falta del otro, pero tampoco se
+## tira: la grasa es energia de verdad aunque no traiga proteina.
+func test_lo_que_sobra_de_uno_vale_menos_pero_no_cero() -> void:
+	assert_gt(Materia.nutrition(Materia.Kind.GRASA), 0.0,
+		"la grasa alimenta, aunque no traiga proteina")
+	assert_lt(Materia.nutrition(Materia.Kind.GRASA),
+		Materia.kcal(Materia.Kind.GRASA) / Materia.KCAL_RACION,
+		"pero menos de lo que dirian sus calorias solas")
+	assert_gt(Materia.nutrition(Materia.Kind.MIEL), 0.0,
+		"y la miel igual")

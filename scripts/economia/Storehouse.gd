@@ -178,33 +178,6 @@ func food_rations() -> float:
 	return sum
 
 
-## Proteína aprovechable que hay en la despensa, en gramos.
-func food_protein() -> float:
-	var sum := 0.0
-	for kind: int in contents.keys():
-		var k := kind as Materia.Kind
-		if Materia.is_food(k):
-			sum += amount(k) * Materia.protein(k)
-	return sum
-
-
-## Raciones COMPLETAS: comidas de verdad que la despensa puede servir.
-##
-## [food_rations] cuenta energía, que es lo que se come y lo que hay que
-## contabilizar. Pero una despensa de puro fruto seco tiene energía para un mes
-## y comidas completas para dos semanas: lo que falta es proteína, y no se
-## sustituye con nada.
-##
-## Es la cifra que contesta «¿por qué me interesa la carne?», y la contesta
-## donde la pregunta tiene respuesta: no por unidad —una tajada de carne magra
-## tiene menos energía que un puñado de avellana, y eso es cierto— sino EN EL
-## MONTÓN. Echar carne a una despensa de avellana sube las comidas completas de
-## golpe; echar más avellana no las sube nada.
-func raciones_completas() -> float:
-	return minf(food_rations(),
-		food_protein() / maxf(Materia.PROTEINA_RACION, 0.001))
-
-
 ## Cuántos días da de comer a un número de bocas.
 func days_of_food(mouths_per_day: float) -> float:
 	if mouths_per_day <= 0.0:

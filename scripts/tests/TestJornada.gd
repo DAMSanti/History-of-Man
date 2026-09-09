@@ -452,12 +452,21 @@ func test_una_racion_es_media_jornada() -> void:
 
 
 func test_las_raciones_salen_de_las_calorias_y_no_de_una_tabla() -> void:
+	# DE LAS DOS CUENTAS, no de una tabla y no solo de las calorias. Ver
+	# [Materia.nutrition]: una racion son 1.250 kcal Y treinta gramos de
+	# proteina aprovechable, y lo que sobra de una no tapa lo que falta de la
+	# otra. Con la energia sola, un puñado de avellana daba 1,36 raciones y una
+	# tajada de carne 0,54.
 	for kind: int in [Materia.Kind.FRUTO_SECO, Materia.Kind.CARNE,
 		Materia.Kind.PESCADO, Materia.Kind.MIEL]:
 		var k := kind as Materia.Kind
+		var energia := Materia.kcal(k) / Materia.KCAL_RACION
+		var proteina := Materia.protein(k) / Materia.PROTEINA_RACION
+		var juntas := minf(energia, proteina)
 		assert_near(Materia.nutrition(k),
-			Materia.kcal(k) / Materia.KCAL_RACION, 0.0001,
-			"%s: la racion se deriva" % Materia.material_name(k))
+			juntas + (maxf(energia, proteina) - juntas) * Materia.EXCEDENTE,
+			0.0001, "%s: la racion se deriva de las dos"
+				% Materia.material_name(k))
 
 
 func test_curar_conserva_pero_no_crea_alimento() -> void:
