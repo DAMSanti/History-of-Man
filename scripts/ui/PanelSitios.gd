@@ -373,6 +373,30 @@ func _place_row(body: VBoxContainer, paraje: Paraje, index: int) -> void:
 	away.add_theme_color_override("font_color", UISkin.INK_SOFT)
 	row.add_child(away)
 
+	# CUANTO SE SABE DE ESTE SITIO, en la lista y no solo al abrirlo.
+	#
+	# Es lo que decide adonde va la siguiente batida -ver
+	# [SettlementSim._paraje_to_survey]-, asi que el jugador tiene que poder
+	# leerlo de un vistazo y en el mismo orden en que la banda lo va a
+	# trabajar: la lista va de mas cerca a mas lejos, y este numero dice cual
+	# de los cercanos todavia tiene «???».
+	var sabido := Label.new()
+	sabido.custom_minimum_size = Vector2(46, 0)
+	sabido.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sabido.add_theme_font_size_override("font_size", 11)
+	row.add_child(sabido)
+	# Atado, que se mueve solo: una batida resuelve una incognita por jornada
+	# y esto tiene que bajar de «???» sin reconstruir la lista.
+	ui._bind(sabido, func() -> void:
+		var cuanto := paraje.known_fraction()
+		sabido.text = "%d %%" % int(round(cuanto * 100.0))
+		if not paraje.has_unknowns():
+			sabido.add_theme_color_override("font_color", UISkin.GREEN)
+		elif cuanto < 0.5:
+			sabido.add_theme_color_override("font_color", UISkin.OCHRE)
+		else:
+			sabido.add_theme_color_override("font_color", UISkin.INK_SOFT))
+
 	var note := Label.new()
 	note.add_theme_font_size_override("font_size", 10)
 	note.clip_text = true
@@ -392,9 +416,11 @@ func _place_row(body: VBoxContainer, paraje: Paraje, index: int) -> void:
 			note.text = Subsistence.activity_name(paraje.activity).to_lower()
 			note.add_theme_color_override("font_color", UISkin.INK_FAINT))
 
-	frame.tooltip_text = "%s\nDescubierto el día %d · %s\n%s" % [
+	frame.tooltip_text = "%s\nDescubierto el día %d · %s\nSe sabe el %d %% de lo que hay%s\n%s" % [
 		paraje.name_text, paraje.found_day,
 		Materia.material_name(paraje.kind),
+		int(round(paraje.known_fraction() * 100.0)),
+		"" if not paraje.has_unknowns() else ": quedan «???» que resolver",
 		"Se ha dejado descansar." if paraje.resting
 			else "Pincha para verlo y mandar gente."]
 

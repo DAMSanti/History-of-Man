@@ -104,41 +104,41 @@ func _scout_target(person: Inhabitant) -> Vector3:
 const BATIDA_RADIUS := 380.0
 
 
-## Cada cuántas batidas se sale a peinar monte SIN NOMBRE.
-##
-## Una de cada tres, y no es un adorno: sin ella la banda no encuentra un sitio
-## nuevo JAMÁS. Una batida elegía siempre el paraje pendiente más conveniente, y
-## mientras quede uno con incógnitas siempre hay pendiente, así que todo lo que
-## la banda llegaba a conocer caía dentro de un paraje que ya existía —y un
-## sitio sólo se bautiza donde no hay otro a menos de [Parajes.MERGE_RANGE].
-##
-## Medido con `HallazgoProbe`, treinta jornadas: siete parajes el día uno, ocho
-## el día seis, y ni uno más. Cero celdas libres para bautizar en todo el mes.
-##
-## Una de cada tres deja la batida siendo lo que es —trabajar a fondo lo ya
-## encontrado— sin cerrar la puerta a lo siguiente. Pendiente de playtest.
-const UNA_DE_CADA := 3
-
 ## Cuántas batidas lleva cada cual. Por persona, para que dos batidores no
 ## salgan el mismo día a lo mismo.
 var _batidas: Dictionary = {}
 
 
+## Adónde va la batida: AL PARAJE CON «???» MÁS CERCANO, y sólo si no queda
+## ninguno, a peinar monte sin nombre.
+##
+## «Lo que deben hacer es explorar los materiales de los parajes de más cercano
+## a más lejano, esa es su misión mientras haya ?? en los parajes». Es
+## exactamente lo que distingue una batida de una expedición: la expedición
+## abre comarca —[Exploration.best_frontier]—, la batida acaba de conocer lo
+## que la banda ya encontró. Un avellanar del que sólo se sabe que tiene
+## avellanas es un avellanar a medias.
+##
+## Aquí hubo una de cada tres batidas desviada a monte sin nombre, porque
+## medido salían siete parajes el día uno, ocho el día seis y ni uno más. Ese
+## atasco no era de la batida: la rejilla de familiaridad no pasaba de 0,24 por
+## una resta que medía la altura, así que NINGUNA celda llegaba al 0,30 que
+## hace falta para bautizar y daba igual a dónde se fuera. Arreglado eso, el
+## desvío sólo servía para quitarle al batidor una de cada tres jornadas de su
+## trabajo. Ver [Traversal.en_llano].
 func _batida_target(person: Inhabitant) -> Vector3:
-	var cuantas := int(_batidas.get(person.id, 0))
-	_batidas[person.id] = cuantas + 1
+	_batidas[person.id] = int(_batidas.get(person.id, 0)) + 1
 
-	# Una de cada tres, a monte sin nombre. Ver [UNA_DE_CADA].
-	if cuantas % UNA_DE_CADA != UNA_DE_CADA - 1:
-		# Lo normal: un paraje a medio investigar. Es lo que de verdad hace una
-		# batida: no descubrir monte nuevo -eso es la expedicion- sino acabar
-		# de conocer lo que ya se ha encontrado. Un avellanar del que solo se
-		# sabe que tiene avellanas es un avellanar a medias.
-		var pending := sim._paraje_to_survey(person)
-		if pending != null:
-			return pending.position
+	var pending := sim._paraje_to_survey(person)
+	if pending != null:
+		# Se apunta CUAL, no solo adonde: al cerrar la jornada hay que saber a
+		# que paraje se le abona lo aprendido. Ver [Inhabitant.paraje_batido].
+		person.paraje_batido = pending.id()
+		return pending.position
 
-	# Se peina el entorno buscando sitios nuevos.
+	# Sin incógnitas pendientes al alcance, se peina el entorno buscando
+	# sitios nuevos: es lo único que queda por hacer aquí cerca.
+	person.paraje_batido = ""
 	return _least_known_around(sim.home_position, BATIDA_RADIUS * 0.35,
 		BATIDA_RADIUS, person)
 
@@ -665,7 +665,18 @@ func _finish_survey(person: Inhabitant) -> void:
 	# cuentan aparte en `_survey`, con su propio techo bajo. Esto es cosa de
 	# BATIDA: la expedicion no vuelve a un paraje a resolver lo que le
 	# falta, eso es justo lo que distingue a las dos.
+	# EL PARAJE AL QUE SE LE MANDO, no el primero que pille el punto.
+	#
+	# Las huellas se solapan y `_paraje_at` devuelve el primero de la lista que
+	# contenga el punto —el mas antiguo—, asi que la jornada se le abonaba a un
+	# vecino que a lo mejor ya estaba conocido a fondo. Ver
+	# [Inhabitant.paraje_batido]. Se exige ademas estar DENTRO de el: si la
+	# batida se quedo a medio camino, no se ha batido nada.
 	var here := sim._paraje_at(person.work_centre)
+	if not person.paraje_batido.is_empty() and sim.parajes != null:
+		var mandado := sim.parajes.por_id(person.paraje_batido)
+		if mandado != null and mandado.contains(person.work_centre):
+			here = mandado
 
 	# APRENDER EL TERRENO SE HACE SIEMPRE, se esté sobre un paraje o no.
 	#

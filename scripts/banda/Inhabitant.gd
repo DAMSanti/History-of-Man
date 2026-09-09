@@ -317,6 +317,20 @@ var horas_en_el_tramo: float = 0.0
 ## dediquen a investigar la zona alrededor del asentamiento».
 var investigando: bool = false
 
+## El paraje al que se le mandó a batir, por su [Paraje.id].
+##
+## Hace falta porque los parajes SE SOLAPAN: la huella de uno de caza a
+## cuarenta y seis metros del abrigo y la de una veta de sílex a ciento seis se
+## pisan la una a la otra, y [SettlementSim._paraje_at] devuelve el primero de
+## la lista que contenga el punto, que es el más antiguo y no el que se estaba
+## batiendo.
+##
+## Medido con `BatidaProbe`: «El pasto de abajo», a 46 m, salía elegido cuatro
+## jornadas seguidas —bien elegido, es el más cercano con «???»— y seguía al
+## 0 %, porque cada jornada se le apuntaba a la veta de al lado, que ya estaba
+## al 100 %. El batidor iba adonde debía y el trabajo se contaba en otro sitio.
+var paraje_batido: String = ""
+
 ## Lo que ha hecho, paso a paso y con la hora. Ver [Diario].
 var diario: Diario = Diario.new()
 

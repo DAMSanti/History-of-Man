@@ -1389,10 +1389,14 @@ func test_la_batida_no_persigue_un_paraje_fuera_de_alcance() -> void:
 
 
 ## La expedicion si puede ir lejos: es lo que la distingue de la batida.
+##
+## Con el cercano ya conocido a fondo, el unico pendiente esta a 900 m. La
+## batida no lo alcanza y se queda sin destino; la expedicion no lleva tope.
 func test_la_expedicion_si_va_al_paraje_lejano() -> void:
 	var sim := _sim_on_fake()
 	var cerca := _paraje_con_incognitas(sim, 3)
-	(cerca.contents[0] as Dictionary)["sabido"] = true
+	for clave: int in cerca.contents:
+		(cerca.contents[clave] as Dictionary)["sabido"] = true
 
 	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
 		Materia.Kind.CARNE, sim.home_position + Vector3(900.0, 0.0, 0.0), 1)
@@ -1407,7 +1411,69 @@ func test_la_expedicion_si_va_al_paraje_lejano() -> void:
 	sim.people = [explorador]
 
 	assert_eq(sim._paraje_to_survey(explorador), lejos,
-		"la expedicion no tiene tope de alcance: va a lo que mas falta por saber")
+		"la expedicion no tiene tope de alcance y va al unico pendiente")
+
+	explorador.current_speciality = Profession.Speciality.BATIDA
+	assert_true(sim._paraje_to_survey(explorador) == null,
+		"la batida, en cambio, no lo alcanza y se queda sin paraje que batir")
+
+
+## EL ORDEN DEL BATIDOR: DE MAS CERCA A MAS LEJOS, y nada mas.
+##
+## «Lo que deben hacer es explorar los materiales de los parajes de mas cercano
+## a mas lejano, esa es su mision mientras haya ?? en los parajes».
+##
+## Se prueba con el caso que antes salia al reves: el de al lado casi conocido
+## y el de mas alla entero por descubrir. Con la nota vieja —que mezclaba lo
+## que faltaba por saber con lo que costaba llegar— ganaba el de mas alla, y
+## desde fuera la batida parecia saltar de un lado a otro sin motivo.
+func test_la_batida_va_al_mas_cercano_con_incognitas() -> void:
+	var sim := _sim_on_fake()
+
+	var cerca := _paraje_con_incognitas(sim, 3)
+	for clave: int in cerca.contents:
+		(cerca.contents[clave] as Dictionary)["sabido"] = true
+	# Le queda UNA sola incognita: sigue siendo el siguiente por ser el de al lado.
+	(cerca.contents[0] as Dictionary)["sabido"] = false
+
+	var media := Paraje.create(2, 2, Subsistence.Activity.CAZA,
+		Materia.Kind.CARNE, sim.home_position + Vector3(300.0, 0.0, 0.0), 1)
+	media.contents = {}
+	for i in range(3):
+		media.contents[i] = {"abundancia": 0.5, "sabido": false}
+	sim.parajes.add(media)
+
+	var batidor := Inhabitant.create(0, sim.home_position, sim._rng)
+	batidor.job = Profession.Job.EXPLORACION
+	batidor.current_speciality = Profession.Speciality.BATIDA
+	sim.people = [batidor]
+
+	assert_eq(sim._paraje_to_survey(batidor), cerca,
+		"el de al lado va primero aunque solo le quede una incognita")
+
+	# Resuelta la ultima del cercano, le toca al siguiente en distancia.
+	(cerca.contents[0] as Dictionary)["sabido"] = true
+	assert_eq(sim._paraje_to_survey(batidor), media,
+		"y cuando ese se acaba, el siguiente mas cercano")
+
+
+## Un paraje ya conocido a fondo no vuelve a salir elegido.
+##
+## Es la otra mitad de «mientras haya ?? en los parajes»: sin incognitas no hay
+## mision, y el batidor pasa a peinar monte sin nombre.
+func test_sin_incognitas_no_hay_paraje_que_batir() -> void:
+	var sim := _sim_on_fake()
+	var paraje := _paraje_con_incognitas(sim, 3)
+	for clave: int in paraje.contents:
+		(paraje.contents[clave] as Dictionary)["sabido"] = true
+
+	var batidor := Inhabitant.create(0, sim.home_position, sim._rng)
+	batidor.job = Profession.Job.EXPLORACION
+	batidor.current_speciality = Profession.Speciality.BATIDA
+	sim.people = [batidor]
+
+	assert_true(sim._paraje_to_survey(batidor) == null,
+		"un sitio sin «???» ya no es trabajo de batida")
 
 
 ## Batir UN PARAJE no es abrirse por la comarca: la vuelta cabe dentro.
@@ -1491,3 +1557,65 @@ func test_las_tres_formas_de_explorar_no_empatan_a_uno() -> void:
 	sim.day += 1
 	assert_eq(sim.reparto._speciality_pressure(Profession.Speciality.BATIDA), 1.0,
 		"sin incognitas que resolver, batir esta cubierto")
+
+
+## LO BATIDO SE LE ABONA AL PARAJE AL QUE SE LE MANDO, no a su vecino.
+##
+## Los parajes se solapan —uno de caza a 46 m del abrigo y una veta a 106 m se
+## pisan las huellas—, y `_paraje_at` devuelve el primero de la lista que
+## contenga el punto, que es el mas antiguo. Medido con `BatidaProbe`: «El
+## pasto de abajo» salia elegido cuatro jornadas seguidas, bien elegido por ser
+## el mas cercano con «???», y seguia al 0 % porque cada jornada se le abonaba
+## a la veta de al lado, que ya estaba conocida a fondo.
+func test_lo_batido_se_le_abona_al_paraje_al_que_se_le_mando() -> void:
+	var sim := _sim_on_fake()
+
+	# Dos parajes en el mismo punto, de oficios distintos: se solapan del todo.
+	var viejo := Paraje.create(1, 1, Subsistence.Activity.MATERIA_PRIMA,
+		Materia.Kind.PIEDRA, sim.home_position + Vector3(60.0, 0.0, 0.0), 1)
+	viejo.contents = {0: {"abundancia": 0.4, "sabido": true}}
+	viejo.extent = 200.0
+	sim.parajes.add(viejo)
+
+	var mandado := Paraje.create(2, 2, Subsistence.Activity.CAZA,
+		Materia.Kind.CARNE, sim.home_position + Vector3(60.0, 0.0, 0.0), 1)
+	mandado.contents = {0: {"abundancia": 0.4, "sabido": false}}
+	mandado.extent = 200.0
+	sim.parajes.add(mandado)
+
+	# El de siempre es el que gana por estar antes en la lista.
+	assert_eq(sim._paraje_at(mandado.position), viejo,
+		"sin la chapa apuntada, el punto lo reclama el paraje mas antiguo")
+
+	var batidor := Inhabitant.create(0, sim.home_position, sim._rng)
+	batidor.job = Profession.Job.EXPLORACION
+	batidor.current_speciality = Profession.Speciality.BATIDA
+	batidor.work_centre = mandado.position
+	batidor.paraje_batido = mandado.id()
+	sim.people = [batidor]
+
+	sim.reconocimiento._finish_survey(batidor)
+	assert_true(not mandado.has_unknowns(),
+		"la jornada resuelve la incognita del sitio al que se le mando")
+
+
+## Y si no llego a entrar en el, no se le abona nada.
+func test_una_batida_a_medio_camino_no_resuelve_nada() -> void:
+	var sim := _sim_on_fake()
+	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
+		Materia.Kind.CARNE, sim.home_position + Vector3(300.0, 0.0, 0.0), 1)
+	lejos.contents = {0: {"abundancia": 0.4, "sabido": false}}
+	lejos.extent = 60.0
+	sim.parajes.add(lejos)
+
+	var batidor := Inhabitant.create(0, sim.home_position, sim._rng)
+	batidor.job = Profession.Job.EXPLORACION
+	batidor.current_speciality = Profession.Speciality.BATIDA
+	# Se quedo a mitad de camino: la chapa esta apuntada, pero no llego.
+	batidor.work_centre = sim.home_position + Vector3(150.0, 0.0, 0.0)
+	batidor.paraje_batido = lejos.id()
+	sim.people = [batidor]
+
+	sim.reconocimiento._finish_survey(batidor)
+	assert_true(lejos.has_unknowns(),
+		"no se ha batido lo que no se ha pisado")

@@ -59,6 +59,15 @@ func has(paraje: Paraje) -> bool:
 	return _by_id.has(paraje.id())
 
 
+## El paraje que lleva esa chapa, o null si ya no está.
+##
+## Puede no estar: una veta se agota y su paraje desaparece —ver
+## `prune_exhausted`—, así que quien guarde un id de una jornada para otra
+## tiene que contar con encontrarse un null.
+func por_id(id: String) -> Paraje:
+	return _by_id.get(id, null) as Paraje
+
+
 func add(paraje: Paraje) -> bool:
 	if _by_id.has(paraje.id()):
 		return false

@@ -162,7 +162,14 @@ XX. Cada una es **datos**: materiales, procesos y edificios disponibles,
 más las técnicas que hay que externalizar para cerrarla.
 
 Están escritas una a una en [EPOCAS.md](EPOCAS.md), con el hito que cierra cada
-una y la regla que decide qué merece ser época y qué no.
+una y la regla que decide qué merece ser época y qué no. El nivel de
+implementación de cada una —catálogo de técnicas, condición de disparo de
+cada hito, oficios nuevos, clases a escribir— está en `EPOCA_NN_NOMBRE.md`
+junto a esa misma época, y lo que comparten las doce vive en
+[SISTEMAS_COMPARTIDOS.md](SISTEMAS_COMPARTIDOS.md): las tres escaleras
+(térmica, soporte, alimento), el sistema de `Hito`, la exploración en tres
+capas —local ya construida, regional pendiente en A1, exterior sin
+empezar—, el comercio y los cuatro hitos que se sufren.
 
 **El tiempo avanza por hitos, no por calendario.** El Paleolítico es el 99,4 %
 del intervalo real; si el tiempo de juego fuese proporcional, la partida entera

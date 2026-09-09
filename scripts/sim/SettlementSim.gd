@@ -3059,33 +3059,21 @@ const SUELO_MALO := "estaba metido donde no se pisa"
 var lost_loads: int = 0
 
 
-## Cuanto pesa la distancia al elegir paraje que batir, contra lo que falta
-## por saber de el.
+## El siguiente paraje que le toca batir: EL MAS CERCANO CON INCOGNITAS.
 ##
-## Es el numero que decide si una batida sale o se pierde, y estaba puesto de
-## forma que no decidia nada: la distancia se dividia entre CUATRO MIL metros
-## cuando una batida alcanza trescientos ochenta. Un paraje a seiscientos
-## metros costaba 0,15 de nota, o sea casi nada, y ganaba siempre por estar
-## entero por conocer.
+## De mas cerca a mas lejos, sin mas. Es la mision del batidor mientras quede
+## un «???» en el mapa, y el orden importa por dos razones:
 ##
-## Medido con `BatidaProbe`, diez jornadas de dos batidores: «El pasto de la
-## boca», a 598 m, salia elegido cinco dias de diez y no se llego a el NI UNA
-## VEZ -se sale, se andan cuatrocientos setenta metros, se acaba el dia y se
-## vuelve-. Los dos pasaban el 51 % del tiempo andando y el 8 % reconociendo, y
-## de cincuenta incognitas se resolvieron seis.
+##   · El sitio de al lado es al que la banda va a volver a diario, asi que
+##     saber lo que tiene rinde antes que saber lo que hay a dos kilometros.
+##   · Y se puede SEGUIR desde fuera. La lista de la pestaña de Parajes va en
+##     ese mismo orden y con su porcentaje al lado, asi que el jugador ve cual
+##     es el siguiente sin tener que adivinar nada.
 ##
-## Con 0,60, un paraje en el filo del alcance tiene que estar 0,6 mas por
-## conocer que uno a la puerta de casa para que compense ir. Pendiente de
-## playtest: subirlo ata la batida al campamento, bajarlo la manda lejos otra
-## vez.
-const CUESTA_LLEGAR := 0.60
-
-
-## El paraje a medio investigar mas conveniente para una batida.
-##
-## Se prefiere el que MENOS se sepa y mas cerca este, en ese orden: acabar de
-## conocer un sitio a doscientos metros vale mas que empezar a conocer otro a
-## dos kilometros, porque el de al lado es al que se va a volver a diario.
+## Antes se puntuaba mezclando lo que faltaba por saber con lo que costaba
+## llegar —un paraje casi virgen a 600 m le ganaba a uno a medias a 200— y el
+## resultado era que la batida saltaba de un lado a otro del valle sin que se
+## entendiera por que. Que la regla sea explicable vale mas aqui que afinarla.
 ##
 ## Devuelve null si no queda ninguno con incognitas.
 func _paraje_to_survey(person: Inhabitant) -> Paraje:
@@ -3125,13 +3113,9 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 		if taken:
 			continue
 
-		# La distancia se mide contra LO QUE SE ALCANZA, no contra una cifra
-		# suelta: es lo que hace que «cerca y a medias» gane a «lejos y sin
-		# tocar», que es como se bate de verdad.
-		var away := paraje.distance_from(home_position)
-		var cuesta := clampf(away / minf(alcance, Despensa.REGIONAL_DISTANCE),
-			0.0, 1.0)
-		var score := (1.0 - paraje.known_fraction()) - cuesta * CUESTA_LLEGAR
+		# El mas cercano, y se acabo. `best_score` guarda la distancia en
+		# negativo para no darle la vuelta a la comparacion.
+		var score := -paraje.distance_from(home_position)
 		if score > best_score:
 			best_score = score
 			best = paraje

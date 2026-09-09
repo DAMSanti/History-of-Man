@@ -226,6 +226,30 @@ Cada ficha trae lo mismo: el suelo real cántabro (**ATESTIGUADO**, con
 yacimiento), los hitos técnicos, los sociales, el de cierre, y **la trampa** —el
 error de diseño que esa época invita a cometer—.
 
+**Cada una tiene además su propio documento de diseño**, `EPOCA_NN_NOMBRE.md`,
+que retoma esta ficha y baja al nivel de implementación: catálogo de técnicas
+al estilo `TechTree`, condición de disparo de cada hito, qué `Profession.Job`
+nuevo hace falta y cuáles cambian, y qué clase concreta escribir en el árbol
+de `scripts/`. Lo que cruza las doce fichas —las tres escaleras, el sistema
+de hito, el comercio, los hitos que se sufren— vive en
+[SISTEMAS_COMPARTIDOS.md](SISTEMAS_COMPARTIDOS.md) y no se repite época a
+época.
+
+| # | Época | Documento |
+|---|---|---|
+| 1 | Paleolítico | [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) (y [SLICE_PALEOLITICO.md](SLICE_PALEOLITICO.md), el diseño detallado) |
+| 2 | Mesolítico | [EPOCA_02_MESOLITICO.md](EPOCA_02_MESOLITICO.md) |
+| 3 | Neolítico | [EPOCA_03_NEOLITICO.md](EPOCA_03_NEOLITICO.md) |
+| 4 | Calcolítico | [EPOCA_04_CALCOLITICO.md](EPOCA_04_CALCOLITICO.md) |
+| 5 | Edad del Bronce | [EPOCA_05_EDAD_DEL_BRONCE.md](EPOCA_05_EDAD_DEL_BRONCE.md) |
+| 6 | Edad del Hierro | [EPOCA_06_EDAD_DEL_HIERRO.md](EPOCA_06_EDAD_DEL_HIERRO.md) |
+| 7 | Roma | [EPOCA_07_ROMA.md](EPOCA_07_ROMA.md) |
+| 8 | Alta Edad Media | [EPOCA_08_ALTA_EDAD_MEDIA.md](EPOCA_08_ALTA_EDAD_MEDIA.md) |
+| 9 | Baja Edad Media | [EPOCA_09_BAJA_EDAD_MEDIA.md](EPOCA_09_BAJA_EDAD_MEDIA.md) |
+| 10 | Edad Moderna | [EPOCA_10_EDAD_MODERNA.md](EPOCA_10_EDAD_MODERNA.md) |
+| 11 | El vapor | [EPOCA_11_EL_VAPOR.md](EPOCA_11_EL_VAPOR.md) |
+| 12 | El siglo corto | [EPOCA_12_SIGLO_CORTO.md](EPOCA_12_SIGLO_CORTO.md) |
+
 ---
 
 ### 1. Paleolítico — el valle helado
