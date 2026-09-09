@@ -67,7 +67,9 @@ func _init() -> void:
 		quit()
 		return
 	_repartir(sim)
-	sim.time_scale = 12.0
+	sim.time_scale = 3.0
+	if not OS.get_environment("VEL").is_empty():
+		sim.time_scale = float(OS.get_environment("VEL"))
 
 	var dias := 4
 	if not OS.get_environment("DIAS").is_empty():

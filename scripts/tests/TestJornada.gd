@@ -531,3 +531,42 @@ func test_armar_el_vivac_es_saber_del_hogar() -> void:
 	assert_gt(bien_mano, bien_torpe,
 		"quien sabe de hogar arma mejor el vivac")
 	assert_gt(bien_torpe, 0, "y el torpe acierta a veces: no es imposible")
+
+
+## Llegar es tambien HABER PASADO DE LARGO.
+##
+## Es el fallo que hacia que nadie llegase a ningun sitio: el radio de llegada
+## son seis metros y, a velocidad de persona, un paso mide entre treinta y
+## sesenta. Se pasaba por encima del destino sin estar nunca dentro de esos seis
+## metros, no se daba por llegado, se volvia a trazar el camino y se pasaba otra
+## vez. Desde fuera se leia como «va a un paraje y cuando llega va a otro».
+func test_el_radio_de_llegada_crece_con_la_zancada() -> void:
+	var sim := SettlementSim.new()
+
+	# Una hora de juego entera: la zancada es de cientos de metros y el radio
+	# tiene que dar para ella.
+	var una_hora := sim._radio_de_llegada(1.0)
+	assert_gt(una_hora, sim.arrive_radius,
+		"con una zancada larga, el radio de llegada crece con ella")
+
+	# Y con un paso corto se queda en el de siempre: no se llega desde lejos.
+	var un_instante := sim._radio_de_llegada(0.0001)
+	assert_eq(un_instante, sim.arrive_radius,
+		"con una zancada corta manda el radio de siempre")
+
+
+## Y quien no tiene fuente conocida sale a INVESTIGAR, no a dar un paseo.
+##
+## «Los trabajadores que no saben dónde hay recursos simplemente echan a andar
+## en línea recta hasta que se acaba el día. Quiero que si no tienen una fuente
+## conocida en un paraje, se dediquen a investigar la zona alrededor del
+## asentamiento».
+func test_sin_sitio_conocido_se_investiga_el_entorno() -> void:
+	var person := Inhabitant.create(0, Vector3.ZERO, RandomNumberGenerator.new())
+	assert_false(person.investigando,
+		"de partida nadie sale a investigar: se sale al tajo")
+	# La bandera es lo que hace que al llegar se RECONOZCA -que revela terreno,
+	# bautiza sitios y recoge de paso- en vez de prospectar un punto suelto.
+	person.investigando = true
+	assert_true(person.investigando,
+		"y con ella puesta, la salida es de reconocimiento")

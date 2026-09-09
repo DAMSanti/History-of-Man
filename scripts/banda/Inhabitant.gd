@@ -289,6 +289,17 @@ var stuck_told: int = -1
 ## Existe porque juntar toda la actividad en una linea no dice nada: «2 jorn.
 ## de ascension» no distingue haber coronado dos picos de haberse dado la
 ## vuelta dos veces a media pared, y son partidas distintas.
+## Si la salida de hoy es a INVESTIGAR el entorno y no a trabajar un sitio.
+##
+## Quien no tiene una fuente conocida de lo suyo no sale a un tajo: sale a mirar
+## la vuelta del asentamiento. La bandera es lo que hace que al llegar se ponga
+## a reconocer —que revela terreno, bautiza sitios y recoge de paso— en vez de a
+## prospectar un punto suelto.
+##
+## Es la petición literal: «si no tienen una fuente conocida en un paraje, que se
+## dediquen a investigar la zona alrededor del asentamiento».
+var investigando: bool = false
+
 ## Lo que ha hecho, paso a paso y con la hora. Ver [Diario].
 var diario: Diario = Diario.new()
 

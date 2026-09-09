@@ -1420,6 +1420,19 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 const APRENDE_POR_HORA := 0.0005
 
 
+## Cuanto cuenta como «he llegado», en metros.
+##
+## No es un numero fijo: es lo que se anda de una zancada, o el radio de
+## siempre si la zancada es mas corta. Estando a menos de un paso del destino,
+## el paso siguiente cae encima o mas alla, asi que se ha llegado.
+##
+## Con `arrive_radius` a pelo -seis metros- y pasos de treinta a sesenta, nadie
+## llegaba nunca a ningun sitio: se pasaba de largo, se volvia a trazar el
+## camino y se pasaba otra vez.
+func _radio_de_llegada(hours: float) -> float:
+	return maxf(arrive_radius, walk_speed * hours * seconds_per_day / 24.0)
+
+
 func _tick_daylight(person: Inhabitant, hours: float) -> void:
 	match person.state:
 		Inhabitant.State.DURMIENDO, Inhabitant.State.OCIOSO:
@@ -1427,7 +1440,19 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 		Inhabitant.State.COMIENDO:
 			despensa._eat_meal(person, hours)
 		Inhabitant.State.YENDO:
-			if person.position.distance_to(person.target) < arrive_radius:
+			# LLEGAR ES TAMBIEN HABER PASADO DE LARGO.
+			#
+			# El radio de llegada son seis metros y, a velocidad de persona, un
+			# paso mide entre treinta y sesenta: se pasa por encima del destino
+			# sin llegar a estar nunca dentro de esos seis metros, no se da por
+			# llegado, se vuelve a trazar el camino y se pasa otra vez. Desde
+			# fuera se lee como «va a un paraje y cuando llega va a otro»: no va
+			# a otro, es que no ha llegado a este.
+			#
+			# Medido con `PasoProbe` a velocidad de juego: los recolectores
+			# andaban 728 m para un viaje de 274, o sea dos vueltas y media de
+			# mas alrededor del sitio.
+			if person.position.distance_to(person.target) < _radio_de_llegada(hours):
 				if person.job == Profession.Job.EXPLORACION \
 						and person.current_speciality == Profession.Speciality.ASCENSION \
 						and cumbres._is_on_peak(person):
@@ -1445,7 +1470,11 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 				# El explorador que llega adonde se le mando no ha
 				# terminado: llegar es marcar una casilla, reconocer es
 				# batir la comarca. Se queda una jornada.
-				if person.job == Profession.Job.EXPLORACION:
+				# El explorador nunca ha terminado por llegar: llegar es
+				# marcar una casilla, reconocer es batir la comarca. Y lo
+				# mismo vale para quien ha salido A INVESTIGAR por no tener
+				# fuente conocida de lo suyo. Ver [Inhabitant.investigando].
+				if person.job == Profession.Job.EXPLORACION 						or person.investigando:
 					person.work_centre = person.position
 					person.forage_target = person.position
 					person.survey_hours = 0.0
@@ -1915,6 +1944,34 @@ func _send_to_work(person: Inhabitant) -> void:
 	# pesca de orilla: veinte jornadas seguidas ociosa, ruta 0, hambre 100,
 	# sin una sola salida que pintar en los rastros. Desde fuera parecia que
 	# el oficio no hacia nada, que es literalmente lo que pasaba.
+	# SIN FUENTE CONOCIDA NO SE SALE A UN TAJO: SE SALE A INVESTIGAR.
+	#
+	# «Los trabajadores que no saben dónde hay recursos simplemente echan a
+	# andar en línea recta hasta que se acaba el día. Quiero que si no tienen
+	# una fuente conocida en un paraje, se dediquen a investigar la zona
+	# alrededor del asentamiento».
+	#
+	# Y es que lo de antes no era investigar: se elegía un punto lejano por su
+	# abundancia supuesta, se andaba hasta él, no se conocía el sitio, se
+	# prospectaba un rato y se probaba en otro. La jornada se iba en el camino
+	# y no quedaba nada aprendido.
+	#
+	# Reconocer el entorno sí deja algo: revela terreno —y con él nacen parajes,
+	# ver [Reconocimiento]—, y de paso se recoge lo que se encuentra.
+	person.investigando = barbecho.sin_sitio(person.activity)
+	if person.investigando:
+		var mirar := reconocimiento._least_known_around(home_position,
+			Reconocimiento.BATIDA_RADIUS * 0.25,
+			Reconocimiento.BATIDA_RADIUS, person)
+		marcha._send_to(person, mirar)
+		if not person.route.is_empty():
+			person.has_task = true
+			if person.journey.is_empty():
+				person.begin_journey("Investigar el entorno", day, hour,
+					home_position)
+			person.state = Inhabitant.State.YENDO
+			return
+
 	var destination := Vector3.ZERO
 	for candidate: Vector3 in _work_candidates(person):
 		marcha._send_to(person, candidate)

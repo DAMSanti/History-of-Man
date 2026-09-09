@@ -723,7 +723,11 @@ func _watch_for_stuck(person: Inhabitant, hours: float) -> void:
 
 	# Estar quieto AL LADO de donde ibas no es estar atascado: es haber
 	# llegado y que el estado no se haya enterado. El remedio es otro.
-	var arrived := person.position.distance_to(person.target) < sim.arrive_radius * 1.5
+	# Con el radio escalado, por lo mismo que en todas partes: a velocidad de
+	# persona un paso mide mas que seis metros y el tramo de batida no se daba
+	# nunca por terminado. Ver [SettlementSim._radio_de_llegada].
+	var arrived := person.position.distance_to(person.target) \
+		< sim._radio_de_llegada(hours) * 1.5
 
 	# QUIEN SE MUEVE NO ESTÁ ATASCADO. Punto, y sin mirar dónde está.
 	#
