@@ -520,6 +520,10 @@ func _survey(person: Inhabitant, hours: float) -> void:
 		_grow_batida_skill(person, hours * BATIDA_REPETITION_RATE,
 			BATIDA_REPETITION_CEILING)
 
+	# Y se recoge lo que va saliendo: reconocer no es andar con las manos en
+	# los bolsillos. Ver [_recoger_de_paso].
+	_recoger_de_paso(person, hours)
+
 	if person.work_centre == Vector3.ZERO:
 		person.work_centre = person.position
 
@@ -552,6 +556,55 @@ func _survey(person: Inhabitant, hours: float) -> void:
 ## por debajo del umbral, y sólo pasaban las celdillas a menos de treinta y seis
 ## metros del punto. Una. Exactamente lo que había antes de repartir nada.
 const LO_QUE_DEJA_UNA_JORNADA := BandKnowledge.KNOWN_ENOUGH 	/ BandKnowledge.SE_APRENDE_MENOS_LEJOS + 0.02
+
+
+## Cuanto se recoge reconociendo, en partes de lo que sacaria un recolector.
+##
+## Un quinto. Quien bate el monte no se para a vaciar un avellanar -esta
+## mirando, no cosechando- pero tampoco pasa de largo por delante de la leña, un
+## nodulo bueno o un puñado de avellanas. Es lo que se pidio: «los exploradores
+## tambien deben ir recogiendo materiales y recursos mientras hacen sus batidas,
+## exploraciones y ascensiones».
+##
+## Pendiente de playtest: subirlo convierte al explorador en un recolector lento,
+## bajarlo lo deja volviendo de vacio otra vez.
+const DE_PASO := 0.20
+
+
+## Lo que se coge ANDANDO, o -1 si aqui no hay nada que echarse al zurron.
+##
+## Recoleccion y materia prima y nada mas: nadie caza ni pesca mientras
+## reconoce, pero leña, fibra y un canto bueno se cogen de paso.
+func _lo_que_se_coge_andando(donde: Vector3) -> int:
+	var mejor := -1
+	var cuanto := 0.05
+	for actividad: int in [Subsistence.Activity.RECOLECCION,
+			Subsistence.Activity.MATERIA_PRIMA]:
+		var hay := sim.field.seasonal_abundance_at(
+			actividad as Subsistence.Activity, donde, GameState.season)
+		if hay > cuanto:
+			cuanto = hay
+			mejor = actividad
+	return mejor
+
+
+## Recoge lo que se encuentra sin dejar de reconocer.
+##
+## Se le PRESTA la actividad al tajo y se le devuelve. Es feo y es a proposito:
+## la cosecha lleva dentro la pericia, la estacion, el agotamiento de la celda,
+## la herramienta y el libro de produccion, y duplicar todo eso aqui para
+## restarle un factor seria tener dos cosechas que se separarian a la primera.
+## Lo que cambia es el RITMO -[DE_PASO]- y nada mas.
+func _recoger_de_paso(person: Inhabitant, hours: float) -> void:
+	if sim.field == null or sim.tajo == null:
+		return
+	var act := _lo_que_se_coge_andando(person.position)
+	if act < 0:
+		return
+	var suya := person.activity
+	person.activity = act as Subsistence.Activity
+	sim.tajo._harvest(person, hours * DE_PASO)
+	person.activity = suya
 
 
 ## Se acabo el sim.reconocimiento: se cuenta lo visto y se vuelve.
@@ -654,8 +707,18 @@ func _finish_survey(person: Inhabitant) -> void:
 			if is_batida:
 				_grow_batida_skill(person, SettlementSim.BATIDA_MATERIAL_MILESTONE,
 					BATIDA_MATERIAL_CEILING)
-				if sim._rng.randf() < person.skill_in(batida_task) * CHAIN_REVEAL_FACTOR:
+				# LA CUENTA INTERNA, y se cuenta. El jugador pidió saber «si no
+				# encontró nada por una cuenta interna, y si es así, qué % tenía
+				# de haberlo encontrado»: aquí está la única del reconocimiento.
+				var opcion := person.skill_in(batida_task) * CHAIN_REVEAL_FACTOR
+				if sim._rng.randf() < opcion:
 					reveals += 1
+				elif discovered.size() < MAX_REVEALS_PER_VISIT:
+					sim.cronista.hallazgo(person,
+						"Buscó si había algo más y no dio con ello: tenía un "
+							+ "%.0f %% de encontrarlo, que es lo que da su "
+								% (opcion * 100.0)
+							+ "destreza batiendo.")
 	# Y el hito de abrir MONTE NUEVO sigue siendo sólo del explorador:
 	# `_credit_new_ground` premia destreza DE EXPLORACIÓN, y dársela a un
 	# recolector por recoger sería pagarle dos veces por la misma jornada.
@@ -667,6 +730,19 @@ func _finish_survey(person: Inhabitant) -> void:
 	# generico del terreno -"hay caza", "monte y piedra"-: una batida que
 	# vuelve con novedades de verdad no puede leerse igual que una que no
 	# encontro nada, ni en la cronica ni en el rastro.
+	# POR QUE SE VUELVE DE VACIO. Es la otra mitad de lo que se pidió: que la
+	# crónica diga si no se encontró nada y por qué, en vez de dejar una línea
+	# de «volvió de vacío» sin explicación.
+	if discovered.is_empty():
+		if here == null:
+			sim.cronista.hallazgo(person,
+				"Aquí no había ningún sitio con nombre que investigar: lo que "
+					+ "trae es mapa, no hallazgos.")
+		elif not here.has_unknowns():
+			sim.cronista.hallazgo(person,
+				"De %s ya se sabía todo: no quedaba nada por descubrir."
+					% here.name_text)
+
 	var outcome: String
 	if not discovered.is_empty():
 		outcome = "investig\u00f3 %s y encontr\u00f3 %s" % [where, ", ".join(discovered)]

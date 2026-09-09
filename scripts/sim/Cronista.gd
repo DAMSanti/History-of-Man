@@ -79,6 +79,14 @@ func _apuntar_lo_que_se_deja(person: Inhabitant, de: Inhabitant.State) -> void:
 			if _en_casa(person):
 				person.diario.apunta(sim.day, sim.hour, Diario.Que.CAMINO,
 					"Llegó al abrigo.")
+				# Y POR QUÉ VUELVE DE VACÍO, si vuelve de vacío. Es lo que se
+				# pidió: «quiero que me pongas cuándo vuelve de vacío al
+				# campamento porque es». Una línea de «volvió de vacío» sin
+				# explicación no dice si el problema es el sitio, el camino o
+				# la suerte.
+				if person.load_kg() < 0.1:
+					person.diario.apunta(sim.day, sim.hour, Diario.Que.APURO,
+						"Llegó de vacío: %s." % _por_que_de_vacio(person))
 
 
 ## Qué se cuenta de pasar de un estado a otro.
@@ -159,6 +167,19 @@ func _apuntar_lo_recogido(person: Inhabitant, antes: Dictionary) -> void:
 			"Empezó a coger %s en %s." % [
 				Materia.material_name(kind as Materia.Kind).to_lower(),
 				_sitio(person.position)])
+
+
+## Por qué no trae nada, con lo que la simulación sabe de esta persona.
+func _por_que_de_vacio(person: Inhabitant) -> String:
+	if person.unreachable != Vector3.ZERO:
+		return "no había forma de llegar al sitio y hubo que darlo por perdido"
+	if person.job == Profession.Job.EXPLORACION:
+		return "lo suyo es traer mapa, no carga"
+	if sim.barbecho != null and sim.barbecho.sin_sitio(person.activity):
+		return "no le queda ningún sitio sin esquilmar donde trabajar lo suyo"
+	if person.state_name() == "atascado":
+		return "se quedó atascado y perdió la jornada"
+	return "no encontró nada que mereciera cargar"
 
 
 ## Que se ha descubierto algo, y dónde. Lo llama quien lo detecta.

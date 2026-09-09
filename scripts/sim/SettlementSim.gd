@@ -1147,6 +1147,20 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 				despensa._deliver(person)
 				person.state = Inhabitant.State.OCIOSO
 			else:
+				# Y SE APUNTA QUE SE VUELVE ANTES DE TIEMPO. Es lo que se pidió
+				# para la crónica: «si no terminó de trabajar, si se tuvo que
+				# volver al asentamiento antes». Sin esto, una jornada cortada
+				# por la noche se lee igual que una terminada.
+				if person.state == Inhabitant.State.RECONOCIENDO:
+					var pide := reconocimiento._survey_hours_for(person)
+					cronista.apuro(person,
+						"Se hacía de noche y dejó el reconocimiento a medias: "
+							+ "llevaba %.1f h de las %.1f que pide batir el sitio."
+								% [person.survey_hours, pide])
+				elif person.state == Inhabitant.State.TRABAJANDO 						or person.state == Inhabitant.State.BUSCANDO:
+					cronista.apuro(person,
+						"Se hacía de noche y tuvo que dejar el trabajo para "
+							+ "emprender la vuelta.")
 				marcha._send_to(person, home_position)
 				person.state = Inhabitant.State.VOLVIENDO
 
