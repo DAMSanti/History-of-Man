@@ -542,8 +542,20 @@ func _survey(person: Inhabitant, hours: float) -> void:
 	# el hito del camino ANTES que el destino, asi que por mucho que se
 	# cambiara el destino la persona seguia apuntando al sitio donde ya
 	# estaba.
+	# RECONOCER NO ES CORRER: en cada tramo hay que pararse a mirar.
+	#
+	# Antes se sorteaba el siguiente tramo en cuanto se llegaba, y a velocidad
+	# de persona doscientos sesenta metros se andan en cinco minutos: la jornada
+	# de reconocimiento salían casi cincuenta tramos y once kilómetros de
+	# zigzag. En la ventana de rastros se veía como un ovillo y siete kilómetros
+	# por batida para un sitio a ochocientos metros.
+	#
+	# Reconocer un trozo de monte es subirse al alto, bajar al arroyo, mirar el
+	# cortado: eso lleva un rato en cada sitio. Ver [MIRAR_EL_SITIO].
+	person.horas_en_el_tramo += hours
 	var arrived := person.position.distance_to(person.forage_target) < sim.arrive_radius
-	if arrived or person.route_step >= person.route.size():
+	if (arrived and person.horas_en_el_tramo >= MIRAR_EL_SITIO) 			or person.route_step >= person.route.size():
+		person.horas_en_el_tramo = 0.0
 		_next_survey_leg(person)
 
 	if person.survey_hours >= needed:
@@ -792,6 +804,17 @@ func _finish_survey(person: Inhabitant) -> void:
 	person.end_journey(sim.day, where, outcome)
 	sim.marcha._send_to(person, sim.home_position)
 	person.state = Inhabitant.State.VOLVIENDO
+
+
+## Cuanto se para uno a mirar cada tramo, en horas.
+##
+## Media hora. Con las cuatro horas que dura una batida salen ocho tramos y unos
+## dos kilometros de vuelta, que es reconocer; sorteando tramo en cuanto se
+## llega salian cincuenta y once kilometros, que es correr.
+##
+## Pendiente de playtest: subirlo hace la batida mas quieta y menos ancha,
+## bajarlo la vuelve otra vez una carrera.
+const MIRAR_EL_SITIO := 0.5
 
 
 ## El siguiente tramo de la batida.

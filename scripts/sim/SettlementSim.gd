@@ -1491,7 +1491,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 					person.state = Inhabitant.State.RECONOCIENDO
 					return
 
-				if known > 0.35:
+				if known > Tajo.SE_PUEDE_TRABAJAR:
 					person.work_centre = person.position
 					person.forage_target = person.position
 					person.state = Inhabitant.State.TRABAJANDO
@@ -1553,7 +1553,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 				# donde está la pieza, y `_forage_drift` le reescribiría el
 				# destino cada tick con un punto sorteado del paraje.
 				if not caceria._is_hunting(person):
-					tajo._forage_drift(person)
+					tajo._forage_drift(person, hours)
 				if person.job == Profession.Job.MANUFACTURA:
 					taller._craft(person, hours)
 				elif person.current_speciality == Profession.Speciality.CAZA_MENOR \

@@ -297,6 +297,15 @@ var stuck_told: int = -1
 ## Existe porque juntar toda la actividad en una linea no dice nada: «2 jorn.
 ## de ascension» no distingue haber coronado dos picos de haberse dado la
 ## vuelta dos veces a media pared, y son partidas distintas.
+## Horas que lleva mirando el tramo de reconocimiento en curso.
+##
+## Reconocer no es correr. Sin esto, en cuanto se llega a un tramo se sortea el
+## siguiente, y a velocidad de persona un tramo de doscientos sesenta metros se
+## hace en cinco minutos: cuatro horas de reconocimiento salían casi cincuenta
+## tramos y once kilómetros de zigzag. Medido en la ventana de rastros: siete
+## kilómetros por batida para un sitio a menos de ochocientos metros.
+var horas_en_el_tramo: float = 0.0
+
 ## Si la salida de hoy es a INVESTIGAR el entorno y no a trabajar un sitio.
 ##
 ## Quien no tiene una fuente conocida de lo suyo no sale a un tajo: sale a mirar

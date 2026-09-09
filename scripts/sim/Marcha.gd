@@ -201,8 +201,18 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 						# cerrarla, mañana se traza la misma ruta por el mismo
 						# sitio y se planta la misma gente en la misma orilla.
 						# Ver [Navgrid.cerrar].
+						# SOLO SI LO QUE ESTORBA ES AGUA.
+						#
+						# Es para lo que esta: la rejilla abre celdas por vados
+						# que sobre el terreno no existen. Un cantil no: la
+						# rejilla ya lo mide con la pendiente, y cerrar celda
+						# cada vez que alguien roza una peña iria troceando el
+						# valle hasta dejar la mitad incomunicada. Medido con
+						# el juego delante: diez cierres en dos jornadas, y no
+						# todos eran agua.
 						var delante := person.position + direction 							* Navgrid.CELL * 0.5
-						if _navgrid().cerrar(delante):
+						var estorba_el_agua := sim._terrain != null 							and sim._terrain.crossing_difficulty_at(delante) > 0.05
+						if estorba_el_agua and _navgrid().cerrar(delante):
 							forget_routes()
 							sim._note(Chronicle.Kind.TIERRA,
 								"Por %s no se pasa: la banda lo tacha de sus "

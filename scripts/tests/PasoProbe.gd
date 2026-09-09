@@ -24,6 +24,7 @@ var _cerradas := 0
 var _cortas := 0
 var _instantaneas := 0
 var _contra_el_rio: Dictionary = {}
+var _estados: Dictionary = {}
 var _sin_acercarse := 0
 var _cuadros_yendo := 0
 var _hace_un_rato: Dictionary = {}
@@ -134,6 +135,17 @@ func _init() -> void:
 				_sin_acercarse += 1
 			_hace_un_rato[p3.given_name] = minf(antes2, ahora)
 
+		# En que estado pasa el tiempo cada uno, contando solo las horas de luz.
+		if sim.hour >= 7.0 and sim.hour <= 20.0:
+			for p5: Inhabitant in sim.people:
+				if p5.job == Profession.Job.OCIOSO:
+					continue
+				var clave2 := "%-9s %s" % [p5.given_name.substr(0, 9),
+					Profession.job_name(p5.job as Profession.Job)]
+				var cuenta2: Dictionary = _estados.get(clave2, {})
+				cuenta2[int(p5.state)] = int(cuenta2.get(int(p5.state), 0)) + 1
+				_estados[clave2] = cuenta2
+
 		var rejilla: Navgrid = sim.marcha._navgrid()
 		if rejilla != null and rejilla.is_ready():
 			for p2: Inhabitant in sim.people:
@@ -172,6 +184,42 @@ func _init() -> void:
 		print("   factor por el tiempo que hace         %.2f" % (_suma_clima / n))
 		print("   TODO JUNTO                            %.2f" % (_suma_total / n))
 	print("")
+	print("")
+	print("--- EN QUE SE LE VA LA JORNADA (cuadros por estado) ---")
+	print("   %-9s %-12s %7s %7s %7s %7s %7s" % [
+		"quien", "oficio", "andando", "trabaja", "reconoce", "busca", "otro"])
+	for clave: String in _estados:
+		var cuenta: Dictionary = _estados[clave]
+		var total := 0.0
+		for e: int in cuenta:
+			total += float(cuenta[e])
+		if total < 1.0:
+			continue
+		var andando := float(cuenta.get(int(Inhabitant.State.YENDO), 0)) 			+ float(cuenta.get(int(Inhabitant.State.VOLVIENDO), 0))
+		var trabaja := float(cuenta.get(int(Inhabitant.State.TRABAJANDO), 0))
+		var reconoce := float(cuenta.get(int(Inhabitant.State.RECONOCIENDO), 0))
+		var busca := float(cuenta.get(int(Inhabitant.State.BUSCANDO), 0))
+		print("   %-22s %6.0f %% %5.0f %% %6.0f %% %5.0f %% %5.0f %%" % [
+			clave, 100.0 * andando / total, 100.0 * trabaja / total,
+			100.0 * reconoce / total, 100.0 * busca / total,
+			100.0 * (total - andando - trabaja - reconoce - busca) / total])
+
+	print("")
+	print("--- CUANTO ANDA CADA UNO POR SALIDA ---")
+	for p4: Inhabitant in sim.people:
+		if p4.journeys.is_empty():
+			continue
+		var km := 0.0
+		var lejos := 0.0
+		for trip: Dictionary in p4.journeys:
+			km += float(trip.get("metres", 0.0))
+			lejos = maxf(lejos, float(trip.get("farthest", 0.0)))
+		print("   %-9s %-12s %d salidas · %.1f km · %.0f m por salida · lo mas lejos %.0f m"
+			% [p4.given_name.substr(0, 9),
+				Profession.job_name(p4.job as Profession.Job),
+				p4.journeys.size(), km / 1000.0,
+				km / float(p4.journeys.size()), lejos])
+
 	print("")
 	print("--- PARAJES: ¿SE LLEGA A ELLOS HOY? ---")
 	var rej: Navgrid = sim.marcha._navgrid()

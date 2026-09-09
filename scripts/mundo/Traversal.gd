@@ -20,6 +20,28 @@ extends RefCounted
 ## Encima de eso van la carga y el suelo, que son los otros dos factores que
 ## de verdad cambian una jornada de marcha.
 
+## Distancia EN LLANO entre dos puntos: la sombra sobre el mapa, sin la altura.
+##
+## Hace falta porque en este valle conviven dos clases de Vector3 y se parecen
+## demasiado: los que llevan la cota puesta —la posición de una persona, la del
+## abrigo, la de un paraje— y los que salen de una rejilla, que traen `y = 0`
+## porque una celda no está a ninguna altura. Restar uno de otro con
+## `distance_to` no mide una distancia: mide la altitud.
+##
+## Y no es teoría. Medido en el sitio 56, donde el relieve va de 96 a 718 m:
+## [Querencia] repartía lo que la banda sabe con `donde.distance_to(centre)`,
+## con la cota en un lado y cero en el otro, así que la distancia salía SIEMPRE
+## mayor que la mancha, toda la vuelta del abrigo se quedaba en el valor del
+## filo —0,24— y la rejilla entera de familiaridad no pasaba de ahí. Por debajo
+## del 0,30 que hace falta para bautizar y del 0,35 para ofrecer un tajo: la
+## banda no tenía NI UN sitio donde trabajar, salía a investigar todos los días
+## y se pasaba la jornada dando vueltas por la ribera.
+##
+## Siempre que un lado venga de una celda, la distancia se mide aquí.
+static func en_llano(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
 ## Tipos de suelo por lo que cuesta pisarlos, no por lo que parecen.
 enum Ground {
 	PASTO,     ## Herbazal y suelo forestal: la referencia

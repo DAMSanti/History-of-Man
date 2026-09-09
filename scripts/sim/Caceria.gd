@@ -505,7 +505,7 @@ func _hunt_step(person: Inhabitant, hours: float) -> void:
 		# la cacería a la cifra ya medida: ver `_tracking_hours`.
 		if person.hunt_cooldown > 0.0:
 			person.hunt_cooldown -= hours
-			sim.tajo._forage_drift(person)
+			sim.tajo._forage_drift(person, hours)
 			person.log_deed(person.current_task(), "cortando rastro", false)
 			return
 		hunt = _open_hunt(person)
@@ -520,7 +520,7 @@ func _hunt_step(person: Inhabitant, hours: float) -> void:
 		# ochocientos animales del valle, y por cazador y por tick son ochocientos
 		# millones de cuentas en una partida de cuatro meses.
 		person.hunt_cooldown = MIRAR_OTRA_VEZ
-		sim.tajo._forage_drift(person)
+		sim.tajo._forage_drift(person, hours)
 		person.log_deed(person.current_task(), "batiendo el monte", false)
 		return
 

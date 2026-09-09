@@ -14,6 +14,23 @@ extends RefCounted
 ##
 ## La caza NO pasa por aqui: acecha una pieza concreta de las que andan por el
 ## valle. Ver [Caceria].
+
+## Familiaridad a partir de la cual un sitio se puede TRABAJAR: se llega y se
+## empieza, sin prospectar antes.
+##
+## Es un peldaño por encima de [BandKnowledge.KNOWN_ENOUGH] -0,30-, que es lo
+## que hace falta para que un sitio merezca nombre. La diferencia es a
+## proposito: saber que ahi hay un avellanar basta para ponerle nombre en el
+## mapa, pero para ir derecho a recoger hay que saber ademas por donde se entra
+## y en que parte de la mancha esta lo bueno.
+##
+## Estaba escrito como un 0,35 suelto en dos sitios -aqui y en el paso de YENDO
+## a TRABAJANDO de [SettlementSim._tick_daylight]- y encima citado a mano en un
+## comentario de [Querencia]. Tres copias de la misma regla es como se pierde
+## una: si se sube este numero hay que subir tambien con cuanto se siembra al
+## fundar, o la banda amanece sin un solo sitio donde trabajar.
+const SE_PUEDE_TRABAJAR := 0.35
+
 var sim: SettlementSim
 
 
@@ -38,7 +55,7 @@ func _rank_known_spots() -> void:
 				var centre := sim.field.cell_center(x, z)
 				# Solo cuenta lo que se conoce: un cotarro sin pisar no esta en
 				# el mapa de la banda por muy bueno que sea
-				if sim.knowledge.familiarity_at(act, centre) < 0.35:
+				if sim.knowledge.familiarity_at(act, centre) < SE_PUEDE_TRABAJAR:
 					continue
 
 				var value := sim.knowledge.believed_abundance(
@@ -837,13 +854,38 @@ func _daily_yield(person: Inhabitant) -> float:
 ## Sin esto la gente llegaba a un punto, se quedaba clavada seis horas y
 ## volvia, que se lee como un automata. Recoger es batir la mancha, y ademas
 ## asi la cuadrilla se reparte sola por el paraje en vez de amontonarse.
-func _forage_drift(person: Inhabitant) -> void:
+## Cuanto se recoge en cada mata antes de pasar a la siguiente, en horas.
+##
+## Tres cuartos de hora. Con las horas utiles de una jornada salen unas diez
+## matas, que es batear una mancha; sorteando otra en cuanto se llega salian
+## cientos, y la jornada se iba en andar entre ellas.
+##
+## Pendiente de playtest: subirlo deja al recolector mas quieto -y esquilma
+## antes la mata-, bajarlo lo vuelve a poner a correr.
+const RECOGER_LA_MATA := 0.75
+
+
+func _forage_drift(person: Inhabitant, hours: float) -> void:
 	if person.work_centre == Vector3.ZERO:
 		person.work_centre = person.position
 
 	if person.position.distance_to(person.forage_target) > sim.arrive_radius * 0.8:
 		person.target = person.forage_target
 		return
+
+	# Y AL LLEGAR A LA MATA, SE RECOGE: no se sale corriendo a la siguiente.
+	#
+	# Sin esto, en cuanto se pisa el punto se sortea otro, y a velocidad de
+	# persona setenta metros se andan en un minuto y medio: la jornada se iba en
+	# ir de mata en mata sin pararse en ninguna. Medido en los rastros: seis y
+	# ocho kilometros por salida para trabajar un paraje a ochocientos metros, y
+	# un ovillo apretado donde tenia que haber trabajo.
+	#
+	# Un recolector no corre entre matas: se planta en una y la deja limpia.
+	person.horas_en_el_tramo += hours
+	if person.horas_en_el_tramo < RECOGER_LA_MATA:
+		return
+	person.horas_en_el_tramo = 0.0
 
 	# Quien trabaja el agua bate la ORILLA, no la mancha entera.
 	#

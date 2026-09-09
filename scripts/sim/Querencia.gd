@@ -47,8 +47,8 @@ const RADIO := 280.0
 ##
 ## Tiene que pasar DOS umbrales, y son distintos:
 ##
-##   0,30  [Parajes.NAMED_AT], que es lo que hace falta para bautizar un sitio
-##   0,35  lo que exige `Tajo._rank_known_spots` para OFRECERLO como tajo
+##   [Parajes.NAMED_AT], que es lo que hace falta para bautizar un sitio
+##   [Tajo.SE_PUEDE_TRABAJAR], lo que se exige para OFRECERLO como tajo
 ##
 ## Con 0,42 en la puerta y caída hasta 0,30 en el filo, la mitad de fuera del
 ## radio pasaba el primero y no el segundo: salían los parajes y la banda no
@@ -130,7 +130,10 @@ func asentarse() -> int:
 			# Ahora el borde se queda por debajo del listón: hay dónde ir a
 			# trabajar desde el primer día, y el sitio de al lado se bautiza
 			# cuando alguien lo trabaje lo bastante.
-			var lejos := donde.distance_to(centre) / MANCHA
+			# En llano: `donde` trae la cota del terreno y `centre` sale de la
+			# rejilla con y = 0. Ver [Traversal.en_llano], que es donde está
+			# medido lo que costaba esta resta.
+			var lejos := Traversal.en_llano(donde, centre) / MANCHA
 			sim.knowledge.reveal(act, centre, lerpf(SABIDO,
 				Parajes.NAMED_AT * 0.8, clampf(lejos, 0.0, 1.0)))
 
@@ -155,6 +158,15 @@ func asentarse() -> int:
 	# una vez, abajo. Cuatro «un sitio con nombre» seguidos en el primer minuto
 	# de partida son ruido, no noticias.
 	sim.parajes.just_found.clear()
+
+	# Y la lista de tajos se rehace AQUI, no al cerrar la jornada.
+	#
+	# `_rank_known_spots` corre una vez al dia, asi que el dia 1 la banda
+	# amanecia con cuatro parajes bautizados y CERO tajos conocidos: para
+	# `Barbecho.sin_sitio` no habia donde trabajar, y los once salian a
+	# investigar en vez de a recoger. La primera jornada entera perdida
+	# sabiendo perfectamente donde estan las cosas.
+	sim.tajo._rank_known_spots()
 
 	sim._note(Chronicle.Kind.HALLAZGO,
 		"La banda se asienta. De la primera vuelta al abrigo salen %d "
@@ -192,10 +204,9 @@ func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
 		# [Marcha.alcanzable_de_verdad].
 		if not sim.marcha.alcanzable_de_verdad(sim.home_position, centre):
 			continue
-			continue
 		# Lo que hay, contra lo que cuesta llegar. Cerca y bueno gana a lejos y
 		# mejor: es la vuelta al abrigo, no una expedicion.
-		var lejos := sim.home_position.distance_to(centre)
+		var lejos := Traversal.en_llano(sim.home_position, centre)
 		var nota := hay * (1.0 - clampf(lejos / hasta, 0.0, 1.0) * 0.5)
 		if nota > mejor_nota:
 			mejor_nota = nota

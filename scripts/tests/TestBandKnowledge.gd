@@ -205,3 +205,57 @@ func test_saber_la_temporada_mejora_el_rendimiento() -> void:
 	assert_gt(sabio.efficiency(Subsistence.Activity.CAZA, Subsistence.Season.OTONO),
 		ciego.efficiency(Subsistence.Activity.CAZA, Subsistence.Season.OTONO),
 		"quien ya vivio la berrea le saca mas partido")
+
+
+## LO QUE SABE LA BANDA AL FUNDAR TIENE QUE VALER PARA TRABAJAR.
+##
+## Se funda el asentamiento sembrando familiaridad alrededor de los cuatro
+## sitios del primer dia -ver [Querencia]-, y esa siembra tiene que pasar DOS
+## listones: [Parajes.NAMED_AT] para que el sitio merezca nombre y
+## [Tajo.SE_PUEDE_TRABAJAR] para que se ofrezca como tajo.
+##
+## Se quedo por debajo de los dos durante un tiempo y no lo vio nadie, porque
+## nada casca: la partida arranca, salen los cuatro parajes en el mapa, y la
+## banda entera se pasa TODAS las jornadas «investigando» —medido: entre el
+## 82 % y el 97 % de las horas de luz reconociendo y CERO trabajando, seis y
+## ocho kilometros de zigzag por la vereda del rio cada salida—. Desde fuera se
+## lee como un fallo de caminos, y no lo era.
+func test_lo_sembrado_al_fundar_pasa_los_dos_listones() -> void:
+	assert_true(Querencia.SABIDO >= Parajes.NAMED_AT,
+		"lo que se siembra al fundar da para bautizar el sitio")
+	assert_true(Querencia.SABIDO >= Tajo.SE_PUEDE_TRABAJAR,
+		"y para ofrecerlo como tajo, o la banda amanece sin donde trabajar")
+
+
+## Y TIENE QUE SEGUIR PASANDOLOS CON EL VALLE EN CUESTA.
+##
+## Es la prueba del fallo de verdad, que no estaba en los numeros sino en una
+## resta: el punto elegido lleva la COTA del terreno puesta y las celdas de la
+## rejilla vienen con y = 0, asi que `donde.distance_to(centre)` no medía la
+## distancia sino la altitud. En Cantabria el relieve va de 96 a 718 m, o sea
+## que salia siempre mayor que la mancha, todo el entorno se llevaba el valor
+## del filo -0,24- y la rejilla ENTERA se quedaba ahi. Ver [Traversal.en_llano].
+func test_la_siembra_no_se_va_al_traste_por_la_altura() -> void:
+	var k := BandKnowledge.new()
+	k.setup(16, 16, Vector2(1600.0, 1600.0))
+	var act := Subsistence.Activity.RECOLECCION
+
+	# El mismo sitio dicho de las dos maneras: con cota y a ras de rejilla.
+	var celda := Vector3(500.0, 0.0, 500.0)
+	var donde := Vector3(500.0, 340.0, 500.0)
+
+	var lejos := Traversal.en_llano(donde, celda) / Querencia.MANCHA
+	k.reveal(act, celda, lerpf(Querencia.SABIDO, Parajes.NAMED_AT * 0.8,
+		clampf(lejos, 0.0, 1.0)))
+	assert_true(k.familiarity_at(act, celda) >= Tajo.SE_PUEDE_TRABAJAR,
+		"el nucleo de la mancha se sabe lo bastante como para trabajarlo")
+
+
+## La distancia en llano no cuenta la altura, que es toda su razon de ser.
+func test_en_llano_no_cuenta_la_altura() -> void:
+	var suelo := Vector3(100.0, 0.0, 200.0)
+	var arriba := Vector3(100.0, 500.0, 200.0)
+	assert_true(is_zero_approx(Traversal.en_llano(suelo, arriba)),
+		"el mismo punto del mapa esta a cero, este a la altura que este")
+	assert_true(absf(Traversal.en_llano(suelo, Vector3(130.0, 500.0, 240.0))
+		- 50.0) < 0.001, "y lo demas es el cateto del mapa: 30 y 40 dan 50")
