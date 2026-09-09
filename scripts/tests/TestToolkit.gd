@@ -319,7 +319,7 @@ func test_sin_material_las_jornadas_no_bastan() -> void:
 	tree.larder = Storehouse.new()
 	var cost := TechTree.learning_cost(TechTree.Tech.NUCLEO)
 	assert_false(cost.is_empty(), "el nucleo preparado cuesta piedra")
-	var gained := tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	var gained := tree.add_practice(Profession.Job.MANUFACTURA, 999.0)
 	assert_false(tree.has(TechTree.Tech.NUCLEO),
 		"con el abrigo vacio no se aprende por muchas jornadas que se echen")
 	assert_eq(gained.size(), 0, "y no se anuncia nada")
@@ -330,7 +330,7 @@ func test_con_material_se_aprende_y_se_paga() -> void:
 	tree.larder = Storehouse.new()
 	tree.larder.add(Materia.Kind.PIEDRA, 100.0)
 	var before := tree.larder.amount(Materia.Kind.PIEDRA)
-	tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	tree.add_practice(Profession.Job.MANUFACTURA, 999.0)
 	assert_true(tree.has(TechTree.Tech.NUCLEO), "con piedra si se aprende")
 	assert_lt(tree.larder.amount(Materia.Kind.PIEDRA), before,
 		"y la piedra se gasta aprendiendo")
@@ -348,7 +348,7 @@ func test_sin_despensa_el_arbol_se_comporta_como_antes() -> void:
 	# Las pruebas viejas y las partidas guardadas montan arboles sueltos, sin
 	# almacen: alli aprender no puede costar material o nada funcionaria.
 	var tree := TechTree.new()
-	tree.add_practice(Subsistence.Activity.MATERIA_PRIMA, 999.0)
+	tree.add_practice(Profession.Job.MANUFACTURA, 999.0)
 	assert_true(tree.has(TechTree.Tech.NUCLEO),
 		"sin despensa que consultar, las jornadas bastan")
 
@@ -370,3 +370,71 @@ func test_todas_las_tecnicas_tienen_cara_con_la_que_dibujarse() -> void:
 		assert_true(TechTree.TECH_FACE.has(tech),
 			"%s tiene con que dibujarse" % TechTree.tech_name(
 				tech as TechTree.Tech))
+
+
+# ------------- las tecnicas: jornadas Y material, a la vez ---------------
+
+## El material se gasta A PLAZOS y frena el progreso cuando falta.
+##
+## Queja literal: «por un lado pasan las jornadas, y despues consume los
+## materiales. No deberia ser asi... si pide 100 jornadas y 10 de calcita,
+## quiero que permita subir 10 jornadas por cada 1 de calcita». Y el reparto es
+## proporcional: si son veinte unidades, cada una abre un 5 %.
+func test_el_material_abre_su_parte_de_las_jornadas() -> void:
+	var tree := TechTree.new()
+	var despensa := Storehouse.new()
+	tree.larder = despensa
+
+	# La hoja pide 110 jornadas de manufactura y 18 de piedra. Con nueve
+	# piedras -la mitad- solo se puede llegar a la mitad del camino.
+	var pide := TechTree.learning_cost(TechTree.Tech.HOJA)
+	var piedra := float(pide[Materia.Kind.PIEDRA])
+	despensa.add(Materia.Kind.PIEDRA, piedra * 0.5)
+	tree.known[TechTree.Tech.LASCA] = true
+	tree.known[TechTree.Tech.NUCLEO] = true
+
+	tree.add_practice(Profession.Job.MANUFACTURA, 9999.0)
+	assert_near(tree.progress(TechTree.Tech.HOJA), 0.5, 0.02,
+		"con la mitad del material, la mitad del camino, por muchas jornadas "
+			+ "que se echen")
+	assert_false(tree.has(TechTree.Tech.HOJA),
+		"y no se aprende: faltan piedras")
+	assert_near(despensa.amount(Materia.Kind.PIEDRA), 0.0, 0.01,
+		"y la piedra que habia SI se ha gastado, mientras se practicaba")
+
+	# Traen el resto y la tecnica se remata sin practicar mas.
+	despensa.add(Materia.Kind.PIEDRA, piedra * 0.5)
+	tree.add_practice(Profession.Job.MANUFACTURA, 0.0)
+	assert_true(tree.has(TechTree.Tech.HOJA),
+		"con el material puesto, la tecnica sale")
+
+
+## Las jornadas cuentan por OFICIO, y el oficio es el de su rama.
+##
+## «Hay tecnicas de ribera y de exploracion que parece que no suben». No lo
+## parecia: no subian. La actividad que hacia avanzar cada tecnica se escribia a
+## mano y no coincidia con la pestaña —la pasarela, rama de exploracion,
+## avanzaba con MATERIA_PRIMA; la piragua, tambien de exploracion, con PESCA—,
+## asi que poner gente a explorar no las movia ni un dia.
+func test_cada_tecnica_la_practica_el_oficio_de_su_rama() -> void:
+	for job: int in TechTree.BRANCHES:
+		for tech: int in (TechTree.BRANCHES[job] as Array):
+			assert_eq(TechTree.job_of(tech as TechTree.Tech), job,
+				"%s se practica en su propia rama"
+					% TechTree.tech_name(tech as TechTree.Tech))
+
+
+## Y trabajar de explorador mueve las tecnicas de exploracion.
+func test_explorar_hace_subir_las_tecnicas_de_exploracion() -> void:
+	var tree := TechTree.new()
+	tree.known[TechTree.Tech.LASCA] = true
+	tree.known[TechTree.Tech.NUCLEO] = true
+	var antes := tree.progress(TechTree.Tech.PASARELA)
+	tree.add_practice(Profession.Job.EXPLORACION, 20.0)
+	assert_gt(tree.progress(TechTree.Tech.PASARELA), antes,
+		"veinte jornadas de exploracion mueven la pasarela")
+	# Y trabajar de OTRA cosa no la mueve.
+	var ahora := tree.progress(TechTree.Tech.PASARELA)
+	tree.add_practice(Profession.Job.CAZA, 200.0)
+	assert_eq(tree.progress(TechTree.Tech.PASARELA), ahora,
+		"y doscientas de caza no la mueven nada")

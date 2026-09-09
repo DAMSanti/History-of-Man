@@ -887,15 +887,24 @@ func _on_day_passed(_day: int) -> void:
 				knowledge.record_season(person.activity, GameState.season)
 
 	# Las tecnicas salen de la practica, no de gastar un recurso abstracto: se
-	# suma una jornada por cada persona que ha trabajado en esa actividad
+	# suma una jornada por cada persona que ha SALIDO A TRABAJAR en ese oficio.
+	#
+	# Por OFICIO y no por actividad, que es lo que se pidio: «si me pide 100
+	# jornadas de caza contara cada jornada que un cazador sale; si cada dia
+	# salen 5, con 20 dias valdra». Ver [TechTree.job_of].
 	if tech:
 		var worked: Dictionary = {}
 		for person: Inhabitant in sim.people:
-			if person.has_task and person.can_work():
-				worked[person.activity] = float(worked.get(person.activity, 0.0)) + 1.0
-		for activity: int in worked.keys():
+			if person.job == Profession.Job.OCIOSO or not person.can_work():
+				continue
+			# Que haya SALIDO, no que estuviera apuntado: quien tiene oficio y
+			# se queda en el abrigo sin tajo no practica nada.
+			if not person.has_task:
+				continue
+			worked[person.job] = float(worked.get(person.job, 0.0)) + 1.0
+		for job: int in worked.keys():
 			for gained: int in tech.add_practice(
-					activity as Subsistence.Activity, float(worked[activity])):
+					job as Profession.Job, float(worked[job])):
 				var learned := gained as TechTree.Tech
 				print("Tecnica aprendida: %s" % TechTree.tech_name(learned))
 				# Aprender a hacer algo es un hito, y se cuenta como tal: con

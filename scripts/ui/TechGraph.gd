@@ -195,22 +195,34 @@ func _tooltip(tech: TechTree.Tech) -> String:
 	lines.append("")
 
 	var entry: Dictionary = TechTree.CATALOGUE[tech]
-	var activity: int = entry["practice"]
-	if activity >= 0 and float(entry["days"]) > 0.0:
-		lines.append("Se aprende %s: %d de %d jornadas." % [
-			Subsistence.activity_name(activity as Subsistence.Activity).to_lower(),
-			int(_tech.days_in(activity as Subsistence.Activity)),
+	var job := TechTree.job_of(tech)
+	if job >= 0 and float(entry["days"]) > 0.0:
+		lines.append("Se aprende trabajando de %s: %d de %d jornadas." % [
+			Profession.job_name(job as Profession.Job).to_lower(),
+			int(_tech.days_in(job as Profession.Job)),
 			int(entry["days"])])
 
 	var cost := TechTree.learning_cost(tech)
 	if cost.is_empty():
 		lines.append("No gasta material: sale de la práctica y nada más.")
 	else:
+		# A PLAZOS, y diciendo cuánto abre cada unidad: es lo que hace legible
+		# que una técnica se pare por falta de material aunque sobren jornadas.
 		var parts: Array[String] = []
 		for material: int in cost:
-			parts.append("%.0f %s" % [float(cost[material]),
+			var total := float(cost[material])
+			parts.append("%.0f %s" % [total,
 				Materia.material_name(material as Materia.Kind).to_lower()])
-		lines.append("Gasta al aprenderla: %s." % ", ".join(parts))
+		lines.append("Se gasta mientras se aprende: %s." % ", ".join(parts))
+		var puestas := TechTree.learning_cost(tech).size()
+		if puestas > 0 and float(entry["days"]) > 0.0:
+			var una: float = float(cost[cost.keys()[0]])
+			if una > 0.0:
+				lines.append("Cada unidad abre el %.0f %% de las jornadas."
+					% (100.0 / una))
+		var falta := _tech.missing_for(tech)
+		if not falta.is_empty():
+			lines.append("PARADA por falta de: %s." % ", ".join(falta))
 
 	var needs: Array = entry["needs"]
 	if not needs.is_empty():

@@ -48,28 +48,30 @@ enum Tech {
 
 
 ## Nombre y descripción de cada técnica, más lo que hace falta para llegar a
-## ella. `needs` son otras técnicas; `practice` es la actividad que hay que
-## haber trabajado, y `days` las jornadas acumuladas en ella.
+## ella. `needs` son otras técnicas y `days` las jornadas de trabajo que hay que
+## acumular; el OFICIO que la practica sale de la rama —ver [BRANCHES] y
+## [job_of]— y no se escribe aquí, para que la pestaña en la que sale y lo que
+## la hace subir no puedan discrepar.
 const CATALOGUE := {
 	Tech.LASCA: {
 		"name": "Talla sobre lasca",
 		"desc": "Percusión directa con percutor duro. Filos rápidos, poco control "
 			+ "de la forma. Es con lo que llega la banda: no se aprende aquí.",
-		"needs": [], "practice": -1, "days": 0,
+		"needs": [], "days": 0,
 	},
 	Tech.NUCLEO: {
 		"name": "Núcleo preparado",
 		"desc": "Se prepara el nódulo antes de extraer, de modo que la lasca sale "
 			+ "con la forma buscada. Es el salto técnico del Musteriense: menos "
 			+ "desperdicio de sílex y filos repetibles.",
-		"needs": [Tech.LASCA], "practice": Subsistence.Activity.MATERIA_PRIMA, "days": 45,
+		"needs": [Tech.LASCA], "days": 45,
 	},
 	Tech.HOJA: {
 		"name": "Talla laminar",
 		"desc": "Hojas largas y estrechas desde un núcleo prismático. Multiplica "
 			+ "los metros de filo por kilo de sílex, que en un valle sin sílex "
 			+ "bueno es la diferencia entre tener herramientas o no.",
-		"needs": [Tech.NUCLEO], "practice": Subsistence.Activity.MATERIA_PRIMA, "days": 110,
+		"needs": [Tech.NUCLEO], "days": 110,
 	},
 	Tech.LAZO: {
 		"name": "Lazo de fibra",
@@ -77,28 +79,28 @@ const CATALOGUE := {
 			+ "el animal ya usa. No hace falta saber tallar ni tener asta: "
 			+ "hace falta leer una vereda, que es lo primero que se aprende "
 			+ "del monte. Es la trampa que da de comer mientras se duerme.",
-		"needs": [], "practice": Subsistence.Activity.CAZA, "days": 35,
+		"needs": [], "days": 35,
 	},
 	Tech.CEPO: {
 		"name": "Cepo de losa",
 		"desc": "Una losa calzada sobre un disparador cebado. Cae con el peso "
 			+ "y mata en el sitio, así que no hay que llegar antes que el "
 			+ "zorro. Dura mucho más que un lazo y pide piedra.",
-		"needs": [Tech.LAZO], "practice": Subsistence.Activity.CAZA, "days": 110,
+		"needs": [Tech.LAZO], "days": 110,
 	},
 	Tech.RED_AVES: {
 		"name": "Red de aves",
 		"desc": "Malla fina entre dos varas en el bebedero o en el paso de la "
 			+ "nube. Es la misma cordelería que la red del río, y da plumas a "
 			+ "espuertas: un ave no da piel, da pluma.",
-		"needs": [Tech.LAZO], "practice": Subsistence.Activity.CAZA, "days": 190,
+		"needs": [Tech.LAZO], "days": 190,
 	},
 	Tech.FOSO: {
 		"name": "Foso",
 		"desc": "Hoyo en la vereda, tapado con ramaje y tierra. Es la única "
 			+ "trampa que coge pieza mayor, y cuesta lo que parece: días de "
 			+ "cavar por una pieza cada tanto, pero esa pieza es un ciervo.",
-		"needs": [Tech.CEPO], "practice": Subsistence.Activity.CAZA, "days": 330,
+		"needs": [Tech.CEPO], "days": 330,
 	},
 	Tech.OJEO: {
 		"name": "Ojeo",
@@ -106,19 +108,19 @@ const CATALOGUE := {
 			+ "otros esperan en el paso. No es una herramienta, es saber "
 			+ "repartirse, y multiplica lo que trae una cuadrilla de caza "
 			+ "mayor sin gastar una azagaya de más.",
-		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 260,
+		"needs": [Tech.AZAGAYA], "days": 260,
 	},
 	Tech.AZAGAYA: {
 		"name": "Azagaya de asta",
 		"desc": "Punta de asta de ciervo enmangada. Permite matar a distancia en "
 			+ "vez de al acecho, y con ello cazar presa mayor sin perder gente.",
-		"needs": [Tech.HOJA], "practice": Subsistence.Activity.CAZA, "days": 140,
+		"needs": [Tech.HOJA], "days": 140,
 	},
 	Tech.PROPULSOR: {
 		"name": "Propulsor",
 		"desc": "Una palanca que alarga el brazo. Dobla el alcance útil de la "
 			+ "azagaya y deja cazar sin acercarse a la distancia de carga.",
-		"needs": [Tech.AZAGAYA], "practice": Subsistence.Activity.CAZA, "days": 420,
+		"needs": [Tech.AZAGAYA], "days": 420,
 	},
 	Tech.PESQUERA: {
 		"name": "Pesquera de piedra",
@@ -126,14 +128,14 @@ const CATALOGUE := {
 			+ "pez a un embudo. No hace falta ninguna técnica nueva, solo "
 			+ "jornadas de brazo, y es lo que convierte la pesca de suerte en "
 			+ "pesca con cuenta.",
-		"needs": [], "practice": Subsistence.Activity.PESCA, "days": 60,
+		"needs": [], "days": 60,
 	},
 	Tech.NASA: {
 		"name": "Nasa de mimbre",
 		"desc": "La cestería de la banda trenzada en embudo. Se cala por la "
 			+ "tarde y se levanta por la mañana: pesca mientras la banda "
 			+ "está en otra cosa.",
-		"needs": [Tech.PESQUERA], "practice": Subsistence.Activity.PESCA, "days": 180,
+		"needs": [Tech.PESQUERA], "days": 180,
 	},
 	Tech.ANZUELO: {
 		"name": "Anzuelo de hueso",
@@ -142,7 +144,7 @@ const CATALOGUE := {
 			+ "traga y se le cruza dentro. Pide hueso ranurado con buril, "
 			+ "cordel y cebo.",
 		"needs": [Tech.NASA, Tech.NUCLEO],
-		"practice": Subsistence.Activity.PESCA, "days": 320,
+		"days": 320,
 	},
 	Tech.ARPON: {
 		"name": "Arpón de asta",
@@ -151,20 +153,20 @@ const CATALOGUE := {
 			+ "hace unos quince mil años— y lo que convierte el remonte de una "
 			+ "suerte estacional en una cosecha previsible.",
 		"needs": [Tech.RED, Tech.HOJA],
-		"practice": Subsistence.Activity.PESCA, "days": 850,
+		"days": 850,
 	},
 	Tech.RED: {
 		"name": "Red de fibra",
 		"desc": "Hay impronta de red trenzada en Pavlov de hace veintinueve mil "
 			+ "años: es más vieja que el arpón, no un adelanto. Se hace cuando "
 			+ "sobra cordel y hay manos para calarla, y pide las dos cosas.",
-		"needs": [Tech.ANZUELO], "practice": Subsistence.Activity.PESCA, "days": 560,
+		"needs": [Tech.ANZUELO], "days": 560,
 	},
 	Tech.ARCO: {
 		"name": "Arco",
 		"desc": "Precisión a distancia y tiro repetido. Cambia la caza de "
 			+ "batida a acecho individual.",
-		"needs": [Tech.PROPULSOR], "practice": Subsistence.Activity.CAZA, "days": 700,
+		"needs": [Tech.PROPULSOR], "days": 700,
 	},
 	Tech.PIRAGUA: {
 		"name": "Piragua monóxila",
@@ -172,14 +174,14 @@ const CATALOGUE := {
 			+ "y la pesca en aguas profundas: media comarca que hasta ahora "
 			+ "estaba a la vista y fuera de alcance.",
 		"needs": [Tech.NUCLEO], "camp": CampProjects.Kind.HOGAR,
-		"practice": Subsistence.Activity.PESCA, "days": 150,
+		"days": 150,
 	},
 	Tech.PASARELA: {
 		"name": "Pasarela de troncos",
 		"desc": "Dos troncos y un tejido de ramas sobre el paso más estrecho. "
 			+ "No sirve para el río grande, pero cruza un arroyo crecido sin "
 			+ "perder la carga.",
-		"needs": [Tech.NUCLEO], "practice": Subsistence.Activity.MATERIA_PRIMA, "days": 70,
+		"needs": [Tech.NUCLEO], "days": 70,
 	},
 	Tech.ARTE: {
 		"name": "Arte parietal",
@@ -187,13 +189,13 @@ const CATALOGUE := {
 			+ "lo que se sabe de los animales y transmitirlo a quien no estaba. "
 			+ "Es la primera tecnología de la memoria.",
 		"needs": [Tech.HOJA], "camp": CampProjects.Kind.HOGAR,
-		"practice": Subsistence.Activity.CAZA, "days": 200,
+		"days": 200,
 	},
 	Tech.AGUJA: {
 		"name": "Aguja de hueso",
 		"desc": "Ropa cosida y ajustada en vez de piel echada por encima. Es lo "
 			+ "que permite trabajar fuera en pleno invierno.",
-		"needs": [Tech.HOJA], "practice": Subsistence.Activity.RECOLECCION, "days": 190,
+		"needs": [Tech.HOJA], "days": 190,
 	},
 }
 
@@ -227,9 +229,21 @@ const CATALOGUE := {
 ## catalogo. La escala de partida es «unas cuantas piezas echadas a perder
 ## mientras se aprende», no un almacen entero.
 ##
-## El material se gasta AL DESBLOQUEAR, no antes: mientras se practica no se
-## toca el almacen, y la tecnica espera a que haya con que rematarla. Ver
-## `SettlementSim._pay_for_tech`.
+## El material se gasta A PLAZOS, al ritmo de la practica.
+##
+## Era al final -se practicaban las jornadas enteras y solo entonces se cobraba
+## el material-, y el jugador lo dijo claro: «por un lado pasan las jornadas, y
+## despues consume los materiales. No deberia ser asi... si pide 100 jornadas y
+## 10 de calcita, quiero que permita subir 10 jornadas por cada 1 de calcita».
+##
+## Y tiene razon en la mecanica, no solo en el orden: aprender a tallar un
+## nucleo se aprende ESTROPEANDO nodulos, asi que el material no es un peaje de
+## salida, es lo que se consume mientras se aprende. Sin nodulos no se practica,
+## se mira.
+##
+## Ahora cada unidad de material abre su parte de las jornadas: con 100 jornadas
+## y 10 de piedra, cada piedra vale diez jornadas y el progreso se para en cuanto
+## no hay con que seguir. Ver [fraccion_pagada] y [_ir_pagando].
 const LEARNING_COST := {
 	Tech.NUCLEO: {Materia.Kind.PIEDRA: 12.0},
 	Tech.HOJA: {Materia.Kind.PIEDRA: 18.0},
@@ -338,7 +352,22 @@ var known: Dictionary = {Tech.LASCA: true}
 ## hay hogar. Ver [CampProjects].
 var camp_built: Dictionary = {}
 
-## Jornadas acumuladas por actividad
+## Jornadas de trabajo acumuladas POR OFICIO.
+##
+## Por oficio y no por actividad, que es lo que pedía el jugador: «las jornadas
+## de trabajo sólo deben contar las de esa profesión; si me pide 100 jornadas de
+## caza contará cada jornada que un cazador sale».
+##
+## Y con eso se arregla de paso lo de «hay técnicas de ribera y de exploración
+## que parece que no suben». No lo parecía: no subían. La actividad que hacía
+## avanzar cada técnica se escribía a mano en el catálogo y no tenía por qué
+## coincidir con la pestaña en la que sale, y no coincidía: la pasarela —rama de
+## exploración— avanzaba con MATERIA_PRIMA y la piragua —también exploración—
+## con PESCA. O sea que poner gente a explorar no las movía ni un día.
+##
+## Ahora el oficio sale de [BRANCHES], que es la misma tabla que pinta las
+## pestañas: la rama en la que está una técnica ES la profesión que la practica,
+## y no hay dos verdades que puedan separarse.
 var practice_days: Dictionary = {}
 
 
@@ -346,14 +375,16 @@ func has(tech: Tech) -> bool:
 	return known.get(tech, false)
 
 
-## Suma jornadas de práctica y devuelve lo que se haya desbloqueado con ellas.
-func add_practice(activity: Subsistence.Activity, days: float) -> Array[Tech]:
-	practice_days[activity] = float(practice_days.get(activity, 0.0)) + days
+## Suma jornadas de práctica de un OFICIO y devuelve lo que se haya desbloqueado.
+func add_practice(job: Profession.Job, days: float) -> Array[Tech]:
+	practice_days[int(job)] = float(practice_days.get(int(job), 0.0)) + days
+	_ir_pagando()
 	return _check_unlocks()
 
 
-func days_in(activity: Subsistence.Activity) -> float:
-	return float(practice_days.get(activity, 0.0))
+func days_in(job: Profession.Job) -> float:
+	return float(practice_days.get(int(job), 0.0))
+
 
 
 ## Si una técnica está al alcance: se tienen sus previas pero no ella.
@@ -376,14 +407,19 @@ static func needs_camp(tech: Tech) -> int:
 
 ## Progreso hacia una técnica, de 0 a 1.
 func progress(tech: Tech) -> float:
-	var entry: Dictionary = CATALOGUE[tech]
-	var needed: float = float(entry["days"])
+	var needed: float = float(CATALOGUE[tech]["days"])
 	if needed <= 0.0:
 		return 1.0
-	var activity: int = entry["practice"]
-	if activity < 0:
+	# El oficio que la practica es el de su rama. Ver [job_of], que ya existia
+	# para pintar las pestañas: la pestaña y lo que hace subir la tecnica son
+	# la misma cosa, y por eso no pueden discrepar.
+	var job := job_of(tech)
+	if job < 0:
 		return 1.0
-	return clampf(days_in(activity as Subsistence.Activity) / needed, 0.0, 1.0)
+	# LO QUE MENOS DE LAS DOS: las jornadas hechas y lo que el material da de
+	# sí. Ver [fraccion_pagada].
+	return minf(clampf(days_in(job as Profession.Job) / needed, 0.0, 1.0),
+		fraccion_pagada(tech))
 
 
 ## La despensa de la banda, para poder cobrar lo que cuesta aprender.
@@ -396,12 +432,19 @@ var larder: Storehouse = null
 
 
 ## Si en el abrigo hay con que rematar el aprendizaje de esta tecnica.
+## Si en el abrigo hay con que TERMINAR de pagar esta tecnica.
+##
+## Lo que falta por poner, no el coste entero: el material se va gastando a
+## plazos mientras se practica, asi que preguntar por el total sobra en cuanto
+## se ha puesto la primera piedra.
 func can_afford(tech: Tech) -> bool:
 	if larder == null:
 		return true
+	var puesto: Dictionary = pagado.get(int(tech), {})
 	for material: int in learning_cost(tech):
-		if larder.amount(material as Materia.Kind) \
-			< float(learning_cost(tech)[material]):
+		var falta := float(learning_cost(tech)[material]) \
+			- float(puesto.get(material, 0.0))
+		if falta > 0.0 and larder.amount(material as Materia.Kind) < falta:
 			return false
 	return true
 
@@ -411,13 +454,75 @@ func missing_for(tech: Tech) -> Array[String]:
 	var short: Array[String] = []
 	if larder == null:
 		return short
+	var puesto: Dictionary = pagado.get(int(tech), {})
 	for material: int in learning_cost(tech):
-		var want := float(learning_cost(tech)[material])
+		# LO QUE FALTA POR PONER, descontado lo ya gastado a plazos.
+		var want := float(learning_cost(tech)[material]) \
+			- float(puesto.get(material, 0.0))
 		var have := larder.amount(material as Materia.Kind)
-		if have < want:
+		if want > 0.0 and have < want:
 			short.append("%.0f %s" % [want - have,
 				Materia.material_name(material as Materia.Kind).to_lower()])
 	return short
+
+
+## Lo que ya se lleva gastado en cada tecnica. `tech -> {material: unidades}`.
+var pagado: Dictionary = {}
+
+
+## Que parte del material de una tecnica esta ya puesta, de 0 a 1.
+##
+## La del material que peor va, no la media: con nodulos de sobra y sin tendon
+## no se aprende a montar una azagaya a medias, se para.
+func fraccion_pagada(tech: Tech) -> float:
+	var cost := learning_cost(tech)
+	if cost.is_empty() or larder == null:
+		return 1.0
+	var puesto: Dictionary = pagado.get(int(tech), {})
+	var peor := 1.0
+	for material: int in cost:
+		var total := float(cost[material])
+		if total <= 0.0:
+			continue
+		peor = minf(peor, float(puesto.get(material, 0.0)) / total)
+	return clampf(peor, 0.0, 1.0)
+
+
+## Va sacando del almacen lo que las jornadas hechas dan derecho a gastar.
+##
+## Se llama en cada tanda de practica. Para cada tecnica al alcance mira cuanto
+## camino llevan hecho las JORNADAS y compra material hasta ponerse a la par; si
+## el almacen no da, se compra lo que haya y el progreso se queda ahi hasta que
+## alguien traiga mas. Eso es lo que hace que la ventana de tecnicas diga la
+## verdad sobre por que una no avanza.
+func _ir_pagando() -> void:
+	if larder == null:
+		return
+	for tech: Tech in CATALOGUE.keys():
+		if not is_available(tech):
+			continue
+		var cost := learning_cost(tech)
+		if cost.is_empty():
+			continue
+		var needed: float = float(CATALOGUE[tech]["days"])
+		if needed <= 0.0:
+			continue
+		var job := job_of(tech)
+		if job < 0:
+			continue
+		var camino := clampf(days_in(job as Profession.Job) / needed, 0.0, 1.0)
+
+		var puesto: Dictionary = pagado.get(int(tech), {})
+		for material: int in cost:
+			var total := float(cost[material])
+			var ya := float(puesto.get(material, 0.0))
+			var toca := total * camino - ya
+			if toca <= 0.0:
+				continue
+			var sacado := larder.take(material as Materia.Kind, toca)
+			if sacado > 0.0:
+				puesto[material] = ya + sacado
+		pagado[int(tech)] = puesto
 
 
 func _check_unlocks() -> Array[Tech]:
@@ -427,15 +532,9 @@ func _check_unlocks() -> Array[Tech]:
 			continue
 		if progress(tech) < 1.0:
 			continue
-		# Las jornadas estan; falta el material. La tecnica NO se pierde: se
-		# queda esperando a que alguien traiga lo que falta, y mientras tanto
-		# se ve en el arbol que lo unico que la frena es eso.
-		if not can_afford(tech):
-			continue
-		for material: int in learning_cost(tech):
-			if larder != null:
-				larder.take(material as Materia.Kind,
-					float(learning_cost(tech)[material]))
+		# El material ya esta puesto: se ha ido gastando a plazos mientras se
+		# practicaba -ver [_ir_pagando]-, y `progress` no llega a uno hasta que
+		# esta pagado del todo. Aqui no se cobra nada; solo se aprende.
 		known[tech] = true
 		gained.append(tech)
 	return gained
