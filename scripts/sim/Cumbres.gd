@@ -592,7 +592,11 @@ func _reveal_from_summit(peak_position: Vector3) -> void:
 	for z in range(sim.field.height):
 		for x in range(sim.field.width):
 			var centre := sim.field.cell_center(x, z)
-			if centre.distance_to(peak_position) > ASCENT_SIGHT_RANGE:
+			# En llano, que si no la cumbre se estorba a si misma: `centre`
+			# sale de la rejilla con y = 0 y el pico trae su cota, asi que la
+			# resta se comia el alcance justo al reves de como debe ser
+			# -cuanto mas alto el pico, menos se veia-. Ver [Traversal.en_llano].
+			if Traversal.en_llano(centre, peak_position) > ASCENT_SIGHT_RANGE:
 				continue
 			if sim.knowledge.explored_at(centre) < SUMMIT_REVEAL_CLARITY:
 				continue
