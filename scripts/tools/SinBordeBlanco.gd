@@ -52,12 +52,14 @@ func _init() -> void:
 			continue
 		imagen.convert(Image.FORMAT_RGBA8)
 		var borrados := _quitar_el_fondo(imagen)
+		var marco := _quitar_el_marco(imagen) if CON_MARCO.has(nombre) else 0
 		var apurados := _apurar_el_filo(imagen)
-		if borrados + apurados <= 0:
+		if borrados + marco + apurados <= 0:
 			continue
 		tocados += 1
 		imagen.save_png(ProjectSettings.globalize_path(ruta))
-		print("%-28s %7d de fondo · %5d de filo" % [nombre, borrados, apurados])
+		print("%-28s %7d de fondo · %6d de marco · %5d de filo" % [
+			nombre, borrados, marco, apurados])
 
 	print("")
 	print("%d iconos mirados, %d limpiados" % [mirados, tocados])
@@ -74,6 +76,63 @@ func _iconos() -> Array[String]:
 			out.append(nombre)
 	out.sort()
 	return out
+
+
+## Los iconos que traen un MARCO DE PIEDRA pintado alrededor de la losa.
+##
+## Va por lista y no por deteccion, y no es pereza: lo probé de tres maneras y
+## ninguna separa «marco decorativo» de «estampa clara pegada al borde». Con
+## umbral de brillo absoluto no vale —el marco es gris como la propia losa—; con
+## brillo relativo al interior, la miel y el fruto seco entran también; y con el
+## peor de los cuatro lados, la cecina (0,46) y la miel (0,39) se solapan. Cada
+## intento se comió iconos que estaban bien.
+##
+## Estas siete imágenes vinieron generadas con el marco dentro y el resto no.
+## Es un dato del material, no una propiedad que se pueda deducir mirando
+## píxeles, así que se escribe: si entra otra con marco, se añade aquí.
+const CON_MARCO := [
+	"materia_agua.png",
+	"materia_caracol.png",
+	"materia_carne_seca.png",
+	"materia_huevo.png",
+	"materia_pescado.png",
+	"materia_resina.png",
+	"materia_seta.png",
+]
+
+## Cuanto se recorta por cada lado, en partes del lado.
+##
+## Un noveno. Medidos uno a uno, los marcos de estas siete imagenes ocupan entre
+## once y veinticuatro pixeles de los quinientos doce, contando el margen
+## transparente que llevan por fuera; cuarenta y seis los cubre todos con
+## holgura y sin llegar a la estampa.
+##
+## Fijo y no medido por imagen a proposito. Lo probé midiendo el perfil de
+## brillo de cada lado y se quedaba corto justo donde el marco tiene bisel
+## -franja clara, franja oscura, franja clara- porque la primera franja oscura
+## lo daba por terminado: el agua y la seta se quedaban con su marco puesto. Una
+## fraccion fija los quita todos, y lo que se pierde es un noveno de losa, que en
+## una estampa fotografica no se ve.
+const RECORTE := 1.0 / 9.0
+
+
+## Recorta el marco de piedra y estira la losa hasta llenar el cuadro.
+##
+## Lo que queda —la losa sola, llenando el icono— es como estan los que no traen
+## marco.
+func _quitar_el_marco(imagen: Image) -> int:
+	var w := imagen.get_width()
+	var h := imagen.get_height()
+	var quitar_x := int(float(w) * RECORTE)
+	var quitar_y := int(float(h) * RECORTE)
+	if quitar_x <= 0 or quitar_y <= 0:
+		return 0
+
+	var dentro := imagen.get_region(Rect2i(quitar_x, quitar_y,
+		w - quitar_x * 2, h - quitar_y * 2))
+	dentro.resize(w, h, Image.INTERPOLATE_LANCZOS)
+	imagen.copy_from(dentro)
+	return (quitar_x + quitar_y) * 2
 
 
 ## Si este color es fondo: transparente ya, o lo bastante claro.
