@@ -149,16 +149,108 @@ const SPECIES_LOOK := {
 
 var glyph: Glyph = Glyph.CANTO
 var tint: Color = Color.WHITE
+var texture: Texture2D = null
+
+const MATERIA_TEXTURES := {
+	Materia.Kind.FRUTO_SECO: "materia_fruto_seco",
+	Materia.Kind.BELLOTA: "materia_bellota",
+	Materia.Kind.BELLOTA_DULCE: "materia_bellota_dulce",
+	Materia.Kind.BAYA: "materia_baya",
+	Materia.Kind.RAIZ: "materia_raiz",
+	Materia.Kind.SETA: "materia_seta",
+	Materia.Kind.HUEVO: "materia_huevo",
+	Materia.Kind.MIEL: "materia_miel",
+	Materia.Kind.CARACOL: "materia_caracol",
+	Materia.Kind.CARNE: "materia_carne",
+	Materia.Kind.CARNE_SECA: "materia_carne_seca",
+	Materia.Kind.PESCADO: "materia_pescado",
+	Materia.Kind.PESCADO_SECO: "materia_pescado_seco",
+	Materia.Kind.MARISCO: "materia_marisco",
+	Materia.Kind.PIEDRA: "materia_piedra",
+	Materia.Kind.SILEX: "materia_silex",
+	Materia.Kind.ASTA: "materia_asta",
+	Materia.Kind.HUESO: "materia_hueso",
+	Materia.Kind.PIEL: "materia_piel",
+	Materia.Kind.TENDON: "materia_tendon",
+	Materia.Kind.FIBRA: "materia_fibra",
+	Materia.Kind.LENA: "materia_lena",
+	Materia.Kind.YESCA: "materia_yesca",
+	Materia.Kind.RESINA: "materia_resina",
+	Materia.Kind.GRASA: "materia_grasa",
+	Materia.Kind.OCRE: "materia_ocre",
+	Materia.Kind.CONCHA: "materia_concha",
+	Materia.Kind.PLUMA: "materia_pluma",
+	Materia.Kind.CORTEZA: "materia_corteza",
+	Materia.Kind.AGUA: "materia_agua",
+}
+
+const TOOL_TEXTURES := {
+	Tool.Kind.BURIL: "tool_buril",
+	Tool.Kind.RAEDERA: "tool_raedera",
+	Tool.Kind.LASCA: "tool_lasca",
+	Tool.Kind.PUNTA: "tool_punta",
+	Tool.Kind.AZAGAYA: "tool_azagaya",
+	Tool.Kind.ARPON: "tool_arpon",
+	Tool.Kind.AGUJA: "tool_aguja",
+	Tool.Kind.PUNZON: "tool_punzon",
+	Tool.Kind.CESTO: "tool_cesto",
+	Tool.Kind.ODRE: "tool_odre",
+	Tool.Kind.CUERDA: "tool_cuerda",
+	Tool.Kind.NASA: "tool_nasa",
+	Tool.Kind.ANZUELO: "tool_anzuelo",
+	Tool.Kind.RED: "tool_red",
+	Tool.Kind.LAMPARA: "tool_lampara",
+}
+
+static var _texture_cache: Dictionary = {}
+
+
+static func get_materia_texture(kind: Materia.Kind) -> Texture2D:
+	var name_str: String = MATERIA_TEXTURES.get(kind, "")
+	if name_str.is_empty():
+		return null
+	return _load_item_texture(name_str)
+
+
+static func get_tool_texture(kind: Tool.Kind) -> Texture2D:
+	var name_str: String = TOOL_TEXTURES.get(kind, "")
+	if name_str.is_empty():
+		return null
+	return _load_item_texture(name_str)
+
+
+static func _load_item_texture(tex_name: String) -> Texture2D:
+	if _texture_cache.has(tex_name):
+		return _texture_cache[tex_name]
+
+	var res_path := "res://textures/items/%s.png" % tex_name
+	var tex: Texture2D = null
+	if ResourceLoader.exists(res_path):
+		tex = load(res_path) as Texture2D
+
+	if tex == null:
+		var global_path := ProjectSettings.globalize_path(res_path)
+		if FileAccess.file_exists(global_path):
+			var img := Image.load_from_file(global_path)
+			if img != null and not img.is_empty():
+				tex = ImageTexture.create_from_image(img)
+
+	_texture_cache[tex_name] = tex
+	return tex
 
 
 static func for_materia(kind: Materia.Kind, size: float = 20.0) -> MateriaIcon:
 	var entry: Array = LOOK.get(kind, [Glyph.CANTO, Color(0.6, 0.6, 0.6)])
-	return _make(entry[0] as Glyph, entry[1] as Color, size)
+	var icon := _make(entry[0] as Glyph, entry[1] as Color, size)
+	icon.texture = get_materia_texture(kind)
+	return icon
 
 
 static func for_tool(kind: Tool.Kind, size: float = 20.0) -> MateriaIcon:
 	var entry: Array = TOOL_LOOK.get(kind, [Glyph.CANTO, Color(0.6, 0.6, 0.6)])
-	return _make(entry[0] as Glyph, entry[1] as Color, size)
+	var icon := _make(entry[0] as Glyph, entry[1] as Color, size)
+	icon.texture = get_tool_texture(kind)
+	return icon
 
 
 static func for_fauna(species: String, size: float = 20.0) -> MateriaIcon:
@@ -179,6 +271,12 @@ func _draw() -> void:
 	var s := minf(size.x, size.y)
 	if s <= 1.0:
 		return
+
+	if texture != null:
+		var target_rect := Rect2((size.x - s) * 0.5, (size.y - s) * 0.5, s, s)
+		draw_texture_rect(texture, target_rect, false)
+		return
+
 	# Todo se dibuja en un cuadrado de 0 a 1 y se escala al final, para poder
 	# escribir las formas con numeros legibles
 	var dark := tint.darkened(0.35)

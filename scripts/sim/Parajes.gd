@@ -42,6 +42,18 @@ var _by_id: Dictionary = {}
 ## contarlos y luego se limpian.
 var just_found: Array[Paraje] = []
 
+## Cuántas veces ha cambiado la lista. Sube al dar de alta o de baja un sitio.
+##
+## Existe para que las chapas del mundo se pinten CUANDO NACE EL PARAJE y no al
+## cerrar la jornada. `ParajeMarkers.refresh` colgaba de `_on_day_passed`, así
+## que un sitio descubierto a las once de la mañana no se veía hasta medianoche:
+## la simulación lo tenía y el jugador no, que es exactamente lo que se veía
+## —«siguen apareciendo todos a la vez a medianoche»—.
+##
+## Un entero y no una señal: [DemoMain] mira ya unas cuantas cosas por
+## fotograma, y comparar dos enteros es más barato que conectar y desconectar.
+var cambios: int = 0
+
 
 func has(paraje: Paraje) -> bool:
 	return _by_id.has(paraje.id())
@@ -54,6 +66,7 @@ func add(paraje: Paraje) -> bool:
 	_by_id[paraje.id()] = paraje
 	list.append(paraje)
 	just_found.append(paraje)
+	cambios += 1
 	return true
 
 
@@ -475,6 +488,7 @@ func remove(paraje: Paraje) -> bool:
 	list.remove_at(index)
 	_by_id.erase(paraje.id())
 	just_found.erase(paraje)
+	cambios += 1
 	return true
 
 

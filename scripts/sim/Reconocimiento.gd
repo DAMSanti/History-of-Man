@@ -287,6 +287,29 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 const DE_UNA_VUELTA := 1
 
 
+## Recoge los sitios que se ganaron nombre y no llegaron a salir en su momento.
+##
+## Corre a cada hora de luz, no al cerrar la jornada. Una vuelta de
+## reconocimiento levanta un círculo de doscientos sesenta metros de golpe y
+## sólo bautiza uno —ver [DE_UNA_VUELTA]—, así que siempre queda cola; con el
+## repaso a medianoche, esa cola salía de madrugada y con el valle a oscuras,
+## que es justo lo que el jugador no quería ver.
+func repasar_rezagados() -> int:
+	if sim.field == null or sim.knowledge == null:
+		return 0
+	var grid := sim.marcha._navgrid()
+	var mismo_trozo := func(a: Vector3, b: Vector3) -> bool:
+		return grid.connected(a, b)
+	var salieron := sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
+		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
+		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
+		Vector3.ZERO, 0.0, DE_UNA_VUELTA)
+	if salieron > 0:
+		_contar_los_nuevos()
+	return salieron
+
+
 ## Bautiza lo que se acabe de descubrir alrededor de un punto, EN EL MOMENTO.
 ##
 ## La otra mitad de [_name_new_parajes], que es el repaso de fin de jornada.
@@ -331,31 +354,13 @@ func _name_new_parajes() -> void:
 				"Se acabo el %s de aquel sitio; lo que queda alli ya es otra cosa: %s."
 					% [spent, lost.name_text], 1)
 
-	# "Mismo trozo de monte" es "misma zona de la rejilla de navegacion":
-	# no hace falta un rio de por medio para que dos celdas cercanas sean
-	# sitios distintos, basta con que no se pueda ir de una a otra sin
-	# rodear. Es lo mismo que ya usa `_scout_target` para saber si se
-	# puede llegar a un sitio, aplicado ahora a si dos sitios son el mismo.
-	var grid := sim.marcha._navgrid()
-	var same_patch := func(a: Vector3, b: Vector3) -> bool:
-		return grid.connected(a, b)
-	# CON TOPE, igual que el hallazgo de quien vuelve del monte.
+	# AQUI YA NO SE BAUTIZA NADA.
 	#
-	# Este repaso es la red de seguridad: recoge lo que se ha ganado un nombre y
-	# no ha saltado en el momento -una vuelta de reconocimiento levanta un
-	# circulo de doscientos sesenta metros de golpe y solo bautiza uno-. Sin
-	# tope lo soltaba TODO a la vez y a medianoche, que es la queja: «aparecen
-	# todos a la vez cuando llegan las 12 de la noche». Medido: nueve chapas a
-	# las 00:10 del dia 2.
-	#
-	# Con tope, la cola se va vaciando de una en una y los sitios aparecen poco
-	# a poco, que es como se descubren.
-	sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
-		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
-		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
-		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, same_patch,
-		Vector3.ZERO, 0.0, DE_UNA_VUELTA)
-
+	# Bautizan dos: quien vuelve de mirar el monte -[bautizar_lo_descubierto]- y
+	# el repaso de cada hora de luz -[repasar_rezagados]-. Este cierre de
+	# jornada se queda con lo suyo: dar de baja las vetas agotadas y contar lo
+	# que haya salido. Mientras bautizaba, la cola entera aparecia a las 00:00 y
+	# el jugador veia las chapas salir todas juntas de madrugada.
 	_contar_los_nuevos()
 	sim._new_ground_surveys_today.clear()
 

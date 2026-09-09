@@ -22,6 +22,7 @@ const SITE_ID := 56
 
 var _reconocimientos := 0
 var _cuando: Array[String] = []
+var _chapas_antes := -1
 var _sin_paraje := 0
 
 
@@ -61,13 +62,19 @@ func _init() -> void:
 		await process_frame
 		# La hora a la que sale cada chapa: es la queja -«aparecen todos a la
 		# vez cuando llegan las 12 de la noche».
+		var chapas := _marcadas(demo)
+		if chapas != _chapas_antes:
+			_cuando.append("dia %2d %s  >>> el valle pasa a tener %d chapas" % [
+				sim.day, Diario.reloj(sim.hour), chapas])
+			_chapas_antes = chapas
 		for paraje: Paraje in sim.parajes.list:
 			if vistos.has(paraje.id()):
 				continue
 			vistos[paraje.id()] = true
-			_cuando.append("dia %2d %s  %-27s %s" % [
+			_cuando.append("dia %2d %s  %-27s %-14s · alfileres %d" % [
 				sim.day, Diario.reloj(sim.hour), paraje.name_text,
-				Subsistence.activity_name(paraje.activity)])
+				Subsistence.activity_name(paraje.activity),
+				_marcadas(demo)])
 		# Cada reconocimiento que TERMINA, y si fue sobre un paraje o no: es lo
 		# que dice quien esta abriendo monte de verdad.
 		for p: Inhabitant in sim.people:

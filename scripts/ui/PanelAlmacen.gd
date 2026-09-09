@@ -504,12 +504,43 @@ func show_tool(kind: Tool.Kind) -> void:
 		ui._text(body, "Sin asentamiento.")
 		return
 
-	ui._heading(body, Tool.kind_name(kind).to_upper())
-
+	var tex := MateriaIcon.get_tool_texture(kind)
 	var have := ui.sim.toolkit.count(kind)
 	var hands := int(ui.sim.taller.tool_natural_demand().get(int(kind), 0))
-	ui._text(body, "Hay %d para %d manos · filo medio al %.0f%%" % [
-		have, hands, ui.sim.toolkit.condition(kind) * 100.0])
+	var status_text := "Hay %d para %d manos · filo medio al %.0f%%" % [
+		have, hands, ui.sim.toolkit.condition(kind) * 100.0]
+
+	if tex != null:
+		var hero := HBoxContainer.new()
+		hero.add_theme_constant_override("separation", 10)
+		body.add_child(hero)
+
+		var img_rect := TextureRect.new()
+		img_rect.texture = tex
+		img_rect.custom_minimum_size = Vector2(80, 80)
+		img_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		hero.add_child(img_rect)
+
+		var info_col := VBoxContainer.new()
+		info_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info_col.add_theme_constant_override("separation", 4)
+		hero.add_child(info_col)
+
+		var title := Label.new()
+		title.text = Tool.kind_name(kind).to_upper()
+		title.add_theme_font_size_override("font_size", 14)
+		title.add_theme_color_override("font_color", UISkin.INK)
+		info_col.add_child(title)
+
+		var sub := Label.new()
+		sub.text = status_text
+		sub.add_theme_font_size_override("font_size", 11)
+		sub.add_theme_color_override("font_color", UISkin.INK_SOFT)
+		info_col.add_child(sub)
+	else:
+		ui._heading(body, Tool.kind_name(kind).to_upper())
+		ui._text(body, status_text)
 
 	ui._heading(body, "CÓMO HA IDO")
 	var series := ui.sim.tool_history_of(kind)
@@ -547,8 +578,40 @@ func show_material(kind: Materia.Kind) -> void:
 		ui._text(body, "Sin asentamiento.")
 		return
 
-	ui._heading(body, Materia.material_name(kind).to_upper())
-	ui._text(body, Materia.describe(kind), true)
+	var tex := MateriaIcon.get_materia_texture(kind)
+	if tex != null:
+		var hero := HBoxContainer.new()
+		hero.add_theme_constant_override("separation", 10)
+		body.add_child(hero)
+
+		var img_rect := TextureRect.new()
+		img_rect.texture = tex
+		img_rect.custom_minimum_size = Vector2(80, 80)
+		img_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		img_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		hero.add_child(img_rect)
+
+		var info_col := VBoxContainer.new()
+		info_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info_col.add_theme_constant_override("separation", 4)
+		hero.add_child(info_col)
+
+		var title := Label.new()
+		title.text = Materia.material_name(kind).to_upper()
+		title.add_theme_font_size_override("font_size", 14)
+		title.add_theme_color_override("font_color", UISkin.INK)
+		info_col.add_child(title)
+
+		var desc := Label.new()
+		desc.text = Materia.describe(kind)
+		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		desc.custom_minimum_size = Vector2(GameUI.PANEL_WIDTH - 150, 0)
+		desc.add_theme_font_size_override("font_size", 11)
+		desc.add_theme_color_override("font_color", UISkin.INK_SOFT)
+		info_col.add_child(desc)
+	else:
+		ui._heading(body, Materia.material_name(kind).to_upper())
+		ui._text(body, Materia.describe(kind), true)
 
 	var have := ui.sim.store.amount(kind)
 	var needed := ui.sim.taller.material_needed(kind)

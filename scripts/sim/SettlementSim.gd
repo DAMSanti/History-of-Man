@@ -1012,12 +1012,23 @@ func _advance(delta: float) -> void:
 
 	var scaled := delta * time_scale
 	var hours := scaled / seconds_per_day * 24.0
+	var hora_antes := int(hour)
 	hour += hours
 	if hour >= 24.0:
 		hour -= 24.0
 		day += 1
 		_end_of_day()
 		day_passed.emit(day)
+	# EL REPASO DE REZAGADOS, A CADA HORA DE LUZ Y NO A MEDIANOCHE.
+	#
+	# Una vuelta de reconocimiento levanta un circulo entero y solo bautiza un
+	# sitio -ver [Reconocimiento.DE_UNA_VUELTA]-; lo que queda esperando se
+	# recogia al cerrar la jornada, o sea a las 00:00, que es la queja: «no se
+	# debe esperar hasta media noche para mostrarlo». Repasando cada hora de
+	# luz, la cola se va vaciando mientras la banda trabaja, que es cuando se
+	# descubren las cosas.
+	elif int(hour) != hora_antes and hour >= HORA_DESPERTAR 			and hour < HORA_DORMIR:
+		reconocimiento.repasar_rezagados()
 
 
 	# El tick se parte en trozos para que acelerar no cambie el resultado: con

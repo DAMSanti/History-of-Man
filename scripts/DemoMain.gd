@@ -863,10 +863,9 @@ func _best_work_spot(activity: Subsistence.Activity, near: Vector3) -> Vector3:
 func _on_day_passed(_day: int) -> void:
 	_update_band_panel()
 
-	# Los parajes se bautizan al cerrar la jornada: es el momento de poner o
-	# quitar sus chapas
+	# Las chapas de paraje NO se rehacen aqui: se rehacen en cuanto nace o
+	# muere un sitio. Ver `_repintar_parajes`.
 	if paraje_markers and sim:
-		paraje_markers.refresh(sim.parajes, terrain)
 		paraje_markers.refresh_peaks(sim.cumbres.peaks(), terrain)
 	if trap_markers and sim:
 		trap_markers.refresh(sim.trampas.traps, terrain)
@@ -1179,6 +1178,32 @@ func _process(_delta: float) -> void:
 	if frame % 90 == 0:
 		_check_discoveries()
 		minimapa._refresh_minimap_fog()
+	_repintar_parajes()
+
+
+## Cuantos parajes habia la ultima vez que se pintaron las chapas.
+var _parajes_pintados: int = -1
+
+
+## Repinta las chapas EN CUANTO nace o muere un paraje.
+##
+## Colgaba de `_on_day_passed`, y ese es el fallo que el jugador veia: un sitio
+## descubierto a las once de la manana existia en la simulacion desde esa hora
+## y su chapa no aparecia hasta medianoche, con todas las demas de golpe. La
+## queja -«los parajes deben aparecer con su marker y su info cuando se
+## descubren, no se debe esperar hasta media noche»- era de esto y no de cuando
+## se bautizaban.
+##
+## Comparar dos enteros por fotograma no cuesta nada; rehacer las chapas si
+## cuesta, y por eso solo se hace cuando la lista ha cambiado de verdad. Ver
+## [Parajes.cambios].
+func _repintar_parajes() -> void:
+	if paraje_markers == null or sim == null or sim.parajes == null:
+		return
+	if sim.parajes.cambios == _parajes_pintados:
+		return
+	_parajes_pintados = sim.parajes.cambios
+	paraje_markers.refresh(sim.parajes, terrain)
 
 
 ## La ficha de depuración, leída de la FUENTE y no de un espejo.
