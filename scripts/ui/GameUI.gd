@@ -126,6 +126,9 @@ var sitios: PanelSitios = PanelSitios.new(self)
 ## Los oficios que hay y quien los ejerce. Ver [PanelOficios].
 var oficios: PanelOficios = PanelOficios.new(self)
 
+## Lo que ha hecho cada cual, paso a paso. Ver [PanelCronica].
+var cronica_personal: PanelCronica = PanelCronica.new(self)
+
 ## Lo que la banda ha PUESTO en el valle. Ver [PanelObras].
 var obras: PanelObras = PanelObras.new(self)
 
@@ -1087,6 +1090,11 @@ func show_person(person: Inhabitant) -> void:
 	_clear(body)
 
 	_ficha_quien_es(body, person)
+	_pestanas_de_persona(body)
+	if _pestana_persona == PestanaPersona.CRONICA:
+		cronica_personal.pintar(body, person)
+		return
+
 	_ficha_ahora_mismo(body, person)
 	_ficha_como_esta(body, person)
 	_ficha_cuerpo(body, person)
@@ -1094,6 +1102,40 @@ func show_person(person: Inhabitant) -> void:
 	_ficha_que_lleva(body, person)
 	_ficha_petate(body, person)
 	_ficha_que_puede_hacer(body, person)
+
+
+## Las dos caras de una persona: lo que ES y lo que HA HECHO.
+##
+## La ficha contesta «¿quién es y cómo está?»; la crónica, «¿qué ha hecho?».
+## Son preguntas distintas y no caben en la misma columna: una jornada detallada
+## son veinte líneas, y metidas debajo del petate empujaban la ficha entera
+## fuera de la ventana.
+enum PestanaPersona { FICHA, CRONICA }
+
+var _pestana_persona: PestanaPersona = PestanaPersona.FICHA
+
+
+func _pestanas_de_persona(body: VBoxContainer) -> void:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 3)
+	body.add_child(fila)
+	for cual: PestanaPersona in [PestanaPersona.FICHA, PestanaPersona.CRONICA]:
+		var button := Button.new()
+		button.text = "Ficha" if cual == PestanaPersona.FICHA else "Crónica"
+		button.custom_minimum_size = Vector2(0, 28)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if cual == _pestana_persona:
+			var manchada := UISkin.button_box("pressed")
+			manchada.border_width_bottom = 0
+			button.add_theme_stylebox_override("normal", manchada)
+			button.add_theme_stylebox_override("hover", manchada)
+			button.add_theme_color_override("font_color", UISkin.OCHRE)
+		button.pressed.connect(func() -> void:
+			_pestana_persona = cual
+			if shown_person != null:
+				show_person(shown_person))
+		fila.add_child(button)
+	body.add_child(HSeparator.new())
 
 
 ## Quien es: nombre, sexo, edad y de que familia.

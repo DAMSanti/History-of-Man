@@ -321,6 +321,14 @@ func _credit_new_ground(just_found: Array[Paraje]) -> void:
 			var speciality := entry["speciality"] as Profession.Speciality
 			if spot.distance_to(paraje.position) < SettlementSim.SURVEY_RADIUS:
 				_award_exploration_skill(surveyor, speciality, SettlementSim.PARAJE_MILESTONE)
+				# «Encontro un buen paraje a las XX:XX», en el diario de quien
+				# lo encontro. La cronica de la banda ya lo cuenta, pero no
+				# dice de quien fue.
+				sim.cronista.hallazgo(surveyor,
+					"Encontró un buen paraje y le puso nombre: %s, %s a %d m."
+						% [paraje.name_text,
+							Parajes.bearing(sim.home_position, paraje.position),
+							int(paraje.distance_from(sim.home_position))])
 
 
 ## Manda explorar hacia un punto. Lo llama el clic sobre terreno desnudo.
@@ -543,6 +551,13 @@ func _finish_survey(person: Inhabitant) -> void:
 			"%s investig\u00f3 %s y encontr\u00f3 %s. Se sabe el %.0f%% de lo que hay."
 				% [person.given_name, here.name_text, ", ".join(discovered),
 					here.known_fraction() * 100.0], 1)
+		# Y en SU diario, con la hora y la distancia: es la mitad de lo que se
+		# pidio -«ha descubierto raices a X metros de la cueva a las XX:XX».
+		sim.cronista.hallazgo(person,
+			"Descubrió %s en %s, a %.0f m del abrigo. Del sitio se sabe ya el %.0f %%."
+				% [", ".join(discovered), here.name_text,
+					sim.home_position.distance_to(person.work_centre),
+					here.known_fraction() * 100.0])
 	else:
 		var found: Array[String] = []
 		if sim.field:

@@ -289,6 +289,9 @@ var stuck_told: int = -1
 ## Existe porque juntar toda la actividad en una linea no dice nada: «2 jorn.
 ## de ascension» no distingue haber coronado dos picos de haberse dado la
 ## vuelta dos veces a media pared, y son partidas distintas.
+## Lo que ha hecho, paso a paso y con la hora. Ver [Diario].
+var diario: Diario = Diario.new()
+
 var journeys: Array[Dictionary] = []
 
 ## La salida en curso. Vacia mientras se esta en el campamento.

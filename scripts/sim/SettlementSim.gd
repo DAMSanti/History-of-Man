@@ -364,6 +364,7 @@ var temporada: Temporada = Temporada.new()
 ## Sin paraje donde trabajar se sale a TANTEAR el terreno, no a cruzar el
 ## valle. Ver [Tanteo].
 var tanteo: Tanteo = Tanteo.new(self)
+var cronista: Cronista = Cronista.new(self)
 
 ## Lo esquilmado se deja descansar y se busca en otra parte. Ver [Barbecho].
 var barbecho: Barbecho = Barbecho.new(self)
@@ -1167,6 +1168,11 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 			person.age_group)
 	_learn_from(person, delta)
 
+	# Y el ultimo en mirar es quien lo apunta: el diario de cada cual se
+	# escribe leyendo COMO HA QUEDADO la persona tras el tick entero. Ver
+	# [Cronista].
+	cronista.mirar(person)
+
 
 ## Cuanto multiplica la destreza de expedicion los dias de comida que se
 ## llevan. `expedition_days` es el suelo -lo que aguanta cualquiera con
@@ -1536,6 +1542,16 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 		# casa: no hace falta avituallarla como a una expedicion.
 		# Amplia el entorno inmediato del campamento, no la
 		# frontera del territorio.
+		#
+		# Y MIRA LA HORA, igual que la mira `_send_to_work` unas lineas mas
+		# abajo. Es lo que faltaba: sin esa guarda, a las ocho de la tarde se
+		# mandaba al batidor a un paraje a ciento sesenta metros, la regla de
+		# recogida -que si mira la hora- le daba media vuelta en el acto, y al
+		# tick siguiente se le volvia a mandar. Sacado del diario de Kelo:
+		# «20:08 salio hacia El cantizal de abajo · 20:08 decidio volver al
+		# abrigo · 20:08 llego al abrigo», treinta veces seguidas.
+		if hour < HORA_SALIDA or hour >= _ultima_salida(person):
+			return
 		var target := reconocimiento._batida_target(person)
 		if target.distance_to(person.position) > arrive_radius:
 			marcha._send_to(person, target)
@@ -1548,8 +1564,16 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 		# Expedicion y ascension: se sale varios dias y hace falta
 		# avituallar. El explorador no tiene tajo fijo: su destino
 		# se calcula cada jornada. Ver [Exploration].
+		#
+		# El tope de hora es el mismo bucle de la batida, pero aqui la guarda
+		# no puede ser `_ultima_salida`: una expedicion NO vuelve hoy, asi que
+		# no hay ida y vuelta que reservar. Lo que si hace falta es no
+		# empezarla de noche. A quien YA esta fuera no le afecta: sigue su
+		# viaje a la hora que sea.
 		var at_home := person.position.distance_to(home_position) \
 			< arrive_radius * 4.0
+		if at_home and hour >= HORA_REGRESO:
+			return
 
 		# El destino se calcula ANTES de avituallar, para saber
 		# cuanto pesa el viaje de hoy -ver [_provision]-: cuanta
