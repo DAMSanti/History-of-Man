@@ -51,6 +51,11 @@ func mirar(person: Inhabitant) -> void:
 	var estado := int(person.state)
 
 	if estado_antes >= 0 and estado_antes != estado:
+		# LO QUE TRAIA EN EL CUADRO ANTERIOR, no lo que lleva ahora: al llegar
+		# al abrigo se descarga -[Despensa._deliver]- antes de que esto mire,
+		# asi que preguntando por la carga de ahora TODO EL MUNDO llega de
+		# vacio, incluido quien acaba de dejar veinte kilos de cuarcita.
+		_traia = _kilos(visto.get("carga", {}) as Dictionary)
 		_apuntar_lo_que_se_deja(person, estado_antes as Inhabitant.State)
 		_apuntar_el_cambio(person, estado_antes as Inhabitant.State,
 			estado as Inhabitant.State)
@@ -84,7 +89,7 @@ func _apuntar_lo_que_se_deja(person: Inhabitant, de: Inhabitant.State) -> void:
 				# campamento porque es». Una línea de «volvió de vacío» sin
 				# explicación no dice si el problema es el sitio, el camino o
 				# la suerte.
-				if person.load_kg() < 0.1:
+				if _traia < 0.1:
 					person.diario.apunta(sim.day, sim.hour, Diario.Que.APURO,
 						"Llegó de vacío: %s." % _por_que_de_vacio(person))
 
@@ -167,6 +172,18 @@ func _apuntar_lo_recogido(person: Inhabitant, antes: Dictionary) -> void:
 			"Empezó a coger %s en %s." % [
 				Materia.material_name(kind as Materia.Kind).to_lower(),
 				_sitio(person.position)])
+
+
+## Lo que llevaba encima la ultima vez que se miro, en kilos.
+var _traia: float = 0.0
+
+
+## Los kilos de una carga apuntada.
+func _kilos(carga: Dictionary) -> float:
+	var kg := 0.0
+	for kind: int in carga:
+		kg += float(carga[kind]) * Materia.kg_per_unit(kind as Materia.Kind)
+	return kg
 
 
 ## Por qué no trae nada, con lo que la simulación sabe de esta persona.
