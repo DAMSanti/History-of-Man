@@ -114,8 +114,14 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 		to_target.y = 0.0
 		# Al alcanzar un hito del camino se pasa al siguiente: asi se rodea
 		# el canchal en vez de cruzarlo, que es donde uno se rompe un tobillo
+		# UN HITO SE DA POR ALCANZADO SI SE HA REBASADO, no solo si se esta
+		# dentro de su radio: a velocidad de persona una zancada puede medir
+		# mas que el radio de llegada, y entonces se pasa por encima del hito
+		# sin llegar a estar nunca dentro. El hito no se marcaba, `to_target`
+		# seguia apuntando hacia atras y la persona se quedaba oscilando.
+		var alcance := maxf(sim.arrive_radius, sim.walk_speed * delta)
 		if person.route_step < person.route.size() \
-				and to_target.length() < sim.arrive_radius:
+				and to_target.length() < alcance:
 			person.route_step += 1
 			to_target = person.next_waypoint() - person.position
 			to_target.y = 0.0
@@ -133,19 +139,41 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 			var pace := _terrain_speed(person, direction, hours) \
 				* sim.weather.pace_factor() * _lane_pace(person) \
 				* sim.caceria._hunt_pace(person)
-			var step := direction * pace * delta
+			# Sin pasarse del DESTINO. Del hito si se pasa: los hitos estan a
+			# unos pocos metros y recortar el paso en cada uno era lo que dejaba
+			# el avance en la sexta parte de lo que tocaba.
+			var recorrido := pace * delta
+			var queda := person.position.distance_to(person.target)
+			var step := direction * minf(recorrido, maxf(queda, sim.arrive_radius))
 
 			# El agua es un obstaculo, no una textura. Si el paso siguiente
 			# entra en algo que no se puede cruzar, se bordea la orilla en vez
 			# de meterse: se prueban las dos perpendiculares y se toma la que
 			# acerque mas al destino. No es un buscador de caminos, pero acaba
 			# con lo que se veia antes, que era gente andando sobre el rio.
-			if not _can_step_into(person.position + step):
-				var side := Vector3(-direction.z, 0.0, direction.x) * sim.walk_speed * delta
+			# LO QUE DEL PASO SE PUEDE ANDAR, y no todo o nada.
+			#
+			# A velocidad de persona un paso mide varios metros, asi que topar
+			# con el agua a mitad de paso pasa a cada rato. Descartando el paso
+			# entero, la gente se quedaba CLAVADA: medido, el 90 % del tiempo
+			# parada y salidas de siete horas con cero metros andados. Se anda
+			# hasta el borde, que es lo que hace cualquiera, y desde ahi se
+			# busca por donde rodear.
+			var libre := _avance_libre(person.position, step)
+			if libre.length() > CATA_DEL_PASO * 0.5:
+				step = libre
+			else:
+				# Ni el primer tramo: hay que rodear. El paso de lado mide LO
+				# MISMO que el que se iba a dar, no la zancada entera a
+				# velocidad maxima -con la velocidad de verdad, eso eran quince
+				# metros de salto lateral que tampoco cabian en ningun sitio.
+				var side := Vector3(-direction.z, 0.0, direction.x) * step.length()
 				var left := person.position + side
 				var right := person.position - side
-				var left_ok := _can_step_into(left)
-				var right_ok := _can_step_into(right)
+				var left_ok := _avance_libre(person.position, side).length() \
+					> step.length() * 0.9
+				var right_ok := _avance_libre(person.position, -side).length() \
+					> step.length() * 0.9
 				if left_ok and (not right_ok
 						or left.distance_to(person.target) < right.distance_to(person.target)):
 					step = side
@@ -308,9 +336,12 @@ func _terrain_speed(person: Inhabitant, direction: Vector3, hours: float = 0.0) 
 	# -cada paso hay que sacar el pie- y eso es lo que cierra el monte alto en
 	# invierno y baja a la banda al fondo del valle. Ver [Temporada].
 	if sim.temporada != null and sim._terrain != null:
-		var techo := maxf(sim._terrain.max_height, 1.0)
+		# Contra el RANGO DE VERDAD del relieve. Ver
+		# [TerrainGenerator.altura_relativa]: dividiendo entre `max_height` -que
+		# con un DEM cargado se queda en su valor por defecto- el abrigo salia a
+		# 4,5 veces la altura del mapa y la banda andaba por nieve todo el año.
 		here *= sim.temporada.freno_por_nieve(
-			clampf(person.position.y / techo, 0.0, 1.0))
+			sim._terrain.altura_relativa(person.position))
 
 	var swim := 1.0
 	if ground == Traversal.Ground.MARISMA:
@@ -349,6 +380,37 @@ func _terrain_speed(person: Inhabitant, direction: Vector3, hours: float = 0.0) 
 	# clavado»; el saber nadar sigue siendo una ventaja sobre eso.
 	var ratio := maxf(here / maxf(reference, 0.001), SettlementSim.MIN_PACE)
 	return sim.walk_speed * ratio * swim
+
+
+## Cada cuantos metros se comprueba el suelo dentro de un mismo paso.
+##
+## Tres. Mirar solo el punto de llegada valia cuando un paso median centimetros;
+## a velocidad de persona un paso mide varios metros y se puede saltar un arroyo
+## entero sin que nadie lo mire. Es lo que antes evitaba el troceado del tick, y
+## aqui sale mas barato: se trocea el PASO, que es lo que tiene geometria, no la
+## jornada entera de las quince personas.
+const CATA_DEL_PASO := 3.0
+
+
+## Cuanto de un paso se puede andar de verdad, mirando por el camino.
+##
+## Devuelve el trozo mas largo del paso que esta libre; cero si ni el primer
+## tramo lo esta. Mirar solo el punto de llegada valia cuando un paso median
+## centimetros; a velocidad de persona mide varios metros y se saltaba un arroyo
+## entero sin que nadie lo mirara.
+func _avance_libre(desde: Vector3, step: Vector3) -> Vector3:
+	var largo := step.length()
+	if largo <= 0.001:
+		return step
+	var catas := maxi(int(ceil(largo / CATA_DEL_PASO)), 1)
+	var bueno := 0
+	for i in range(1, catas + 1):
+		if not _can_step_into(desde + step * (float(i) / float(catas))):
+			break
+		bueno = i
+	if bueno == catas:
+		return step
+	return step * (float(bueno) / float(catas))
 
 
 ## Si se puede poner el pie en un punto concreto.

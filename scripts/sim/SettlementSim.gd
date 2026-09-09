@@ -136,7 +136,24 @@ const HORAS_UTILES := (HORA_REGRESO - HORA_SALIDA) - (HORA_FIN_MEDIODIA - HORA_M
 ## 60 s reales, se alcanza algo menos de dos kilometros de ida. Descontando la
 ## vuelta y el tiempo de recoger, el radio util de una jornada queda en torno a
 ## 800 m, que es lo que da un forrajeo de radio corto de verdad.
-@export var walk_speed: float = 60.0
+## Lo que se anda por el llano, sin carga, en metros por segundo REAL.
+##
+## Con `seconds_per_day` a 120, una hora de juego son cinco segundos reales, así
+## que esto por cinco son los metros que se cubren en una hora de juego. A 900
+## salen 4.500 m/h, que es andar a cuatro kilómetros y medio por hora: lo que
+## anda una persona por terreno llano. Con los factores del monte —pendiente,
+## suelo, carga— se queda en unos 2,9 km/h efectivos, que es andar por el campo.
+##
+## Estuvo en 60, o sea 300 m por hora de juego: quince veces menos que una
+## persona. Sumado al fallo de la cota de nieve —ver
+## [TerrainGenerator.altura_relativa]— daba los 48 m/h medidos, y de ahí las
+## siete horas para hacer trescientos metros.
+##
+## Lo que esto cambia no es sólo el reloj: con travesías realistas, el día se va
+## en TRABAJAR y no en andar, y las reglas de volver antes de que anochezca
+## pasan a decidir expediciones de kilómetros en vez de paseos de trescientos
+## metros.
+@export var walk_speed: float = 900.0
 
 ## Lo que puede llevar una persona antes de ir a plena carga, en las mismas
 ## unidades que `carrying`. Sirve para saber si va cargada o no.

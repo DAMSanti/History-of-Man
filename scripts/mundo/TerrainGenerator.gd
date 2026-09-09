@@ -878,6 +878,29 @@ func get_terrain_material() -> ShaderMaterial:
 	return _material_manager.get_material()
 
 
+## A qué altura relativa está un punto, de 0 en el fondo del valle a 1 en lo
+## más alto del mapa.
+##
+## Contra el RANGO DE VERDAD del relieve, no contra `max_height`. Ahí estaba uno
+## de los fallos más caros del proyecto: `max_height` es la escala del generador
+## de ruido —treinta por defecto, y con un DEM cargado nadie la actualiza—
+## mientras el relieve real de este valle va de 96 a 718 metros. Dividiendo el
+## abrigo, que está a 135, entre treinta, la «fracción de altura» salía 4,50.
+##
+## Y como la cota de nieve se compara contra eso —ver [Temporada.hay_nieve]—,
+## la banda llevaba TODO EL AÑO andando por nieve a espesor completo, en
+## primavera y en el fondo del valle: el freno se quedaba clavado en 0,36 y
+## multiplicaba por un tercio cada paso que daba cualquiera.
+##
+## Medido con `PasoProbe`: el paso efectivo era de 48 a 80 m por hora de juego
+## contra los 300 nominales, y los factores de terreno sólo explicaban 0,65 de
+## esa caída. El resto era esto.
+func altura_relativa(world_position: Vector3) -> float:
+	var span := get_height_range()
+	var alto := maxf(span.y - span.x, 1.0)
+	return clampf((world_position.y - span.x) / alto, 0.0, 1.0)
+
+
 func get_height_range() -> Vector2:
 	return _height_range
 
