@@ -408,17 +408,28 @@ func _task_counts() -> Dictionary:
 ## es adorno, entra en el rendimiento, y es la razón por la que mover gente de
 ## oficio constantemente sale caro.
 func _skills_text(person: Inhabitant) -> String:
+	# Se recorre LO QUE HA APRENDIDO, no la lista de actividades.
+	#
+	# Es el mismo fallo que tenia la fila de la banda: `skill` esta indexado
+	# por TAREA -ver [Inhabitant.current_task]- y aqui se preguntaba por
+	# ACTIVIDAD, asi que ninguna acertaba y todas devolvian el 0,5 por
+	# defecto. Con el corte en 0,505 eso queria decir que el cuadro salia
+	# SIEMPRE VACIO: «todavia nada» a un cazador con veinte temporadas.
 	var lines: Array[String] = [person.given_name + " sabe hacer:"]
-	var any := false
-	for activity: int in GameUI.ALL_ACTIVITIES:
-		var value := person.skill_in(activity)
-		if value <= 0.505:
+	var filas: Array[Dictionary] = []
+	for task: int in person.skill:
+		var value := float(person.skill[task])
+		if value <= 0.01:
 			continue
-		any = true
+		filas.append({"tarea": task, "pericia": value})
+	filas.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["pericia"]) > float(b["pericia"]))
+	for fila: Dictionary in filas:
 		lines.append("  %s · %s (%d%%)" % [
-			Subsistence.activity_name(activity as Subsistence.Activity),
-			person.skill_label(value), int(value * 100.0)])
-	if not any:
+			Profession.task_name(int(fila["tarea"])),
+			person.skill_label(float(fila["pericia"])),
+			int(float(fila["pericia"]) * 100.0)])
+	if filas.is_empty():
 		lines.append("  Todavía nada: es lo que se aprende trabajando.")
 	return "\n".join(lines)
 
@@ -426,13 +437,15 @@ func _skills_text(person: Inhabitant) -> String:
 ## Lo que hay que saber para repartirle trabajo: qué hace hoy y qué se le da
 ## bien.
 func _person_note(person: Inhabitant) -> String:
+	# Por TAREA, igual que `_skills_text`: preguntando por actividad no
+	# acertaba ninguna y nadie tenia nunca un «se le da bien».
 	var best_name := ""
 	var best_value := 0.55
-	for activity: int in GameUI.ALL_ACTIVITIES:
-		var value := person.skill_in(activity)
+	for task: int in person.skill:
+		var value := float(person.skill[task])
 		if value > best_value:
 			best_value = value
-			best_name = Subsistence.activity_name(activity as Subsistence.Activity)
+			best_name = Profession.task_name(task)
 
 	if person.nursing:
 		return "criando · %d años" % person.age_years
@@ -654,17 +667,25 @@ func _band_person_row(body: VBoxContainer, person: Inhabitant) -> void:
 	#
 	# Y se dice en que, ademas del numero: «pericia 62 %» sin decir en que no
 	# significa nada cuando la misma persona talla, recolecta y cuida el fuego.
+	#
+	# Y quien no tiene oficio no tiene pericia QUE ENSEÑAR. Salia «medianero en
+	# sin oficio (50 %)», que es el 0,5 por defecto de `skill_in` cuando la
+	# tarea no esta en la tabla: un numero inventado con pinta de dato. Se dice
+	# que no tiene oficio y se calla la cifra.
 	var nota := " · criando" if person.nursing else ""
 	var tarea := person.current_task()
 	var pericia := person.skill_in(tarea)
+	var lo_que_sabe := "sin oficio: no ha aprendido nada todavía"
+	if person.job != Profession.Job.OCIOSO:
+		lo_que_sabe = "%s en %s (%d %%)" % [person.skill_label(pericia),
+			Profession.task_name(tarea).to_lower(), int(pericia * 100.0)]
 	var label := Label.new()
-	label.text = "  %s (%s %s, %d)%s · %s · hambre %d · fatiga %d · %s en %s (%d %%)" % [
+	label.text = "  %s (%s %s, %d)%s · %s · hambre %d · fatiga %d · %s" % [
 		person.given_name,
 		"mujer" if person.sex == Inhabitant.Sex.MUJER else "hombre",
 		person.age_name(), person.age_years, nota,
 		person.state_name(), int(person.hunger), int(person.fatigue),
-		person.skill_label(pericia), Profession.task_name(tarea).to_lower(),
-		int(pericia * 100.0)]
+		lo_que_sabe]
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.custom_minimum_size = Vector2(
 		maxf(body.custom_minimum_size.x - 45.0, 200.0), 0)

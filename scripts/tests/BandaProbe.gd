@@ -64,9 +64,44 @@ func _init() -> void:
 	print("%-6s %-11s %9s %7s %8s %7s %7s" % [
 		"dia", "estacion", "despensa", "dias", "cabe", "hambre", "cestos"])
 
+	# La pericia de partida, para poder decir cuanto ha subido.
+	var pericia_al_empezar: Dictionary = {}
+	for person: Inhabitant in sim.people:
+		pericia_al_empezar[person.given_name] = person.skill_in(person.current_task())
+
 	await _correr(sim, dias)
 	_desglose(sim, dias)
+	_pericia(sim, pericia_al_empezar, dias)
 	quit()
+
+
+## Cuanto ha subido cada cual en lo suyo.
+##
+## Es la queja del jugador: «no veo subir la habilidad de los miembros de la
+## banda en su profesion». [SettlementSim.APRENDE_POR_HORA] estuvo en 0,00015 y
+## a ocho horas al dia eso son doce milesimas por jornada: del 0,50 de partida
+## al 0,95 de tope habia TRESCIENTOS SETENTA Y CINCO DIAS. No es que subiera
+## poco, es que a efectos practicos no subia.
+func _pericia(sim: Node, antes: Dictionary, dias: int) -> void:
+	print("")
+	print("=== LA PERICIA, %d JORNADAS DESPUES ===" % dias)
+	print("%-9s %-13s %-22s %8s %8s %8s" % [
+		"quien", "oficio", "en que", "al 1", "al %d" % dias, "subio"])
+	var subidas := 0.0
+	var cuantos := 0
+	for person: Inhabitant in sim.people:
+		var tarea := person.current_task()
+		var ahora := person.skill_in(tarea)
+		var partia := float(antes.get(person.given_name, 0.5))
+		print("%-9s %-13s %-22s %7.0f %% %7.0f %% %+7.0f" % [
+			person.given_name.substr(0, 9),
+			Profession.job_name(person.job as Profession.Job),
+			Profession.task_name(tarea),
+			partia * 100.0, ahora * 100.0, (ahora - partia) * 100.0])
+		subidas += ahora - partia
+		cuantos += 1
+	print("subida media: %+.0f puntos en %d jornadas" % [
+		100.0 * subidas / maxf(float(cuantos), 1.0), dias])
 
 
 ## Levanta la escena en el sitio 56 y devuelve su simulacion.
