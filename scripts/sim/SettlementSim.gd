@@ -2986,7 +2986,7 @@ func _paraje_at(point: Vector3) -> Paraje:
 	if parajes == null:
 		return null
 	for paraje: Paraje in parajes.list:
-		if paraje.position.distance_to(point) < paraje.extent:
+		if paraje.contains(point):
 			return paraje
 	return null
 

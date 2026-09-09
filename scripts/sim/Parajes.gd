@@ -155,10 +155,9 @@ func at(point: Vector3) -> Paraje:
 	var best: Paraje = null
 	var best_distance := INF
 	for paraje: Paraje in list:
-		var flat := Vector2(point.x - paraje.position.x, point.z - paraje.position.z)
-		var distance := flat.length()
-		if distance > paraje.extent:
+		if not paraje.contains(point):
 			continue
+		var distance := paraje.distance_from(point)
 		if distance < best_distance:
 			best_distance = distance
 			best = paraje
@@ -313,7 +312,53 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				paraje.kind = richest as Materia.Kind
 				if add(paraje):
 					added += 1
+
+	# Y la forma de todos, al dia. No es solo de los recien nacidos: la mancha
+	# cambia con la estacion -un avellanar en enero no ocupa lo que en octubre-
+	# y con lo que se saca, asi que se repasa entera cada vez.
+	retocar_huellas(field, terrain)
 	return added
+
+
+## Cuanto se gasta como mucho en rehacer formas de una vez, en milisegundos.
+##
+## Sacar la forma de los siete parajes de una partida recien empezada cuesta
+## quince milisegundos y medio -medido con `HuellaProbe`-, y eso es un cuadro
+## entero de tiron una vez al dia. A velocidad ultra, donde un dia son cuatro
+## cuadros, se nota de verdad.
+##
+## Asi que se reparte, igual que [HornoDeRejillas] amasa las rejillas: cada
+## repaso gasta lo suyo y deja el resto para el siguiente. La forma de un sitio
+## no tiene por que estar al dia HOY -cambia con la estacion, que dura cuarenta
+## y cinco jornadas- pero la de un paraje RECIEN NACIDO si, porque sin ella no
+## se puede ir a trabajar a el.
+const MS_POR_REPASO := 2.0
+
+## Por donde iba el repaso. Da la vuelta a la lista sin dejarse ninguno.
+var _por_retocar: int = 0
+
+
+## Vuelve a sacar la forma de los parajes, a ratos. Devuelve cuantas ha hecho.
+func retocar_huellas(field: ResourceField, terrain: TerrainGenerator) -> int:
+	if field == null or list.is_empty():
+		return 0
+
+	# Los recien nacidos, siempre y todos: un paraje sin forma no existe para
+	# nadie y no se puede trabajar en el.
+	var hechas := 0
+	for paraje: Paraje in list:
+		if paraje.huella == null:
+			paraje.retocar(field, terrain)
+			hechas += 1
+
+	var hasta := Time.get_ticks_usec() + int(MS_POR_REPASO * 1000.0)
+	for vuelta in range(list.size()):
+		if Time.get_ticks_usec() >= hasta:
+			break
+		_por_retocar = (_por_retocar + 1) % list.size()
+		list[_por_retocar].retocar(field, terrain)
+		hechas += 1
+	return hechas
 
 
 ## Por debajo de esto una veta se da por agotada. No es cero: el ultimo 4%
@@ -374,8 +419,14 @@ func prune_exhausted(field: ResourceField) -> Array[Dictionary]:
 		# la cuerna caida del vecino no tiene la culpa de que se acabara el
 		# silex.
 		var spent := paraje.kind
-		for cell: Vector2i in field.cells_within(paraje.position, paraje.extent):
-			if _kind_for(act, field.cell_center(cell.x, cell.y),
+		# Se seca LA MANCHA, no el redondel: un paraje de pesca que se agota
+		# deja seco el tramo de rio que era, no la ladera de al lado.
+		for cell: Vector2i in field.cells_within(paraje.position,
+				Huella.alcance_de(paraje)):
+			var centre := field.cell_center(cell.x, cell.y)
+			if not paraje.contains(centre):
+				continue
+			if _kind_for(act, centre,
 					GameState.season as Subsistence.Season) != spent:
 				continue
 			field.dry_cell(act, cell.x, cell.y)

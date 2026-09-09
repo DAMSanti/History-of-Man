@@ -125,6 +125,35 @@ const EXTENSION := {
 }
 
 
+## La forma de verdad del sitio: la mancha de monte que ocupa. Ver [Huella].
+##
+## `extent` deja de ser el borde del paraje y pasa a ser el ALCANCE con el que
+## se busca la forma; el borde lo pone el monte. Un paraje de pesca sale como
+## una cinta que sigue el cauce, y un avellanar como la mancha de umbría que
+## ocupa, que es justo lo que el jugador pedía: «¿por qué los parajes son
+## círculos? Quiero que puedan ser cualquier forma, así se adaptan al río bien
+## también, o a una ribera».
+##
+## Vale `null` hasta que se saca —hace falta el campo de recursos y el
+## terreno—, y mientras tanto [contains] cae al disco de siempre.
+var huella: Huella = null
+
+
+## Si este punto cae DENTRO del sitio.
+##
+## Es lo que antes preguntaba todo el mundo por su cuenta como «distancia al
+## centro menor que el radio», y por eso todos los parajes eran redondos.
+func contains(point: Vector3) -> bool:
+	if huella != null and not huella.vacia():
+		return huella.contiene(point)
+	return distance_from(point) <= extent
+
+
+## Vuelve a sacar la forma. Cambia con la estación y con lo que se saque.
+func retocar(field: ResourceField, terrain: TerrainGenerator) -> void:
+	huella = Huella.de(self, field, terrain)
+
+
 ## Cuánto se sabe de este sitio, de 0 a 1.
 func known_fraction() -> float:
 	if contents.is_empty():

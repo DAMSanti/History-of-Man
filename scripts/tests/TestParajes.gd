@@ -269,20 +269,29 @@ func test_abrir_la_puerta_no_regala_un_vado() -> void:
 
 
 ## Una rejilla de prueba, escrita como se ve: '#' es mancha y '.' es vacio.
-func _mask(rows: Array) -> Array[bool]:
-	var out: Array[bool] = []
+func _mask(rows: Array) -> PackedByteArray:
+	var out := PackedByteArray()
 	for row: String in rows:
 		for i in range(row.length()):
-			out.append(row[i] == "#")
+			out.append(1 if row[i] == "#" else 0)
 	return out
 
 
-func _draw(mask: Array[bool], side: int) -> String:
+## Una huella suelta del tamaño que haga falta, para probar la limpieza de la
+## forma sin montar un paraje entero.
+func _huella(side: int) -> Huella:
+	var h := Huella.new()
+	h.lado = side
+	h.origen = Vector3.ZERO
+	return h
+
+
+func _draw(mask: PackedByteArray, side: int) -> String:
 	var lines: Array[String] = []
 	for z in range(side):
 		var line := ""
 		for x in range(side):
-			line += "#" if mask[z * side + x] else "."
+			line += "#" if mask[z * side + x] != 0 else "."
 		lines.append(line)
 	return "
 ".join(lines)
@@ -292,7 +301,6 @@ func test_un_paraje_es_un_sitio_y_no_un_archipielago() -> void:
 	# Lo que se veia: una mancha agujereada con islas sueltas alrededor. Nadie
 	# entiende asi un avellanar: uno dice «el avellanar» senalando un trozo de
 	# ladera, con sus claros dentro y su borde.
-	var markers := ParajeMarkers.new()
 	var side := 9
 	# La isla va LEJOS a proposito. La primera version la puso a dos
 	# celdillas y fallo con razon: a esa distancia tiene que absorberse, que
@@ -312,26 +320,24 @@ func test_un_paraje_es_un_sitio_y_no_un_archipielago() -> void:
 
 	# El centro de la rejilla tiene que caer dentro del cuerpo para que la
 	# prueba mida lo que dice medir
-	mask[4 * side + 4] = true
+	mask[4 * side + 4] = 1
 
-	var grown := markers._grow(mask, side)
-	var body := markers._keep_centre_blob(grown, side, 4)
-	markers._fill_holes(body, side)
+	var h := _huella(side)
+	var body := h._solo_lo_pegado(h._ensanchar(mask), 4)
+	h._tapar_claros(body)
 
 	# El agujero de dentro, tapado
-	assert_true(body[2 * side + 3], "el claro de en medio es parte del sitio")
+	assert_true(body[2 * side + 3] != 0, "el claro de en medio es parte del sitio")
 
 	# Y la isla lejana, fuera: eso es otro paraje, y ya se llamara solo
-	assert_false(body[8 * side + 8],
+	assert_true(body[8 * side + 8] == 0,
 		"la isla de la esquina no se cuela:
 %s" % _draw(body, side))
-	markers.free()
 
 
 func test_las_islas_de_al_lado_se_absorben() -> void:
 	# La peticion literal: si hay islas, se incorporan y el paraje se hace mas
 	# grande. Un hueco de una celdilla no separa dos sitios, separa dos matas.
-	var markers := ParajeMarkers.new()
 	var side := 7
 	var mask := _mask([
 		".......",
@@ -343,19 +349,18 @@ func test_las_islas_de_al_lado_se_absorben() -> void:
 		".......",
 	])
 
-	var grown := markers._grow(mask, side)
-	var body := markers._keep_centre_blob(grown, side, 3)
-	markers._fill_holes(body, side)
+	var h := _huella(side)
+	var body := h._solo_lo_pegado(h._ensanchar(mask), 3)
+	h._tapar_claros(body)
 
 	var filled := 0
-	for on: bool in body:
-		if on:
+	for on: int in body:
+		if on != 0:
 			filled += 1
 	assert_gt(float(filled), 8.0,
 		"las cuatro esquinas quedan pegadas en un solo cuerpo:
 %s"
 			% _draw(body, side))
-	markers.free()
 
 
 # --- que hay dentro: un paraje no es un material repetido siempre igual ---
@@ -375,64 +380,54 @@ func _field_rico() -> ResourceField:
 # --- la mancha respeta el terreno: ni cruza rios ni trepa cantiles -------
 
 func test_la_mancha_no_cruza_el_rio() -> void:
-	var markers := ParajeMarkers.new()
 	var terrain := FakeTerrain.new()
 	var paraje := _paraje(10, 20, Materia.Kind.FRUTO_SECO,
 		Subsistence.Activity.RECOLECCION)
 	var orilla := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
-	assert_false(markers._fits_terrain(paraje, orilla, terrain),
+	assert_false(Huella._cuadra_el_terreno(paraje, orilla, terrain),
 		"el cauce del rio no es sitio de recolectar")
-	markers.free()
 
 
 func test_la_mancha_no_trepa_un_cantil() -> void:
-	var markers := ParajeMarkers.new()
 	var terrain := FakeTerrain.new()
 	var paraje := _paraje(10, 20, Materia.Kind.CARNE, Subsistence.Activity.CAZA)
 	var pared := Vector3(FakeTerrain.GORGE_X, 0.0, 500.0)
-	assert_false(markers._fits_terrain(paraje, pared, terrain),
+	assert_false(Huella._cuadra_el_terreno(paraje, pared, terrain),
 		"una pared casi vertical no es sitio de caza")
-	markers.free()
 
 
 func test_la_materia_prima_si_trepa_un_cantil() -> void:
 	# La excepcion explicita: una veta de piedra o silex SI puede estar en
 	# roca viva -es precisamente donde se busca-, aunque el rio le siga
 	# vedado igual que a cualquier otro.
-	var markers := ParajeMarkers.new()
 	var terrain := FakeTerrain.new()
 	var paraje := _paraje(10, 20, Materia.Kind.PIEDRA,
 		Subsistence.Activity.MATERIA_PRIMA)
 	var pared := Vector3(FakeTerrain.GORGE_X, 0.0, 500.0)
-	assert_true(markers._fits_terrain(paraje, pared, terrain),
+	assert_true(Huella._cuadra_el_terreno(paraje, pared, terrain),
 		"la materia prima si se busca en la pared")
 
 	var orilla := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
-	assert_false(markers._fits_terrain(paraje, orilla, terrain),
+	assert_false(Huella._cuadra_el_terreno(paraje, orilla, terrain),
 		"pero el rio le sigue vedado igual que a cualquiera")
-	markers.free()
 
 
 func test_terreno_normal_pasa_sin_problema() -> void:
-	var markers := ParajeMarkers.new()
 	var terrain := FakeTerrain.new()
 	var paraje := _paraje(10, 20, Materia.Kind.FRUTO_SECO,
 		Subsistence.Activity.RECOLECCION)
 	var llano := Vector3(500.0, 0.0, 500.0)
-	assert_true(markers._fits_terrain(paraje, llano, terrain),
+	assert_true(Huella._cuadra_el_terreno(paraje, llano, terrain),
 		"la meseta llana no tiene nada que le impida ser paraje")
-	markers.free()
 
 
 func test_sin_terreno_no_se_descarta_nada() -> void:
 	# Las pruebas que bautizan sin terreno de verdad -Y=0 en todas partes-
 	# no deben perder su mancha por esto.
-	var markers := ParajeMarkers.new()
 	var paraje := _paraje(10, 20, Materia.Kind.FRUTO_SECO,
 		Subsistence.Activity.RECOLECCION)
-	assert_true(markers._fits_terrain(paraje, Vector3(500.0, 0.0, 500.0), null),
+	assert_true(Huella._cuadra_el_terreno(paraje, Vector3(500.0, 0.0, 500.0), null),
 		"sin terreno, no hay con que descartar y se deja pasar")
-	markers.free()
 
 
 # --- un SITIO es un paraje, aunque en el se hagan tres cosas --------------
@@ -1196,17 +1191,15 @@ func test_la_mancha_de_una_pesquera_ES_el_rio() -> void:
 	# Se rechazaba TODO lo que no se pudiera cruzar a pie, incluso para la
 	# pesca: la mancha salia con el cauce recortado por dentro, un agujero
 	# justo donde estan los peces.
-	var markers := ParajeMarkers.new()
 	var terrain := FakeTerrain.new()
 	var paraje := _paraje(10, 20, Materia.Kind.PESCADO,
 		Subsistence.Activity.PESCA)
 	var cauce := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
-	assert_true(markers._fits_terrain(paraje, cauce, terrain),
+	assert_true(Huella._cuadra_el_terreno(paraje, cauce, terrain),
 		"el rio ES la pesquera")
 	var ladera := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z + 400.0)
-	assert_false(markers._fits_terrain(paraje, ladera, terrain),
+	assert_false(Huella._cuadra_el_terreno(paraje, ladera, terrain),
 		"y la ladera de enfrente no")
-	markers.free()
 
 
 # ------------------------------------ lo que la banda sabe al asentarse --
@@ -1275,3 +1268,69 @@ func test_el_nombre_de_un_paraje_es_de_su_oficio() -> void:
 		int(Materia.Kind.PESCADO), "y uno de pesca por el pescado")
 	assert_eq(Parajes.material_que_da_nombre(Subsistence.Activity.MATERIA_PRIMA),
 		int(Materia.Kind.PIEDRA), "y una cantera por la piedra")
+
+
+# ------------- la forma de un paraje no es un circulo ---------------------
+
+## Un sitio de agua sale CINTA, no disco: se estira por donde hay cauce.
+##
+## [FakeTerrain] tiene un rio de ochenta metros de ancho cruzando de este a
+## oeste, asi que una pesquera plantada encima tiene que salir estirada en x y
+## cortada en z.
+func test_una_pesquera_sigue_el_rio() -> void:
+	var terrain := FakeTerrain.new()
+	var centro := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.PESCA,
+		Materia.Kind.PESCADO, centro, 1)
+	var huella := Huella.de(paraje, null, terrain)
+
+	var mas_lejos := paraje.extent * 2.0
+	assert_gt(mas_lejos, paraje.extent,
+		"la prueba mide MAS ALLA del radio nominal, que es de lo que va")
+	assert_true(huella.contiene(centro + Vector3(mas_lejos, 0.0, 0.0)),
+		"la cinta sigue el cauce mas alla del radio nominal")
+	assert_true(huella.contiene(centro - Vector3(mas_lejos, 0.0, 0.0)),
+		"y rio arriba tambien")
+	assert_false(huella.contiene(centro + Vector3(0.0, 0.0, mas_lejos)),
+		"pero no se sube a la ladera: ahi no hay donde pescar")
+	terrain.free()
+
+
+## Y un sitio de tierra no se sale de su alcance por las esquinas.
+##
+## Es lo que salia mal al ensanchar: crecer una celdilla sin volver a mirar el
+## radio llenaba la caja de busqueda, y los parajes de tierra salian CUADRADOS
+## -medido, el 224 % de su circulo con el lado largo igual al corto.
+func test_un_paraje_de_tierra_no_sale_cuadrado() -> void:
+	var terrain := FakeTerrain.new()
+	var centro := Vector3(500.0, 0.0, 500.0)
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.FRUTO_SECO, centro, 1)
+	var huella := Huella.de(paraje, null, terrain)
+
+	var casi := paraje.extent * 0.9
+	assert_true(huella.contiene(centro + Vector3(casi, 0.0, 0.0)),
+		"de frente, al 90 % del radio, dentro")
+	assert_false(huella.contiene(centro + Vector3(casi, 0.0, casi)),
+		"pero la esquina esta a 1,27 radios del centro: fuera")
+	terrain.free()
+
+
+## Y la simulacion pregunta por la FORMA, no por el radio.
+func test_lo_que_esta_dentro_lo_dice_la_huella() -> void:
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.FRUTO_SECO, Vector3(900.0, 0.0, 900.0), 1)
+	# Sin forma sacada se cae al disco de siempre, que es lo que habia antes.
+	assert_true(paraje.contains(paraje.position + Vector3(100.0, 0.0, 0.0)),
+		"sin forma sacada, el disco de siempre")
+
+	var huella := Huella.new()
+	huella.lado = 3
+	huella.origen = paraje.position - Vector3(
+		Huella.CELDILLA * 1.5, 0.0, Huella.CELDILLA * 1.5)
+	huella.dentro = PackedByteArray([0, 0, 0, 0, 1, 0, 0, 0, 0])
+	paraje.huella = huella
+
+	assert_true(paraje.contains(paraje.position), "el nucleo esta dentro")
+	assert_false(paraje.contains(paraje.position + Vector3(100.0, 0.0, 0.0)),
+		"y lo que la forma deja fuera esta fuera, aunque el radio lo abarque")

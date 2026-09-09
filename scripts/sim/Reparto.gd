@@ -186,7 +186,7 @@ func remaining_units_in(paraje: Paraje, activity: Subsistence.Activity,
 	if per_day <= 0.0:
 		return 0.0
 	var season := ResourceField.seasonal_factor(activity, GameState.season)
-	var stock := sim.field.stock_fraction_around(activity, paraje.position, paraje.extent)
+	var stock := sim.field.stock_fraction_in(activity, paraje.huella)
 	var cell_days := sim.field.abundance_cell(activity, paraje.cell_x, paraje.cell_z) \
 		/ SettlementSim.DEPLETION_PER_DAY
 	# El fondo de la celda del centro da la escala; la mancha, cuánto queda

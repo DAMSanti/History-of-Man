@@ -507,8 +507,8 @@ func _content_row(body: VBoxContainer, entry: Dictionary, index: int,
 		# De TODA la mancha, no de la celda del centro: la cuadrilla se
 		# reparte por el sitio y gasta las de alrededor, así que mirando
 		# solo el centro la cifra no bajaba nunca.
-		stock = ui.field.stock_fraction_around(activity as Subsistence.Activity,
-			paraje.position, paraje.extent)
+		stock = ui.field.stock_fraction_in(
+			activity as Subsistence.Activity, paraje.huella)
 
 	var frame := PanelContainer.new()
 	frame.add_theme_stylebox_override("panel", UISkin.row_box(

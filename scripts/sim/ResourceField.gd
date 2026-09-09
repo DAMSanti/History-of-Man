@@ -258,6 +258,39 @@ func stock_fraction_around(activity: Subsistence.Activity, centre: Vector3,
 	return clampf(stock / room, 0.0, 1.0)
 
 
+## Lo que queda en LA MANCHA de un paraje, no en su redondel. Ver [Huella].
+##
+## Es la misma cuenta que [stock_fraction_around] pero preguntando por la forma
+## de verdad del sitio: una pesquera que sigue el cauce no puede medirse con un
+## disco que se sube a la ladera, porque la mitad de lo que promedia es monte
+## en el que no se pesca.
+func stock_fraction_in(activity: Subsistence.Activity, huella: Huella) -> float:
+	if huella == null or huella.vacia():
+		return 1.0
+	if not capacities.has(activity) or width <= 0 or height <= 0:
+		return 1.0
+	var stock := 0.0
+	var room := 0.0
+	var cap: PackedFloat32Array = capacities[activity]
+	var grid: PackedFloat32Array = grids[activity]
+	# Por celda del CAMPO y no por celdilla de la huella: la celda del campo es
+	# mas gruesa, asi que ir al reves contaria la misma celda muchas veces.
+	var seen := {}
+	for centre: Vector3 in huella.celdas():
+		var x := clampi(int(centre.x / world_size.x * float(width)), 0, width - 1)
+		var z := clampi(int(centre.z / world_size.y * float(height)), 0, height - 1)
+		var i := z * width + x
+		if seen.has(i) or cap[i] <= 0.001:
+			continue
+		seen[i] = true
+		stock += grid[i]
+		room += cap[i]
+
+	if room <= 0.001:
+		return 1.0
+	return clampf(stock / room, 0.0, 1.0)
+
+
 ## Celdas que no se reponen, por actividad: `activity -> PackedByteArray`.
 ##
 ## Una mata de avellano rebrota y una manada se recompone; un nodulo de silex

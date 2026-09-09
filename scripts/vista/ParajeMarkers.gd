@@ -582,12 +582,6 @@ func hide_extent() -> void:
 		_extent_mesh = null
 
 
-## Cuanto mide la celdilla con la que se dibuja la mancha, en metros.
-##
-## Veinticinco: fina para que el borde siga la forma del sitio y gruesa para
-## que un paraje de doscientos metros no sean mil baldosas.
-const FOOTPRINT_CELL := 25.0
-
 ## Y con que paso se apoya en el suelo, en metros.
 ##
 ## Cinco: el mismo detalle con el que esta hecho el terreno. Mas grueso y la
@@ -638,65 +632,39 @@ func show_extent(paraje: Paraje, terrain: TerrainGenerator,
 
 ## Las baldosas que forman la mancha, ya en triangulos y apoyadas en el suelo.
 ##
-## Un paraje es UN SITIO, no un archipielago. La primera version pintaba
-## celdilla a celdilla lo que daba el campo de recursos y salia una mancha
-## agujereada con islas sueltas alrededor, que no es como nadie entiende un
-## avellanar: uno dice «el avellanar» senalando un trozo de ladera, con sus
-## claros dentro y su borde, no una constelacion de manchitas.
+## La FORMA no se saca aqui: la tiene el propio paraje, que es lo que arreglo
+## que el juego y el dibujo dijeran cosas distintas. Ver [Huella]. Aqui solo se
+## drapea sobre el relieve.
 ##
-## Asi que la forma se limpia en tres pasos, y en este orden:
-##   1. **se ensancha una celdilla**, para que las islas de al lado se peguen
-##      al cuerpo en vez de quedarse sueltas -absorberlas, no tirarlas-
-##   2. **se queda solo lo pegado al centro**, que descarta lo que quedo lejos
-##      de verdad y es de otro sitio
-##   3. **se tapan los agujeros de dentro**, porque un claro en mitad del
-##      avellanar sigue siendo avellanar
+## Y se drapea con paso fino, no celdilla a celdilla: una celdilla de
+## veinticinco metros pintada como un cuadrado plano atraviesa el relieve -en
+## una ladera entra por un lado y sale por el otro-, y lo que se ve es una
+## lamina rigida flotando sobre el valle en vez de una mancha pegada al suelo.
+##
+## Los vertices se comparten entre celdillas vecinas -se recorre una rejilla
+## continua, no cada celdilla por su cuenta-, asi que no quedan grietas.
 func _footprint(paraje: Paraje, terrain: TerrainGenerator,
 		field: ResourceField) -> PackedVector3Array:
-	var reach := int(paraje.extent / FOOTPRINT_CELL) + 2
-	var side := reach * 2 + 1
-	var raw := _candidate_cells(paraje, field, reach, side, terrain)
-	# Ensanchar une los trozos sueltos... y se comia el terreno que no toca.
-	#
-	# `_grow` abre una celdilla en todas direcciones SIN volver a mirar el suelo,
-	# asi que el borde de una pesquera se subia a la ladera: medido, habia trozos
-	# secos de un paraje de pesca sin agua a menos de ciento treinta metros. Se
-	# vuelve a pasar el filtro despues de crecer: crecer sirve para saltar huecos
-	# de RECURSO, no para saltar el terreno.
-	var grown := _mask_terrain(_grow(raw, side), paraje, reach, side, terrain)
-	var body := _keep_centre_blob(grown, side, reach)
-	_fill_holes(body, side)
+	var huella := paraje.huella
+	if huella == null or huella.vacia():
+		huella = Huella.de(paraje, field, terrain)
 
-	# Y se dibuja DRAPEADO, con paso fino, no celdilla a celdilla.
-	#
-	# Una celdilla de veinticinco metros pintada como un cuadrado plano
-	# atraviesa el relieve: en una ladera entra por un lado y sale por el otro,
-	# y lo que se ve es una lamina rigida flotando sobre el valle en vez de una
-	# mancha pegada al suelo. Con paso fino cada vertice se apoya donde de
-	# verdad esta el monte.
-	#
-	# Los vertices se comparten entre celdillas vecinas -se recorre una rejilla
-	# continua, no cada celdilla por su cuenta-, asi que no quedan grietas
-	# entre ellas.
 	var out := PackedVector3Array()
-	var fine := int(FOOTPRINT_CELL / DRAPE_STEP)
-	var span := side * fine
-	var origin := paraje.position - Vector3(
-		float(reach) * FOOTPRINT_CELL + FOOTPRINT_CELL * 0.5, 0.0,
-		float(reach) * FOOTPRINT_CELL + FOOTPRINT_CELL * 0.5)
+	var fine := int(Huella.CELDILLA / DRAPE_STEP)
+	var span := huella.lado * fine
 
 	for z in range(span):
 		for x in range(span):
 			# La celdilla gruesa a la que pertenece este trozo fino
 			@warning_ignore("integer_division")
-			var owner := (z / fine) * side + (x / fine)
-			if owner < 0 or owner >= body.size() or not body[owner]:
+			var owner := (z / fine) * huella.lado + (x / fine)
+			if owner < 0 or owner >= huella.dentro.size() 					or huella.dentro[owner] == 0:
 				continue
 
 			var corners: Array[Vector3] = []
 			for offset: Vector2i in [Vector2i(0, 0), Vector2i(1, 0),
 					Vector2i(1, 1), Vector2i(0, 1)]:
-				var point := origin + Vector3(
+				var point := huella.origen + Vector3(
 					float(x + offset.x) * DRAPE_STEP, 0.0,
 					float(z + offset.y) * DRAPE_STEP)
 				if terrain:
@@ -712,187 +680,6 @@ func _footprint(paraje: Paraje, terrain: TerrainGenerator,
 			out.append(corners[3])
 	return out
 
-
-## Donde hay de verdad algo de lo de este paraje.
-func _candidate_cells(paraje: Paraje, field: ResourceField,
-		reach: int, side: int, terrain: TerrainGenerator = null) -> Array[bool]:
-	var mask: Array[bool] = []
-	mask.resize(side * side)
-
-	for dz in range(-reach, reach + 1):
-		for dx in range(-reach, reach + 1):
-			var index := (dz + reach) * side + (dx + reach)
-			var centre := paraje.position + Vector3(
-				float(dx) * FOOTPRINT_CELL, 0.0, float(dz) * FOOTPRINT_CELL)
-			var away := Vector2(centre.x - paraje.position.x,
-				centre.z - paraje.position.z).length()
-			if away > paraje.extent:
-				mask[index] = false
-				continue
-			if field == null:
-				mask[index] = true
-				continue
-
-			var amount := field.seasonal_abundance_at(
-				paraje.activity, centre, GameState.season)
-			# El umbral sube con la distancia al centro: el corazon del sitio
-			# entra aunque este flojo, y el borde solo si de verdad sigue
-			# habiendo
-			var needed := lerpf(0.05, 0.16, away / maxf(paraje.extent, 1.0))
-			mask[index] = amount >= needed and _fits_terrain(paraje, centre, terrain)
-	return mask
-
-
-## Si esta celdilla es terreno que de verdad pertenece al paraje.
-##
-## Un avellanar no cruza el rio para seguir siendo el mismo avellanar: la
-## otra orilla es otro sitio, aunque el campo de recursos -que no sabe de
-## agua ni de peñas, solo de cuanto hay- diga que ahi tambien abunda. Y una
-## pared vertical no es sitio de recolectar ni de cazar: eso solo vale para
-## la materia prima, que es precisamente la que se busca en la roca viva.
-##
-## Sin este corte, la mancha se colaba por el vado y trepaba el cantil con
-## tal de que el material siguiera "abundando" ahi, que es fisicamente lo
-## que ningun paraje hace de verdad.
-func _fits_terrain(paraje: Paraje, centre: Vector3, terrain: TerrainGenerator) -> bool:
-	if terrain == null:
-		return true
-
-	var ford := terrain.crossing_difficulty_at(centre)
-
-	# El agua es LO QUE ES EL SITIO para unos y una pared para otros.
-	#
-	# Un paraje de pesca ES el rio y su orilla: hay que dejarlo entrar, y hasta
-	# exigirlo. Se rechazaba todo lo que no se pudiera cruzar a pie, con lo que
-	# la mancha de un pescador salia con el cauce recortado por dentro -un
-	# agujero justo donde estan los peces- y se iba ladera arriba buscando suelo
-	# pisable, que es lo contrario de lo que es una pesquera.
-	if paraje.activity == Subsistence.Activity.PESCA \
-			or paraje.activity == Subsistence.Activity.MARISQUEO:
-		return ford > 0.05
-
-	# Para todo lo demas el rio es el BORDE del sitio, y sigue siendolo aunque
-	# el material salga del cauce: un avellanar no cruza el rio para seguir
-	# siendo el mismo avellanar, y una veta de cuarcita tampoco.
-	if not Hydrography.can_cross(ford, false, false):
-		return false
-
-	if paraje.serves(Subsistence.Activity.MATERIA_PRIMA):
-		return true
-
-	var slope := terrain.get_slope_at(centre)
-	return absf(slope) <= Traversal.CLIMB_LIMIT
-
-
-## Vuelve a pasar el filtro de terreno sobre una mascara ya crecida.
-func _mask_terrain(mask: Array[bool], paraje: Paraje, reach: int, side: int,
-	terrain: TerrainGenerator) -> Array[bool]:
-	if terrain == null:
-		return mask
-	for dz in range(-reach, reach + 1):
-		for dx in range(-reach, reach + 1):
-			var index := (dz + reach) * side + (dx + reach)
-			if not mask[index]:
-				continue
-			var centre := paraje.position + Vector3(
-				float(dx) * FOOTPRINT_CELL, 0.0, float(dz) * FOOTPRINT_CELL)
-			mask[index] = _fits_terrain(paraje, centre, terrain)
-	return mask
-
-
-## Ensancha la mancha una celdilla en todas direcciones.## Ensancha la mancha una celdilla en todas direcciones.
-##
-## Es lo que ABSORBE las islas cercanas: dos trozos separados por un hueco de
-## una o dos celdillas se tocan y pasan a ser el mismo sitio, que es lo que de
-## verdad son.
-func _grow(mask: Array[bool], side: int) -> Array[bool]:
-	var out: Array[bool] = []
-	out.resize(side * side)
-	for z in range(side):
-		for x in range(side):
-			var on := false
-			for dz in range(-1, 2):
-				for dx in range(-1, 2):
-					var nx := x + dx
-					var nz := z + dz
-					if nx < 0 or nz < 0 or nx >= side or nz >= side:
-						continue
-					if mask[nz * side + nx]:
-						on = true
-						break
-				if on:
-					break
-			out[z * side + x] = on
-	return out
-
-
-## Se queda solo con el trozo pegado al centro.
-##
-## Lo que quedo lejos de verdad no es este paraje: es otro sitio, y si merece
-## nombre ya se lo pondra la banda cuando lo conozca.
-func _keep_centre_blob(mask: Array[bool], side: int, reach: int) -> Array[bool]:
-	var out: Array[bool] = []
-	out.resize(side * side)
-
-	var start := reach * side + reach
-	if not mask[start]:
-		return out
-
-	var stack: Array[int] = [start]
-	out[start] = true
-	while not stack.is_empty():
-		var cell: int = stack.pop_back()
-		var x := cell % side
-		var z := cell / side
-		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0),
-				Vector2i(0, 1), Vector2i(0, -1)]:
-			var nx := x + step.x
-			var nz := z + step.y
-			if nx < 0 or nz < 0 or nx >= side or nz >= side:
-				continue
-			var next_cell := nz * side + nx
-			if out[next_cell] or not mask[next_cell]:
-				continue
-			out[next_cell] = true
-			stack.append(next_cell)
-	return out
-
-
-## Tapa los huecos de dentro.
-##
-## Se inunda el VACIO desde el borde del recuadro: lo que el vacio no alcanza
-## esta rodeado por la mancha, o sea que es un claro de dentro. Un claro en
-## mitad del avellanar sigue siendo avellanar.
-func _fill_holes(mask: Array[bool], side: int) -> void:
-	var outside: Array[bool] = []
-	outside.resize(side * side)
-
-	var stack: Array[int] = []
-	for i in range(side):
-		for edge: int in [i, (side - 1) * side + i, i * side, i * side + side - 1]:
-			if not mask[edge] and not outside[edge]:
-				outside[edge] = true
-				stack.append(edge)
-
-	while not stack.is_empty():
-		var cell: int = stack.pop_back()
-		var x := cell % side
-		var z := cell / side
-		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0),
-				Vector2i(0, 1), Vector2i(0, -1)]:
-			var nx := x + step.x
-			var nz := z + step.y
-			if nx < 0 or nz < 0 or nx >= side or nz >= side:
-				continue
-			var next_cell := nz * side + nx
-			if outside[next_cell] or mask[next_cell]:
-				continue
-			outside[next_cell] = true
-			stack.append(next_cell)
-
-	for i in range(mask.size()):
-		if not mask[i] and not outside[i]:
-			mask[i] = true
 
 
 ## Ajusta el tamano de los marcadores a la distancia de la camara.
