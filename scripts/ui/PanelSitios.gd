@@ -641,6 +641,17 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 			% [Materia.nutrition(kind), Materia.unit_name(kind),
 				Materia.kcal(kind), Materia.KCAL_DIA]
 			+ "come una persona al día.", true)
+		# La segunda cuenta, y sin ella no se entiende el juego: con sólo las
+		# calorías un puñado de avellana alimenta como tres pescados y pico, y
+		# la banda debería poder vivir de fruto seco. No puede, y el motivo es
+		# éste. Ver [Materia.protein].
+		var prot := Materia.protein(kind)
+		if prot > 0.0:
+			ui._text(body, "Y da %.0f g de proteína aprovechable: %.0f %% de "
+				% [prot, 100.0 * prot / Materia.PROTEINA_DIA]
+				+ "lo que hace falta al día.", true)
+		else:
+			ui._text(body, "No da proteína: llena, pero no sostiene.", true)
 	var life := Materia.shelf_life(kind)
 	if life <= 0:
 		ui._text(body, "No se estropea.", true)

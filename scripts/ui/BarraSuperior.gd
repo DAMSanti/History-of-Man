@@ -345,8 +345,11 @@ func _update_winter_gauge() -> void:
 		head = "BERREA · de cara al invierno"
 	elif season == Subsistence.Season.INVIERNO:
 		head = "Invierno · reserva"
-	ui._winter_label.text = "%s   %d de %d raciones  (%d %%)" % [
-		head, int(stock["have"]), int(stock["needed"]), int(share * 100.0)]
+	# Las raciones, CON DECIMAL. Redondeadas a entero, el trasiego de un dia
+	# normal -media racion arriba, media abajo- no se veia moverse, y la cifra
+	# parecia congelada mientras la despensa se vaciaba de verdad.
+	ui._winter_label.text = "%s   %.1f de %.0f raciones  (%d %%)" % [
+		head, float(stock["have"]), float(stock["needed"]), int(share * 100.0)]
 
 	# Tres colores y no un degradado: lo que hace falta saber de un vistazo es
 	# si se llega, si va justo o si no se llega.

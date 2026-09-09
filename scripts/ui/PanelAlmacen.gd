@@ -435,7 +435,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 	row.add_child(now)
 	ui._bind(now, func() -> void:
 		var rations := ui.sim.store.food_rations()
-		now.text = "%.0f" % rations
+		now.text = "%.1f" % rations
 		now.add_theme_color_override("font_color",
 			UISkin.OCHRE if ui.sim.despensa.food_is_capped() else UISkin.INK))
 
@@ -675,6 +675,16 @@ func _uses_of(kind: Materia.Kind) -> String:
 		lines.append("Una persona come %.0f raciones al día, y el almacén "
 			% (Materia.KCAL_DIA / Materia.KCAL_RACION)
 			+ "cuenta en raciones, no en bultos.")
+		# Y la proteína, que es la cuenta que las raciones no llevan: hacen
+		# falta sesenta gramos al día y no se sustituyen con nada.
+		var prot := Materia.protein(kind)
+		if prot > 0.0:
+			lines.append("Proteína aprovechable: %.0f g por %s, de los %.0f "
+				% [prot, Materia.unit_name(kind), Materia.PROTEINA_DIA]
+				+ "que hacen falta al día. La vegetal cuenta a la mitad: es "
+				+ "incompleta.")
+		else:
+			lines.append("No da proteína. Llena, pero no sostiene.")
 	if not uses.is_empty():
 		lines.append("Se gasta en: %s." % ", ".join(uses))
 	if not works.is_empty():

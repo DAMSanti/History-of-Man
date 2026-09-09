@@ -609,7 +609,7 @@ func show_band() -> void:
 	ui._heading(body, "%d personas · %s (%s) del año %d" % [
 		ui.sim.population(), Subsistence.season_name(GameState.season),
 		Subsistence.month_name(GameState.season, ui.sim.season_day), GameState.year])
-	ui._text(body, "Reservas: %.0f raciones" % ui.sim.store.food_rations(), true)
+	ui._text(body, "Reservas: %.1f raciones" % ui.sim.store.food_rations(), true)
 	body.add_child(HSeparator.new())
 
 	# Agrupadas por OFICIO, no por actividad. Por actividad se perdía media
