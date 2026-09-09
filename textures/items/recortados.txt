@@ -1,0 +1,10 @@
+# Iconos a los que YA se les ha recortado el marco de piedra.
+# Lo lleva scripts/tools/SinBordeBlanco.gd para no recortarlos dos veces:
+# el recorte no se puede detectar mirando la imagen, asi que se apunta.
+materia_agua.png
+materia_caracol.png
+materia_carne_seca.png
+materia_huevo.png
+materia_pescado.png
+materia_resina.png
+materia_seta.png

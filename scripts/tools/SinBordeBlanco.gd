@@ -1,8 +1,14 @@
 extends SceneTree
-## Quita el fondo blanco de los iconos de materiales y utensilios.
+## Deja los iconos de materiales y utensilios sin borde claro.
 ##
-## Los iconos vienen con un marco blanco opaco alrededor de la estampa, y en la
-## interfaz eso se ve como un recuadro claro sobre la piel oscura del almacén.
+## Son TRES cosas distintas que se ven igual —un recuadro claro alrededor de la
+## estampa sobre la piel oscura del almacén— y hubo que arreglar las tres:
+##
+##   EL FONDO    un marco blanco opaco alrededor de la imagen
+##   EL MARCO    un marco de piedra clara pintado DENTRO, en siete de ellas
+##   EL ALIAS    y, la que de verdad se veía en el juego, que un PNG de 512
+##               pintado a 24 píxeles SIN MIPMAPS no se reduce: se muestrea a
+##               saltos, y el filo claro del borde sale como una raya moteada
 ##
 ## ## Por qué es una herramienta y no un arreglo
 ##
@@ -23,6 +29,11 @@ extends SceneTree
 ##
 ## Y después se apura el filo: al inundar queda un anillo de antialias muy claro
 ## a medio alfa que a tamaño de icono se lee como una raya blanca.
+##
+## Lo del alias no se arregla tocando la imagen —a 24 píxeles reducida bien no
+## tiene borde ninguno— sino diciéndole al importador que genere mipmaps. Va
+## aquí y no a mano porque los `.import` nacen sin ellos: cada icono nuevo
+## volvería a traer la raya.
 
 ## A partir de qué claridad se considera fondo, de 0 a 255.
 const ES_FONDO := 225
@@ -39,12 +50,29 @@ const VUELTAS_DE_FILO := 2
 
 const CARPETA := "res://textures/items"
 
+## Donde se apunta a quién se le ha quitado ya el marco.
+const YA_RECORTADOS := "res://textures/items/recortados.txt"
+
+## El hueco que ha abierto la inundacion en la imagen que se esta mirando.
+##
+## El apurado del filo se ata a ESTE hueco y no a cualquier transparencia, y no
+## es un detalle: atado a la transparencia a secas, cada pasada quitaba un
+## anillo, el anillo dejaba transparencia nueva y la siguiente pasada quitaba
+## otro. El tendon perdia treinta y cinco pixeles cada vez que se pasaba la
+## herramienta, sin parar nunca. El filo del marco esta pegado a LO QUE SE
+## ACABA DE BORRAR; lo demas es estampa.
+var _hueco: PackedByteArray = PackedByteArray()
+
 
 func _init() -> void:
 	var tocados := 0
 	var mirados := 0
+	var con_mipmaps := 0
+	var hechos := _ya_recortados()
 	for nombre: String in _iconos():
 		mirados += 1
+		if _con_mipmaps(nombre):
+			con_mipmaps += 1
 		var ruta := CARPETA + "/" + nombre
 		var imagen := Image.load_from_file(ProjectSettings.globalize_path(ruta))
 		if imagen == null:
@@ -52,8 +80,17 @@ func _init() -> void:
 			continue
 		imagen.convert(Image.FORMAT_RGBA8)
 		var borrados := _quitar_el_fondo(imagen)
-		var marco := _quitar_el_marco(imagen) if CON_MARCO.has(nombre) else 0
-		var apurados := _apurar_el_filo(imagen)
+		var marco := 0
+		if CON_MARCO.has(nombre) and not hechos.has(nombre):
+			marco = _quitar_el_marco(imagen)
+			if marco > 0:
+				_apuntar_recortado(nombre)
+				hechos.append(nombre)
+		# El filo SOLO si la inundacion ha quitado algo: es el antialias del
+		# marco blanco, y sin marco blanco no hay antialias que apurar. Sin esta
+		# condicion, cada pasada mordia un anillo de la estampa clara pegada al
+		# margen -el tendon perdia veinte pixeles cada vez- y no paraba nunca.
+		var apurados := _apurar_el_filo(imagen) if borrados > 0 else 0
 		if borrados + marco + apurados <= 0:
 			continue
 		tocados += 1
@@ -62,8 +99,63 @@ func _init() -> void:
 			nombre, borrados, marco, apurados])
 
 	print("")
-	print("%d iconos mirados, %d limpiados" % [mirados, tocados])
+	print("%d iconos mirados, %d limpiados, %d puestos a generar mipmaps"
+		% [mirados, tocados, con_mipmaps])
+	if con_mipmaps > 0:
+		print("hay que reimportar: godot --headless --path . --import")
 	quit()
+
+
+## Los que ya llevan el marco quitado, para no quitarlo dos veces.
+func _ya_recortados() -> Array[String]:
+	var out: Array[String] = []
+	if not FileAccess.file_exists(YA_RECORTADOS):
+		return out
+	for linea: String in FileAccess.get_file_as_string(
+			YA_RECORTADOS).split("
+"):
+		var limpia := linea.strip_edges()
+		if not limpia.is_empty() and not limpia.begins_with("#"):
+			out.append(limpia)
+	return out
+
+
+## Apunta que a este icono ya se le ha quitado el marco.
+func _apuntar_recortado(nombre: String) -> void:
+	var archivo := FileAccess.open(YA_RECORTADOS, FileAccess.READ_WRITE)
+	if archivo == null:
+		return
+	archivo.seek_end()
+	archivo.store_string(nombre + "
+")
+	archivo.close()
+
+
+## Se asegura de que el icono se importe CON MIPMAPS. Devuelve si hizo falta.
+##
+## Es lo que de verdad se veía en el juego. Un PNG de 512 pintado en un cuadro
+## de veinticuatro píxeles sin mipmaps no se reduce: la tarjeta coge un punto
+## de cada veintiuno, y el filo claro del borde de la estampa sale como una raya
+## moteada alrededor del icono. Con mipmaps se reduce promediando y el borde
+## desaparece —además de que la estampa se ve entera en vez de a manchas.
+##
+## Los `.import` se generan con `mipmaps/generate=false`, así que esto hay que
+## volver a pasarlo cada vez que entren iconos nuevos.
+func _con_mipmaps(nombre: String) -> bool:
+	var ruta := ProjectSettings.globalize_path(
+		CARPETA + "/" + nombre + ".import")
+	if not FileAccess.file_exists(ruta):
+		return false
+	var texto := FileAccess.get_file_as_string(ruta)
+	if not texto.contains("mipmaps/generate=false"):
+		return false
+	texto = texto.replace("mipmaps/generate=false", "mipmaps/generate=true")
+	var archivo := FileAccess.open(ruta, FileAccess.WRITE)
+	if archivo == null:
+		return false
+	archivo.store_string(texto)
+	archivo.close()
+	return true
 
 
 func _iconos() -> Array[String]:
@@ -90,6 +182,10 @@ func _iconos() -> Array[String]:
 ## Estas siete imágenes vinieron generadas con el marco dentro y el resto no.
 ## Es un dato del material, no una propiedad que se pueda deducir mirando
 ## píxeles, así que se escribe: si entra otra con marco, se añade aquí.
+##
+## Y como tampoco se puede deducir si YA está recortada, se apunta en
+## [YA_RECORTADOS] al recortarla. Sin eso, pasar la herramienta dos veces
+## recortaba dos veces y la estampa se iba acercando a saltos.
 const CON_MARCO := [
 	"materia_agua.png",
 	"materia_caracol.png",
@@ -148,6 +244,7 @@ func _quitar_el_fondo(imagen: Image) -> int:
 	var h := imagen.get_height()
 	var visto := PackedByteArray()
 	visto.resize(w * h)
+	_hueco = visto
 
 	var cola: Array[int] = []
 	for x in range(w):
@@ -169,6 +266,7 @@ func _quitar_el_fondo(imagen: Image) -> int:
 		if not _es_fondo(color):
 			continue
 		visto[i] = 1
+		_hueco[i] = 1
 		if color.a > 0.0:
 			borrados += 1
 			imagen.set_pixel(x, y, Color(color.r, color.g, color.b, 0.0))
@@ -203,10 +301,17 @@ func _apurar_el_filo(imagen: Image) -> int:
 						Vector2i(0, 1), Vector2i(0, -1)]:
 					var nx := x + paso.x
 					var ny := y + paso.y
-					if nx < 0 or ny < 0 or nx >= w or ny >= h \
-							or imagen.get_pixel(nx, ny).a < 0.08:
+					if nx >= 0 and ny >= 0 and nx < w and ny < h 							and _hueco.size() == w * h 							and _hueco[ny * w + nx] != 0:
 						fuera.append(Vector2i(x, y))
 						break
+					# Pegado a un HUECO DE VERDAD, no al canto de la imagen.
+					#
+					# Contando el canto como hueco, una estampa que llega al
+					# borde -el tendon, la cuerda- se roia un pelo en cada
+					# pasada y no paraba nunca: treinta y cinco pixeles cada
+					# vez. El filo del marco esta pegado a lo transparente; el
+					# canto de la imagen no es filo de nada.
+
 		for punto: Vector2i in fuera:
 			var color := imagen.get_pixel(punto.x, punto.y)
 			imagen.set_pixel(punto.x, punto.y,
