@@ -171,7 +171,6 @@ func asentarse() -> int:
 func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
 	var mejor := Vector3.ZERO
 	var mejor_nota := 0.0
-	var grid := sim.marcha._navgrid()
 	for celda: Vector2i in sim.field.cells_within(sim.home_position, hasta):
 		var centre := sim.field.cell_center(celda.x, celda.y)
 		var hay := sim.field.abundance_cell(act, celda.x, celda.y)
@@ -184,7 +183,15 @@ func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
 		# 0,98 a quinientos metros. Medido en el sitio 56.
 		if hay <= maxf(Parajes.WORTH_NAMING, sim.parajes.threshold_for(act)):
 			continue
-		if grid != null and grid.is_ready() 				and not grid.connected(sim.home_position, centre):
+		# QUE SE LLEGUE DE VERDAD, y no solo que este comunicado.
+		#
+		# Estar en la misma zona de la rejilla solo dice que EXISTE un
+		# camino; puede ser dar la vuelta al rio por un vado a kilometro y
+		# medio. Es la queja del jugador: uno de los cuatro sitios del primer
+		# dia salia al otro lado del agua, y comunicado lo estaba. Ver
+		# [Marcha.alcanzable_de_verdad].
+		if not sim.marcha.alcanzable_de_verdad(sim.home_position, centre):
+			continue
 			continue
 		# Lo que hay, contra lo que cuesta llegar. Cerca y bueno gana a lejos y
 		# mejor: es la vuelta al abrigo, no una expedicion.

@@ -1440,20 +1440,20 @@ func test_no_se_bautiza_lo_que_no_se_alcanza() -> void:
 			saber.reveal(Subsistence.Activity.RECOLECCION,
 				field.cell_center(x, z), 1.0)
 
-	var abrigo := Vector3(64.0, 0.0, 64.0)
 	var oficios: Array = [Subsistence.Activity.RECOLECCION]
 
-	# Con todo comunicado sale al menos uno.
+	# Con todo al alcance sale al menos uno.
 	var suelto := Parajes.new()
-	var todo_vale := func(_a: Vector3, _b: Vector3) -> bool: return true
-	assert_gt(float(suelto.refresh(field, saber, 1, oficios, null, todo_vale,
-		Vector3.ZERO, 0.0, 0, abrigo)), 0.0,
+	var se_llega := func(_punto: Vector3) -> bool: return true
+	assert_gt(float(suelto.refresh(field, saber, 1, oficios, null, Callable(),
+		Vector3.ZERO, 0.0, 0, se_llega)), 0.0,
 		"si se llega, se bautiza")
 
-	# Y con el abrigo incomunicado de todo, ninguno.
+	# Y con todo fuera de alcance, ninguno. Fuera de alcance no es solo
+	# «incomunicado»: tambien lo es un sitio al que solo se llega dando la
+	# vuelta al rio. Ver [Marcha.alcanzable_de_verdad].
 	var aislado := Parajes.new()
-	var nada_vale := func(a: Vector3, _b: Vector3) -> bool:
-		return a != abrigo
-	assert_eq(aislado.refresh(field, saber, 1, oficios, null, nada_vale,
-		Vector3.ZERO, 0.0, 0, abrigo), 0,
+	var no_se_llega := func(_punto: Vector3) -> bool: return false
+	assert_eq(aislado.refresh(field, saber, 1, oficios, null, Callable(),
+		Vector3.ZERO, 0.0, 0, no_se_llega), 0,
 		"si no se llega desde el abrigo, no hay sitio que nombrar")

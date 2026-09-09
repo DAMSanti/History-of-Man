@@ -285,7 +285,7 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 		day: int, activities: Array, terrain: TerrainGenerator = null,
 		same_patch: Callable = Callable(),
 		centro: Vector3 = Vector3.ZERO, radio: float = 0.0,
-		tope: int = 0, abrigo: Vector3 = Vector3.INF) -> int:
+		tope: int = 0, se_llega: Callable = Callable()) -> int:
 	if field == null or knowledge == null:
 		return 0
 
@@ -319,9 +319,11 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 				# los que va. Un avellanar al otro lado de un río que este mes
 				# no se vadea es un sitio que se VE, no uno que se conoce.
 				#
-				# `same_patch` es «hay camino de aquí a allí» —la misma
-				# pregunta— así que se le pasa el abrigo y contesta.
-				if abrigo.x < INF and same_patch.is_valid() 						and not same_patch.call(abrigo, centre):
+				# Y no vale con que HAYA camino: tiene que ser un camino que se
+				# ande. Comunicado lo estaba —por un vado a kilómetro y medio—
+				# y aun así el sitio está al otro lado del río. Ver
+				# [Marcha.alcanzable_de_verdad].
+				if se_llega.is_valid() and not se_llega.call(centre):
 					continue
 
 				candidatas.append({"act": activity, "x": x, "z": z,

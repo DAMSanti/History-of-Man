@@ -287,6 +287,12 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 const DE_UNA_VUELTA := 1
 
 
+## La prueba de «a este sitio se va de verdad», para pasarsela al bautizo.
+func _se_llega() -> Callable:
+	return func(punto: Vector3) -> bool:
+		return sim.marcha.alcanzable_de_verdad(sim.home_position, punto)
+
+
 ## Recoge los sitios que se ganaron nombre y no llegaron a salir en su momento.
 ##
 ## Corre a cada hora de luz, no al cerrar la jornada. Una vuelta de
@@ -304,7 +310,7 @@ func repasar_rezagados() -> int:
 		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
-		Vector3.ZERO, 0.0, DE_UNA_VUELTA, sim.home_position)
+		Vector3.ZERO, 0.0, DE_UNA_VUELTA, _se_llega())
 	if salieron > 0:
 		_contar_los_nuevos()
 	return salieron
@@ -325,7 +331,7 @@ func bautizar_lo_descubierto(centro: Vector3, radio: float) -> int:
 		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
-		centro, radio, DE_UNA_VUELTA, sim.home_position)
+		centro, radio, DE_UNA_VUELTA, _se_llega())
 	if salieron > 0:
 		_contar_los_nuevos()
 	return salieron

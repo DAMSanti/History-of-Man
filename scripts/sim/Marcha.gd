@@ -193,6 +193,22 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 					if person.blocked_steps > SettlementSim.BLOCKED_BEFORE_REPLAN:
 						person.blocked_steps = 0
 						person.blocked_replans += 1
+						# Y SE APUNTA QUE POR AHI NO SE PASA.
+						#
+						# Es la diferencia entre tropezar una vez y tropezar
+						# todos los dias. La rejilla habia abierto esta celda
+						# por un vado que sobre el terreno no existe; sin
+						# cerrarla, mañana se traza la misma ruta por el mismo
+						# sitio y se planta la misma gente en la misma orilla.
+						# Ver [Navgrid.cerrar].
+						var delante := person.position + direction 							* Navgrid.CELL * 0.5
+						if _navgrid().cerrar(delante):
+							forget_routes()
+							sim._note(Chronicle.Kind.TIERRA,
+								"Por %s no se pasa: la banda lo tacha de sus "
+									% sim.parajes.place_name(delante,
+										sim.home_position)
+								+ "caminos.", 0)
 						var goal := person.target
 						person.route = PackedVector3Array()
 						person.route_step = 0
@@ -484,6 +500,44 @@ func _can_step_into(world_position: Vector3) -> bool:
 ## minutos: los bloques de «volver a casa» corren cada fotograma, asi que cada
 ## persona lanzaba un A* completo sesenta veces por segundo para pedir
 ## exactamente el mismo camino.
+## Cuanto puede rodear un camino antes de que el sitio deje de estar al alcance.
+##
+## Dos veces y media la linea recta. Un valle obliga a rodear -se sube el
+## reguero, se bordea el canchal- y eso es andar; dar la vuelta al rio por un
+## vado a dos kilometros para trabajar un avellanar que se ve desde casa no lo
+## es. Pendiente de playtest.
+const RODEO_QUE_SE_ANDA := 2.5
+
+
+## Si a este punto se llega DE VERDAD desde aqui.
+##
+## No basta con que la rejilla los ponga en la misma zona: eso solo dice que hay
+## un camino, y el camino puede ser dar la vuelta al rio entero. Es la queja del
+## jugador -«uno de los parajes iniciales esta al otro lado del rio»-: estaba
+## comunicado, si, por un vado a kilometro y medio.
+##
+## Se mide el camino de verdad y se compara con la linea recta. Cuesta una
+## busqueda, asi que esto se pregunta al BAUTIZAR un sitio -unas pocas veces al
+## dia- y no al repartir trabajo, que ya tiene su propio filtro.
+func alcanzable_de_verdad(desde: Vector3, hasta: Vector3) -> bool:
+	var grid := _navgrid()
+	if grid == null or not grid.is_ready():
+		return true
+	if not grid.connected(desde, hasta):
+		return false
+
+	var derecho := desde.distance_to(hasta)
+	if derecho <= Navgrid.CELL:
+		return true
+	var camino := Wayfinder.find(grid, desde, hasta)
+	if camino.is_empty():
+		return false
+	var largo := desde.distance_to(camino[0])
+	for i in range(1, camino.size()):
+		largo += camino[i - 1].distance_to(camino[i])
+	return largo <= derecho * RODEO_QUE_SE_ANDA
+
+
 func _send_to(person: Inhabitant, destination: Vector3) -> void:
 	var same := Vector2(person.target.x - destination.x,
 		person.target.z - destination.z).length() < 1.0

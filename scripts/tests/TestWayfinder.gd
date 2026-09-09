@@ -818,3 +818,43 @@ func test_la_barca_invalida_las_cuatro() -> void:
 	assert_true(horno.sirven(false, false), "sirven para lo que se hornearon")
 	assert_false(horno.sirven(true, false),
 		"con barca cambian los pasos y hay que rehacerlas")
+
+
+## «Al otro lado del rio» no es lo mismo que «incomunicado».
+##
+## Queja literal: «uno de los parajes iniciales esta al otro lado del rio, que
+## pollas haces». Y estaba comunicado —habia camino— dando la vuelta por un vado
+## a kilometro y medio. Estar en la misma zona de la rejilla solo dice que EXISTE
+## un camino; lo que hace falta saber es si se anda.
+func test_no_basta_con_que_haya_camino_tiene_que_andarse() -> void:
+	assert_gt(Marcha.RODEO_QUE_SE_ANDA, 1.0,
+		"un valle obliga a rodear: el camino nunca es la linea recta")
+	assert_lt(Marcha.RODEO_QUE_SE_ANDA, 4.0,
+		"pero dar la vuelta al rio para trabajar lo que se ve desde casa no "
+			+ "es rodear, es otro sitio")
+
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3(500.0, 200.0, 500.0)
+
+	# Al lado de casa se llega siempre, sin buscar nada.
+	assert_true(sim.marcha.alcanzable_de_verdad(sim.home_position,
+		sim.home_position + Vector3(20.0, 0.0, 0.0)),
+		"a la puerta de casa se llega")
+
+
+## Y una celda que el terreno desmiente se CIERRA, para no repetir el viaje.
+##
+## Sin esto, la ruta pasaba por un vado que sobre el suelo no existe, la persona
+## se plantaba en la orilla, se le daba media vuelta, y al dia siguiente se le
+## trazaba la misma ruta por el mismo sitio. Todos los dias y varios a la vez.
+func test_una_celda_desmentida_se_cierra() -> void:
+	var terrain := FakeTerrain.new()
+	var grid := Navgrid.from_terrain(terrain, false, false)
+	var seco := Vector3(500.0, 0.0, 500.0)
+	assert_true(grid.passable(seco), "la meseta se anda")
+
+	assert_true(grid.cerrar(seco), "se cierra la celda que el terreno desmiente")
+	assert_false(grid.passable(seco), "y deja de existir para el trazado")
+	assert_false(grid.cerrar(seco), "cerrar lo ya cerrado no hace nada")
+	terrain.free()

@@ -408,6 +408,27 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 	return lerpf(total / float(PROBES.size()), worst, WORST_BIAS)
 
 
+## Cierra una celda que el terreno ha desmentido, y rehace las zonas.
+##
+## La rejilla mide con nueve muestras y una linea de vado; el terreno tiene mas
+## detalle que eso, y de vez en cuando abre una celda por un paso que sobre el
+## suelo no existe. Antes eso era un pozo sin fondo: la ruta pasaba por ahi, la
+## persona se plantaba en la orilla, se le daba media vuelta, y AL DIA SIGUIENTE
+## se le volvia a trazar la misma ruta por el mismo sitio. Todos los dias, y
+## varios a la vez, siempre en el mismo punto.
+##
+## Ahora la banda APRENDE: quien se topa con que por ahi no se pasa lo cierra
+## para todos, y el camino de mañana da la vuelta o el sitio deja de estar al
+## alcance. Devuelve si de verdad cerro algo.
+func cerrar(world_position: Vector3) -> bool:
+	var i := cell_of(world_position)
+	if i < 0 or i >= cost.size() or cost[i] <= BLOCKED:
+		return false
+	cost[i] = BLOCKED
+	_flood_areas()
+	return true
+
+
 ## Marca las zonas comunicadas con un relleno por inundación.
 ##
 ## Se hace con una pila y no con recursión porque una comarca de diez mil
