@@ -319,6 +319,52 @@ func _best_known_spot(person: Inhabitant) -> Vector3:
 	return best
 
 
+## El paraje de SU oficio mas cercano al que todavia le quedan «???».
+##
+## Es el escalon que faltaba entre «tengo donde trabajar» y «me voy a dar una
+## vuelta a ver que encuentro»:
+##
+##   1. Si hay una fuente conocida y utilizable, se trabaja. Eso ya lo hace
+##      `_best_known_spot`.
+##   2. Si no —o si las que hay estan esquilmadas—, SE VA AL PARAJE DE LO SUYO
+##      MAS CERCANO QUE TENGA ALGO POR DESCUBRIR, y se prospecta ahi. Esto.
+##   3. Y solo si no queda ninguno, se sale a tantear monte. Ver `_search_target`.
+##
+## Peticion literal: «lo primero que haran los recolectores es ir a un paraje de
+## su especializacion y tratar de encontrar materiales que ellos puedan
+## recolectar... quiero que SOLO hagan esto si no hay otro paraje con ese
+## material descubierto o si los que hay descubiertos estan llenos. Lo que no
+## quiero nunca es que se vayan mas lejos de lo necesario, no tiene sentido
+## alejarse 2000 m si hay parajes sin descubrir a 500 m».
+##
+## Por cercania y nada mas, igual que la batida —ver
+## [SettlementSim._paraje_to_survey]—: lo que se pide es un frente que se abre
+## despacio desde el abrigo, no un salto al mejor sitio del valle.
+func _paraje_por_prospectar(person: Inhabitant) -> Vector3:
+	if sim.parajes == null:
+		return Vector3.ZERO
+
+	var best: Paraje = null
+	var best_lejos := INF
+	for paraje: Paraje in sim.parajes.list:
+		if paraje.activity != person.activity or not paraje.has_unknowns():
+			continue
+		if paraje.resting or sim._is_resting(person.activity, paraje.position):
+			continue
+		# Adonde ya se intento llegar hoy sin conseguirlo, no se vuelve.
+		if sim.marcha._given_up_on(person, paraje.position):
+			continue
+		var lejos := Traversal.en_llano(sim.home_position, paraje.position)
+		if lejos >= best_lejos:
+			continue
+		# Lo caro va al final, y solo para el que ya es el mas cercano.
+		if not sim.marcha.alcanzable_de_verdad(person.position, paraje.position):
+			continue
+		best_lejos = lejos
+		best = paraje
+	return Vector3.ZERO if best == null else best.position
+
+
 ## Adonde salir a buscar cuando no se conoce ningun paraje.
 ##
 ## Se abren en abanico, cada uno por una direccion que no lleve otro. Es lo
@@ -912,6 +958,15 @@ func _forage_drift(person: Inhabitant, hours: float) -> void:
 					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat, sim.has_bridge):
 				continue
 			if waterside and attempt < tries - 1 and not _water_beside(candidate):
+				continue
+			# NI SE CRUZA EL AGUA PARA IR A LA MATA SIGUIENTE.
+			#
+			# El punto de allá es tierra firme y pisable, así que pasaba el
+			# filtro de arriba; lo que no se puede es LLEGAR. En una pesquera
+			# —donde el sitio es el río y sus dos orillas están a treinta
+			# metros— eso es la jornada entera andando contra el agua. Ver
+			# [Marcha.cruza_el_agua].
+			if sim.marcha.cruza_el_agua(person.work_centre, candidate):
 				continue
 
 		person.forage_target = candidate

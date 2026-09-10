@@ -536,16 +536,75 @@ func alcanzable_de_verdad(desde: Vector3, hasta: Vector3) -> bool:
 	if not grid.connected(desde, hasta):
 		return false
 
-	var derecho := desde.distance_to(hasta)
+	var derecho := Traversal.en_llano(desde, hasta)
 	if derecho <= Navgrid.CELL:
 		return true
 	var camino := Wayfinder.find(grid, desde, hasta)
 	if camino.is_empty():
 		return false
-	var largo := desde.distance_to(camino[0])
+	return largo_de(desde, camino) <= derecho * RODEO_QUE_SE_ANDA
+
+
+## Si en línea recta entre estos dos puntos hay agua que no se vadea.
+##
+## Es la comprobación barata para elegir DÓNDE TRABAJAR dentro de un sitio: la
+## mata siguiente, el tramo siguiente de una batida. Un A* por cada candidato
+## sería absurdo —se sortean varios cada pocos minutos de juego— y aquí no hace
+## falta saber el camino, sino sólo si hay cauce de por medio.
+##
+## Se cata al mismo paso que anda una persona, [CATA_DEL_PASO], porque el río
+## de este valle mide entre cuarenta y ochenta metros y catar cada veinte lo
+## deja pasar a trozos: es el mismo fallo que ya se arregló en la rejilla —ver
+## [Navgrid.CATA_DEL_VADO]— y en las huellas de los parajes.
+func cruza_el_agua(desde: Vector3, hasta: Vector3) -> bool:
+	if sim._terrain == null:
+		return false
+	var largo := Traversal.en_llano(desde, hasta)
+	if largo <= 0.001:
+		return false
+	var catas := maxi(int(ceil(largo / CATA_DEL_PASO)), 1)
+	for i in range(catas + 1):
+		var punto := desde.lerp(hasta, float(i) / float(catas))
+		if not Hydrography.can_cross(sim._terrain.crossing_difficulty_at(punto),
+				sim.has_boat, sim.has_bridge, int(GameState.season)):
+			return true
+	return false
+
+
+## Lo que mide un camino ya trazado, en metros.
+func largo_de(desde: Vector3, camino: PackedVector3Array) -> float:
+	if camino.is_empty():
+		return 0.0
+	var largo := Traversal.en_llano(desde, camino[0])
 	for i in range(1, camino.size()):
-		largo += camino[i - 1].distance_to(camino[i])
-	return largo <= derecho * RODEO_QUE_SE_ANDA
+		largo += Traversal.en_llano(camino[i - 1], camino[i])
+	return largo
+
+
+## Si el camino que ACABA de trazarse para esta persona merece andarse.
+##
+## Es `alcanzable_de_verdad` sin pagar la busqueda dos veces: el camino ya está
+## en `person.route` porque `_send_to` lo puso ahí, así que sólo hay que
+## medirlo. Y es la misma regla —no más de [RODEO_QUE_SE_ANDA] veces la línea
+## recta—, que estaba escrita en un sitio y comprobada en ninguno de los tres
+## que deciden adónde se va.
+##
+## Porque «hay camino» no quiere decir «se va»: la otra orilla está comunicada
+## por un vado a kilómetro y medio, así que `_send_to` devuelve una ruta
+## perfectamente válida de mil metros para un sitio que se ve desde la puerta.
+## Es la queja, literal: «un explorador ha ido a batir ese paraje y se ha ido a
+## 1 km contra el río».
+##
+## El suelo de cortesía es para los saltos cortos: a veinte metros, rodear una
+## roca ya multiplica por tres y eso no es irse lejos, es andar.
+func merece_el_camino(person: Inhabitant, destino: Vector3) -> bool:
+	if person.route.is_empty():
+		return false
+	var derecho := Traversal.en_llano(person.position, destino)
+	if derecho <= Navgrid.CELL * 2.0:
+		return true
+	return largo_de(person.position, person.route) \
+		<= derecho * RODEO_QUE_SE_ANDA + Navgrid.CELL * 2.0
 
 
 func _send_to(person: Inhabitant, destination: Vector3) -> void:

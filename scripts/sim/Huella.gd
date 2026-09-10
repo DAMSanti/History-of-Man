@@ -35,6 +35,8 @@ extends RefCounted
 ##      de verdad y es de otro sitio
 ##   4. **se tapan los agujeros de dentro**, porque un claro en mitad del
 ##      avellanar sigue siendo avellanar
+##   5. **y se vuelve a quedar sólo lo pegado**, porque tapar claros puede
+##      haber cosido la orilla de enfrente al cruzar un meandro
 
 ## Cuánto mide la celdilla de la mancha, en metros.
 ##
@@ -152,7 +154,27 @@ static func de(paraje: Paraje, field: ResourceField,
 	# recolección con once y cinco celdillas de agua dentro después de haberlas
 	# quitado. Un claro en mitad del avellanar sigue siendo avellanar; un río en
 	# mitad del avellanar es un río.
-	huella.dentro = huella._filtrar(paraje, terrain, cuerpo, alcance, lejos)
+	var limpio := huella._filtrar(paraje, terrain, cuerpo, alcance, lejos)
+
+	# Y SE VUELVE A MIRAR QUE SIGA PEGADO, que es el paso que faltaba.
+	#
+	# `_solo_lo_pegado` corria ANTES de tapar claros, y tapar claros vuelve a
+	# meter celdillas: un rio que entra y sale por la vuelta de un meandro deja
+	# su cauce encerrado dentro de la mancha, o sea que para el tapador es un
+	# claro, y taparlo pega LA ORILLA DE ENFRENTE al paraje. El filtro de
+	# despues quita el agua otra vez —por eso el cauce no salia en la forma—
+	# pero no vuelve a preguntar si lo que queda sigue unido, asi que ese trozo
+	# de la otra orilla se quedaba dentro como una isla suelta.
+	#
+	# Y una isla suelta es sitio de trabajo: se sortea un punto de la mancha,
+	# toca alli, y la jornada se va andando contra el agua. Es la queja, dicha
+	# por el jugador antes que por ninguna sonda: «el problema son los parajes
+	# de seco que estan a la orilla de un rio... el paraje no tendria que llegar
+	# mas alla de donde marca».
+	#
+	# No le hace nada a una pesquera: su cinta va pegada POR EL AGUA, que es de
+	# lo que esta hecha, y sigue entera.
+	huella.dentro = huella._solo_lo_pegado(limpio, alcance)
 
 	# Un paraje sin forma no existe para nadie: si el campo no da ni una
 	# celdilla —pasa con un sitio recién bautizado en el filo del umbral— se

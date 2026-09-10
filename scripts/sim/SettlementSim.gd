@@ -1530,6 +1530,23 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 				# [Reconocimiento.bautizar_lo_descubierto].
 				reconocimiento.bautizar_lo_descubierto(
 					person.position, Reconocimiento.FORAGE_RADIUS)
+
+				# Y si esto era un paraje con «???», prospectar con exito
+				# resuelve uno. No hace falta ser explorador para saber que en
+				# el avellanar al que vas a diario tambien hay zarza: eso se
+				# aprende recogiendo.
+				#
+				# «Lo primero que haran los recolectores es ir a un paraje de su
+				# especializacion y tratar de encontrar materiales que ellos
+				# puedan recolectar. Si encuentran alguno, descubriran una de
+				# las ?? de los parajes».
+				var aqui := _paraje_at(person.position)
+				if aqui != null and aqui.activity == person.activity:
+					var salio := aqui.reveal_one()
+					if salio >= 0:
+						_note(Chronicle.Kind.HALLAZGO, "%s da con %s en %s."
+							% [person.given_name, Materia.material_name(
+								salio as Materia.Kind).to_lower(), aqui.name_text], 1)
 			elif person.search_hours > 5.0:
 				# Aqui no hay nada. Se prueba en otro sitio.
 				marcha._send_to(person, tajo._search_target(person))
@@ -1982,12 +1999,29 @@ func _send_to_work(person: Inhabitant) -> void:
 			person.state = Inhabitant.State.YENDO
 			return
 
+	# Se prueban por orden y se coge el primero AL QUE MEREZCA LA PENA IR. Que
+	# exista camino no basta: el avellanar de enfrente esta comunicado por un
+	# vado a kilometro y medio, y esa ruta es perfectamente valida.
+	#
+	# «Lo que no quiero nunca es que se vayan mas lejos de lo necesario, no
+	# tiene sentido alejarse 2000 m si hay parajes sin descubrir a 500 m». Ver
+	# [Marcha.merece_el_camino].
 	var destination := Vector3.ZERO
+	var descartados := 0
 	for candidate: Vector3 in _work_candidates(person):
 		marcha._send_to(person, candidate)
-		if not person.route.is_empty():
+		if marcha.merece_el_camino(person, candidate):
 			destination = candidate
 			break
+		if not person.route.is_empty():
+			descartados += 1
+
+	# Si TODOS los candidatos salian por un rodeo que no se anda, se apunta:
+	# es un dato distinto de «no hay camino» y se lee distinto en los atascos.
+	if destination == Vector3.ZERO and descartados > 0:
+		marcha._record_stuck(person, "a los %d tajos de %s que conoce solo se "
+			% [descartados, Subsistence.activity_name(person.activity).to_lower()]
+			+ "llega dando la vuelta al agua")
 
 	if destination == Vector3.ZERO:
 		# A ningun tajo de este oficio se llega hoy. Se apunta —para que salga
@@ -2051,9 +2085,23 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 	# alcance se va a el, y si no, se da la vuelta. Lo que ya no pasa es
 	# quedarse en el abrigo.
 	if barbecho.sin_sitio(person.activity):
+		# LO PRIMERO, EL PARAJE DE LO SUYO MAS CERCANO CON «???».
+		#
+		# Por delante de buscar y de tantear, que son las dos formas de irse
+		# lejos: un sitio con nombre a doscientos metros del que no se sabe lo
+		# que tiene es mejor apuesta que el mejor punto del campo de recursos a
+		# dos kilometros, y ademas deja algo aprendido. Ver
+		# [Tajo._paraje_por_prospectar].
 		var buscando := barbecho.donde_buscar(person.activity, person.position)
 		if buscando != Vector3.ZERO:
 			out.insert(0, buscando)
+
+		# Y este por delante de aquel: los dos van antes que el mejor conocido
+		# -que aqui es un sitio muerto- pero prospectar un paraje que ya esta
+		# en el mapa gana a mudarse a un punto del campo de recursos.
+		var prospectar := tajo._paraje_por_prospectar(person)
+		if prospectar != Vector3.ZERO:
+			out.insert(0, prospectar)
 		var tanteando := tanteo.adonde(person)
 		if tanteando != Vector3.ZERO and not out.has(tanteando):
 			out.append(tanteando)
@@ -3095,7 +3143,9 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 			continue
 		if paraje.distance_from(home_position) > alcance:
 			continue
-		if not marcha._navgrid().connected(person.position, paraje.position):
+		# Comunicado no es alcanzable: la otra orilla lo está, por un vado a
+		# kilómetro y medio. Ver [Marcha.alcanzable_de_verdad].
+		if not marcha.alcanzable_de_verdad(person.position, paraje.position):
 			continue
 		# Adonde ya va otro, no se va: la batida es cosa de uno, y dos
 		# batidores resolviendo la misma incognita es una jornada tirada.

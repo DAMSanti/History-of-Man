@@ -103,6 +103,13 @@ func _scout_target(person: Inhabitant) -> Vector3:
 ## medio, en pocas jornadas cubre el circulo entero por simple variacion.
 const BATIDA_RADIUS := 380.0
 
+## Cuanto se le consiente pasarse del radio antes de traerlo de vuelta.
+##
+## Un cuarto de margen: batir el borde de un sitio que esta en el filo del
+## alcance saca a cualquiera un poco fuera, y traerlo por eso seria una correa
+## demasiado corta. Pendiente de playtest.
+const SE_PASA_DE_LA_RAYA := 1.25
+
 
 ## Cuántas batidas lleva cada cual. Por persona, para que dos batidores no
 ## salgan el mismo día a lo mismo.
@@ -128,6 +135,28 @@ var _batidas: Dictionary = {}
 ## trabajo. Ver [Traversal.en_llano].
 func _batida_target(person: Inhabitant) -> Vector3:
 	_batidas[person.id] = int(_batidas.get(person.id, 0)) + 1
+
+	# NO SE SUELTA UN SITIO HASTA DEJARLO SIN «???».
+	#
+	# Una batida dura media jornada —ver `_survey_hours_for`— asi que cada
+	# batidor sale dos veces al dia, y volver a elegir en cada salida le hacia
+	# cambiar de paraje a media tarde. Con dos batidores y la regla de no ir
+	# adonde ya va otro, los dos se iban turnando los mismos cuatro sitios: cada
+	# uno estaba yendo al mas cercano que tenia libre, y visto desde fuera era
+	# un ir y venir sin orden.
+	#
+	# «Lo que noto es que dan vueltas entre varios parajes sin orden. Tiene que
+	# ir de paraje mas cercano a mas lejano descubriendo ??».
+	#
+	# Asi que el sitio se hereda de la salida anterior mientras siga sirviendo:
+	# mientras exista, le queden incognitas y se llegue. El orden por cercania
+	# decide a que sitio se ENTRA; esto decide cuando se sale de el.
+	if not person.paraje_batido.is_empty() and sim.parajes != null:
+		var seguido := sim.parajes.por_id(person.paraje_batido)
+		if seguido != null and seguido.has_unknowns() and not seguido.resting \
+				and sim.marcha.alcanzable_de_verdad(
+					person.position, seguido.position):
+			return seguido.position
 
 	var pending := sim._paraje_to_survey(person)
 	if pending != null:
@@ -246,6 +275,11 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 			if not Traversal.is_passable(sim._terrain.get_slope_at(candidate),
 					sim._terrain.crossing_difficulty_at(candidate),
 					sim.has_boat, sim.has_bridge):
+				continue
+			# Y que no haya cauce de por medio: pisable no es alcanzable, y la
+			# otra orilla es las dos cosas menos la segunda. Ver
+			# [Marcha.cruza_el_agua].
+			if sim.marcha.cruza_el_agua(centre, candidate):
 				continue
 
 		# Un pelin de azar encima de lo conocido. Sin el, en cuanto dos sitios
@@ -532,6 +566,36 @@ func _survey(person: Inhabitant, hours: float) -> void:
 
 	if person.work_centre == Vector3.ZERO:
 		person.work_centre = person.position
+
+	# LA CORREA DE LA BATIDA, Y ES ABSOLUTA.
+	#
+	# Todo lo demas de aqui mide RODEOS -el camino contra la linea recta- y esa
+	# cuenta es relativa: una vez que alguien esta lejos, cualquier tramo suyo
+	# le sale de rodeo corto y nada le trae de vuelta. Medido con `BatidaProbe`:
+	# el destino a 292 m del abrigo y el batidor A 843, jornada tras jornada,
+	# «encima» de un paraje que esta a 226.
+	#
+	# Una batida sale despues de desayunar y duerme en casa: su radio es
+	# [BATIDA_RADIUS] y punto. Pasado eso no se sortea otro tramo, se vuelve al
+	# sitio que se vino a batir. Es lo que se pidio dicho al derecho: «lo que no
+	# quiero nunca es que se vayan mas lejos de lo necesario».
+	if person.current_speciality == Profession.Speciality.BATIDA 			and Traversal.en_llano(sim.home_position, person.position) 				> BATIDA_RADIUS * SE_PASA_DE_LA_RAYA:
+		var vuelvo := person.work_centre
+		if not person.paraje_batido.is_empty() and sim.parajes != null:
+			var suyo := sim.parajes.por_id(person.paraje_batido)
+			if suyo != null:
+				vuelvo = suyo.position
+		if Traversal.en_llano(sim.home_position, vuelvo) > BATIDA_RADIUS:
+			vuelvo = sim.home_position
+		sim.marcha._record_stuck(person, "se habia ido a %.0f m batiendo un sitio a %.0f m"
+			% [Traversal.en_llano(sim.home_position, person.position),
+				Traversal.en_llano(sim.home_position, vuelvo)])
+		person.route = PackedVector3Array()
+		person.route_step = 0
+		person.horas_en_el_tramo = 0.0
+		person.forage_target = vuelvo
+		sim.marcha._send_to(person, vuelvo)
+		return
 
 	# Se BATE la comarca: se da la vuelta al punto por tramos, subiendo al
 	# alto de al lado, bajando al arroyo, mirando el cortado.
@@ -843,16 +907,45 @@ func _next_survey_leg(person: Inhabitant) -> void:
 	#
 	# Medido con `BatidaProbe`: 48 % del tiempo andando contra 13 %
 	# reconociendo, y 0,6 hallazgos por batidor y jornada.
+	# Y EL CENTRO DE LA VUELTA ES EL PARAJE, NO DONDE SE ESTA.
+	#
+	# Se sorteaba alrededor de `work_centre`, y `work_centre` se mueve con la
+	# persona tramo a tramo: eso no es batir un sitio, es un paseo aleatorio sin
+	# correa, y se va. Medido con `BatidaProbe`: un batidor reconociendo a 791 m
+	# del abrigo con su paraje pendiente a CUARENTA Y SEIS, y dos jornadas
+	# seguidas con «encima: NO», o sea fuera de todo paraje. El alcance de una
+	# batida es [BATIDA_RADIUS]: 380 m.
+	#
+	# El sitio se toma de la chapa apuntada —ver [Inhabitant.paraje_batido]— y
+	# no de `_paraje_at`, que con las huellas solapadas devuelve el vecino mas
+	# antiguo y no aquel al que se vino.
 	var vuelta := SettlementSim.SURVEY_RADIUS
-	var aqui := sim._paraje_at(person.work_centre)
+	var centro := person.work_centre
+	var aqui: Paraje = null
+	if not person.paraje_batido.is_empty() and sim.parajes != null:
+		aqui = sim.parajes.por_id(person.paraje_batido)
+	if aqui == null:
+		aqui = sim._paraje_at(person.work_centre)
 	if aqui != null:
 		vuelta = aqui.extent
+		centro = aqui.position
 
-	for attempt in range(3):
+	# Mas intentos cuando hay sitio al que ceñirse: cada uno puede caerse por
+	# quedar fuera de la huella, y con tres se agotaban antes de dar con uno
+	# bueno; entonces caia al salto corto de abajo y el batidor se quedaba
+	# temblando en el borde.
+	var intentos := 8 if aqui != null else 3
+	for attempt in range(intentos):
 		# Al trozo de alrededor que menos se conozca: reconocer es rellenar
 		# los huecos del mapa, no dar vueltas por lo ya visto
-		var candidate := _least_known_around(person.work_centre,
-			vuelta * 0.45, vuelta, person)
+		var candidate := _least_known_around(centro, vuelta * 0.45, vuelta, person)
+
+		# Y que no se salga del sitio: si hay paraje, el tramo es SUYO. Sin
+		# esto la vuelta se centra bien pero el borde sigue mordiendo monte de
+		# fuera, y de tramo en tramo se acaba en el valle de al lado.
+		if aqui != null and aqui.huella != null and not aqui.huella.vacia() \
+				and not aqui.contains(candidate):
+			continue
 
 		# El camino se traza de nuevo. Es lo que suelta el hito viejo que
 		# tenia a la persona clavada donde llego: `next_waypoint` devuelve el
@@ -862,8 +955,23 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.forage_target = candidate
 		sim.marcha._send_to(person, candidate)
 
-		if not person.route.is_empty() \
+		# Que HAYA camino no basta: batiendo un paraje pegado al agua, la
+		# otra orilla está comunicada por un vado lejano y el tramo de
+		# doscientos metros se convierte en uno de mil contra el río. Ver
+		# [Marcha.merece_el_camino].
+		if sim.marcha.merece_el_camino(person, candidate) \
 				or candidate.distance_to(person.position) < sim.arrive_radius * 2.0:
+			return
+
+	# Si no ha salido ningun tramo bueno pero se estaba batiendo un sitio, se
+	# vuelve A SU CENTRO: es lo unico que se sabe seguro que esta dentro y al
+	# alcance, y bate el nucleo en vez de dejar a la persona en el borde.
+	if aqui != null:
+		person.route = PackedVector3Array()
+		person.route_step = 0
+		person.forage_target = aqui.position
+		sim.marcha._send_to(person, aqui.position)
+		if sim.marcha.merece_el_camino(person, aqui.position):
 			return
 
 	# Si de verdad no hay por donde salir, se bate lo que se tenga a mano en

@@ -97,6 +97,17 @@ func _parte(sim: Node) -> void:
 			continue
 		var pendiente: Paraje = sim._paraje_to_survey(p)
 		var encima: Paraje = sim._paraje_at(p.work_centre)
+		var mandado: Paraje = null
+		if not p.paraje_batido.is_empty() and sim.parajes != null:
+			mandado = sim.parajes.por_id(p.paraje_batido)
+		print("      centro a %4.0f m · destino a %4.0f m · mandado a %s · dentro %s" % [
+			Traversal.en_llano(sim.home_position, p.work_centre),
+			Traversal.en_llano(sim.home_position, p.target),
+			"ninguno" if mandado == null else "%s (%.0f m, huella %d celdas)" % [
+				mandado.name_text,
+				Traversal.en_llano(sim.home_position, mandado.position),
+				0 if mandado.huella == null else mandado.huella.celdas().size()],
+			"SI" if mandado != null and mandado.contains(p.position) else "no"])
 		print("   %-9s %-14s %-13s a %4.0f m · pendiente: %-22s · encima: %s" % [
 			p.given_name.substr(0, 9),
 			Profession.speciality_name(p.current_speciality as Profession.Speciality),
