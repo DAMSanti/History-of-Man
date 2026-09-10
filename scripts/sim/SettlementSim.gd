@@ -1691,6 +1691,24 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 					person.begin_journey("Batida", day, hour,
 						home_position)
 				person.state = Inhabitant.State.YENDO
+			elif not _at_shelter(person):
+				# SIN CAMINO Y LEJOS DE CASA: SE VUELVE.
+				#
+				# Sin esto no pasaba NADA —ni ruta ni cambio de estado— asi que
+				# quien estuviera parado en mitad del monte se quedaba ahi. Y
+				# se quedaba de verdad: medido con `BatidaProbe` en una tirada
+				# de un año, Jara se planta ociosa a 399 m del abrigo la jornada
+				# 49 y sigue en el mismo punto, al metro, TREINTA JORNADAS
+				# despues. Ni bate, ni vuelve, ni come.
+				#
+				# Volver a casa siempre es una salida: desde el campamento se
+				# vuelve a decidir con la rejilla y la estacion del dia
+				# siguiente, y una batida que no encuentra destino hoy lo
+				# encuentra manana.
+				marcha._record_stuck(person,
+					"sin camino a ningun sitio que batir, se vuelve al abrigo")
+				marcha._send_to(person, home_position)
+				person.state = Inhabitant.State.VOLVIENDO
 	elif person.job == Profession.Job.EXPLORACION:
 		# Expedicion y ascension: se sale varios dias y hace falta
 		# avituallar. El explorador no tiene tajo fijo: su destino
@@ -3185,8 +3203,15 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 		if paraje.distance_from(home_position) > alcance:
 			continue
 		# Comunicado no es alcanzable: la otra orilla lo está, por un vado a
-		# kilómetro y medio. Ver [Marcha.alcanzable_de_verdad].
-		if not marcha.alcanzable_de_verdad(person.position, paraje.position):
+		# kilómetro y medio.
+		#
+		# Con MEMORIA, y desde el abrigo: esto se pregunta por CADA paraje con
+		# incognitas cada vez que alguien decide su salida, y con medio centenar
+		# de parajes son medio centenar de busquedas enteras. La decision se toma
+		# en el campamento —es de donde se sale— asi que la pregunta buena es
+		# «¿se llega desde casa?», que ademas es la que ya esta guardada. Ver
+		# [Marcha.alcanzable_desde_casa].
+		if not marcha.alcanzable_desde_casa(paraje.position):
 			continue
 		# Adonde ya va otro, no se va: la batida es cosa de uno, y dos
 		# batidores resolviendo la misma incognita es una jornada tirada.

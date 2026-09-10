@@ -14,7 +14,13 @@ const SITE_ID := 56
 
 
 func _init() -> void:
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	# SIN VENTANA SI SE PIDE. Una tirada de un año son horas: con ventana
+	# secuestra la pantalla y va soltando los avisos del juego —«un sitio con
+	# nombre», y su botón— que hay que ir quitando a mano. Esto no es una
+	# captura: no hay nada que mirar, solo cuentas, y las cuentas salen igual
+	# sin pintar nada. Ver `--headless`.
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	var sim := await _arrancar()
 	if sim == null:

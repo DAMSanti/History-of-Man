@@ -655,8 +655,14 @@ func _survey(person: Inhabitant, hours: float) -> void:
 				vuelvo = suyo.position
 				porque = "batiendo %s se habia ido %.0f m fuera de el" % [
 					suyo.name_text, fuera]
-		# Y sin sitio —peinando monte— la correa sigue siendo la de casa.
-		elif Traversal.en_llano(sim.home_position, person.position) 				> SettlementSim.RADIO_DE_JORNADA:
+		# Y sin sitio —peinando monte— la correa es la del PEINADO, que es lo
+		# que [BATIDA_RADIUS] quiere decir: la vuelta corta alrededor del
+		# campamento. Con la de jornada —novecientos, la de ir a un sitio que ya
+		# se conoce— se consentia deambular hasta 900 m sin estar batiendo nada,
+		# y ahi es donde se perdian: medido en un año, tres jornadas seguidas
+		# «reconociendo» a 156, 270 y 338 m sin estar encima de ningun paraje, y
+		# a la cuarta plantada.
+		elif Traversal.en_llano(sim.home_position, person.position) 				> BATIDA_RADIUS * SE_PASA_DE_LA_RAYA:
 			vuelvo = sim.home_position
 			porque = "peinando monte se habia ido a %.0f m del abrigo" % 				Traversal.en_llano(sim.home_position, person.position)
 
