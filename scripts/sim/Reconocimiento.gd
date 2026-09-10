@@ -103,11 +103,11 @@ func _scout_target(person: Inhabitant) -> Vector3:
 ## medio, en pocas jornadas cubre el circulo entero por simple variacion.
 const BATIDA_RADIUS := 380.0
 
-## Cuanto se le consiente pasarse del radio antes de traerlo de vuelta.
+## Cuanto se le consiente salirse del sitio antes de traerlo de vuelta.
 ##
-## Un cuarto de margen: batir el borde de un sitio que esta en el filo del
-## alcance saca a cualquiera un poco fuera, y traerlo por eso seria una correa
-## demasiado corta. Pendiente de playtest.
+## Un cuarto de margen sobre el radio del paraje: batir su borde saca a
+## cualquiera un poco fuera, y traerlo por eso seria una correa demasiado
+## corta. Pendiente de playtest.
 const SE_PASA_DE_LA_RAYA := 1.25
 
 
@@ -167,9 +167,22 @@ func _batida_target(person: Inhabitant) -> Vector3:
 
 	# Sin incógnitas pendientes al alcance, se peina el entorno buscando
 	# sitios nuevos: es lo único que queda por hacer aquí cerca.
+	#
+	# Y AQUI TAMBIEN SE MIRA EL CAMINO. Este es el plan B, y un plan B que
+	# manda a alguien a estrellarse es peor que no tenerlo: `_least_known_around`
+	# ya descarta lo que tiene el cauce de por medio en linea recta, pero un
+	# punto puede estar seco, sin agua en la recta, y aun asi pedir un rodeo que
+	# no se anda. Se prueban varios y se coge el primero que merezca el camino.
 	person.paraje_batido = ""
-	return _least_known_around(sim.home_position, BATIDA_RADIUS * 0.35,
-		BATIDA_RADIUS, person)
+	var suelto := sim.home_position
+	for intento in range(4):
+		var candidato := _least_known_around(sim.home_position,
+			BATIDA_RADIUS * 0.35, BATIDA_RADIUS, person)
+		sim.marcha._send_to(person, candidato)
+		if sim.marcha.merece_el_camino(person, candidato):
+			return candidato
+		suelto = candidato
+	return suelto
 
 
 ## Cuantos sitios se miran antes de elegir adonde batir.
@@ -616,26 +629,45 @@ func _survey(person: Inhabitant, hours: float) -> void:
 	# «encima» de un paraje que esta a 226.
 	#
 	# Una batida sale despues de desayunar y duerme en casa: su radio es
-	# [BATIDA_RADIUS] y punto. Pasado eso no se sortea otro tramo, se vuelve al
+	# [SettlementSim.RADIO_DE_JORNADA] —el mismo hasta donde se va a un tajo,
+	# porque es la misma pregunta— y punto. Pasado eso no se sortea otro tramo,
+	# se vuelve al
 	# sitio que se vino a batir. Es lo que se pidio dicho al derecho: «lo que no
 	# quiero nunca es que se vayan mas lejos de lo necesario».
-	if person.current_speciality == Profession.Speciality.BATIDA 			and Traversal.en_llano(sim.home_position, person.position) 				> BATIDA_RADIUS * SE_PASA_DE_LA_RAYA:
-		var vuelvo := person.work_centre
+	if person.current_speciality == Profession.Speciality.BATIDA:
+		var vuelvo := Vector3.ZERO
+		var porque := ""
+
+		# LA CORREA VA AL SITIO QUE SE ESTA BATIENDO, no al abrigo.
+		#
+		# Atada al abrigo no sirve: batiendo un paraje a 227 m, el batidor se
+		# plantaba a 818 —medido con `BatidaProbe`, jornadas 4 a 6, y dos dias
+		# seguidos sin resolver una sola incognita— y la correa del abrigo no
+		# se enteraba porque 818 cabe de sobra en el radio de jornada. Lo que
+		# esta mal no es estar lejos de casa: es estar lejos DEL SITIO al que
+		# se ha venido, que es donde estan las «???».
+		var suyo: Paraje = null
 		if not person.paraje_batido.is_empty() and sim.parajes != null:
-			var suyo := sim.parajes.por_id(person.paraje_batido)
-			if suyo != null:
+			suyo = sim.parajes.por_id(person.paraje_batido)
+		if suyo != null:
+			var fuera := Traversal.en_llano(suyo.position, person.position)
+			if fuera > suyo.extent * SE_PASA_DE_LA_RAYA:
 				vuelvo = suyo.position
-		if Traversal.en_llano(sim.home_position, vuelvo) > BATIDA_RADIUS:
+				porque = "batiendo %s se habia ido %.0f m fuera de el" % [
+					suyo.name_text, fuera]
+		# Y sin sitio —peinando monte— la correa sigue siendo la de casa.
+		elif Traversal.en_llano(sim.home_position, person.position) 				> SettlementSim.RADIO_DE_JORNADA:
 			vuelvo = sim.home_position
-		sim.marcha._record_stuck(person, "se habia ido a %.0f m batiendo un sitio a %.0f m"
-			% [Traversal.en_llano(sim.home_position, person.position),
-				Traversal.en_llano(sim.home_position, vuelvo)])
-		person.route = PackedVector3Array()
-		person.route_step = 0
-		person.horas_en_el_tramo = 0.0
-		person.forage_target = vuelvo
-		sim.marcha._send_to(person, vuelvo)
-		return
+			porque = "peinando monte se habia ido a %.0f m del abrigo" % 				Traversal.en_llano(sim.home_position, person.position)
+
+		if vuelvo != Vector3.ZERO:
+			sim.marcha._record_stuck(person, porque)
+			person.route = PackedVector3Array()
+			person.route_step = 0
+			person.horas_en_el_tramo = 0.0
+			person.forage_target = vuelvo
+			sim.marcha._send_to(person, vuelvo)
+			return
 
 	# Se BATE la comarca: se da la vuelta al punto por tramos, subiendo al
 	# alto de al lado, bajando al arroyo, mirando el cortado.

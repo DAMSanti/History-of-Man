@@ -74,7 +74,7 @@ func _rank_known_spots() -> void:
 				# vuelta y nunca el coto de kilometro y medio para el que se les
 				# habia cargado la mochila.
 				if distance > (SettlementSim.CAZA_LEJOS_M if act == Subsistence.Activity.CAZA
-						else 900.0):
+						else SettlementSim.RADIO_DE_JORNADA):
 					continue
 
 				# Y QUE SE PUEDA LLEGAR HOY. No se ofrece como tajo un sitio

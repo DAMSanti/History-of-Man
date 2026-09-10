@@ -129,6 +129,22 @@ const CANSA_DE_NOCHE := 1.6
 ## Horas utiles de trabajo en una jornada, descontando la parada
 const HORAS_UTILES := (HORA_REGRESO - HORA_SALIDA) - (HORA_FIN_MEDIODIA - HORA_MEDIODIA)
 
+## Hasta donde se va a trabajar y se vuelve a dormir a casa, en metros.
+##
+## Novecientos. Estaba escrito a pelo dentro de `Tajo._rank_known_spots` con su
+## razon al lado —«hay que ir, trabajar y volver antes de que anochezca»— y es
+## la misma pregunta que se hace la batida, asi que tiene que ser el mismo
+## numero y no dos.
+##
+## No sale de una cuenta y no puede salir: con [HORAS_UTILES] y la velocidad
+## nominal darian quince kilometros, porque `Marcha.hours_to_walk` estima en
+## llano y de vacio, y una jornada de verdad va cargada y por ladera. Este es de
+## los de playtest.
+##
+## La caza no se rige por esto: sale avituallada y duerme donde caza. Ver
+## [CAZA_LEJOS_M].
+const RADIO_DE_JORNADA := 900.0
+
 ## Velocidad de la gente en llano, de vacio y por pasto, en unidades de mundo
 ## por segundo. Es la referencia: sobre ella actuan pendiente, suelo y carga.
 ##
@@ -3144,9 +3160,22 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 	# que un paraje mas alla de su radio no es un destino: es una jornada
 	# entera andando para volver sin nada. La expedicion si puede ir, y por eso
 	# no lleva tope.
+	#
+	# EL RADIO DE JORNADA, NO EL DE LA BATIDA. Son dos cosas que se llamaban
+	# igual y no lo son: [Reconocimiento.BATIDA_RADIUS] es hasta donde se PEINA
+	# monte sin nombre —una vuelta corta alrededor del campamento— y esto es
+	# hasta donde se VA A UN SITIO QUE YA SE CONOCE, que es la misma pregunta
+	# que se hace el reparto de tajos y por tanto el mismo numero.
+	#
+	# Usando el de peinar, un paraje a 386 m quedaba fuera por seis metros: la
+	# batida se quedaba sin destino, caia al plan B —peinar monte— y se ponia a
+	# dar vueltas. Es la queja, y con la cifra puesta: «ha descubierto
+	# totalmente los parajes hasta los 364 m, pero el siguiente, 386 m, ya no
+	# ha ido a por el, y ha empezado a hacer rutas extrañas, otra vez contra el
+	# rio».
 	var alcance := INF
 	if person.current_speciality == Profession.Speciality.BATIDA:
-		alcance = Reconocimiento.BATIDA_RADIUS
+		alcance = RADIO_DE_JORNADA
 
 	var best: Paraje = null
 	var best_score := -INF

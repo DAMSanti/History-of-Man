@@ -97,6 +97,17 @@ func _parte(sim: Node) -> void:
 			continue
 		var pendiente: Paraje = sim._paraje_to_survey(p)
 		var encima: Paraje = sim._paraje_at(p.work_centre)
+		# EL PLAN B: cuando no hay paraje pendiente se peina monte sin nombre.
+		# Si el destino esta al otro lado del agua o el camino da la vuelta, se
+		# ve aqui.
+		if p.paraje_batido.is_empty():
+			var recto: float = Traversal.en_llano(p.position, p.target)
+			var ruta: PackedVector3Array = p.route
+			var largo: float = sim.marcha.largo_de(p.position, ruta)
+			print("      PLAN B (sin paraje) · destino a %.0f m del abrigo · recto %.0f m · camino %.0f m (x%.1f)%s" % [
+				Traversal.en_llano(sim.home_position, p.target), recto, largo,
+				largo / maxf(recto, 1.0),
+				" · CRUZA EL AGUA" if sim.marcha.cruza_el_agua(p.position, p.target) else ""])
 		var mandado: Paraje = null
 		if not p.paraje_batido.is_empty() and sim.parajes != null:
 			mandado = sim.parajes.por_id(p.paraje_batido)

@@ -1371,7 +1371,8 @@ func test_la_batida_no_persigue_un_paraje_fuera_de_alcance() -> void:
 	(cerca.contents[0] as Dictionary)["sabido"] = true
 
 	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
-		Materia.Kind.CARNE, sim.home_position + Vector3(900.0, 0.0, 0.0), 1)
+		Materia.Kind.CARNE,
+		sim.home_position + Vector3(SettlementSim.RADIO_DE_JORNADA * 2.0, 0.0, 0.0), 1)
 	lejos.contents = {}
 	for i in range(3):
 		lejos.contents[i] = {"abundancia": 0.5, "sabido": false}
@@ -1382,7 +1383,7 @@ func test_la_batida_no_persigue_un_paraje_fuera_de_alcance() -> void:
 	batidor.current_speciality = Profession.Speciality.BATIDA
 	sim.people = [batidor]
 
-	assert_true(lejos.distance_from(sim.home_position) > Reconocimiento.BATIDA_RADIUS,
+	assert_true(lejos.distance_from(sim.home_position) > SettlementSim.RADIO_DE_JORNADA,
 		"el lejano tiene que estar de verdad fuera del alcance de una batida")
 	assert_eq(sim._paraje_to_survey(batidor), cerca,
 		"la batida va al que alcanza, no al que mas le falta por saber")
@@ -1399,7 +1400,8 @@ func test_la_expedicion_si_va_al_paraje_lejano() -> void:
 		(cerca.contents[clave] as Dictionary)["sabido"] = true
 
 	var lejos := Paraje.create(2, 2, Subsistence.Activity.CAZA,
-		Materia.Kind.CARNE, sim.home_position + Vector3(900.0, 0.0, 0.0), 1)
+		Materia.Kind.CARNE,
+		sim.home_position + Vector3(SettlementSim.RADIO_DE_JORNADA * 2.0, 0.0, 0.0), 1)
 	lejos.contents = {}
 	for i in range(3):
 		lejos.contents[i] = {"abundancia": 0.5, "sabido": false}
