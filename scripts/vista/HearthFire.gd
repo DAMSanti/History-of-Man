@@ -30,10 +30,14 @@ func setup(sim: SettlementSim, terrain: TerrainGenerator, where: Vector3) -> voi
 
 
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: fuego del hogar")
 	if _sim == null or _fire == null:
+		Cronometro.cierra("vista: fuego del hogar")
 		return
 	# Construido: se ven las piedras y los leños. Encendido: además arde. Es la
 	# misma diferencia que lleva la simulación, y ahora se ve sin abrir nada.
 	var built: bool = _sim.camp_built.get(CampProjects.Kind.HOGAR, false)
 	visible = built
 	_fire.lit = built and _sim.hearth_lit
+	Cronometro.cierra("vista: fuego del hogar")
+

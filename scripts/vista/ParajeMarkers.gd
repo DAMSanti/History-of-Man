@@ -264,7 +264,9 @@ func _paint(holder: Node3D, paraje: Paraje) -> void:
 ## Oculta el rótulo de los que quedan lejos: con veinte parajes a la vista, el
 ## mapa se vuelve una sopa de letras.
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: chapas de parajes")
 	if _camera == null:
+		Cronometro.cierra("vista: chapas de parajes")
 		return
 
 	# La escala va CADA fotograma: es lo que el ojo nota si se retrasa, porque
@@ -273,6 +275,7 @@ func _process(_delta: float) -> void:
 	_scale_markers()
 
 	if Engine.get_process_frames() % 12 != 0:
+		Cronometro.cierra("vista: chapas de parajes")
 		return
 
 	# La baliza se pone y se quita AL INSTANTE. Refrescarla solo al cerrar la
@@ -290,6 +293,9 @@ func _process(_delta: float) -> void:
 
 ## Tamaño de la chapa en píxeles. Alta y estrecha porque es un alfiler, no
 ## un disco: cabeza arriba, punta abajo.
+	Cronometro.cierra("vista: chapas de parajes")
+
+
 const PIN_WIDTH := 72
 const PIN_HEIGHT := 94
 

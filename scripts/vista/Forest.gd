@@ -573,10 +573,13 @@ func _card_mesh() -> ArrayMesh:
 ## principio porque son dos triángulos cada uno y tienen que estar SIEMPRE, que
 ## es de lo que va este sistema.
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: bosque")
 	if _stands.is_empty() or _library == null:
+		Cronometro.cierra("vista: bosque")
 		return
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
+		Cronometro.cierra("vista: bosque")
 		return
 	var eye := camera.global_position
 	var centre := Vector2i(int(floor(eye.x / BLOCK_M)),
@@ -594,6 +597,7 @@ func _process(_delta: float) -> void:
 		if _pending.is_empty():
 			break
 		_build_block(_pending.pop_front())
+	Cronometro.cierra("vista: bosque")
 
 
 func _replan() -> void:

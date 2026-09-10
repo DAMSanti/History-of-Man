@@ -225,6 +225,7 @@ func show_tech_video(tech_kind: TechTree.Tech) -> void:
 ## que no habia nada. Se refresca cada segundo, que es de sobra para datos que
 ## cambian por jornadas y no cuesta nada.
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("interfaz (GameUI)")
 	# El reloj sí va a ritmo de pantalla: es lo único que cambia continuamente
 	# y verlo saltar de hora en hora se lee como que el juego se ha colgado.
 	barra._update_clock()
@@ -239,6 +240,7 @@ func _process(_delta: float) -> void:
 	# cambia de ESTRUCTURA -un material nuevo en el almacén, un crío que
 	# cumple años y entra en los oficios-.
 	if Engine.get_process_frames() % 30 != 0:
+		Cronometro.cierra("interfaz (GameUI)")
 		return
 	for id: String in _windows.keys():
 		var frame: Control = _windows[id]
@@ -299,6 +301,9 @@ func _process(_delta: float) -> void:
 
 ## Lo que queda por atender. Se encolan: en una jornada pueden bautizarse dos
 ## parajes a la vez, y tragarse el segundo sería peor que no avisar de ninguno.
+	Cronometro.cierra("interfaz (GameUI)")
+
+
 var _moments: Array[Moment] = []
 var _moment_card: Control
 

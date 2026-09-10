@@ -303,9 +303,11 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("terreno (trozos)")
 	if _regenerate_queued:
 		_regenerate_queued = false
 		generate()
+	Cronometro.cierra("terreno (trozos)")
 
 
 func _queue_regenerate() -> void:

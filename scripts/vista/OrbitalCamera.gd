@@ -108,6 +108,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("camara")
 	var input_dir := Vector3.ZERO
 	
 	# Movimiento con teclas directas (más confiable)
@@ -162,6 +163,9 @@ func _process(delta: float) -> void:
 ##
 ## Las escenas siguen razonando en terminos del mundo entero -"de un centesimo
 ## del mapa a dos veces el mapa"- y el recorte se decide en un solo sitio.
+	Cronometro.cierra("camara")
+
+
 func set_distance_limits(full_near: float, full_far: float) -> void:
 	var near := maxf(full_near, 0.01)
 	var far := maxf(full_far, near * 1.01)

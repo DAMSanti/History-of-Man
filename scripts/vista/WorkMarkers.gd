@@ -49,7 +49,9 @@ func setup(camera: Camera3D, sim: SettlementSim) -> void:
 
 
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: marcas de trabajo")
 	if _sim == null:
+		Cronometro.cierra("vista: marcas de trabajo")
 		return
 	# La cámara ACTIVA, no la que se pasó al montar. La partida tiene una sola,
 	# pero las sondas montan la suya para mirar de cerca, y con la guardada el
@@ -58,6 +60,7 @@ func _process(_delta: float) -> void:
 	if camera == null:
 		camera = _camera
 	if camera == null:
+		Cronometro.cierra("vista: marcas de trabajo")
 		return
 
 	var alive := {}
@@ -76,6 +79,7 @@ func _process(_delta: float) -> void:
 			continue
 		(_badges[id]["holder"] as Node).queue_free()
 		_badges.erase(id)
+	Cronometro.cierra("vista: marcas de trabajo")
 
 
 func _update(person: Inhabitant, work: Dictionary, origin: Vector3) -> void:

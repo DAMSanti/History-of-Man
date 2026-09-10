@@ -519,6 +519,80 @@ func _can_step_into(world_position: Vector3) -> bool:
 const RODEO_QUE_SE_ANDA := 2.5
 
 
+## Lo mismo, pero DESDE EL ABRIGO y con memoria.
+##
+## `alcanzable_de_verdad` cuesta una busqueda entera, y la pregunta «¿se llega a
+## esta celda desde casa?» se hace a puñados: el repaso de rezagados barre las
+## 4.096 celdas del campo por cada uno de los cinco oficios y pregunta por toda
+## candidata que pase el liston. Medido con `PicoProbe`: 1.233 busquedas en 107
+## segundos, 22,7 ms cada una, 28 de los 67 segundos que se van en tirones.
+##
+## La respuesta no cambia hasta que cambia la rejilla —o sea con la estacion,
+## ver [HornoDeRejillas]— asi que se guarda por celda de rejilla. Una celda son
+## cuarenta metros: dos puntos de la misma celda tienen la misma respuesta, y
+## eso reduce cuatro mil preguntas a las pocas decenas de celdas que de verdad
+## se miran.
+func alcanzable_desde_casa(punto: Vector3) -> bool:
+	var grid := _navgrid()
+	if grid == null or not grid.is_ready():
+		return true
+	# La memoria se tira entera cuando cambia la rejilla: comparar la instancia
+	# basta, el horno entrega una nueva por temporada.
+	if _memoria_de != grid:
+		_memoria_de = grid
+		_memoria.clear()
+	var celda := grid.nearest_open(punto)
+	if celda < 0:
+		return false
+	if _memoria.has(celda):
+		return bool(_memoria[celda])
+
+	# Y UN PRESUPUESTO POR CUADRO.
+	#
+	# La memoria quita las preguntas repetidas, pero la primera vez que se
+	# barre el campo hay decenas de celdas nuevas y cada una cuesta una
+	# busqueda de veinticuatro milisegundos: veintiseis en un cuadro son
+	# seiscientos treinta y cinco, y eso es un tiron por si solo. Medido con
+	# `PicoProbe`.
+	#
+	# Agotado el presupuesto se contesta con lo barato —estar en la misma zona
+	# de la rejilla— y NO SE GUARDA, para que la respuesta buena se calcule en
+	# el cuadro siguiente. Lo que se pierde es que un sitio al otro lado de un
+	# vado lejano puede colarse un momento; lo que se gana es que la jornada no
+	# se para. Y quien de verdad decide si se va —ver `merece_el_camino`—
+	# vuelve a mirar el camino entero antes de mandar a nadie.
+	if _quedan_caminos <= 0:
+		return grid.connected(sim.home_position, punto)
+	_quedan_caminos -= 1
+
+	var respuesta := alcanzable_de_verdad(sim.home_position, punto)
+	_memoria[celda] = respuesta
+	return respuesta
+
+
+## Cuantas busquedas caras quedan en este cuadro. Ver [alcanzable_desde_casa].
+var _quedan_caminos: int = CAMINOS_POR_CUADRO
+
+## Cuantas busquedas de «se llega desde casa» se consienten por cuadro.
+##
+## Cuatro: a veinticuatro milisegundos la pieza son unos cien de tope, que es
+## justo el limite que se pide —«todo lo que sea menor a 100 ms de momento me
+## vale»—. Pendiente de playtest, y de que el propio A* adelgace.
+const CAMINOS_POR_CUADRO := 4
+
+
+## Devuelve el presupuesto al empezar el cuadro.
+func nuevo_cuadro() -> void:
+	_quedan_caminos = CAMINOS_POR_CUADRO
+
+
+## Lo contestado ya, por celda de rejilla. Ver [alcanzable_desde_casa].
+var _memoria: Dictionary = {}
+
+## De que rejilla es esa memoria. Otra rejilla, otras respuestas.
+var _memoria_de: Navgrid = null
+
+
 ## Si a este punto se llega DE VERDAD desde aqui.
 ##
 ## No basta con que la rejilla los ponga en la misma zona: eso solo dice que hay

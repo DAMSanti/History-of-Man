@@ -455,10 +455,13 @@ func _resolve(spec: Dictionary) -> bool:
 ## SUS COORDENADAS -un sitio siempre da los mismos props, se vuelva cuando se
 ## vuelva-.
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: props de recursos")
 	if _specs.is_empty() or _field == null or _terrain == null:
+		Cronometro.cierra("vista: props de recursos")
 		return
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
+		Cronometro.cierra("vista: props de recursos")
 		return
 
 	var eye := camera.global_position
@@ -475,6 +478,9 @@ func _process(_delta: float) -> void:
 
 
 ## Decide que bloques deben existir y tira los que sobran.
+	Cronometro.cierra("vista: props de recursos")
+
+
 func _replan() -> void:
 	var reach := int(ceil(view_distance / BLOCK_M))
 	var keep: Dictionary = {}

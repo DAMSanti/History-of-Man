@@ -136,6 +136,7 @@ func show_weather(kind: Weather.Kind) -> void:
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("vista: tiempo")
 	# La caja viaja con la cámara. Sin esto habría que llenar de partículas
 	# toda la comarca para que lloviera donde miras, que es pagar veinte
 	# kilómetros de lluvia para ver doscientos metros.
@@ -165,6 +166,7 @@ func _process(delta: float) -> void:
 	if _haze and _haze.material:
 		(_haze.material as ShaderMaterial).set_shader_parameter(
 			"strength", _fog_now)
+	Cronometro.cierra("vista: tiempo")
 
 
 func _make_precipitation(tint: Color, gravity: Vector3, scale_m: float,

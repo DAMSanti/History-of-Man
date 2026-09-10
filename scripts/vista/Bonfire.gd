@@ -216,11 +216,14 @@ func _build_light() -> void:
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("vista: hoguera")
 	if _flames == null:
+		Cronometro.cierra("vista: hoguera")
 		return
 	_flames.visible = lit
 	_light.visible = lit
 	if not lit:
+		Cronometro.cierra("vista: hoguera")
 		return
 
 	_phase += delta * FLICKER_SPEED
@@ -228,3 +231,5 @@ func _process(delta: float) -> void:
 		+ sin(_phase * 2.7) * FLICKER_AMOUNT * 0.5
 	_light.light_energy = LIGHT_ENERGY * size * flicker
 	_flames.scale = Vector3(1.0, 0.88 + flicker * 0.16, 1.0)
+	Cronometro.cierra("vista: hoguera")
+

@@ -589,10 +589,13 @@ func _find_sim() -> Node:
 
 
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: entorno")
 	if not follow_time_of_day:
+		Cronometro.cierra("vista: entorno")
 		return
 	var sim := _find_sim()
 	if sim == null:
+		Cronometro.cierra("vista: entorno")
 		return
 	# `season_day` cuenta desde cero los días cumplidos de la estación; el
 	# cálculo del día del año los quiere desde uno.
@@ -600,6 +603,9 @@ func _process(_delta: float) -> void:
 
 
 ## Deja el sol clavado a la hora de `fixed_hour`, con el cielo que le toque.
+	Cronometro.cierra("vista: entorno")
+
+
 func _apply_fixed_sun() -> void:
 	if not _directional_light:
 		return

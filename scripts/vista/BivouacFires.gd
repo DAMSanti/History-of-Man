@@ -62,7 +62,9 @@ func setup(sim: SettlementSim, terrain: TerrainGenerator) -> void:
 
 
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: hogueras de vivac")
 	if _sim == null:
+		Cronometro.cierra("vista: hogueras de vivac")
 		return
 
 	# Quién tiene fuego esta noche: el que acampó fuera y llevaba leña. Ver
@@ -133,6 +135,9 @@ func _process(_delta: float) -> void:
 
 ## Cuántas hogueras hay encendidas ahora mismo. Para poder comprobarlo sin
 ## mirar la pantalla.
+	Cronometro.cierra("vista: hogueras de vivac")
+
+
 func lit_count() -> int:
 	var count := 0
 	for fire: Bonfire in _fires:

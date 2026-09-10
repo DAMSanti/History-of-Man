@@ -56,8 +56,10 @@ static var last_nodes: int = 0
 static func find(grid: Navgrid, from_point: Vector3,
 		to_point: Vector3) -> PackedVector3Array:
 	last_nodes = 0
+	Cronometro.tramo("A* (Wayfinder.find)")
 	var straight := PackedVector3Array([to_point])
 	if grid == null or not grid.is_ready():
+		Cronometro.cierra("A* (Wayfinder.find)")
 		return straight
 
 	# El destino se amarra a suelo pisable ANTES del atajo de «esta al lado, ve
@@ -68,6 +70,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 	if grid.cost[grid.cell_of(to_point)] <= Navgrid.BLOCKED:
 		var dry := grid.nearest_open(to_point)
 		if dry < 0:
+			Cronometro.cierra("A* (Wayfinder.find)")
 			return PackedVector3Array()
 		to_point = grid.point_of(dry)
 		straight = PackedVector3Array([to_point])
@@ -86,6 +89,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# «atascado».
 	var span := Vector2(to_point.x - from_point.x, to_point.z - from_point.z).length()
 	if span < Navgrid.CELL * 1.5 and _clear_line(grid, from_point, to_point):
+		Cronometro.cierra("A* (Wayfinder.find)")
 		return straight
 
 	# Los dos extremos se amarran a suelo pisable. El destino porque el jugador
@@ -95,16 +99,19 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# una celda inexistente y no se le podía trazar nada.
 	var start := grid.nearest_open(from_point)
 	if start < 0:
+		Cronometro.cierra("A* (Wayfinder.find)")
 		return PackedVector3Array()
 
 	var goal := grid.cell_of(to_point)
 	if start == goal:
+		Cronometro.cierra("A* (Wayfinder.find)")
 		return straight
 
 
 	# Y si están en zonas distintas del mapa, no hay camino y no hace falta
 	# buscarlo. Esto es lo que antes costaba doce mil nodos.
 	if grid.area[start] < 0 or grid.area[start] != grid.area[goal]:
+		Cronometro.cierra("A* (Wayfinder.find)")
 		return PackedVector3Array()
 
 	# El coste mínimo posible de una celda, para que la heurística no se pase.
@@ -172,6 +179,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 		closed[current] = 1
 		if current == goal:
 			last_nodes = visited
+			Cronometro.cierra("A* (Wayfinder.find)")
 			return _rebuild(came, current, start, grid, to_point)
 		visited += 1
 
@@ -242,6 +250,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 
 	# Se ha agotado la búsqueda sin llegar: NO hay camino.
 	last_nodes = visited
+	Cronometro.cierra("A* (Wayfinder.find)")
 	return PackedVector3Array()
 
 

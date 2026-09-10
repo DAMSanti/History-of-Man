@@ -112,13 +112,17 @@ func _montar() -> void:
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("vista: conchero")
 	if _sim == null or _sim.desechos == null:
+		Cronometro.cierra("vista: conchero")
 		return
 	_reloj += delta
 	if _reloj < CADA:
+		Cronometro.cierra("vista: conchero")
 		return
 	_reloj = 0.0
 	_crecer()
+	Cronometro.cierra("vista: conchero")
 
 
 func _crecer() -> void:

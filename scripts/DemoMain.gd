@@ -1189,8 +1189,11 @@ func _update_band_panel() -> void:
 func _process(_delta: float) -> void:
 	if sim == null:
 		return
+	Cronometro.abre_el_fotograma()
+	Cronometro.tramo_raiz("escena principal (DemoMain)")
 	var frame := Engine.get_process_frames()
 	if frame % 15 == 0:
+		Cronometro.tramo("cada 15: panel de banda + minimapa")
 		_update_band_panel()
 		minimapa._update_minimap()
 		_refresh_debug_label()
@@ -1198,18 +1201,28 @@ func _process(_delta: float) -> void:
 		# cuatro veces por segundo va sobrado, y la capa corta sola si no ha
 		# cambiado nada
 		_sync_weather()
+		Cronometro.cierra("cada 15: panel de banda + minimapa")
 	# El overlay del terreno se repinta mucho mas de tarde en tarde: lo que
 	# muestra es conocimiento acumulado, que crece a lo largo de jornadas, no
 	# de frames. Recorre las 4.096 celdas del campo, asi que hacerlo seguido
 	# seria pagar cada segundo por un dato que cambia cada dia de juego.
 	if _overlay_activity != OVERLAY_OFF and frame % 180 == 0:
+		Cronometro.tramo("cada 180: capa de recursos")
 		minimapa._refresh_resource_overlay()
+		Cronometro.cierra("cada 180: capa de recursos")
 	# Lo descubierto crece por jornadas, no por frames: revisarlo cuatro veces
 	# por segundo seria pagar todo el rato por un dato que casi nunca cambia
 	if frame % 90 == 0:
+		Cronometro.tramo("cada 90: hallazgos + niebla del minimapa")
 		_check_discoveries()
 		minimapa._refresh_minimap_fog()
+		Cronometro.cierra("cada 90: hallazgos + niebla del minimapa")
+	Cronometro.tramo("chapas de parajes")
 	_repintar_parajes()
+	Cronometro.cierra("chapas de parajes")
+	Cronometro.cierra("escena principal (DemoMain)")
+	Cronometro.cierra_el_fotograma("dia %d %02d:%02d" % [sim.day, int(sim.hour),
+		int(fmod(sim.hour, 1.0) * 60.0)])
 
 
 ## Cuantos parajes habia la ultima vez que se pintaron las chapas.

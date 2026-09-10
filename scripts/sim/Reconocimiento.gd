@@ -323,8 +323,11 @@ const DE_UNA_VUELTA := 1
 
 ## La prueba de «a este sitio se va de verdad», para pasarsela al bautizo.
 func _se_llega() -> Callable:
+	# Con memoria: la misma pregunta sale miles de veces en un barrido y la
+	# respuesta no cambia hasta que cambia la rejilla. Ver
+	# [Marcha.alcanzable_desde_casa].
 	return func(punto: Vector3) -> bool:
-		return sim.marcha.alcanzable_de_verdad(sim.home_position, punto)
+		return sim.marcha.alcanzable_desde_casa(punto)
 
 
 ## Recoge los sitios que se ganaron nombre y no llegaron a salir en su momento.
@@ -340,14 +343,51 @@ func repasar_rezagados() -> int:
 	var grid := sim.marcha._navgrid()
 	var mismo_trozo := func(a: Vector3, b: Vector3) -> bool:
 		return grid.connected(a, b)
-	var salieron := sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
-		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
-		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
-		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
-		Vector3.ZERO, 0.0, DE_UNA_VUELTA, _se_llega())
+	# UN OFICIO POR VUELTA, no los cinco.
+	#
+	# Esto barria las 4.096 celdas del campo POR CADA UNO de los cinco oficios,
+	# y corre a cada hora de luz. El propio `Parajes.refresh` avisa —«sin
+	# acotar, el barrido recorre las 4.096 celdas y hacerlo a cada hallazgo se
+	# comeria el rendimiento»— y este era justo quien no le hacia caso.
+	#
+	# Medido con `PicoProbe`: 665 ms POR LLAMADA, una llamada cada 0,83 s de
+	# reloj a velocidad 6. Es el tiron que se veia, dicho por el jugador antes
+	# que por la sonda: «cada segundo o asi llega algun frame de 1000 ms».
+	#
+	# Es una COLA, no una urgencia: lo que busca son sitios que se ganaron el
+	# nombre y no llegaron a salir. Repasar un oficio por hora los repasa los
+	# cinco cada cinco horas de luz, y una jornada tiene trece.
+	# Un oficio Y UNA FRANJA por vuelta. Con cinco oficios y cuatro franjas, el
+	# campo entero se repasa cada veinte horas de luz, o sea cada dia y medio
+	# largo. De sobra para una cola.
+	var turno := _de_quien_toca % TURNOS.size()
+	@warning_ignore("integer_division")
+	var trozo := (_de_quien_toca / TURNOS.size()) % FRANJAS
+	_de_quien_toca += 1
+	var alto := int(ceil(float(sim.field.height) / float(FRANJAS)))
+	var salieron := sim.parajes.refresh(sim.field, sim.knowledge, sim.day,
+		[TURNOS[turno]], sim._terrain, mismo_trozo,
+		Vector3.ZERO, 0.0, DE_UNA_VUELTA, _se_llega(),
+		Vector2i(trozo * alto, (trozo + 1) * alto))
 	if salieron > 0:
 		_contar_los_nuevos()
 	return salieron
+
+
+## Los oficios del repaso, en el orden en que se turnan.
+const TURNOS := [
+	Subsistence.Activity.RECOLECCION,
+	Subsistence.Activity.CAZA,
+	Subsistence.Activity.MATERIA_PRIMA,
+	Subsistence.Activity.PESCA,
+	Subsistence.Activity.MARISQUEO,
+]
+
+## En cuantos trozos se parte el campo para repasarlo.
+const FRANJAS := 4
+
+## A quien le toca el proximo repaso.
+var _de_quien_toca: int = 0
 
 
 ## Bautiza lo que se acabe de descubrir alrededor de un punto, EN EL MOMENTO.

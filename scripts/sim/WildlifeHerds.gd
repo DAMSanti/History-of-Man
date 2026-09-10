@@ -451,12 +451,15 @@ var sim: SettlementSim = null
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("fauna (manadas)")
 	if sim != null:
 		delta *= sim.time_scale
 	if delta <= 0.0:
+		Cronometro.cierra("fauna (manadas)")
 		return
 	_hop_phase += delta * TAU * HOP_SPEED
 	if _terrain == null:
+		Cronometro.cierra("fauna (manadas)")
 		return
 
 	for animal: Dictionary in _animals:
@@ -469,6 +472,9 @@ func _process(delta: float) -> void:
 ## Decide el ESTADO: huir manda sobre todo lo demás, luego cazar o beber,
 ## y vagando -que ya implica pastar, porque el destino sesga a la hierba- de
 ## sobra.
+	Cronometro.cierra("fauna (manadas)")
+
+
 func _think(animal: Dictionary, config: Dictionary, delta: float) -> void:
 	var diet: String = config["diet"]
 	animal["thirst"] = minf(100.0, float(animal["thirst"]) + delta * 0.9)

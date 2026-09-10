@@ -1010,15 +1010,23 @@ func _process(delta: float) -> void:
 	# pausa no adelantaria trabajo y al reanudar seguiria faltando la rejilla
 	# del trimestre que viene. Cuatro milisegundos por cuadro, ver
 	# [HornoDeRejillas.MS_POR_CUADRO].
+	Cronometro.tramo_raiz("simulacion (SettlementSim)")
+	marcha.nuevo_cuadro()
+	Cronometro.tramo("horno de rejillas")
 	horno.amasar()
+	Cronometro.cierra("horno de rejillas")
 	if people.is_empty() or _terrain == null or time_scale <= 0.0:
+		Cronometro.cierra("simulacion (SettlementSim)")
 		return
 	_pendiente += delta
 	var dados := 0
 	while _pendiente >= PASO_FIJO and dados < PASOS_POR_CUADRO:
 		_pendiente -= PASO_FIJO
 		dados += 1
+		Cronometro.tramo("paso de simulacion")
 		_advance(PASO_FIJO)
+		Cronometro.cierra("paso de simulacion")
+	Cronometro.cierra("simulacion (SettlementSim)")
 
 
 ## Un paso de simulacion. Siempre del mismo tamaño: ver [PASO_FIJO].
@@ -1034,7 +1042,9 @@ func _advance(delta: float) -> void:
 	if hour >= 24.0:
 		hour -= 24.0
 		day += 1
+		Cronometro.tramo("cierre de jornada")
 		_end_of_day()
+		Cronometro.cierra("cierre de jornada")
 		day_passed.emit(day)
 	# EL REPASO DE REZAGADOS, A CADA HORA DE LUZ Y NO A MEDIANOCHE.
 	#
@@ -1045,7 +1055,9 @@ func _advance(delta: float) -> void:
 	# luz, la cola se va vaciando mientras la banda trabaja, que es cuando se
 	# descubren las cosas.
 	elif int(hour) != hora_antes and hour >= HORA_DESPERTAR 			and hour < HORA_DORMIR:
+		Cronometro.tramo("repaso de rezagados")
 		reconocimiento.repasar_rezagados()
+		Cronometro.cierra("repaso de rezagados")
 
 
 	# El tick se parte en trozos para que acelerar no cambie el resultado: con

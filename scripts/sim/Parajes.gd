@@ -294,7 +294,8 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 		day: int, activities: Array, terrain: TerrainGenerator = null,
 		same_patch: Callable = Callable(),
 		centro: Vector3 = Vector3.ZERO, radio: float = 0.0,
-		tope: int = 0, se_llega: Callable = Callable()) -> int:
+		tope: int = 0, se_llega: Callable = Callable(),
+		franja: Vector2i = Vector2i(-1, -1)) -> int:
 	if field == null or knowledge == null:
 		return 0
 
@@ -306,7 +307,18 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 		# sin esto nacian "pastos" -parajes de caza- en cualquier celda con un
 		# roce de animales, que es la misma queja que en `fill_contents`.
 		var worth := maxf(WORTH_NAMING, threshold_for(activity))
-		for z in range(field.height):
+		# SOLO UNA FRANJA DE FILAS, si se pide.
+		#
+		# El barrido entero son 4.096 celdas y el repaso de rezagados lo hacia
+		# a cada hora de luz: 213 ms de tiron cada vez, medido con `PicoProbe`.
+		# Es una COLA, no una urgencia —busca sitios que se ganaron el nombre y
+		# no llegaron a salir—, asi que se puede repasar a trozos.
+		var desde_z := 0
+		var hasta_z := field.height
+		if franja.x >= 0:
+			desde_z = clampi(franja.x, 0, field.height)
+			hasta_z = clampi(franja.y, desde_z, field.height)
+		for z in range(desde_z, hasta_z):
 			for x in range(field.width):
 				if field.abundance_cell(activity, x, z) < worth:
 					continue

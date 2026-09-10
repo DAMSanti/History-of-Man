@@ -550,13 +550,16 @@ func _card_mesh() -> ArrayMesh:
 ## la cámara se mueva. Sin redondear, la pradera repta bajo tus pies al andar y
 ## se nota al instante.
 func _process(_delta: float) -> void:
+	Cronometro.tramo_raiz("vista: cubierta del suelo")
 	if _node == null or _terrain == null:
+		Cronometro.cierra("vista: cubierta del suelo")
 		return
 	if _bake_view != null:
 		_collect_albedo_bake()
 
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
+		Cronometro.cierra("vista: cubierta del suelo")
 		return
 
 	var eye := camera.global_position
@@ -607,6 +610,9 @@ func _process(_delta: float) -> void:
 
 ## A dónde mira la cámara, sobre el suelo. Unos pocos pasos contra la altura del
 ## terreno: no hace falta precisión, sólo saber dónde centrar la alfombra.
+	Cronometro.cierra("vista: cubierta del suelo")
+
+
 func _look_point(camera: Camera3D) -> Vector3:
 	var origin := camera.global_position
 	var direction := -camera.global_transform.basis.z

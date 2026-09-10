@@ -104,13 +104,16 @@ func following() -> String:
 
 
 func _process(delta: float) -> void:
+	Cronometro.tramo_raiz("vista: rastros")
 	# Se repinta solo mientras haya algo elegido. Sin esto habia que cerrar y
 	# abrir el panel para ver por donde iban ahora, que es justo la pregunta
 	# que uno se hace con el rastro delante.
 	if _job < 0 and not _solo_source.is_valid():
+		Cronometro.cierra("vista: rastros")
 		return
 	_since_redraw += delta
 	if _since_redraw < REDRAW_EVERY:
+		Cronometro.cierra("vista: rastros")
 		return
 	_since_redraw = 0.0
 	if _job >= 0:
@@ -125,6 +128,9 @@ func _process(delta: float) -> void:
 ## hay una sola linea y lo que se pregunta es la forma del recorrido completo
 ## -si repite querencia, si el lobo lo echo del prado-, no cual es el trecho
 ## de hoy.
+	Cronometro.cierra("vista: rastros")
+
+
 func _repaint_solo() -> void:
 	_wipe(_solo_lines)
 	var paths: Variant = _solo_source.call()

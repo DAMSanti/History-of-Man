@@ -5,6 +5,14 @@ extends CanvasLayer
 ## Los valores salen de la clase [Performance] del motor, no de contadores
 ## propios: son los mismos que ve el profiler del editor, así que sirven para
 ## comparar entre ejecuciones y para decidir dónde optimizar con datos.
+##
+## Y debajo, EL ÚLTIMO TIRÓN: qué se comió el fotograma malo.
+##
+## Los monitores del motor dan medias, y una media no encuentra un tirón —la
+## media está bien, ése es justo el problema—. La queja era «algunos frames
+## están aceptables, pero cada segundo o así llega alguno de 1000 ms», y para
+## eso hay que cazar EL FOTOGRAMA MALO y preguntarle qué hizo de más. De eso se
+## encarga [Cronometro], que sólo está encendido mientras este panel se ve.
 
 ## Cada cuánto se refresca el texto, en segundos. Refrescarlo cada frame haría
 ## que los números bailasen tanto que no se pueden leer.
@@ -23,6 +31,16 @@ extends CanvasLayer
 var _fps_label: Label
 var _detail_label: Label
 var _accumulator: float = 0.0
+
+## El peor fotograma visto desde que se abrió el panel, con su desglose.
+var _peor: Dictionary = {}
+
+## Y el último tirón, sea o no el peor: es el que dice si esto sigue pasando.
+var _ultimo: Dictionary = {}
+
+## Cuántos tirones van desde que se abrió el panel, y desde cuándo.
+var _tirones: int = 0
+var _desde: float = 0.0
 var _history: PackedFloat32Array = PackedFloat32Array()
 var _history_size: int = 0
 
@@ -33,6 +51,11 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_history_size = maxi(1, int(history_seconds / maxf(update_interval, 0.01)))
 	_build_ui()
+	# El cepo se enciende con el panel, tambien al arrancar: si no, el panel
+	# esta abierto y diciendo «sin tirones» porque nadie esta midiendo.
+	Cronometro.activo = visible
+	Cronometro.reinicia()
+	_desde = float(Time.get_ticks_msec()) / 1000.0
 	_refresh()
 
 
@@ -83,12 +106,24 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == toggle_key:
 			visible = not visible
+			# El cronometro cuesta un `if` por marca cuando esta apagado, pero
+			# marcas hay muchas: se enciende SOLO mientras se mira el panel.
+			Cronometro.activo = visible
+			Cronometro.reinicia()
+			_peor = {}
+			_ultimo = {}
+			_tirones = 0
+			_desde = float(Time.get_ticks_msec()) / 1000.0
 			get_viewport().set_input_as_handled()
 
 
 func _process(delta: float) -> void:
 	if not visible:
 		return
+
+	# Los tirones se recogen CADA FOTOGRAMA, no cada cuarto de segundo: si se
+	# leyeran al refrescar el texto se perderian justo los que se buscan.
+	_recoger_tirones()
 
 	_accumulator += delta
 	if _accumulator < update_interval:
@@ -122,8 +157,65 @@ func _refresh() -> void:
 		"draw calls %5d    triangulos %s" % [int(draw_calls), _format_count(primitives)],
 		"objetos    %5d    nodos %d" % [int(objects), int(nodes)],
 		"VRAM     %6.0f MB  RAM %.0f MB" % [vram, ram],
-		"F3 para ocultar"
-	])
+	] + _lineas_del_tiron() + ["F3 para ocultar"])
+
+
+## Se vacia la bandeja de picos que ha ido dejando [Cronometro].
+func _recoger_tirones() -> void:
+	if Cronometro.picos.is_empty():
+		return
+	for pico: Dictionary in Cronometro.picos:
+		_tirones += 1
+		_ultimo = pico
+		if float(pico["total"]) > float(_peor.get("total", 0.0)):
+			_peor = pico
+	Cronometro.picos.clear()
+
+
+## El desglose del tiron, para que se lea en el panel.
+##
+## Se enseña el PEOR y, si el ultimo fue otro, tambien el ultimo: uno dice
+## cuanto puede llegar a doler y el otro si sigue doliendo ahora mismo.
+func _lineas_del_tiron() -> Array:
+	if _peor.is_empty():
+		return ["", "cuadros  %d · medio %.0f ms · peor %.0f ms" % [
+				Cronometro.cuadros(), Cronometro.media_ms(), Cronometro.peor_ms()],
+			"sin tirones de mas de %.0f ms" % Cronometro.limite_ms]
+
+	var corridos := maxf(float(Time.get_ticks_msec()) / 1000.0 - _desde, 0.001)
+	var out: Array = [
+		"",
+		"cuadros  %d · medio %.0f ms · peor %.0f ms" % [
+			Cronometro.cuadros(), Cronometro.media_ms(), Cronometro.peor_ms()],
+		"TIRONES  %d en %.0f s (uno cada %.1f s)" % [
+			_tirones, corridos, corridos / float(_tirones)],
+		"el peor  %6.1f ms   %s" % [
+			float(_peor["total"]), String(_peor.get("etiqueta", ""))],
+	]
+	out += _desglose_de(_peor)
+	if not _ultimo.is_empty() and _ultimo != _peor:
+		out.append("el ultimo %5.1f ms   %s" % [
+			float(_ultimo["total"]), String(_ultimo.get("etiqueta", ""))])
+		out += _desglose_de(_ultimo)
+	return out
+
+
+## Los tramos de un pico, de mas caro a menos. Solo los que se notan: una lista
+## de quince renglones con doce a cero tapa la pantalla y no dice nada.
+func _desglose_de(pico: Dictionary) -> Array:
+	var out: Array = []
+	var total: float = maxf(float(pico["total"]), 0.001)
+	var puesto := 0
+	for tramo: Dictionary in (pico["desglose"] as Array):
+		var ms: float = float(tramo["ms"])
+		if ms < 1.0 or puesto >= 5:
+			break
+		puesto += 1
+		out.append("   %5.1f ms %3.0f %%  %s x%d" % [
+			ms, 100.0 * ms / total, String(tramo["tramo"]), int(tramo["veces"])])
+	if puesto == 0:
+		out.append("   (nada marcado: el tiron esta fuera de lo medido)")
+	return out
 
 
 func _fps_color(fps: float) -> Color:
