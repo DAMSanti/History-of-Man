@@ -1457,3 +1457,61 @@ func test_no_se_bautiza_lo_que_no_se_alcanza() -> void:
 	assert_eq(aislado.refresh(field, saber, 1, oficios, null, Callable(),
 		Vector3.ZERO, 0.0, 0, no_se_llega), 0,
 		"si no se llega desde el abrigo, no hay sitio que nombrar")
+
+
+## UN PARAJE DE SECO NO SALTA A LA ORILLA DE ENFRENTE.
+##
+## Es el fallo que el jugador vio antes que ninguna sonda: «mi problema con los
+## trabajadores alejándose y chocándose contra el río es por parajes que están
+## cortados por un río... el paraje no tendría que llegar más allá de donde
+## marca».
+##
+## El mecanismo estaba en el ORDEN de los pasos. `_solo_lo_pegado` —quedarse
+## con lo unido al centro— corría antes de `_tapar_claros`, y tapar claros
+## vuelve a meter celdillas: el cauce encerrado dentro de la mancha es un claro
+## para el tapador, y taparlo cose la otra orilla. El filtro de después quita el
+## agua otra vez, pero ya no volvía a preguntar si lo que queda sigue unido, así
+## que ese trozo de enfrente se quedaba dentro como una isla suelta. Y una isla
+## suelta es sitio de trabajo.
+##
+## [FakeTerrain] tiene un río de ochenta metros cruzando de este a oeste. Un
+## avellanar plantado justo en su orilla no puede contener ni una celdilla del
+## otro lado.
+func test_un_paraje_de_seco_no_cruza_el_rio() -> void:
+	var terrain := FakeTerrain.new()
+	# En la orilla misma: el centro seco, el cauce pegado al norte.
+	var centro := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z + FakeTerrain.RIVER_HALF + 20.0)
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.FRUTO_SECO, centro, 1)
+	var huella := Huella.de(paraje, null, terrain)
+
+	var enfrente := 0
+	for punto: Vector3 in huella.celdas():
+		# Al otro lado del cauce: el centro está al sur del río en z crecientes,
+		# así que enfrente es todo lo que quede pasado el agua.
+		if punto.z < FakeTerrain.RIVER_Z - FakeTerrain.RIVER_HALF:
+			enfrente += 1
+	assert_eq(enfrente, 0, "ni una celdilla en la orilla de enfrente")
+	assert_gt(huella.celdas().size(), 0, "y el sitio sigue existiendo")
+	terrain.free()
+
+
+## Y una pesquera sí sigue siendo el cauce, que es de lo que está hecha.
+##
+## La otra mitad de la misma regla, y la que impide arreglar aquello a lo bruto:
+## un paraje de pesca ES el río —ver `Huella._cuadra_el_terreno`— y cortarlo por
+## el agua lo deja sin sitio donde pescar. El primer intento de arreglo hizo
+## justo eso.
+func test_una_pesquera_conserva_su_cauce() -> void:
+	var terrain := FakeTerrain.new()
+	var centro := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z)
+	var paraje := Paraje.create(4, 4, Subsistence.Activity.PESCA,
+		Materia.Kind.PESCADO, centro, 1)
+	var huella := Huella.de(paraje, null, terrain)
+
+	var mojadas := 0
+	for punto: Vector3 in huella.celdas():
+		if terrain.crossing_difficulty_at(punto) > 0.05:
+			mojadas += 1
+	assert_gt(mojadas, 0, "una pesquera sin agua dentro no es una pesquera")
+	terrain.free()

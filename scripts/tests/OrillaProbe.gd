@@ -1,220 +1,117 @@
 extends SceneTree
-## «Anado gente a la pesca de orilla, pero no hacen nada.»
+## ¿Se puede llegar a la otra orilla, y por dónde?
 ##
-## Se reproduce tal cual: partida por defecto y, encima, ORILLA en prioridad
-## 1 a tres personas -que es lo que hace el jugador en la pestana Trabajos-.
-## Luego se mira, persona a persona, que oficio les toca y por que.
+## Duda del jugador: «mirando el mapa no deberían tener forma de llegar hasta
+## verano, a no ser que las 8 tiles del margen se cuenten para buscar caminos».
+##
+## Se coge la otra orilla enfrente del abrigo y se pregunta por ella: si la
+## rejilla la da por comunicada, se traza el camino y se mira POR DÓNDE cruza el
+## agua. Un paso por el borde del mapa saldría aquí como un camino que se va a
+## las tiles del margen antes de cruzar.
 
 const SITE_ID := 56
-const DAYS := 30
-
-var _scene: Node
-var _frames := 0
 
 
-func _initialize() -> void:
-	var set_res: SiteSet = load("res://data/sites/cantabria_sites.res")
-	var chosen: Site = null
-	for s: Site in set_res.sites:
+func _init() -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	Engine.max_fps = 0
+	var demo := await _arrancar()
+	if demo == null:
+		quit()
+		return
+	var sim: Node = demo.sim
+	sim.time_scale = 6.0
+	var primero: int = sim.day
+	while sim.day < primero + 2:
+		await process_frame
+
+	var grid: Navgrid = sim.marcha._navgrid()
+	var tam: Vector2 = Vector2(sim._terrain.terrain_size)
+	print("")
+	print("mapa %.0f x %.0f m · celda de rejilla %.0f m" % [tam.x, tam.y, Navgrid.CELL])
+	print("abrigo en (%.0f, %.0f)" % [sim.home_position.x, sim.home_position.z])
+
+	# Se barre en abanico alrededor del abrigo buscando puntos secos al otro
+	# lado del agua: los que hay que cruzar el rio para pisar.
+	var comunicados := 0
+	var alcanzables := 0
+	var mirados := 0
+	var ejemplo := Vector3.ZERO
+	for i in range(360):
+		var angulo := float(i) / 360.0 * TAU
+		for radio: float in [300.0, 500.0, 800.0, 1200.0]:
+			var punto: Vector3 = sim.home_position + Vector3(
+				cos(angulo) * radio, 0.0, sin(angulo) * radio)
+			if punto.x < 0.0 or punto.z < 0.0 or punto.x > tam.x or punto.z > tam.y:
+				continue
+			punto.y = sim._terrain.get_height_at(punto)
+			if not Hydrography.can_cross(
+					sim._terrain.crossing_difficulty_at(punto), false, false):
+				continue
+			if not sim.marcha.cruza_el_agua(sim.home_position, punto):
+				continue
+			mirados += 1
+			if grid.connected(sim.home_position, punto):
+				comunicados += 1
+				if ejemplo == Vector3.ZERO:
+					ejemplo = punto
+			if sim.marcha.alcanzable_de_verdad(sim.home_position, punto):
+				alcanzables += 1
+
+	print("")
+	print("puntos secos con el rio de por medio: %d" % mirados)
+	print("   que la rejilla da por COMUNICADOS: %d" % comunicados)
+	print("   que ademas son ALCANZABLES (rodeo <= x%.1f): %d" % [
+		Marcha.RODEO_QUE_SE_ANDA, alcanzables])
+
+	if ejemplo != Vector3.ZERO:
+		print("")
+		print("--- POR DONDE CRUZA EL CAMINO A UNO DE ELLOS ---")
+		var camino := Wayfinder.find(grid, sim.home_position, ejemplo)
+		var largo: float = sim.marcha.largo_de(sim.home_position, camino)
+		print("   destino a %.0f m en recta · camino de %.0f m (x%.1f)" % [
+			Traversal.en_llano(sim.home_position, ejemplo), largo,
+			largo / maxf(Traversal.en_llano(sim.home_position, ejemplo), 1.0)])
+		var antes: Vector3 = sim.home_position
+		for punto: Vector3 in camino:
+			if sim.marcha.cruza_el_agua(antes, punto):
+				var borde := minf(minf(punto.x, punto.z),
+					minf(tam.x - punto.x, tam.y - punto.z))
+				print("   cruza el agua en (%.0f, %.0f), a %.0f m del borde del mapa"
+					% [punto.x, punto.z, borde])
+				print("   o sea %s" % ("POR EL MARGEN DEL MAPA"
+					if borde < Navgrid.CELL * 8.0 else "por un vado de dentro"))
+				break
+			antes = punto
+	quit()
+
+
+func _arrancar() -> Node:
+	var local: HeightmapData = load("res://data/dem/local/site_%d.res" % SITE_ID)
+	var sites: SiteSet = load("res://data/sites/cantabria_sites.res")
+	if local == null or sites == null:
+		print("faltan los datos de relieve")
+		return null
+	var site: Site = null
+	for s: Site in sites.sites:
 		if s.id == SITE_ID:
-			chosen = s
-			break
-
-	var path := "res://data/dem/local/site_%d.res" % SITE_ID
-	var local: HeightmapData = load(path)
+			site = s
 	var size_m := local.get_world_size_meters()
 	var half := float(Expedition.local_size_m) * 0.5
-
-	Expedition.site = chosen
-	Expedition.heightmap_path = path
+	Expedition.site = site
+	Expedition.heightmap_path = "res://data/dem/local/site_%d.res" % SITE_ID
 	Expedition.sea_level_m = 0.0
 	Expedition.era = Site.Era.PALEOLITICO
 	Expedition.region_offset = Vector2(
-		clampf(local.u_for_lon(chosen.lon) * size_m.x - half, 0.0,
+		clampf(local.u_for_lon(site.lon) * size_m.x - half, 0.0,
 			maxf(size_m.x - half * 2.0, 0.0)),
-		clampf(local.v_for_lat(chosen.lat) * size_m.y - half, 0.0,
+		clampf(local.v_for_lat(site.lat) * size_m.y - half, 0.0,
 			maxf(size_m.y - half * 2.0, 0.0)))
-
-	_scene = (load("res://scenes/demo_main.tscn") as PackedScene).instantiate()
-	get_root().add_child(_scene)
-
-
-func _process(_delta: float) -> bool:
-	_frames += 1
-	if _frames < 15:
-		return false
-	_run()
-	return true
-
-
-func _run() -> void:
-	var sim: SettlementSim = _scene.get("sim")
-	sim.time_scale = 1.0
-
-	print("=== SITIOS DE TRABAJO MONTADOS ===")
-	for activity: int in sim.work_sites:
-		print("  %s en %v" % [
-			Subsistence.activity_name(activity as Subsistence.Activity),
-			sim.work_sites[activity]])
-	print("  hay sitio de PESCA: %s" % sim.work_sites.has(
-		Subsistence.Activity.PESCA))
-
-	# Lo que hace el jugador: subir ORILLA a 1 en tres personas, sin tocar
-	# nada mas
-	var elegidos: Array[Inhabitant] = []
-	for person: Inhabitant in sim.people:
-		if elegidos.size() >= 3 and true:
-			break
-		if not Profession.can_do(Profession.Job.RIBERA, person):
-			continue
-		# Exactamente el reparto de la captura del jugador: TODO a 2 y la
-		# orilla sola en 1. Sin empates que valgan.
-		for job_key: int in Profession.CATALOGUE:
-			for task: int in Profession.tasks_of(job_key as Profession.Job):
-				person.set_priority(task, 2)
-		person.set_priority(Profession.task_id(Profession.Job.RIBERA,
-			Profession.Speciality.ORILLA), 1)
-		elegidos.append(person)
-	sim.apply_priorities()
-	print("=== A LA ORILLA: %s ===" % _names(elegidos))
-	for person: Inhabitant in elegidos:
-		var wanted := sim.top_choice(person)
-		print("  %s quiere %s | estorbo: «%s»" % [person.given_name,
-			Profession.speciality_name(Profession.task_speciality(wanted)),
-			sim.task_blocked_by(person, wanted)])
-
-	_report(sim, elegidos)
-
-	var step := sim.seconds_per_day / 24.0 / 60.0
-	for _day in range(DAYS):
-		for _tick in range(24 * 60):
-			sim._process(step)
-	print("--- tras %d dias ---" % DAYS)
-	_report(sim, elegidos)
-	print("  pescado fresco %.1f · pescado seco %.1f · raciones totales %.1f" % [
-		sim.store.amount(Materia.Kind.PESCADO),
-		sim.store.amount(Materia.Kind.PESCADO_SECO),
-		sim.store.food_rations()])
-	print("  secadero levantado: %s" % sim.camp_built.get(
-		CampProjects.Kind.SECADERO, false))
-	print("  atascos: %s" % JSON.stringify(sim.stuck_tally))
-	print("  cargas perdidas: %d" % sim.lost_loads)
-	print("  produccion diaria de pescado que cuenta la banda: %.2f"
-		% sim.taller.production_of(Materia.Kind.PESCADO))
-	print("=== LO QUE DICE CADA SALIDA DE PESCA ===")
-	for person: Inhabitant in elegidos:
-		if person.activity != Subsistence.Activity.PESCA:
-			continue
-		print("  --- %s (lleva encima: %s) ---" % [person.given_name,
-			JSON.stringify(person.load)])
-		var contadas := 0
-		for i in range(person.journeys.size() - 1, -1, -1):
-			if contadas >= 10:
-				break
-			contadas += 1
-			var trip: Dictionary = person.journeys[i]
-			print("      d%d %-12s :: %s" % [int(trip["day"]),
-				String(trip["kind"]), String(trip["outcome"])])
-
-	print("=== DOS JORNADAS, HORA A HORA, DE UN PESCADOR ===")
-	var quien: Inhabitant = null
-	for person: Inhabitant in elegidos:
-		if person.activity == Subsistence.Activity.PESCA:
-			quien = person
-			break
-	if quien:
-		for _hora in range(48):
-			for _tick in range(60):
-				sim._process(step)
-			print("  d%d %5.2fh  %-12s  en %v  destino %v  ruta %d  hambre %.0f cansancio %.0f" % [
-				sim.day, sim.hour, _state(quien.state), quien.position,
-				quien.target, quien.route.size(), quien.hunger, quien.fatigue])
-
-	print("=== EL CAUCE, VISTO POR EL CAMPO DE RECURSOS ===")
-	var sitio: Vector3 = sim.work_sites.get(Subsistence.Activity.PESCA, Vector3.ZERO)
-	print("  abundancia de pesca en el sitio de trabajo: %.3f"
-		% sim.field.abundance_at(Subsistence.Activity.PESCA, sitio))
-	print("  stock alrededor (120 m): %.3f" % sim.field.stock_fraction_around(
-		Subsistence.Activity.PESCA, sitio, 120.0))
-
-	var celdas := 0
-	var suma := 0.0
-	var mejor := 0.0
-	for z in range(sim.field.height):
-		for x in range(sim.field.width):
-			var value := sim.field.abundance_cell(Subsistence.Activity.PESCA, x, z)
-			if value > 0.001:
-				celdas += 1
-				suma += value
-			mejor = maxf(mejor, value)
-	print("  celdas con pesca en TODO el mapa: %d de %d  ·  media %.3f  ·  mejor %.3f" % [
-		celdas, sim.field.width * sim.field.height,
-		suma / maxf(float(celdas), 1.0), mejor])
-
-	print("=== SITIOS CONOCIDOS DE PESCA ===")
-	var spots: Array = sim._known_spots.get(Subsistence.Activity.PESCA, [])
-	print("  %d sitios en la lista" % spots.size())
-	for i in range(mini(spots.size(), 6)):
-		var spot: Dictionary = spots[i]
-		print("    %v  puntuacion %.3f  abundancia %.3f" % [
-			spot["pos"], float(spot["score"]),
-			sim.field.abundance_at(Subsistence.Activity.PESCA, spot["pos"])])
-	var reserva: Vector3 = sim.work_sites.get(Subsistence.Activity.PESCA, Vector3.ZERO)
-	var grid := sim.marcha._navgrid()
-	print("  sitio de reserva: %v" % reserva)
-	print("  can_reach: %s | connected(casa, sitio): %s | zonas: %d" % [
-		sim.marcha.can_reach(reserva), grid.connected(sim.home_position, reserva),
-		grid.areas])
-	print("  celda de casa: %d | celda del rio: %d" % [
-		grid.nearest_open(sim.home_position), grid.nearest_open(reserva)])
-	for person: Inhabitant in elegidos:
-		if person.activity == Subsistence.Activity.PESCA:
-			print("  _best_known_spot(%s) = %v" % [person.given_name,
-				sim.tajo._best_known_spot(person)])
-
-	print("=== DONDE ESTAN Y QUE SACAN ===")
-	for person: Inhabitant in elegidos:
-		if person.activity != Subsistence.Activity.PESCA:
-			continue
-		print("  %s trabaja en %v · abundancia ahi %.3f · umbral para nombrarlo %.2f" % [
-			person.given_name, person.work_centre,
-			sim.field.abundance_at(Subsistence.Activity.PESCA, person.work_centre),
-			Parajes.threshold_for(Subsistence.Activity.PESCA)])
-		for trip: Dictionary in person.journeys:
-			print("      d%d %s :: %s" % [int(trip["day"]),
-				String(trip["kind"]), String(trip["outcome"])])
-
-
-func _report(sim: SettlementSim, elegidos: Array[Inhabitant]) -> void:
-	for person: Inhabitant in elegidos:
-		var tarea := Profession.task_id(Profession.Job.RIBERA,
-			Profession.Speciality.ORILLA)
-		print("  %-8s oficio %-14s espec %-16s actividad %-12s tarea:%s estado:%d salidas:%d" % [
-			person.given_name, Profession.job_name(person.job),
-			Profession.speciality_name(person.current_speciality as Profession.Speciality),
-			Subsistence.activity_name(person.activity),
-			person.has_task, int(person.state), person.journeys.size()])
-		print("        prioridad orilla %d | tiene adonde ir: %s | puede: %s" % [
-			person.priority_for(tarea),
-			sim._task_has_somewhere(Profession.Job.RIBERA, tarea),
-			Profession.can_do(Profession.Job.RIBERA, person)])
-
-
-func _state(state: int) -> String:
-	match state:
-		Inhabitant.State.DURMIENDO: return "DURMIENDO"
-		Inhabitant.State.OCIOSO: return "OCIOSO"
-		Inhabitant.State.YENDO: return "YENDO"
-		Inhabitant.State.TRABAJANDO: return "TRABAJANDO"
-		Inhabitant.State.VOLVIENDO: return "VOLVIENDO"
-		Inhabitant.State.COMIENDO: return "COMIENDO"
-		Inhabitant.State.BUSCANDO: return "BUSCANDO"
-		Inhabitant.State.RECONOCIENDO: return "RECONOCIENDO"
-		_: return "estado %d" % state
-
-
-func _names(people: Array[Inhabitant]) -> String:
-	var out: Array[String] = []
-	for person: Inhabitant in people:
-		out.append(person.given_name)
-	return ", ".join(out)
+	change_scene_to_file("res://scenes/demo_main.tscn")
+	for i in range(120):
+		await process_frame
+	var demo := current_scene
+	if demo == null or not ("sim" in demo):
+		print("la escena no arranco")
+		return null
+	return demo
