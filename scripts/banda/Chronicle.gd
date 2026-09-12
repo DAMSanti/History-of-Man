@@ -18,6 +18,7 @@ enum Kind {
 	PENURIA,    ## Hambre, almacén lleno, parajes esquilmados
 	OBRA,       ## Mejoras del abrigo terminadas
 	GENTE,      ## Nacimientos, muertes, quien deja de criar
+	TRUEQUE,    ## Trato con banda vecina: qué entra, qué sale, o por qué no
 }
 
 const KIND_NAMES := {
@@ -27,6 +28,7 @@ const KIND_NAMES := {
 	Kind.PENURIA: "Penurias",
 	Kind.OBRA: "Obras",
 	Kind.GENTE: "La banda",
+	Kind.TRUEQUE: "El trueque",
 }
 
 ## Cuántas anotaciones se guardan. Al pasarse, se olvidan las más viejas.

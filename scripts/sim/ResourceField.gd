@@ -183,9 +183,21 @@ func seasonal_abundance_at(activity: Subsistence.Activity, world_position: Vecto
 ## Repone lo gastado, con curva logistica: se recupera mas rapido a media carga
 ## que casi vacio, que es como funcionan las poblaciones de verdad. Una mancha
 ## esquilmada tarda desproporcionadamente en volver.
-func regrow(activity: Subsistence.Activity, rate: float) -> void:
+## Devuelve las celdas que al rebrotar han PASADO de `umbral`, si se da uno.
+##
+## Es la otra forma de que un sitio se gane un nombre sin que nadie vaya a
+## mirarlo: una veta que se esquilmó, dejó de tener paraje y años después
+## vuelve a dar. La familiaridad no cambia -la banda ya conocía el sitio-, así
+## que quien lo espera no se entera por ahí.
+##
+## Devolverlo aquí lo convierte en un aviso, que es lo que es. La alternativa
+## era volver a barrer las 4.096 celdas por si acaso, y eso ya se ha quitado
+## de en medio una vez. Ver [Parajes.cola].
+func regrow(activity: Subsistence.Activity, rate: float,
+		umbral: float = -1.0) -> PackedInt32Array:
+	var cruzadas := PackedInt32Array()
 	if not grids.has(activity) or not capacities.has(activity):
-		return
+		return cruzadas
 	var grid: PackedFloat32Array = grids[activity]
 	var cap: PackedFloat32Array = capacities[activity]
 	var dead: PackedByteArray = frozen.get(activity, PackedByteArray())
@@ -198,7 +210,10 @@ func regrow(activity: Subsistence.Activity, rate: float) -> void:
 		var stock := grid[i]
 		grid[i] = clampf(stock + rate * maxf(stock, capacity * 0.04)
 			* (1.0 - stock / capacity), 0.0, capacity)
+		if umbral >= 0.0 and stock < umbral and grid[i] >= umbral:
+			cruzadas.append(i)
 	grids[activity] = grid
+	return cruzadas
 
 
 ## Cuanto queda en una celda respecto a lo que tenia intacta, de 0 a 1.

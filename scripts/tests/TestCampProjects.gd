@@ -16,6 +16,21 @@ func test_el_hogar_no_depende_de_nada() -> void:
 		"es lo primero que se puede levantar")
 
 
+func test_las_plazas_de_abrigo_suben_con_el_paraviento() -> void:
+	var sim := SettlementSim.new()
+	var base := sim.plazas_abrigo()
+	sim.camp_built[CampProjects.Kind.PARAVIENTO] = true
+	assert_eq(sim.plazas_abrigo(), base + SettlementSim.PLAZAS_ABRIGO_POR_PARAVIENTO,
+		"levantar un paraviento aumenta el aforo del abrigo")
+
+
+func test_el_paraviento_no_depende_de_nada() -> void:
+	# Es un cierre, no una fuente de calor: no necesita el hogar, igual que
+	# el lavadero no necesita fuego para dejarse en el remanso.
+	assert_eq(CampProjects.requires(CampProjects.Kind.PARAVIENTO), -1,
+		"se puede levantar sin hogar previo")
+
+
 func test_el_secadero_exige_el_hogar() -> void:
 	assert_eq(CampProjects.requires(CampProjects.Kind.SECADERO),
 		CampProjects.Kind.HOGAR, "ahumar sin fuego no se hace")
@@ -276,3 +291,153 @@ func test_el_yesquero_estira_la_lena() -> void:
 func test_el_cuidado_acorta_la_convalecencia() -> void:
 	assert_gt(float(SettlementSim.CUIDADO_DAYS), 0.0,
 		"cuidar de los heridos tiene que servir de algo, o es un rotulo")
+
+
+# --- llenar odres: un odre hecho no es un odre lleno ---------------------
+#
+# Antes `_sync_waterskins` daba por lleno cualquier odre que hubiera en el
+# taller. Un odre es un recipiente vacío hasta que alguien lo llena con
+# trabajo de hogar -ver [Hogar._fill_waterskins]-, igual que un cesto vacío
+# no da comida solo por existir.
+
+func _hogar_con(rng_seed: int) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = rng_seed
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	Profession.assign(Profession.Job.HOGAR, person)
+	return person
+
+
+func test_los_odres_vacios_se_llenan_con_trabajo_de_hogar() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.people = [_hogar_con(1)]
+
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"un odre recien hecho arranca vacío")
+	sim.hogar._fill_waterskins()
+	assert_gt(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"con alguien en el hogar, se van llenando")
+
+
+func test_no_se_llenan_mas_odres_de_los_que_existen() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.people = [_hogar_con(1)]
+
+	for i in range(10):
+		sim.hogar._fill_waterskins()
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
+		"un solo odre no puede dar mas de un odre lleno, por muchos dias que pasen")
+
+
+func test_sin_nadie_en_el_hogar_no_se_llenan_odres() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.hogar._fill_waterskins()
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"sin nadie de hogar, nadie va a por agua")
+
+
+# --- cuevas que no estan pegadas al agua ----------------------------------
+#
+# «Tanto beber del río como llenar los odres debe ser una salida y marcarse
+# como tal, quizá haya cuevas que no estén pegadas al agua». Antes de esto,
+# _home_by_water no existia y se asumia que si, siempre. Ahora depende del
+# terreno de verdad.
+
+func test_home_by_water_depende_del_terreno_de_verdad() -> void:
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	assert_false(sim.hogar._home_by_water(),
+		"lejos del rio de FakeTerrain, el abrigo no esta junto al agua")
+
+	sim.home_position = Vector3(0.0, 0.0, FakeTerrain.RIVER_Z)
+	assert_true(sim.hogar._home_by_water(),
+		"junto al rio, si lo esta")
+
+
+func test_sin_terreno_se_asume_junto_al_agua() -> void:
+	# Mismo patron que `Taller.knows_tool` con el arbol de tecnicas: un
+	# montaje de prueba que no trae terreno no tiene por que probar esto.
+	var sim := SettlementSim.new()
+	assert_true(sim.hogar._home_by_water(),
+		"sin terreno que consultar, se asume el comportamiento de siempre")
+
+
+func test_lejos_del_agua_no_se_llena_pasivamente() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.people = [_hogar_con(1)]
+
+	sim.hogar._fill_waterskins()
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"sin rio a la puerta, llenar en el sitio ya no es gratis")
+
+
+func test_lejos_del_agua_alguien_de_hogar_sale_a_por_ella() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	var person := _hogar_con(1)
+	person.position = Vector3.ZERO
+	sim.people = [person]
+
+	assert_true(sim.hogar._fetch_water(person),
+		"con odres vacios y el abrigo lejos del agua, alguien sale")
+	assert_eq(person.state, Inhabitant.State.YENDO, "de camino, no en el sitio")
+	assert_false(person.journey.is_empty(), "y la salida queda marcada como tal")
+
+
+func test_por_agua_no_sale_nadie_si_el_abrigo_ya_esta_junto_al_rio() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3(0.0, 0.0, FakeTerrain.RIVER_Z)
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	var person := _hogar_con(1)
+	sim.people = [person]
+
+	assert_false(sim.hogar._fetch_water(person),
+		"junto al rio, llenar sigue siendo tarea pasiva, no una salida")
+
+
+func test_llegar_a_la_orilla_llena_odres_y_manda_de_vuelta() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	var person := _hogar_con(1)
+	sim.people = [person]
+
+	sim.hogar._arrive_at_water(person)
+	assert_gt(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"llegar a la orilla llena lo que da de si un acarreo")
+	assert_eq(person.state, Inhabitant.State.VOLVIENDO,
+		"y manda de vuelta a casa, no se queda en la orilla")
+
+
+func test_un_odre_roto_pierde_el_agua_que_llevaba() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	var tool := sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.store.add(Materia.Kind.AGUA, 1.0)
+
+	tool.wear(tool.durability())
+	sim.toolkit.discard_spent()
+	sim.despensa._sync_waterskins()
+
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"si el odre se rompe, el agua que llevaba se pierde con él")

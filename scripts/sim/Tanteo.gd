@@ -129,7 +129,12 @@ func _margen_del_rio(act: Subsistence.Activity) -> Vector3:
 			punto.y = sim._terrain.get_height_at(punto)
 			# Sólo vale si de verdad hay agua cerca: tantear la ribera lejos
 			# del agua es dar una vuelta por el prado.
-			if sim._terrain.crossing_difficulty_at(punto) <= 0.02:
+			#
+			# Con el umbral de todos y no con uno propio. Aquí había un 0,02 a
+			# mano, que era el cuarto número distinto para «aquí hay agua». Da
+			# igual afinarlo: esto es sólo un descarte barato y quien decide de
+			# verdad es `_shore_near`, unas líneas más abajo.
+			if sim._terrain.crossing_difficulty_at(punto) <= Hydrography.ROZA_EL_AGUA:
 				continue
 			var orilla := sim.tajo._shore_near(punto)
 			if orilla == Vector3.ZERO:

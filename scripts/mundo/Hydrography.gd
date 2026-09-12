@@ -35,6 +35,22 @@ const BANK_BLEND_CELLS := 1.6
 const FORD_WADEABLE := 0.35
 const FORD_IMPASSABLE := 0.70
 
+## Por encima de esto ya se ve lamina de agua, aunque se cruce de un salto.
+##
+## No es un umbral de paso -de eso van los dos de arriba- sino de PRESENCIA:
+## lo que contesta a «¿hay rio aqui al lado?». Lo preguntan quien busca
+## orilla donde pescar -ver [Tajo._water_beside]- y quien busca el pasillo
+## del cauce para explorarlo -ver [Reconocimiento._terrain_lure]-, y estaba
+## escrito a mano en los dos.
+const HAY_AGUA := 0.15
+
+## El minimo por el que una celda cuenta como MOJADA para el trazado.
+##
+## Mas bajo que [HAY_AGUA] a proposito: aquello pregunta si se ve el rio y
+## esto si la celda toca el cauce siquiera, que es cuando deja de poder
+## cruzarse por donde sea. Ver [Navgrid.vado].
+const ROZA_EL_AGUA := 0.05
+
 ## Anchura total, en metros, a la que un cauce deja de vadearse EN AGUAS
 ## MEDIAS. Estuvo en 9 y era demasiado restrictivo: gente que cruzaba Europa a
 ## pie no se paraba ante un rio de doce metros. Se vadea por las barras de
@@ -446,12 +462,27 @@ static func can_cross(difficulty: float, has_boat: bool, has_bridge: bool,
 		if difficulty >= 1.0:
 			adjusted = 1.0
 
-	if adjusted <= FORD_IMPASSABLE:
-		return true
-	# Ni la barca ni el puente de la epoca salvan cualquier anchura
+	var tope := tope_de_vado(has_boat, has_bridge)
+	return adjusted < tope.x if tope.y > 0.5 else adjusted <= tope.x
+
+
+## El tope de vado como NUMERO: hasta cuanto se pasa, y si la comparacion es
+## estricta (`y` distinto de cero) o no.
+##
+## Es [can_cross] dicho al reves, y existe para poder catar una linea entera sin
+## una llamada por punto: quien recorre una recta preguntando por el agua -ver
+## [TerrainGenerator.linea_sin_agua]- pide el tope UNA vez y compara. La regla
+## sigue viviendo aqui y en un solo sitio: `can_cross` sale de esta misma
+## funcion.
+##
+## Sin barca ni puente se pasa hasta [FORD_IMPASSABLE] incluido. Con una de las
+## dos se pasa cualquier cosa por debajo de 1,0 -mar abierta no, que ni la barca
+## ni el puente de la epoca salvan cualquier anchura-, y eso incluye de sobra
+## todo lo que ya pasaba sin ellas.
+static func tope_de_vado(has_boat: bool, has_bridge: bool) -> Vector2:
 	if has_boat or has_bridge:
-		return adjusted < 1.0
-	return false
+		return Vector2(1.0, 1.0)
+	return Vector2(FORD_IMPASSABLE, 0.0)
 
 
 ## Convierte una polilínea geográfica a coordenadas de celda.

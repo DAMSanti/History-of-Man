@@ -188,6 +188,13 @@ func _tend_camp(person: Inhabitant, hours: float) -> void:
 
 	sim._hearth_tended = sim._hearth_tended or sim.hearth_lit
 
+	# Sin agua a mano -el abrigo no está junto al río de verdad, ver
+	# [_home_by_water]-, llenar odres deja de ser gratis: hace falta una
+	# salida real a la orilla más cercana. Va antes que curar y pintar
+	# porque sin agua tampoco se hacen esas dos cosas.
+	if _fetch_water(person):
+		return
+
 	# La pared, si el jugador ha mandado pintar algo. Va por delante de curar y
 	# de ahumar porque es lo único de aquí que el jugador ha PEDIDO: lo demás
 	# lo hace la banda sola. Ver `_paint_wall`.
@@ -426,6 +433,104 @@ func _smoke_the_larder() -> void:
 	for person: Inhabitant in hands:
 		supervision += person.effectiveness()
 	_dry_meat(supervision, SettlementSim.AHUMADO_BONUS)
+
+
+## Si el abrigo está de verdad junto al agua -no "hay un río en el valle",
+## sino que se puede llenar un odre sin alejarse-. De eso depende que llenar
+## odres (y beber en casa, ver [Despensa._drink_and_thirst]) sea gratis o
+## una salida real. No todas las cuevas lo son: `Tajo._water_beside` mira el
+## terreno de verdad, no lo asume.
+func _home_by_water() -> bool:
+	# Sin terreno que consultar -pruebas y montajes a medias, mismo patron
+	# que `Taller.knows_tool` con el arbol de tecnicas- se asume que si, que
+	# es el comportamiento de siempre: no penalizar un montaje que no viene
+	# a probar esto.
+	if sim._terrain == null:
+		return true
+	return sim.tajo._water_beside(sim.home_position)
+
+
+## Cuántos odres se llenan por jornada y por persona de hogar, a rendimiento
+## pleno -tanto en casa como en la orilla, ver [_arrive_at_water]-.
+const ODRES_LLENADOS_POR_DIA := 4.0
+
+
+## Llena odres vacíos EN CASA, una vez al día, sin que nadie salga.
+##
+## Sólo aplica si el abrigo está junto al agua de verdad -ver
+## [_home_by_water]-; si no, llenar es una salida real y la lleva
+## [_fetch_water] en vez de esto. Mismo patrón pasivo que
+## [_smoke_the_larder]: capado por cuántos vigilan y cuánto saben, sin
+## gastarle la jornada a nadie de forma explícita.
+func _fill_waterskins() -> void:
+	if not _home_by_water():
+		return
+	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
+		- sim.store.amount(Materia.Kind.AGUA)
+	if vacios <= 0.0:
+		return
+
+	var hands := _hearth_hands()
+	if hands.is_empty():
+		return
+
+	var supervision := 0.0
+	for person: Inhabitant in hands:
+		supervision += person.effectiveness()
+
+	var llenados := minf(vacios, ODRES_LLENADOS_POR_DIA * supervision)
+	if llenados <= 0.0:
+		return
+	sim.store.add(Materia.Kind.AGUA, llenados)
+
+
+# --- ir a por agua de verdad, cuando el abrigo no está junto al río -------
+#
+# «Tanto beber del río como llenar los odres debe ser una salida y marcarse
+# como tal, quizá haya cuevas que no estén pegadas al agua». Antes de esto,
+# `_home_by_water() == false` no cambiaba nada: se seguía llenando gratis en
+# el sitio. Ahora, sin agua a mano, alguien de HOGAR tiene que ir de verdad.
+
+## Manda a alguien de HOGAR a la orilla más cercana si el abrigo no está
+## junto al agua y hacen falta odres. Devuelve si se ha gastado la faena en
+## esto -y `_tend_camp` no hace nada más este tick-.
+##
+## Es una salida real: `marcha._send_to` + `State.YENDO` es el mismo
+## mecanismo que usa cualquier otro viaje del juego, así que cuenta como
+## jornada de camino, deja rastro y cierra su `journey` al volver -ver
+## [Inhabitant.end_journey], llamado desde [Despensa._deliver] igual que
+## para cualquiera-. Nada de esto es nuevo: es no tratar a quien va a por
+## agua de otra manera que a quien va a cualquier otro tajo.
+func _fetch_water(person: Inhabitant) -> bool:
+	if _home_by_water():
+		return false
+	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
+		- sim.store.amount(Materia.Kind.AGUA)
+	if vacios <= 0.0:
+		return false
+
+	if person.journey.is_empty():
+		person.begin_journey(Profession.job_name(person.job as Profession.Job),
+			sim.day, sim.hour, sim.home_position)
+	person.log_deed(person.current_task(), "de camino al agua", false)
+	sim.marcha._send_to(person, sim.tajo._shore_near(sim.home_position))
+	person.state = Inhabitant.State.YENDO
+	return true
+
+
+## Al llegar a la orilla -enganchado desde el `YENDO` general de
+## `SettlementSim`, cuando quien llega es de HOGAR-. Llena lo que el
+## acarreo de uno dé de sí y vuelve; `_deliver` cierra la salida al entrar
+## por la boca del abrigo, igual que con cualquier otro viaje.
+func _arrive_at_water(person: Inhabitant) -> void:
+	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
+		- sim.store.amount(Materia.Kind.AGUA)
+	var llenados := minf(vacios, ODRES_LLENADOS_POR_DIA * person.effectiveness())
+	if llenados > 0.0:
+		sim.store.add(Materia.Kind.AGUA, llenados)
+	person.log_deed(person.current_task(), "llenando odres en la orilla", false)
+	sim.marcha._send_to(person, sim.home_position)
+	person.state = Inhabitant.State.VOLVIENDO
 
 
 

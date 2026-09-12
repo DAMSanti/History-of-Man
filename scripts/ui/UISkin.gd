@@ -104,6 +104,18 @@ static func row_box(tint: Color = SURFACE) -> StyleBoxFlat:
 	return box
 
 
+## Caja de una fila MARCADA: la misma de siempre con un filete alrededor.
+##
+## Para lo que hay que ver sin pinchar. Hoy la usa la lista de parajes para
+## los que esta estacion no se pueden trabajar: el sitio sigue ahi —la banda
+## lo conoce— pero el rio va crecido o hay que dar la vuelta al valle.
+static func outlined_box(tint: Color, edge: Color) -> StyleBoxFlat:
+	var box := row_box(tint)
+	box.set_border_width_all(1)
+	box.border_color = edge
+	return box
+
+
 ## Botón: tres estados con el mismo borde y distinto relleno.
 static func button_box(state: String) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()

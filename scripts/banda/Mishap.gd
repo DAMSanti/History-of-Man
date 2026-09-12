@@ -8,9 +8,11 @@ extends RefCounted
 ## riesgo lo eliges tú, y hasta que no se pudo señalar el destino, el riesgo
 ## habría sido un impuesto arbitrario en vez de una apuesta.
 ##
-## Nada de esto mata a nadie. Una banda de quince no aguanta perder gente por
-## un tiro de dados, y matar por azar es la forma más rápida de que el jugador
-## deje de arriesgar nunca más.
+## Casi nada de esto mata a nadie. Una banda de quince no aguanta perder gente
+## por un tiro de dados generoso, y matar por azar es la forma más rápida de
+## que el jugador deje de arriesgar nunca más -por eso sólo la peor caída
+## puede ser mortal, y con una probabilidad baja. Ver `is_fatal` y
+## `docs/specs/QUE_SE_PUEDA_PERDER.md`, tarea 11.
 
 enum Kind {
 	TORCEDURA,   ## Un tobillo. Se anda peor durante días
@@ -88,6 +90,20 @@ static func roll(rng: RandomNumberGenerator,
 
 static func is_good(kind: Kind) -> bool:
 	return kind == Kind.HALLAZGO
+
+
+## Probabilidad de que una caída -la peor tirada que hay- resulte mortal, en
+## vez de dejar a la persona tocada unos días. Sin calibrar: lo decidido es
+## que pueda pasar y que sea raro, no cuánto exactamente.
+const FATAL_CHANCE_ON_FALL := 0.05
+
+
+## Si, dado que ha tocado este percance, además resulta mortal. Sólo la
+## caída puede serlo -una torcedura, perderse o que llueva no matan a nadie.
+static func is_fatal(kind: Kind, rng: RandomNumberGenerator) -> bool:
+	if kind != Kind.CAIDA:
+		return false
+	return rng.randf() < FATAL_CHANCE_ON_FALL
 
 
 ## Cuántos días queda tocada la persona.

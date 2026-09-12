@@ -37,7 +37,8 @@ enum Kind {
 	PIEDRA,       ## Cuarcita y sílex en bruto
 	ASTA,
 	HUESO,
-	PIEL,
+	PIEL,         ## CRUDA: se pudre si no se curte
+	PIEL_CURTIDA, ## Raspada y curada con ocre y grasa: ya no se pudre
 	TENDON,
 	FIBRA,        ## Cordelería sin trenzar
 	LENA,
@@ -225,9 +226,17 @@ const CATALOGUE := {
 		"desc": "Punzones, agujas, y combustible cuando falta leña.",
 	},
 	Kind.PIEL: {
-		"name": "Piel", "unit": "piel", "kg": 3.5, "litros": 12.0,
+		"name": "Piel cruda", "unit": "piel", "kg": 3.5, "litros": 12.0,
+		"dias": 12, "kcal": 0.0,
+		"desc": "Recién descarnada. Sin curtir se pudre en unos días: raspar, "
+			+ "ocre y grasa la vuelven piel curtida, la que de verdad sirve "
+			+ "para algo.",
+	},
+	Kind.PIEL_CURTIDA: {
+		"name": "Piel curtida", "unit": "piel", "kg": 3.3, "litros": 11.0,
 		"dias": 0, "kcal": 0.0,
-		"desc": "Ropa, cobijo y recipientes. Sin curtir se pudre.",
+		"desc": "Raspada y curada con ocre y grasa. Ropa, cobijo y "
+			+ "recipientes: ya no se pudre.",
 	},
 	Kind.TENDON: {
 		"name": "Tendón", "unit": "manojo", "kg": 0.15, "litros": 0.4,

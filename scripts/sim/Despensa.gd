@@ -66,7 +66,7 @@ func _expedition_days_for(person: Inhabitant, distance_m: float = -1.0) -> float
 ## nada: se come en casa como cualquier otro y se vuelve esa misma tarde.
 ## Cargar racion aqui era pedirle un peaje a quien ni siquiera duerme fuera.
 func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
-	if distance_m >= 0.0 and distance_m <= sim.arrive_radius * 4.0:
+	if distance_m >= 0.0 and distance_m <= SettlementSim.SALIDA_DE_CASA:
 		return true
 
 	# Lo que ya lleve cuenta
@@ -242,7 +242,7 @@ const VUELTA_QUE_NO_COMPENSA := 0.5
 ## se duerme en casa, que se duerme mejor-, hay que poder con la noche, y hay
 ## que llevar de comer. Lo de comer lo mira quien llama; aqui va el resto.
 func _camps_out(person: Inhabitant, mid_survey: bool) -> bool:
-	if person.position.distance_to(sim.home_position) <= sim.arrive_radius * 4.0:
+	if sim._saliendo_de_casa(person):
 		return false
 	if person.job == Profession.Job.EXPLORACION:
 		return person.current_speciality != Profession.Speciality.BATIDA \
@@ -369,30 +369,19 @@ func winter_stock() -> Dictionary:
 	}
 
 
-## Cuantos odres LLENOS cuelgan del abrigo ahora mismo.
+## Que `Materia.Kind.AGUA` -odres llenos- nunca pase de cuantos odres existen.
 ##
-## El almacen no guarda agua a granel: guarda odres llenos, y por eso
-## `Materia.Kind.AGUA` se mide en «odre» y pesa lo que pesa uno. La cifra no se
-## lleva a mano -eso serian dos verdades sobre lo mismo- sino que se deriva de
-## los odres que ha hecho el taller menos los que hay fuera con alguien.
-##
-## Y estan llenos porque el abrigo se funda junto al agua: colgar un odre en la
-## boca de la cueva es tenerlo lleno. El que se vacia es el que sale.
+## Ya NO fuerza la igualdad: un odre hecho no está lleno solo, hace falta
+## llenarlo con trabajo de hogar -ver [Hogar._fill_waterskins]-. Esto sólo
+## cubre el caso en que un odre se rompe con agua dentro: su agua se pierde
+## con él, no se queda flotando por encima del total que queda.
 func _sync_waterskins() -> void:
 	if sim.store == null or sim.toolkit == null:
 		return
-	var out := 0
-	for person: Inhabitant in sim.people:
-		if person.has_waterskin:
-			out += 1
-	var at_home := maxf(float(sim.toolkit.count(Tool.Kind.ODRE) - out), 0.0)
-	var now := sim.store.amount(Materia.Kind.AGUA)
-	if absf(now - at_home) < 0.01:
-		return
-	if now > at_home:
-		sim.store.take(Materia.Kind.AGUA, now - at_home)
-	else:
-		sim.store.add(Materia.Kind.AGUA, at_home - now)
+	var total := float(sim.toolkit.count(Tool.Kind.ODRE))
+	var llenos := sim.store.amount(Materia.Kind.AGUA)
+	if llenos > total:
+		sim.store.take(Materia.Kind.AGUA, llenos - total)
 
 
 ## Reparte cesto y odre entre los que salen, de lo que hay HECHO.
@@ -404,11 +393,23 @@ func _sync_waterskins() -> void:
 ## mundo con odre- y el taller no servia para nada en este frente.
 func _hand_out_containers(person: Inhabitant) -> void:
 	person.has_basket = _take_container(person, Tool.Kind.CESTO)
-	person.has_waterskin = _take_container(person, Tool.Kind.ODRE)
+	person.has_waterskin = _take_waterskin(person)
 	# Se sale de casa con el odre lleno; sin odre, con lo que se lleva bebido.
 	person.water_left = SettlementSim.SED_HORAS_CON_ODRE if person.has_waterskin \
 		else SettlementSim.SED_HORAS_SIN_ODRE
 	_sync_waterskins()
+
+
+## Da un odre LLENO a quien sale, si hay. A diferencia de [_take_container]
+## -que sólo PRESTA una pieza que no se gasta al llevarla-, un odre lleno SÍ
+## se gasta al salir: el agua que lleva es la que había en el almacén. Ver
+## [Hogar._fill_waterskins] para cómo se rellena, y [_deliver] para cómo
+## vuelve vacío.
+func _take_waterskin(person: Inhabitant) -> bool:
+	if sim.store.amount(Materia.Kind.AGUA) < 1.0:
+		return false
+	sim.store.take(Materia.Kind.AGUA, 1.0)
+	return true
 
 
 ## Si queda una pieza de este tipo libre para esta persona.
@@ -427,17 +428,37 @@ func _take_container(person: Inhabitant, kind: Tool.Kind) -> bool:
 	return taken < made
 
 
+## Cuanta AGUA se gasta por hora al beber en un abrigo que NO esta junto al
+## agua -mismo pool que llenan las salidas de [Hogar._fetch_water]-. Sin
+## esto, "estar en casa" seguiria siendo gratis de otra manera aunque la
+## cueva este lejos del rio.
+const SORBO_EN_CASA_POR_HORA := 0.08
+
+
 ## El agua del dia: se bebe donde la hay y se gasta donde no.
 ##
 ## Es la regla que faltaba para que una banda no pueda plantarse una jornada
 ## entera en un canchal seco. Beber es gratis y no cuesta tiempo mientras se
-## este JUNTO al agua -o en el abrigo, que se funda al lado de ella-; lo que
-## cuesta es el viaje cuando se acaba a media tarde en mitad del monte.
+## este JUNTO al agua de verdad. Algunas cuevas lo estan -`_water_beside`
+## sobre el propio abrigo lo dice-, y ESA es la unica razon de que "estar en
+## casa" pueda ser gratis: si no lo estuviera, la primera comprobacion ya
+## habria fallado. Si el abrigo no esta junto al agua, beber en casa gasta
+## la reserva que trajeron las salidas de hogar, no es gratis solo por
+## estar dentro.
 func _drink_and_thirst(person: Inhabitant, hours: float) -> void:
-	if sim.tajo._water_beside(person.position) or sim._at_shelter(person):
+	if sim.tajo._water_beside(person.position):
 		person.water_left = SettlementSim.SED_HORAS_CON_ODRE if person.has_waterskin \
 			else SettlementSim.SED_HORAS_SIN_ODRE
 		return
+	if sim._at_shelter(person):
+		var sorbo := hours * SORBO_EN_CASA_POR_HORA
+		if sim.store.amount(Materia.Kind.AGUA) >= sorbo:
+			sim.store.take(Materia.Kind.AGUA, sorbo)
+			person.water_left = SettlementSim.SED_HORAS_CON_ODRE if person.has_waterskin \
+				else SettlementSim.SED_HORAS_SIN_ODRE
+			return
+		# Sin agua guardada y sin rio a la puerta, seguir dentro no quita
+		# la sed: se cae al mismo tramo que cualquiera lejos del agua.
 	# Durmiendo no se bebe, pero tampoco se suda: la noche no cuenta.
 	if person.state == Inhabitant.State.DURMIENDO:
 		return
@@ -496,8 +517,9 @@ func _deliver(person: Inhabitant) -> void:
 	# personas, los dos primeros que los cogieron no los soltaban nunca.
 	person.has_basket = false
 	person.has_waterskin = false
-	# El odre vuelve al abrigo, y vuelve LLENO: se rellena en el rio de la
-	# puerta. Ver `_sync_waterskins`.
+	# El odre vuelve VACIO: el agua que llevaba se gastó al salir (ver
+	# [_take_waterskin]). Volver a llenarlo es trabajo de hogar, no un hecho
+	# de haber vuelto a la boca de la cueva. Ver [Hogar._fill_waterskins].
 	_sync_waterskins()
 	if rejected > 0.01:
 		sim.storage_full.emit(rejected)

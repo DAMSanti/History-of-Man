@@ -8,7 +8,7 @@ extends RefCounted
 ## multiplica algo concreto, y el secadero exige el hogar porque ahumar carne
 ## sin fuego no es lento, es imposible.
 
-enum Kind { HOGAR, SECADERO, LAVADERO }
+enum Kind { HOGAR, SECADERO, LAVADERO, PARAVIENTO }
 
 ## `requires` es -1 si no depende de nada.
 const INFO := {
@@ -45,6 +45,18 @@ const INFO := {
 		# primera obra que se puede levantar sin tener fuego encendido.
 		"labor_days": 2.0,
 		"materials": {Materia.Kind.FIBRA: 6.0, Materia.Kind.PIEDRA: 4.0},
+		"requires": -1,
+	},
+	Kind.PARAVIENTO: {
+		"name": "Paraviento",
+		"desc": "Cierre de piel y madera contra la boca del abrigo. No abriga "
+			+ "más que la roca: hace sitio. Es lo que se levanta cuando la "
+			+ "banda ya no cabe entera al calor del hogar.",
+		# Dos jornadas: no es un edificio, es cerrar un hueco con pieles
+		# tensadas sobre un armazón. No depende del hogar -es un cierre, no
+		# una fuente de calor-, igual que el lavadero.
+		"labor_days": 2.0,
+		"materials": {Materia.Kind.PIEL: 4.0, Materia.Kind.LENA: 3.0},
 		"requires": -1,
 	},
 }

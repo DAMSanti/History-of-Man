@@ -306,7 +306,7 @@ static func _moja_la_celdilla(centre: Vector3, terrain: TerrainGenerator) -> boo
 			var punto := centre + Vector3(
 				(float(i) / float(CATAS - 1) - 0.5) * CELDILLA, 0.0,
 				(float(j) / float(CATAS - 1) - 0.5) * CELDILLA)
-			if terrain.crossing_difficulty_at(punto) > 0.05:
+			if terrain.crossing_difficulty_at(punto) > Hydrography.ROZA_EL_AGUA:
 				return true
 	return false
 

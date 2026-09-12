@@ -81,6 +81,15 @@ func _apply_mishap(person: Inhabitant, ground: Traversal.Ground,
 	var kind := Mishap.roll(sim._rng, ground)
 	var where := sim.parajes.place_name(person.position, sim.home_position)
 
+	# La peor tirada, pocas veces, no vuelve. Va ANTES de todo lo demás:
+	# nada de lo que sigue -perder la carga, dar media vuelta, ofrecer
+	# elegir- tiene sentido para quien ya no está. Ver [Mishap.is_fatal].
+	if Mishap.is_fatal(kind, sim._rng):
+		sim._person_dies(person,
+			"%s murió en una caída %s: no volvió del monte."
+				% [person.given_name, where])
+		return
+
 	if Mishap.is_good(kind):
 		# A veces sale bien: se tropieza con algo que no buscaba
 		var found := Materia.Kind.PIEDRA

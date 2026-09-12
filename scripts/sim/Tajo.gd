@@ -31,6 +31,17 @@ extends RefCounted
 ## fundar, o la banda amanece sin un solo sitio donde trabajar.
 const SE_PUEDE_TRABAJAR := 0.35
 
+## La cuerna que se recoge del suelo en una jornada completa, en invierno.
+##
+## UNA CIFRA EN UN SITIO, porque la recogen tres oficios distintos: el
+## recolector que pasa por el prado, el cantero que trabaja el desmogadero y
+## quien va a materia prima sin especialidad. Escrita tres veces se separa a
+## la primera, y el asta es justo el material del que depende la azagaya.
+##
+## El ciervo desmoga de febrero a abril y es la unica materia dura animal que
+## no exige matar; por eso la cifra es pequeña y estacional, no un recurso mas.
+const ASTA_DE_DESMOGUE := 0.8
+
 var sim: SettlementSim
 
 
@@ -178,7 +189,7 @@ func _water_beside(point: Vector3) -> bool:
 		for spoke in range(8):
 			var angle := TAU * float(spoke) / 8.0
 			if sim._terrain.crossing_difficulty_at(point + Vector3(
-					cos(angle) * reach, 0.0, sin(angle) * reach)) > 0.15:
+					cos(angle) * reach, 0.0, sin(angle) * reach)) > Hydrography.HAY_AGUA:
 				return true
 	return false
 
@@ -270,7 +281,11 @@ func _best_known_spot(person: Inhabitant) -> Vector3:
 			if other.state == Inhabitant.State.DURMIENDO \
 					or other.state == Inhabitant.State.OCIOSO:
 				continue
-			if other.target.distance_to(centre) < 260.0:
+			# EN LLANO y contra una constante con nombre. El 260 estaba escrito
+			# a mano aqui, que es el mismo numero que
+			# [SettlementSim.SURVEY_RADIUS] y por el mismo motivo -es el trozo
+			# de monte que ocupa una cuadrilla trabajando-.
+			if Traversal.en_llano(other.target, centre) < SettlementSim.SURVEY_RADIUS:
 				crowd += 1.0
 
 		# Y un TOPE, no solo un descuento. Un descuento que solo penaliza deja
@@ -358,7 +373,22 @@ func _paraje_por_prospectar(person: Inhabitant) -> Vector3:
 		if lejos >= best_lejos:
 			continue
 		# Lo caro va al final, y solo para el que ya es el mas cercano.
-		if not sim.marcha.alcanzable_de_verdad(person.position, paraje.position):
+		#
+		# Y DESDE CASA, que es donde se toma la decision.
+		#
+		# Es exactamente la misma pregunta que se hace
+		# [SettlementSim._paraje_to_survey] un paso antes -«¿merece la pena
+		# ir a este paraje?»- y la hacia desde OTRO SITIO: aquella desde el
+		# abrigo y esta desde la persona. Dos origenes, dos respuestas, y
+		# encima la de aqui no se podia guardar -la persona se mueve, la
+		# memoria va por celda- asi que era una busqueda entera POR PARAJE
+		# CANDIDATO, sin pasar por ningun presupuesto. De ahi salian los
+		# treinta y dos A* en un cuadro del reparto de la manana.
+		#
+		# Preguntando desde casa se contesta con lo que ya esta calculado
+		# -ver [Marcha.alcanzable_desde_casa], con memoria por celda- y las
+		# dos capas dicen lo mismo. Que es lo que hay que exigirles.
+		if not sim.marcha.alcanzable_desde_casa(paraje.position):
 			continue
 		best_lejos = lejos
 		best = paraje
@@ -370,6 +400,12 @@ func _paraje_por_prospectar(person: Inhabitant) -> Vector3:
 ## Se abren en abanico, cada uno por una direccion que no lleve otro. Es lo
 ## mismo que hacen los exploradores, pero a radio de jornada y buscando un
 ## recurso concreto en vez de mapa.
+## El abanico ya filtrado de cada persona. Ver [_abanico_de].
+var _abanicos: Dictionary = {}
+var _abanicos_con := Vector2i(-1, -1)
+var _abanicos_desde := Vector3(INF, INF, INF)
+
+
 func _search_target(person: Inhabitant) -> Vector3:
 	if sim._terrain == null:
 		return sim.home_position
@@ -382,6 +418,59 @@ func _search_target(person: Inhabitant) -> Vector3:
 	var best := sim.home_position
 	var best_score := -1.0
 
+	for par: Array in _abanico_de(person):
+		var candidate: Vector3 = par[0]
+		var distance: float = par[1]
+
+		# Lo que promete el terreno, aunque la banda no lo sepa todavia:
+		# el recolector no adivina, pero el monte tiene lo que tiene
+		var promise := 0.0
+		if sim.field:
+			promise = sim.field.seasonal_abundance_at(
+				person.activity, candidate, GameState.season)
+
+		# Se premia lo que esta sin batir y se penaliza la distancia
+		var unknown := 1.0
+		if sim.knowledge:
+			unknown = 1.0 - sim.knowledge.familiarity_at(person.activity, candidate)
+
+		var score := (promise * 0.6 + unknown * 0.4) / (1.0 + distance / 700.0)
+		for other_target: Vector3 in taken:
+			if candidate.distance_to(other_target) < 260.0:
+				score *= 0.35
+
+		if score > best_score:
+			best_score = score
+			best = candidate
+
+	return best
+
+
+## El abanico de una persona: los puntos que se le prueban y a que distancia,
+## en el orden en que se probaban.
+##
+## ES CACHE Y NO PARTIDA, y por eso se puede guardar: el abanico sale del `id`
+## de la persona y del abrigo -doce direcciones por tres distancias, con un
+## desfase por persona para que no prueben todos lo mismo-, y lo que el terreno
+## dice de cada punto -altura, pendiente, vado- no cambia en toda la partida.
+## Lo que SI cambia -lo que promete el campo y lo que la banda conoce- se sigue
+## preguntando en cada llamada.
+##
+## Lo que evita: treinta y seis puntos por llamada con tres preguntas al
+## relieve cada uno, y esto se llama cada vez que alguien decide su jornada.
+## Medido en tres jornadas de verano: 5,0 s de los 34,2 del paso de
+## simulacion. Ver la tarea 21 de docs/specs/LO_MISMO_MAS_DEPRISA.md.
+func _abanico_de(person: Inhabitant) -> Array:
+	# Barca, puente o abrigo nuevos cambian lo que se puede pisar: se rehace.
+	var con := Vector2i(1 if sim.has_boat else 0, 1 if sim.has_bridge else 0)
+	if con != _abanicos_con or sim.home_position != _abanicos_desde:
+		_abanicos.clear()
+		_abanicos_con = con
+		_abanicos_desde = sim.home_position
+	if _abanicos.has(person.id):
+		return _abanicos[person.id]
+
+	var puntos: Array = []
 	for spoke in range(12):
 		# El desfase por persona evita que todos prueben las mismas direcciones
 		var angle := TAU * (float(spoke) / 12.0 + float(person.id) * 0.083)
@@ -397,29 +486,9 @@ func _search_target(person: Inhabitant) -> Vector3:
 			if not Traversal.is_passable(sim._terrain.get_slope_at(candidate),
 					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat, sim.has_bridge):
 				continue
-
-			# Lo que promete el terreno, aunque la banda no lo sepa todavia:
-			# el recolector no adivina, pero el monte tiene lo que tiene
-			var promise := 0.0
-			if sim.field:
-				promise = sim.field.seasonal_abundance_at(
-					person.activity, candidate, GameState.season)
-
-			# Se premia lo que esta sin batir y se penaliza la distancia
-			var unknown := 1.0
-			if sim.knowledge:
-				unknown = 1.0 - sim.knowledge.familiarity_at(person.activity, candidate)
-
-			var score := (promise * 0.6 + unknown * 0.4) / (1.0 + distance / 700.0)
-			for other_target: Vector3 in taken:
-				if candidate.distance_to(other_target) < 260.0:
-					score *= 0.35
-
-			if score > best_score:
-				best_score = score
-				best = candidate
-
-	return best
+			puntos.append([candidate, distance])
+	_abanicos[person.id] = puntos
+	return puntos
 
 
 ## La suma del periodo para una clave, materiales y piezas por igual.
@@ -774,7 +843,15 @@ func _yield_materials(activity: Subsistence.Activity) -> Dictionary:
 			# Rinde poco por peso: la concha va incluida
 			return {Materia.Kind.MARISCO: 26.0}
 		Subsistence.Activity.MATERIA_PRIMA:
-			return {Materia.Kind.PIEDRA: 13.0, Materia.Kind.OCRE: 0.8}
+			var duro := {Materia.Kind.PIEDRA: 13.0, Materia.Kind.OCRE: 0.8}
+			# El desmogadero es un sitio de materia prima -uno de los cuatro
+			# nombres de `Parajes.MATERIA_PRIMA_POOL`- y esta tabla no daba
+			# asta: se iba a por cuerna y se volvia con cantos. La misma cifra
+			# que la recoleccion de invierno, que es la otra forma de
+			# recogerla, porque es la misma cuerna del mismo suelo.
+			if GameState.season == Subsistence.Season.INVIERNO:
+				duro[Materia.Kind.ASTA] = ASTA_DE_DESMOGUE
+			return duro
 		_:
 			# Recoleccion: comida, y todo lo que se recoge del suelo de paso.
 			# En invierno no hay fruto que coger, y a cambio es cuando el
@@ -864,7 +941,7 @@ func _gathering_yields() -> Dictionary:
 			# desmogue, que es la unica materia dura animal que no exige matar.
 			# El ciervo desmoga de febrero a abril.
 			yields[Materia.Kind.RAIZ] = 7.0
-			yields[Materia.Kind.ASTA] = 0.8
+			yields[Materia.Kind.ASTA] = ASTA_DE_DESMOGUE
 			yields[Materia.Kind.LENA] = 2.6
 			yields[Materia.Kind.HUESO] = 0.8
 

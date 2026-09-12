@@ -225,8 +225,14 @@ func test_las_tecnicas_de_caza_salen_de_cazar() -> void:
 	for tech_key: int in [TechTree.Tech.LAZO, TechTree.Tech.CEPO,
 			TechTree.Tech.RED_AVES, TechTree.Tech.FOSO, TechTree.Tech.OJEO,
 			TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR, TechTree.Tech.ARCO]:
-		assert_eq(int(TechTree.CATALOGUE[tech_key as TechTree.Tech]["practice"]),
-			int(Subsistence.Activity.CAZA),
+		# Se pregunta a `job_of`, que lee [TechTree.BRANCHES]. Esta prueba
+		# miraba una clave "practice" del catalogo que dejo de existir cuando
+		# el oficio paso a salir de la rama, asi que reventaba antes de su
+		# primer assert y se contaba como que pasaba. Una prueba que no llega
+		# a comprobar nada no falla: por eso hay que mirar tambien el total de
+		# comprobaciones y no solo el verde.
+		assert_eq(TechTree.job_of(tech_key as TechTree.Tech),
+			int(Profession.Job.CAZA),
 			"%s se aprende cazando" % TechTree.tech_name(tech_key as TechTree.Tech))
 
 

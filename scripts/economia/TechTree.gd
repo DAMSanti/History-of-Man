@@ -449,6 +449,98 @@ func can_afford(tech: Tech) -> bool:
 	return true
 
 
+## Por que no avanza una tecnica. Una pregunta, un sitio que la contesta.
+##
+## La casilla del panel y su aviso emergente lo decidian cada uno por su
+## cuenta, y por eso la casilla se quedaba en «43 %» mientras el aviso decia
+## «PARADA por falta de asta»: dos verdades sobre lo mismo. Ahora las dos
+## preguntan aqui. Ver [causa] y `docs/INTERFAZ.md` §4.
+enum Freno {
+	NINGUNO,        ## Dominada, o nada la frena
+	PRERREQUISITO,  ## Falta una tecnica de las de antes
+	OBRA,           ## Falta una obra del abrigo
+	JORNADAS,       ## Va despacio: faltan jornadas de su oficio
+	MATERIAL,       ## PARADA: el progreso no sube aunque se practique
+}
+
+## Margen para no llamar «parada por material» a una diferencia de redondeo
+## entre las dos fracciones, que van a plazos y nunca casan al decimal.
+const HOLGURA_DEL_FRENO := 0.001
+
+
+## Cual de las tres puertas esta cerrada. Ver [Freno].
+##
+## MATERIAL y JORNADAS no son lo mismo y por eso se separan: con material se
+## PARA -`_ir_pagando` no puede seguir comprando y `progress` deja de subir
+## aunque la banda practique-, y con jornadas solo va despacio. El panel las
+## pinta distinto porque piden decisiones distintas: traer asta, o poner gente
+## en el oficio.
+func freno(tech: Tech) -> Freno:
+	if has(tech):
+		return Freno.NINGUNO
+	for need: Tech in (CATALOGUE[tech]["needs"] as Array):
+		if not has(need):
+			return Freno.PRERREQUISITO
+	var camp := needs_camp(tech)
+	if camp >= 0 and not camp_built.get(camp, false):
+		return Freno.OBRA
+	var needed: float = float(CATALOGUE[tech]["days"])
+	var job := job_of(tech)
+	if needed <= 0.0 or job < 0:
+		return Freno.NINGUNO
+	var por_dias := clampf(days_in(job as Profession.Job) / needed, 0.0, 1.0)
+	# LAS DOS CONDICIONES, no solo que el material vaya por detras.
+	#
+	# `_ir_pagando` solo compra cuando alguien practica, asi que entre tanda y
+	# tanda la fraccion pagada va siempre un poco atrasada aunque la despensa
+	# este llena: eso no es estar parado, es un tick de retraso que se cobra
+	# solo. Con solo la primera condicion el panel pintaba «parada por
+	# material» -y en rojo- tecnicas que tenian el material en el abrigo, y
+	# encima sin poder decir cual faltaba, porque no faltaba ninguno.
+	# Visto en `ArbolProbe`: «Lazo de fibra · parada por material», con fibra
+	# de sobra.
+	if fraccion_pagada(tech) < por_dias - HOLGURA_DEL_FRENO \
+			and not can_afford(tech):
+		return Freno.MATERIAL
+	return Freno.JORNADAS
+
+
+## La causa, dicha en corto para la casilla del panel.
+##
+## Cadena vacia si no hay nada que decir. Va aqui y no en la ventana porque es
+## la misma frase que necesitan la casilla, el aviso emergente y la leyenda, y
+## escrita tres veces se separa a la primera.
+func causa(tech: Tech) -> String:
+	match freno(tech):
+		Freno.PRERREQUISITO:
+			for need: Tech in (CATALOGUE[tech]["needs"] as Array):
+				if not has(need):
+					return "tras %s" % tech_name(need).to_lower()
+			return "falta lo de antes"
+		Freno.OBRA:
+			return "pide %s" % CampProjects.project_name(
+				needs_camp(tech) as CampProjects.Kind).to_lower()
+		Freno.MATERIAL:
+			# `missing_for` no puede volver vacia aqui: [freno] solo dice
+			# MATERIAL cuando la despensa no da para rematarla.
+			return "parada: falta %s" % ", ".join(missing_for(tech))
+		Freno.JORNADAS:
+			# La cifra que hace falta para DECIDIR es la que queda, no el
+			# porcentaje: «faltan 118 de manufactura» dice a quien hay que
+			# mover de oficio, y «82 %» no dice nada.
+			var job := job_of(tech)
+			if job < 0:
+				return ""
+			var quedan: float = float(CATALOGUE[tech]["days"]) \
+				- days_in(job as Profession.Job)
+			if quedan <= 0.0:
+				return "lista"
+			return "faltan %d de %s" % [int(ceilf(quedan)),
+				Profession.job_name(job as Profession.Job).to_lower()]
+		_:
+			return ""
+
+
 ## Lo que falta para poder rematarla, dicho para leerlo. Vacio si no falta.
 func missing_for(tech: Tech) -> Array[String]:
 	var short: Array[String] = []

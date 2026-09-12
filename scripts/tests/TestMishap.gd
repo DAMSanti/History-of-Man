@@ -3,10 +3,11 @@ extends TestCase
 ## Pruebas de lo que sale mal en el monte.
 ##
 ## Lo que hay que asegurar es que el riesgo sea PROPORCIONADO: que salir lejos
-## y por mal terreno se note, que estar reventado lo empeore, y que nada de
-## esto mate a nadie. Una banda de quince no aguanta perder gente por un tiro
-## de dados, y matar por azar es la forma mas rapida de que el jugador no
-## vuelva a arriesgar nunca.
+## y por mal terreno se note, que estar reventado lo empeore, y que casi nada
+## de esto mate a nadie -sólo la peor caída puede, y pocas veces-. Una banda
+## de quince no aguanta perder gente por un tiro de dados generoso, y matar
+## por azar es la forma mas rapida de que el jugador no vuelva a arriesgar
+## nunca.
 
 
 func suite_name() -> String:
@@ -191,6 +192,60 @@ func test_aguantar_sale_mas_caro_que_volver() -> void:
 	aguantar.call()
 	assert_gt(float(person.hurt_days), float(Mishap.SPRAIN_DAYS),
 		"andar con eso roto se paga en dias")
+
+
+func test_solo_la_caida_puede_ser_mortal() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	for kind: int in [Mishap.Kind.TORCEDURA, Mishap.Kind.PERDIDA,
+			Mishap.Kind.TORMENTA, Mishap.Kind.HALLAZGO]:
+		for i in range(30):
+			assert_false(Mishap.is_fatal(kind as Mishap.Kind, rng),
+				"el percance %d nunca es mortal, salga lo que salga en la tirada" % kind)
+
+
+func test_una_caida_es_mortal_pocas_veces() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260911
+	var mortales := 0
+	var tiradas := 2000
+	for i in range(tiradas):
+		if Mishap.is_fatal(Mishap.Kind.CAIDA, rng):
+			mortales += 1
+	var proporcion := float(mortales) / float(tiradas)
+	assert_gt(proporcion, 0.0, "alguna caída, entre dos mil, es mortal")
+	assert_lt(proporcion, 0.15, "pero es la excepción, no la norma")
+
+
+func test_un_percance_grave_puede_matar_pero_es_la_excepcion() -> void:
+	# Integración de la tarea 12: `_apply_mishap` de verdad, no sólo
+	# `Mishap.is_fatal` en aislado. Criterio 7 de la spec: la proporción de
+	# muertes sobre percances graves totales queda muy por debajo de la
+	# proporción de heridas.
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim._rng.seed = 20260911
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var person := Inhabitant.create(0, Vector3(900.0, 0.0, 900.0), rng)
+	person.position = Vector3(900.0, 0.0, 900.0)
+	sim.home_position = Vector3.ZERO
+
+	var muertes := 0
+	var heridas := 0
+	var tiradas := 3000
+	for i in range(tiradas):
+		sim.people = [person]
+		person.hurt_days = 0
+		sim.percances._apply_mishap(person, Traversal.Ground.CANCHAL, 900.0)
+		if sim.people.is_empty():
+			muertes += 1
+		elif person.hurt_days > 0:
+			heridas += 1
+
+	assert_gt(float(muertes), 0.0, "en tres mil percances graves, alguno mata")
+	assert_gt(float(heridas), float(muertes) * 3.0,
+		"pero herir sigue siendo mucho más frecuente que matar")
 
 
 func test_una_caida_no_deja_nada_que_decidir() -> void:

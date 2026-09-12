@@ -90,6 +90,9 @@ const LOOK := {
 	Materia.Kind.ASTA: [Glyph.ASTA, Color(0.80, 0.75, 0.63)],
 	Materia.Kind.HUESO: [Glyph.HUESO, Color(0.87, 0.85, 0.78)],
 	Materia.Kind.PIEL: [Glyph.PIEL, Color(0.60, 0.44, 0.30)],
+	# Misma silueta que la cruda -sigue siendo una piel-, más clara y cálida:
+	# es lo que deja el ocre y la grasa del curtido.
+	Materia.Kind.PIEL_CURTIDA: [Glyph.PIEL, Color(0.74, 0.52, 0.32)],
 	Materia.Kind.TENDON: [Glyph.HEBRAS, Color(0.82, 0.78, 0.68)],
 	Materia.Kind.FIBRA: [Glyph.HEBRAS, Color(0.50, 0.58, 0.28)],
 	Materia.Kind.LENA: [Glyph.RAMAS, Color(0.42, 0.31, 0.20)],
@@ -124,6 +127,9 @@ const TOOL_LOOK := {
 	Tool.Kind.ANZUELO: [Glyph.ANZUELO, Color(0.85, 0.83, 0.76)],
 	Tool.Kind.RED: [Glyph.RED, Color(0.46, 0.62, 0.55)],
 	Tool.Kind.LAMPARA: [Glyph.LAMPARA, Color(0.92, 0.72, 0.34)],
+	# Sin glifo propio todavía: reutiliza la silueta de piel -es lo que es,
+	# piel cosida- con un tono distinto de la materia prima. Ver `Glyph.PIEL`.
+	Tool.Kind.VESTIDO: [Glyph.PIEL, Color(0.70, 0.40, 0.24)],
 }
 
 ## Forma y color de cada especie de caza. La clave es el nombre tal cual lo
@@ -171,6 +177,7 @@ const MATERIA_TEXTURES := {
 	Materia.Kind.ASTA: "materia_asta",
 	Materia.Kind.HUESO: "materia_hueso",
 	Materia.Kind.PIEL: "materia_piel",
+	Materia.Kind.PIEL_CURTIDA: "materia_piel_curtida",
 	Materia.Kind.TENDON: "materia_tendon",
 	Materia.Kind.FIBRA: "materia_fibra",
 	Materia.Kind.LENA: "materia_lena",

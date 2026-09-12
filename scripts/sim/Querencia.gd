@@ -202,7 +202,15 @@ func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
 		# medio. Es la queja del jugador: uno de los cuatro sitios del primer
 		# dia salia al otro lado del agua, y comunicado lo estaba. Ver
 		# [Marcha.alcanzable_de_verdad].
-		if not sim.marcha.alcanzable_de_verdad(sim.home_position, centre):
+		# POR LA VIA CON MEMORIA, que esto va dentro de un bucle.
+		#
+		# Es la misma pregunta -«¿se llega desde casa?»- y se hacia con la
+		# version cara, que lanza una busqueda entera. Dentro de un barrido
+		# de candidatos eso son decenas de busquedas en un cuadro: medido en
+		# el panel de F3, SETENTA Y NUEVE, y 2.541 ms de fotograma.
+		# [Marcha.alcanzable_desde_casa] contesta lo mismo, guarda la
+		# respuesta por celda y respeta el presupuesto del cuadro.
+		if not sim.marcha.alcanzable_desde_casa(centre):
 			continue
 		# Lo que hay, contra lo que cuesta llegar. Cerca y bueno gana a lejos y
 		# mejor: es la vuelta al abrigo, no una expedicion.

@@ -393,6 +393,7 @@ func _levantar_marcadores() -> void:
 	trail_view = TrailView.new()
 	trail_view.name = "Rastros"
 	add_child(trail_view)
+	trail_view.setup(sim)
 
 	# Y el tiempo, que hasta ahora solo existia en un rotulo. Llevaba desde
 	# que se implanto decidiendo lo que cunde la jornada, lo que se anda y lo
@@ -531,6 +532,15 @@ func _levantar_hogar() -> void:
 	sim.temporada.asentar(GameState.season as Subsistence.Season)
 	sim.day_passed.connect(_on_dia_para_el_paisaje)
 	_on_dia_para_el_paisaje(sim.day)
+	# Y las cuevas que la banda va encontrando, a HORAS DE JUEGO: escriben en
+	# la cronica, asi que cada cuanto se miran es de la partida y no del
+	# fotograma. Ver docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0.
+	sim.hour_passed.connect(_on_hora_para_los_hallazgos)
+
+
+## Cada hora de juego, mirar si la banda ha dado con alguna cueva.
+func _on_hora_para_los_hallazgos(_dia: int, _hora: int) -> void:
+	_check_discoveries()
 
 
 ## La fauna que anda de verdad por el valle, y el arbol de tecnicas.
@@ -604,6 +614,9 @@ func _levantar_interfaz() -> void:
 	# decisiones que pedir. Ver [Moment].
 	if sim != null:
 		ui.barra.watch_moments(sim)
+		# AHORA, y no antes: sim.setup() ya corrió y nadie escuchaba todavía.
+		# Ver [SettlementSim.iniciar_partida].
+		sim.iniciar_partida()
 
 	minimapa._build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
@@ -1210,13 +1223,15 @@ func _process(_delta: float) -> void:
 		Cronometro.tramo("cada 180: capa de recursos")
 		minimapa._refresh_resource_overlay()
 		Cronometro.cierra("cada 180: capa de recursos")
-	# Lo descubierto crece por jornadas, no por frames: revisarlo cuatro veces
-	# por segundo seria pagar todo el rato por un dato que casi nunca cambia
+	# La niebla del minimapa crece por jornadas, no por frames: repintarla
+	# cuatro veces por segundo seria pagar todo el rato por un dato que casi
+	# nunca cambia. Los hallazgos ya no se miran aqui: van a horas de juego,
+	# colgados de `SettlementSim.hour_passed`, porque escriben en la cronica y
+	# el numero de fotograma no es de la partida.
 	if frame % 90 == 0:
-		Cronometro.tramo("cada 90: hallazgos + niebla del minimapa")
-		_check_discoveries()
+		Cronometro.tramo("cada 90: niebla del minimapa")
 		minimapa._refresh_minimap_fog()
-		Cronometro.cierra("cada 90: hallazgos + niebla del minimapa")
+		Cronometro.cierra("cada 90: niebla del minimapa")
 	Cronometro.tramo("chapas de parajes")
 	_repintar_parajes()
 	Cronometro.cierra("chapas de parajes")

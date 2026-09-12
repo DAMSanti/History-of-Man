@@ -113,6 +113,41 @@ static func travel_speed(slope: float, ground: Ground, load_fraction: float) -> 
 	return hiking_speed(slope) * ground_factor(ground) * load_factor(load_fraction)
 
 
+## Lo que se anda aquí como FRACCIÓN del llano de vacío.
+##
+## Es LA cuenta de lo que cuesta andar un trozo de monte, y tiene que ser una
+## sola: la usan el que traza el camino —[Navgrid], para decidir por dónde sale
+## más barato— y el que lo anda —[Marcha], para saber a qué paso va—. Con dos
+## cuentas, el camino más barato de trazar no es el más barato de andar, y eso
+## no se ve en ninguna prueba: sólo en que la gente tarda más de lo que debería
+## por rutas que parecían buenas.
+##
+## Las unidades de Tobler son km/h y no interesan en ninguno de los dos sitios;
+## lo que interesa en los dos es la proporción respecto al llano, que además no
+## toca la escala de tiempo del juego.
+static func pace_fraction(slope: float, ground: Ground,
+		load_fraction: float) -> float:
+	var llano := travel_speed(0.0, Ground.PASTO, 0.0)
+	return travel_speed(slope, ground, load_fraction) / maxf(llano, 0.001)
+
+
+## Lo mismo, cuando NO SE SABE en qué sentido se va a andar.
+##
+## Es el caso de una celda de la rejilla: no tiene sentido de marcha, y encima
+## un camino se anda en los dos —se sale por él y se vuelve por él—. Se promedia
+## subir y bajar.
+##
+## Aquí había un error callado y viejo: la rejilla pasaba a Tobler la pendiente
+## que le da [TerrainGenerator.get_slope_at], que es un MÓDULO —siempre positiva—
+## y la curva de Tobler es asimétrica, con el máximo en una bajada del 5 %. O
+## sea que la rejilla costeaba TODAS las celdas como si se subieran, siempre, en
+## los dos sentidos. Una bajada del 30 % le salía un 40 % más cara de lo que es.
+static func pace_both_ways(slope: float, ground: Ground,
+		load_fraction: float) -> float:
+	return 0.5 * (pace_fraction(slope, ground, load_fraction)
+		+ pace_fraction(-slope, ground, load_fraction))
+
+
 ## Si se puede pasar por un punto.
 ##
 ## Ojo con la distinción: que algo sea AGOTADOR no lo hace intransitable. Son

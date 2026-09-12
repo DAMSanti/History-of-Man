@@ -164,12 +164,15 @@ func _refresh() -> void:
 func _recoger_tirones() -> void:
 	if Cronometro.picos.is_empty():
 		return
+	# NO SE VACÍA: la bandeja la limpia el cepo al abrir el fotograma
+	# siguiente, y así la pueden leer este panel y la sonda que esté midiendo.
+	# Vaciándola aquí, el panel le robaba los tirones a la sonda. Ver
+	# [Cronometro.picos].
 	for pico: Dictionary in Cronometro.picos:
 		_tirones += 1
 		_ultimo = pico
 		if float(pico["total"]) > float(_peor.get("total", 0.0)):
 			_peor = pico
-	Cronometro.picos.clear()
 
 
 ## El desglose del tiron, para que se lea en el panel.

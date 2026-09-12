@@ -338,9 +338,24 @@ func show_places() -> void:
 
 ## Una fila de paraje: qué es, a cuánto está y cómo anda de existencias.
 func _place_row(body: VBoxContainer, paraje: Paraje, index: int) -> void:
+	# NO ALCANZABLE, Y POR QUE. La razon la da [Marcha.por_que_no_se_llega],
+	# que es quien tiene delante la rejilla de ESTA estacion: preguntarlo aqui
+	# por nuestra cuenta seria una segunda regla, y acabaria diciendo otra cosa
+	# que la que de verdad manda a la gente.
+	var pega := ""
+	if ui.sim != null and ui.sim.marcha != null:
+		pega = ui.sim.marcha.por_que_no_se_llega(paraje.position)
+
 	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", UISkin.row_box(
-		UISkin.SURFACE if index % 2 == 0 else UISkin.GROUND.lightened(0.03)))
+	var fondo: Color = UISkin.SURFACE if index % 2 == 0 \
+		else UISkin.GROUND.lightened(0.03)
+	if pega.is_empty():
+		frame.add_theme_stylebox_override("panel", UISkin.row_box(fondo))
+	else:
+		# Marco rojo: el sitio sigue en la lista -la banda lo conoce- pero hoy
+		# no se puede trabajar, y eso tiene que verse sin pinchar.
+		frame.add_theme_stylebox_override("panel",
+			UISkin.outlined_box(fondo, UISkin.ALARM))
 	frame.mouse_filter = Control.MOUSE_FILTER_STOP
 	frame.gui_input.connect(func(event: InputEvent) -> void:
 		var click := event as InputEventMouseButton
@@ -372,6 +387,16 @@ func _place_row(body: VBoxContainer, paraje: Paraje, index: int) -> void:
 	away.add_theme_font_size_override("font_size", 11)
 	away.add_theme_color_override("font_color", UISkin.INK_SOFT)
 	row.add_child(away)
+
+	if not pega.is_empty():
+		var aviso := Label.new()
+		aviso.text = "No alcanzable (%s)" % pega
+		aviso.add_theme_font_size_override("font_size", 11)
+		aviso.add_theme_color_override("font_color", UISkin.ALARM)
+		aviso.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		aviso.clip_text = true
+		row.add_child(aviso)
+		return
 
 	# CUANTO SE SABE DE ESTE SITIO, en la lista y no solo al abrirlo.
 	#

@@ -104,6 +104,23 @@ var resting: bool = false
 ## sentido a volver: una batida no repite trabajo, resuelve una incógnita.
 var contents: Dictionary = {}
 
+## Lo que la banda YA IDENTIFICO aqui alguna vez. `Materia.Kind -> true`.
+##
+## Va aparte de [contents] porque son dos cosas distintas y se confundian:
+## `contents` es LO QUE HAY ESTA ESTACION -se rehace en cada cambio, ver
+## [fill_contents]- y esto es LO QUE SE SABE, que no se olvida nunca.
+##
+## El recuerdo estaba guardado dentro de `contents`, en la casilla «sabido» de
+## cada material. Y como `contents` solo lleva lo que esta en temporada, en
+## cuanto las raices salian de temporada el recuerdo de haberlas identificado
+## se iba con ellas: a la primavera siguiente el paraje volvia a enseñar «???»
+## por unas raices que la banda llevaba un año conociendo.
+##
+## Es la queja literal: «si en primavera ya hemos descubierto raices, cuando
+## pase el año completo y lleguemos a la siguiente primavera, las raices no
+## tienen que aparecer como ??».
+var sabidos: Dictionary = {}
+
 ## Radio del paraje en metros. No es un punto: es una mancha de monte.
 ##
 ## Y no todos miden lo mismo, que es lo que lo dejaba mal: un paraje de
@@ -205,6 +222,8 @@ func reveal_one() -> int:
 			best = kind
 	if best >= 0:
 		(contents[best] as Dictionary)["sabido"] = true
+		# Y en la memoria que no se borra con la estacion. Ver [sabidos].
+		sabidos[best] = true
 	return best
 
 
@@ -252,10 +271,16 @@ var ford: float = 0.0
 
 
 func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
-	var previously_known := {}
+	# LO SABIDO NO SE RECONSTRUYE DESDE `contents`: viene de [sabidos].
+	#
+	# Reconstruirlo desde `contents` era perderlo, porque `contents` solo
+	# lleva lo que esta en temporada. Se sigue leyendo tambien de `contents`
+	# para no perder lo aprendido en partidas guardadas antes de que
+	# existiera `sabidos`.
 	for k: int in contents:
 		if bool((contents[k] as Dictionary)["sabido"]):
-			previously_known[k] = true
+			sabidos[k] = true
+	var previously_known := sabidos
 
 	var fresh := {}
 	if field == null:

@@ -27,6 +27,7 @@ enum Kind {
 	ANZUELO,    ## Bastoncillo de hueso apuntado por los dos cabos. Con cebo
 	RED,        ## Fibra trenzada entre dos orillas: lo que mas pescado da
 	LAMPARA,    ## Canto ahuecado con grasa y mecha: la unica luz de la cueva
+	VESTIDO,    ## Piel cosida con aguja: lo que hace que el invierno abrigue
 }
 
 ## De qué está hecha. Decide cuánto aguanta.
@@ -51,7 +52,7 @@ const KIND_NAMES := {
 	Kind.AGUJA: "Aguja", Kind.PUNZON: "Punzón", Kind.CESTO: "Cesto",
 	Kind.ODRE: "Odre", Kind.CUERDA: "Cuerda", Kind.NASA: "Nasa",
 	Kind.ANZUELO: "Anzuelo", Kind.RED: "Red",
-	Kind.LAMPARA: "Lámpara",
+	Kind.LAMPARA: "Lámpara", Kind.VESTIDO: "Vestido",
 }
 
 const STUFF_NAMES := {
@@ -120,7 +121,7 @@ static func default_stuff(kind_value: Kind) -> Stuff:
 			return Stuff.ASTA
 		Kind.AGUJA, Kind.PUNZON:
 			return Stuff.HUESO
-		Kind.ODRE:
+		Kind.ODRE, Kind.VESTIDO:
 			return Stuff.PIEL
 		Kind.ANZUELO:
 			return Stuff.HUESO
@@ -211,7 +212,13 @@ static func recipe(kind_value: Kind) -> Dictionary:
 			# `SettlementSim.PINTURA_GRASA`.
 			return {Materia.Kind.PIEDRA: 1.0, Materia.Kind.FIBRA: 0.3}
 		Kind.ODRE:
-			return {Materia.Kind.PIEL: 1.0, Materia.Kind.FIBRA: 0.5}
+			# Piel CURTIDA, no cruda: un odre cosido con piel sin curar se
+			# pudriria con el agua dentro. Ver `Taller._curar_piel`.
+			return {Materia.Kind.PIEL_CURTIDA: 1.0, Materia.Kind.FIBRA: 0.5}
+		Kind.VESTIDO:
+			# Una prenda entera lleva mas piel que un odre, y se cose -no se
+			# ata-, asi que no lleva fibra.
+			return {Materia.Kind.PIEL_CURTIDA: 1.5}
 		_:
 			return {Materia.Kind.FIBRA: 1.5}
 
@@ -233,7 +240,7 @@ static func tech_of(kind_value: Kind) -> int:
 			return TechTree.Tech.AZAGAYA
 		Kind.ARPON:
 			return TechTree.Tech.ARPON
-		Kind.AGUJA:
+		Kind.AGUJA, Kind.VESTIDO:
 			return TechTree.Tech.AGUJA
 		Kind.NASA:
 			return TechTree.Tech.NASA
@@ -261,5 +268,7 @@ static func needs_tool(kind_value: Kind) -> int:
 			return Kind.CUERDA
 		Kind.ODRE:
 			return Kind.RAEDERA
+		Kind.VESTIDO:
+			return Kind.AGUJA
 		_:
 			return -1

@@ -52,15 +52,20 @@ var _bridge := false
 ## Estación -> rejilla. Las que están a medias también viven aquí.
 var _rejillas: Dictionary = {}
 
+
 ## Lo que queda por amasar, por orden. La de hoy no entra: esa va entera.
 var _cola: Array[int] = []
 
 
 ## Tira todo y vuelve a empezar. Se llama al montar y cuando aparece la barca.
 ##
-## `caudales` es estación -> caudal, o sea [Temporada.CAUDAL].
+## `caudales` es estación -> caudal, o sea [Temporada.CAUDAL]; `encharques` lo
+## mismo con [Temporada.ENCHARCA]. Las dos cosas hacen falta y por lo mismo:
+## una rejilla de invierno hay que medirla con el río de enero Y con el barro
+## de enero, o costea el valle como si fuera agosto.
 func encargar(terrain: TerrainGenerator, has_boat: bool, has_bridge: bool,
-		hoy: Subsistence.Season, caudales: Dictionary) -> void:
+		hoy: Subsistence.Season, caudales: Dictionary,
+		encharques: Dictionary = {}) -> void:
 	_terrain = terrain
 	_boat = has_boat
 	_bridge = has_bridge
@@ -71,14 +76,15 @@ func encargar(terrain: TerrainGenerator, has_boat: bool, has_bridge: bool,
 
 	# La de hoy, entera y ahora: sin ella no hay partida.
 	_rejillas[int(hoy)] = Navgrid.from_terrain(terrain, has_boat, has_bridge,
-		float(caudales.get(hoy, 1.0)))
+		float(caudales.get(hoy, 1.0)), float(encharques.get(hoy, 0.0)))
 
 	# Las otras tres, preparadas y a la cola. Por orden de LLEGADA -la que
 	# viene después de hoy primero-, que es el orden en que van a hacer falta.
 	for paso in range(1, 4):
 		var season := ((int(hoy) + paso) % 4)
 		_rejillas[season] = Navgrid.preparar(terrain, has_boat, has_bridge,
-			float(caudales.get(season, 1.0)))
+			float(caudales.get(season, 1.0)),
+			float(encharques.get(season, 0.0)))
 		_cola.append(season)
 
 
@@ -90,27 +96,37 @@ func amasar() -> bool:
 	while not _cola.is_empty():
 		var season: int = _cola[0]
 		var grid: Navgrid = _rejillas[season]
-		if grid.amasar(_terrain, FILAS_POR_VUELTA):
+		if grid.amasar(_terrain, FILAS_POR_VUELTA, hasta):
 			_cola.pop_front()
 		if Time.get_ticks_msec() >= hasta:
 			break
 	return not _cola.is_empty()
 
 
-## La rejilla de una estación, o la que haya si todavía no está.
+## La rejilla de una estación, entera. Si está a medias, se termina aquí.
 ##
 ## NUNCA devuelve una a medias: una rejilla sin inundar dice que no hay camino
-## a ninguna parte, y con eso la banda se queda en el abrigo. Mientras la del
-## invierno se hornea se sigue andando con la del otoño, que es lo peor que
-## puede pasar —caminos de hace un trimestre— y no es grave.
+## a ninguna parte, y con eso la banda se queda en el abrigo.
+##
+## Y NUNCA devuelve la de otra estación, que es lo que hacía antes mientras
+## ésta se amasaba. El horno amasa por milisegundos de RELOJ, así que en qué
+## paso de la partida llegaba la rejilla nueva —y con ella el cambio de
+## caminos, que tira los guardados— dependía de lo rápida que fuera la
+## máquina: la misma semilla daba partidas distintas. Eso es comportamiento,
+## no coste. Ver docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0.
+##
+## Terminarla cuesta lo que le falte —una entera son unos 900 ms—, y para eso
+## está el amasado a trozos de cada fotograma: para que cuando alguien la pida
+## ya esté hecha. Lo que cambia es que si NO lo está, se espera.
 func de(season: Subsistence.Season) -> Navgrid:
 	var pedida: Navgrid = _rejillas.get(int(season))
-	if pedida != null and pedida.horneada():
+	if pedida == null:
+		return null
+	if pedida.horneada():
 		return pedida
-	for otra: int in _rejillas:
-		var grid: Navgrid = _rejillas[otra]
-		if grid != null and grid.horneada():
-			return grid
+	while not pedida.horneada():
+		pedida.amasar(_terrain, pedida.tall)
+	_cola.erase(int(season))
 	return pedida
 
 

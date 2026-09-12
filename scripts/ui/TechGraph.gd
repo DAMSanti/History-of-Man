@@ -175,27 +175,30 @@ func _node_box(tech: TechTree.Tech) -> Control:
 
 
 ## Una línea corta con lo que le pasa ahora mismo.
+##
+## Dice la CAUSA, no el porcentaje. Era «43 %» y la queja del jugador es
+## literal: «hay varias técnicas que no se desbloquean, no sé por qué». Un
+## porcentaje que no se mueve no distingue las tres causas —prerrequisito,
+## jornadas o material— y son tres decisiones distintas: esperar, mover gente
+## de oficio, o ir a por asta. Ver `TechTree.causa` y docs/INTERFAZ.md §4.
 func _state_line(tech: TechTree.Tech) -> String:
 	if _tech.has(tech):
 		return "dominada"
-	if not _tech.is_available(tech):
-		# Se dice CUÁL falta, no «falta lo de antes». Con la flecha delante eso
-		# ya se veía; sin ella —porque la previa vive en la rama de otro
-		# oficio— la casilla no decía nada, y es justo el caso en que hay que
-		# mandar al jugador a otra pestaña.
-		for need: int in (TechTree.CATALOGUE[tech]["needs"] as Array):
-			if not _tech.has(need as TechTree.Tech):
-				return "tras %s" % TechTree.tech_name(
-					need as TechTree.Tech).to_lower()
-		var camp := TechTree.needs_camp(tech)
-		if camp >= 0:
-			return "pide %s" % CampProjects.project_name(
-				camp as CampProjects.Kind).to_lower()
-		return "falta lo de antes"
-	if _tech.progress(tech) >= 1.0:
-		var short := _tech.missing_for(tech)
-		return "falta %s" % ", ".join(short) if not short.is_empty() else "lista"
-	return "%d %%" % int(_tech.progress(tech) * 100.0)
+	var causa := _tech.causa(tech)
+	if causa.is_empty():
+		return "%d %%" % int(_tech.progress(tech) * 100.0)
+	# El porcentaje NO se pierde cuando cabe: dice cuánto se lleva andado, y
+	# la causa dice qué lo detiene. Los dos juntos sólo si la línea no se
+	# corta —la casilla son 124 px de texto—.
+	#
+	# Menos con «lista», que es cuando las jornadas están hechas y sólo falta
+	# que la práctica de mañana cobre el material. Ahí el porcentaje es el del
+	# material sin cobrar y sale «lista · 0 %», que se lee como una
+	# contradicción y encima de un estado que dura un día.
+	if _tech.freno(tech) == TechTree.Freno.JORNADAS and causa != "lista" \
+			and causa.length() <= 18:
+		return "%s · %d %%" % [causa, int(_tech.progress(tech) * 100.0)]
+	return causa
 
 
 ## Todo lo que hay que saber de una técnica, para el aviso emergente.
@@ -230,9 +233,13 @@ func _tooltip(tech: TechTree.Tech) -> String:
 			if una > 0.0:
 				lines.append("Cada unidad abre el %.0f %% de las jornadas."
 					% (100.0 / una))
-		var falta := _tech.missing_for(tech)
-		if not falta.is_empty():
-			lines.append("PARADA por falta de: %s." % ", ".join(falta))
+		# PARADA lo decide [TechTree.freno] y no «falta algo en la despensa»:
+		# no es lo mismo que falte para REMATARLA que que el progreso se haya
+		# detenido, y esto decía «parada» de técnicas que seguían subiendo.
+		if _tech.freno(tech) == TechTree.Freno.MATERIAL:
+			var falta := _tech.missing_for(tech)
+			var que := ", ".join(falta) if not falta.is_empty() else "material"
+			lines.append("PARADA: el progreso no sube hasta que haya %s." % que)
 
 	var needs: Array = entry["needs"]
 	if not needs.is_empty():
@@ -241,10 +248,13 @@ func _tooltip(tech: TechTree.Tech) -> String:
 			before.append(TechTree.tech_name(need as TechTree.Tech))
 		lines.append("Cuelga de: %s." % ", ".join(before))
 
-	var short := _tech.missing_for(tech)
-	if not short.is_empty():
+	# Y la causa, la misma que dice la casilla. Aquí había una segunda lista de
+	# «ahora mismo falta» sacada de `missing_for`, que repetía la línea de
+	# PARADA de arriba y además callaba las otras dos causas.
+	var causa := _tech.causa(tech)
+	if not causa.is_empty():
 		lines.append("")
-		lines.append("Ahora mismo falta: %s." % ", ".join(short))
+		lines.append("Ahora mismo: %s." % causa)
 	return "\n".join(lines)
 
 
@@ -295,6 +305,16 @@ func _casilla(tech: TechTree.Tech) -> void:
 	# El filo. En ocre si se puede tocar, en carbón si todavía no.
 	draw_rect(caja, UISkin.OCHRE.darkened(0.25) if alcanzable
 		else UISkin.INK_FAINT.darkened(0.35), false, 1.0)
+
+	# Y la que está PARADA, en hematites y con doble filete.
+	#
+	# Parada es sólo la que no sube aunque se practique —falta material—, no
+	# la que va despacio: si se marcara también la de las jornadas se
+	# marcarían casi todas y la señal no diría nada. Es la diferencia entre
+	# «trae asta» y «pon gente en el taller». Ver [TechTree.Freno].
+	if _tech.freno(tech) == TechTree.Freno.MATERIAL:
+		draw_rect(caja, UISkin.ALARM, false, 1.5)
+		draw_rect(caja.grow(-2.5), UISkin.ALARM.darkened(0.45), false, 1.0)
 
 
 ## Una correa de la casilla de arriba a la de abajo, en tres tramos rectos: una

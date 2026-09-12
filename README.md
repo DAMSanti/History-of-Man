@@ -31,7 +31,9 @@ La primera vez que se funda un emplazamiento se descarga su relieve del IGN
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-887 pruebas, 6 163 comprobaciones. Tienen que estar todas en verde.
+Tienen que estar todas en verde, y el total de comprobaciones no puede bajar
+del que diera al empezar. El total medido está en
+[docs/ESTADO.md](docs/ESTADO.md) §3, que es el único sitio donde vive esa cifra.
 
 Aparte están las **sondas** (`scripts/tests/*Probe.gd`), que no pasan ni
 fallan: miden. El balanceo de este proyecto se ajusta midiendo.

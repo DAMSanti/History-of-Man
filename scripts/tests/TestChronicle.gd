@@ -98,6 +98,14 @@ func test_lo_nuevo_se_cuenta_hasta_que_se_lee() -> void:
 	assert_eq(log.unread, 0, "y ninguna despues de mirar")
 
 
+func test_todos_los_tipos_tienen_nombre() -> void:
+	# Una entrada de crónica sin nombre de categoría no se puede filtrar en la
+	# interfaz -es lo que enganchó el trueque.
+	for kind: int in Chronicle.Kind.values():
+		assert_true(Chronicle.kind_name(kind as Chronicle.Kind).length() > 0,
+			"%d tiene nombre" % kind)
+
+
 func test_la_fecha_se_lee_como_una_fecha() -> void:
 	var entry := {
 		"day": 34, "season": Subsistence.Season.OTONO, "year": 2,

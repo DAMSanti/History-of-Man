@@ -268,6 +268,39 @@ func test_abrir_la_puerta_no_regala_un_vado() -> void:
 		"cuesta cara (%.1f), no es una autopista" % grid.cost[cell])
 
 
+# --- lo aprendido no se olvida al cambiar la estacion --------------------
+
+func test_lo_sabido_sobrevive_a_la_vuelta_del_ano() -> void:
+	# La queja: «si en primavera ya hemos descubierto raices, cuando pase el
+	# año completo y lleguemos a la siguiente primavera, las raices no tienen
+	# que aparecer como ??».
+	#
+	# Pasaba porque lo sabido se guardaba DENTRO de `contents`, que solo lleva
+	# lo que esta en temporada: en cuanto la raiz salia de temporada, el
+	# recuerdo se iba con ella. Ver [Paraje.sabidos].
+	var field := _field_rico()
+	var paraje := _paraje(4, 4, Materia.Kind.RAIZ,
+		Subsistence.Activity.RECOLECCION)
+	paraje.position = field.cell_center(4, 4)
+
+	paraje.fill_contents(field, Subsistence.Season.PRIMAVERA)
+	var aprendido := paraje.reveal_one()
+	assert_gt(float(aprendido), -1.0, "en primavera se identifica algo")
+
+	# Y ahora el año entero, hasta volver a primavera.
+	for estacion: int in [Subsistence.Season.VERANO, Subsistence.Season.OTONO,
+		Subsistence.Season.INVIERNO, Subsistence.Season.PRIMAVERA]:
+		paraje.fill_contents(field, estacion as Subsistence.Season)
+
+	assert_true(paraje.sabidos.has(aprendido),
+		"la banda sigue recordando lo que identifico hace un año")
+	if paraje.contents.has(aprendido):
+		assert_true(bool((paraje.contents[aprendido] as Dictionary)["sabido"]),
+			"y al volver a estar en temporada NO sale otra vez como ???")
+	field.free()
+
+
+
 ## Una rejilla de prueba, escrita como se ve: '#' es mancha y '.' es vacio.
 func _mask(rows: Array) -> PackedByteArray:
 	var out := PackedByteArray()
@@ -375,6 +408,35 @@ func _field_rico() -> ResourceField:
 		field.set_abundance(activity as Subsistence.Activity, 4, 4, 1.0)
 		field.spread(activity as Subsistence.Activity, 3)
 	return field
+
+
+# --- el repaso de formas: docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0 -------
+
+func test_el_repaso_de_formas_cuenta_formas_y_no_milisegundos() -> void:
+	# Cuántas formas se rehacían por vuelta lo decidían dos milisegundos de
+	# reloj, y la forma decide dónde se trabaja: una máquina más rápida jugaba
+	# otra partida. Ahora son POR_REPASO, tarde lo que tarde cada una.
+	var parajes := Parajes.new()
+	var field := _field_rico()
+	var terrain := FakeTerrain.new()
+	var cuantos := Parajes.POR_REPASO * 3 + 1
+	for i in range(cuantos):
+		var paraje := _paraje(i % 8, int(float(i) / 8.0))
+		assert_true(parajes.add(paraje), "el paraje %d entra" % i)
+		paraje.retocar(field, terrain)
+	var viejas: Dictionary = {}
+	for paraje: Paraje in parajes.list:
+		viejas[paraje] = paraje.huella
+	var vueltas := int(ceil(float(cuantos) / float(Parajes.POR_REPASO)))
+	for vuelta in range(vueltas):
+		assert_eq(parajes.retocar_huellas(field, terrain), Parajes.POR_REPASO,
+			"la vuelta %d rehace exactamente %d" % [vuelta + 1, Parajes.POR_REPASO])
+	var sin_tocar := 0
+	for paraje: Paraje in parajes.list:
+		if is_same(paraje.huella, viejas[paraje]):
+			sin_tocar += 1
+	assert_eq(sin_tocar, 0, "y en %d vueltas no se ha dejado ninguno" % vueltas)
+	terrain.free()
 
 
 # --- la mancha respeta el terreno: ni cruza rios ni trepa cantiles -------
@@ -1515,3 +1577,29 @@ func test_una_pesquera_conserva_su_cauce() -> void:
 			mojadas += 1
 	assert_gt(mojadas, 0, "una pesquera sin agua dentro no es una pesquera")
 	terrain.free()
+
+
+## La regla de este fichero: «lo que se puede traer de un sitio tiene que
+## salir en la ficha del sitio». El asta la incumplia por los dos lados.
+func test_el_asta_de_invierno_sale_en_la_ficha_del_prado() -> void:
+	# La recoleccion de invierno produce cuerna de desmogue -Tajo, 0,8 al
+	# dia- y ningun prado la anunciaba, asi que no habia forma de ir a por
+	# ella. Es la puerta que cerraba el bucle de la azagaya.
+	var extras: Array = Parajes.EXTRAS_BY_ACTIVITY[Subsistence.Activity.RECOLECCION]
+	assert_true(extras.has(Materia.Kind.ASTA),
+		"la recoleccion de invierno trae asta, asi que la ficha la dice")
+	assert_true(Parajes.in_season(Materia.Kind.ASTA, Subsistence.Season.INVIERNO),
+		"pero solo en invierno: el ciervo desmoga de febrero a abril")
+	assert_false(Parajes.in_season(Materia.Kind.ASTA, Subsistence.Season.VERANO),
+		"en verano el ciervo lleva la cuerna puesta")
+
+
+func test_un_desmogadero_entrega_asta() -> void:
+	# `MATERIA_PRIMA_POOL` reserva cuatro papeletas de quince para el asta, o
+	# sea que hay parajes llamados desmogadero. No entregaban nada: la tabla
+	# de la materia prima solo daba piedra y ocre. La ficha mentia.
+	assert_true(Parajes.MATERIA_PRIMA_NAMES.has(Materia.Kind.ASTA),
+		"el desmogadero es un nombre de paraje de materia prima")
+	var extras: Array = Parajes.EXTRAS_BY_ACTIVITY[Subsistence.Activity.MATERIA_PRIMA]
+	assert_true(extras.has(Materia.Kind.ASTA),
+		"y por tanto sale tambien en la ficha de los demas sitios de piedra")

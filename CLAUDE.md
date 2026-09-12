@@ -41,9 +41,13 @@ Godot está en `E:\Godot\Godot_v4.5.1-stable_win64.exe`, **no** donde dice
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-**887 pruebas, 6 163 comprobaciones**, en verde siempre. Mira las dos cosas: que
-esté verde **y que el total de comprobaciones no baje**. Una prueba que revienta
-antes de su primer `assert` no falla: pasa.
+**En verde siempre.** Mira las dos cosas: que esté verde **y que el total de
+comprobaciones no baje del que diera al empezar** —anótalo antes de tocar nada;
+es el único suelo que no caduca—. Una prueba que revienta antes de su primer
+`assert` no falla: pasa.
+
+El total del día, medido, está en [docs/ESTADO.md](docs/ESTADO.md) §3, que es
+el único sitio del repositorio donde vive esa cifra.
 
 Si tocaste algo que salió de una fachada (`SettlementSim`, `GameUI`):
 

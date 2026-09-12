@@ -80,16 +80,28 @@ func _scout_target(person: Inhabitant) -> Vector3:
 					"Ya no queda nada nuevo que reconocer a este lado. La banda "
 						+ "conoce su comarca; para ver mas habria que cruzar el "
 						+ "agua o levantar el campamento.", 2)
+			# Y se repasa TODO EL MAPA, no un radio: lo que peor se conoce
+			# puede estar en la otra punta, y llegar hasta alli es cosa de la
+			# mochila y no de un numero escrito aqui.
+			var ancho := 4096.0
+			if sim._terrain != null:
+				ancho = maxf(float(sim._terrain.terrain_size.x),
+					float(sim._terrain.terrain_size.y))
 			target = _least_known_around(sim.home_position,
-				BATIDA_RADIUS, Cumbres.PEAK_SEARCH_RADIUS, person)
+				BATIDA_RADIUS, ancho, person)
 
-	# Ni el rumbo del jugador se salta esto: una partida corta no se
-	# aventura al borde del mapa por mucho que se le señale. Se queda
-	# repasando lo que tiene mas cerca hasta que se sume mas gente.
-	if target.distance_to(sim.home_position) > Despensa.REGIONAL_DISTANCE \
-			and sim.despensa._expedition_party_size() < Despensa.MIN_GROUP_FOR_REGIONAL:
-		target = _least_known_around(sim.home_position,
-			BATIDA_RADIUS, Despensa.REGIONAL_DISTANCE, person)
+	# AQUI NO HAY TOPE DE DISTANCIA, Y ES DELIBERADO.
+	#
+	# Habia uno: pasados 2.600 m se le cambiaba el destino por otro mas
+	# cerca si la banda no tenia tres personas dedicadas a expedicion. Eso
+	# es limitar por distancia y por plantilla, y no es lo que limita a una
+	# expedicion de verdad.
+	#
+	# Lo que la limita es LO QUE SE PUEDE LLEVAR ENCIMA: los dias de viaje
+	# salen de la distancia, la comida sale de los dias, y si no se puede
+	# cargar esa comida no se sale. Eso lo decide [Despensa._provision],
+	# que es quien tiene delante el almacen y la mochila. Aqui solo se
+	# elige adonde merece la pena ir.
 
 	target.y = sim._terrain.get_height_at(target)
 	return target
@@ -175,13 +187,40 @@ func _batida_target(person: Inhabitant) -> Vector3:
 	# no se anda. Se prueban varios y se coge el primero que merezca el camino.
 	person.paraje_batido = ""
 	var suelto := sim.home_position
+	var mejor_rodeo := INF
 	for intento in range(4):
 		var candidato := _least_known_around(sim.home_position,
 			BATIDA_RADIUS * 0.35, BATIDA_RADIUS, person)
+		# La ruta se vacia antes de pedir la del candidato siguiente: si no, un
+		# candidato al que `_send_to` no le traza nada -por sabido imposible-
+		# se queda con la ruta del anterior y se le mide un rodeo que no es
+		# suyo.
+		person.route = PackedVector3Array()
+		person.route_step = 0
 		sim.marcha._send_to(person, candidato)
+		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			# Sin mirar no se descarta: se deja de probar y se sale con lo
+			# que haya. Ver [Marcha.Traza].
+			break
 		if sim.marcha.merece_el_camino(person, candidato):
 			return candidato
-		suelto = candidato
+		# EL MENOS MALO, y no el ultimo probado.
+		#
+		# Se devolvia `suelto` = el cuarto candidato, hubiera salido como
+		# hubiera salido: si los cuatro pedian rodeo, el batidor se iba con el
+		# que tocara en el sorteo. Es la queja literal —«un explorador ha ido a
+		# batir ese paraje y se ha ido a 1 km contra el rio»—: no es que no
+		# hubiera camino, es que se cogia uno cualquiera de los malos.
+		#
+		# Y sin ruta no es candidato a nada: eso es mandar a alguien a un sitio
+		# al que no se llega.
+		if person.route.is_empty():
+			continue
+		var derecho := maxf(Traversal.en_llano(person.position, candidato), 1.0)
+		var rodeo := sim.marcha.largo_de(person.position, person.route) / derecho
+		if rodeo < mejor_rodeo:
+			mejor_rodeo = rodeo
+			suelto = candidato
 	return suelto
 
 
@@ -189,6 +228,19 @@ func _batida_target(person: Inhabitant) -> Vector3:
 ##
 ## Doce da para cubrir el circulo sin que la eleccion cueste nada: son doce
 ## consultas al mapa mental, no doce busquedas de camino.
+## A que distancia se considera que a ese sitio YA VA OTRO.
+##
+## Ciento veinte metros, que es el radio de un paraje -ver [Paraje.extent]-:
+## dos exploradores dentro de eso estan resolviendo las mismas incognitas y
+## uno de los dos sobra.
+##
+## Estaba escrito a mano aqui y otra vez en
+## [SettlementSim._paraje_to_survey], que decide lo mismo un paso antes. Dos
+## copias de la regla de repartirse el monte es como se acaba con los dos
+## batidores en el mismo sitio.
+const YA_HAY_OTRO := 120.0
+
+
 const SCAN_CANDIDATES := 12
 
 
@@ -220,7 +272,7 @@ func _terrain_lure(point: Vector3) -> float:
 		for offset: Vector2 in [Vector2(reach_water, 0.0), Vector2(-reach_water, 0.0),
 				Vector2(0.0, reach_water), Vector2(0.0, -reach_water)]:
 			var side := point + Vector3(offset.x, 0.0, offset.y)
-			if sim._terrain.crossing_difficulty_at(side) > 0.15:
+			if sim._terrain.crossing_difficulty_at(side) > Hydrography.HAY_AGUA:
 				lure += LURE_WATER
 				break
 
@@ -277,16 +329,26 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 		person: Inhabitant) -> Vector3:
 	var best: Array[Dictionary] = []
 
+	# ADONDE YA VA OTRO, UNA VEZ Y NO DOCE. Los demas exploradores no se mueven
+	# mientras se barre el abanico, asi que sus anclas se sacan aqui: dentro
+	# del bucle eran quince personas por cada uno de los doce candidatos. Van
+	# en el mismo orden que `sim.people`, que es el orden en que se sumaban.
+	var anclas: Array[Vector3] = []
+	for other: Inhabitant in sim.people:
+		if other != person and other.job == Profession.Job.EXPLORACION:
+			anclas.append(_exploration_anchor(other))
+	var terreno := sim._terrain
+
 	for i in range(SCAN_CANDIDATES):
 		# En abanico y no al azar, para que el barrido cubra el circulo
 		var angle := (float(i) + sim._rng.randf()) / float(SCAN_CANDIDATES) * TAU
 		var radius := sim._rng.randf_range(near, far)
 		var candidate := centre + Vector3(
 			cos(angle) * radius, 0.0, sin(angle) * radius)
-		if sim._terrain:
-			candidate.y = sim._terrain.get_height_at(candidate)
-			if not Traversal.is_passable(sim._terrain.get_slope_at(candidate),
-					sim._terrain.crossing_difficulty_at(candidate),
+		if terreno:
+			candidate.y = terreno.get_height_at(candidate)
+			if not Traversal.is_passable(terreno.get_slope_at(candidate),
+					terreno.crossing_difficulty_at(candidate),
 					sim.has_boat, sim.has_bridge):
 				continue
 			# Y que no haya cauce de por medio: pisable no es alcanzable, y la
@@ -310,9 +372,8 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 		# líneas, no por sus casillas.
 		known -= _terrain_lure(candidate)
 		# Adonde ya va otro no se va: asi se abren en abanico
-		for other: Inhabitant in sim.people:
-			if other != person and other.job == Profession.Job.EXPLORACION \
-					and _exploration_anchor(other).distance_to(candidate) < 120.0:
+		for ancla: Vector3 in anclas:
+			if Traversal.en_llano(ancla, candidate) < YA_HAY_OTRO:
 				known += 0.5
 		best.append({"pos": candidate, "known": known})
 
@@ -373,12 +434,42 @@ func repasar_rezagados() -> int:
 	# Un oficio Y UNA FRANJA por vuelta. Con cinco oficios y cuatro franjas, el
 	# campo entero se repasa cada veinte horas de luz, o sea cada dia y medio
 	# largo. De sobra para una cola.
+	# PRIMERO LA COLA, que es de lo que va esto.
+	#
+	# Sacar al siguiente que espera no cuesta un barrido: los candidatos ya
+	# estan apuntados desde que se encontraron. Ver [Parajes.cola].
+	var salieron := sim.parajes.vaciar_cola(sim.field, sim.knowledge,
+		sim.day, sim._terrain, mismo_trozo, DE_UNA_VUELTA, _se_llega())
+	if salieron > 0:
+		_contar_los_nuevos()
+		return salieron
+
+	# Y EL BARRIDO, SOLO CUANDO HAY MOTIVO.
+	#
+	# El motivo es que haya cambiado POR DONDE SE PASA: un sitio que se
+	# descarto en enero porque el rio iba crecido vuelve a ser candidato en
+	# agosto sin que nadie haya vuelto a mirarlo, asi que ahi si hay que
+	# repasar el mapa. Lo avisa la propia rejilla al cambiar -ver
+	# [Marcha.forget_routes]-.
+	#
+	# Barria SIEMPRE, a cada hora de luz, y de ahi salia el tiron: 178 ms del
+	# peor cuadro medidos con `PicoProbe`. Y no era solo caro: al barrer por
+	# turnos -un oficio y una franja por vuelta- un sitio podia esperar dia y
+	# medio a que le tocara su casilla, que es una cola con latencia
+	# inventada. Ahora sale en cuanto se descubre.
+	if not sim.parajes.revisar_el_mapa:
+		return 0
+
 	var turno := _de_quien_toca % TURNOS.size()
 	@warning_ignore("integer_division")
 	var trozo := (_de_quien_toca / TURNOS.size()) % FRANJAS
 	_de_quien_toca += 1
+	# Cuando se han dado las cinco vueltas por las cuatro franjas, el mapa
+	# esta repasado entero y el aviso se apaga hasta el proximo cambio.
+	if _de_quien_toca % (TURNOS.size() * FRANJAS) == 0:
+		sim.parajes.revisar_el_mapa = false
 	var alto := int(ceil(float(sim.field.height) / float(FRANJAS)))
-	var salieron := sim.parajes.refresh(sim.field, sim.knowledge, sim.day,
+	salieron = sim.parajes.refresh(sim.field, sim.knowledge, sim.day,
 		[TURNOS[turno]], sim._terrain, mismo_trozo,
 		Vector3.ZERO, 0.0, DE_UNA_VUELTA, _se_llega(),
 		Vector2i(trozo * alto, (trozo + 1) * alto))
@@ -592,8 +683,14 @@ const BATIDA_REPETITION_RATE := 0.001
 
 
 func _survey(person: Inhabitant, hours: float) -> void:
+	# Las marcas del cepo de aqui son las de la tarea 21 de
+	# docs/specs/LO_MISMO_MAS_DEPRISA.md: reconocer cuesta 2,1 ms por tick
+	# -cien veces mas que trabajar- y se lleva el 73 % de los tirones de una
+	# ventana de invierno. «Reconocer» a secas no dice cual de sus piezas.
 	person.survey_hours += hours
+	Cronometro.tramo("reconociendo: horas que pide")
 	var needed := _survey_hours_for(person)
+	Cronometro.cierra("reconociendo: horas que pide")
 	person.fatigue = clampf(
 		person.fatigue + hours * 4.0 * person.fatigue_factor(), 0.0, 100.0)
 
@@ -604,10 +701,12 @@ func _survey(person: Inhabitant, hours: float) -> void:
 	# llegaba al umbral de nombrar un paraje nuevo por mucho que la banda
 	# saliera a explorar: esto es lo que de verdad apagaba el descubrimiento.
 	if sim.knowledge:
+		Cronometro.tramo("reconociendo: ver y observar")
 		sim.knowledge.see_from(person.position, sim.sight_range * sim.weather.sight_factor())
 		var pace := hours / 24.0
 		for activity: int in sim._activities_for_learning(person):
 			sim.knowledge.observe(activity as Subsistence.Activity, person.position, pace)
+		Cronometro.cierra("reconociendo: ver y observar")
 
 	if person.current_speciality == Profession.Speciality.BATIDA:
 		_grow_batida_skill(person, hours * BATIDA_REPETITION_RATE,
@@ -615,7 +714,9 @@ func _survey(person: Inhabitant, hours: float) -> void:
 
 	# Y se recoge lo que va saliendo: reconocer no es andar con las manos en
 	# los bolsillos. Ver [_recoger_de_paso].
+	Cronometro.tramo("reconociendo: recoger de paso")
 	_recoger_de_paso(person, hours)
+	Cronometro.cierra("reconociendo: recoger de paso")
 
 	if person.work_centre == Vector3.ZERO:
 		person.work_centre = person.position
@@ -635,6 +736,7 @@ func _survey(person: Inhabitant, hours: float) -> void:
 	# sitio que se vino a batir. Es lo que se pidio dicho al derecho: «lo que no
 	# quiero nunca es que se vayan mas lejos de lo necesario».
 	if person.current_speciality == Profession.Speciality.BATIDA:
+		Cronometro.tramo("reconociendo: correa")
 		var vuelvo := Vector3.ZERO
 		var porque := ""
 
@@ -673,7 +775,9 @@ func _survey(person: Inhabitant, hours: float) -> void:
 			person.horas_en_el_tramo = 0.0
 			person.forage_target = vuelvo
 			sim.marcha._send_to(person, vuelvo)
+			Cronometro.cierra("reconociendo: correa")
 			return
+		Cronometro.cierra("reconociendo: correa")
 
 	# Se BATE la comarca: se da la vuelta al punto por tramos, subiendo al
 	# alto de al lado, bajando al arroyo, mirando el cortado.
@@ -696,12 +800,57 @@ func _survey(person: Inhabitant, hours: float) -> void:
 	# cortado: eso lleva un rato en cada sitio. Ver [MIRAR_EL_SITIO].
 	person.horas_en_el_tramo += hours
 	var arrived := person.position.distance_to(person.forage_target) < sim.arrive_radius
-	if (arrived and person.horas_en_el_tramo >= MIRAR_EL_SITIO) 			or person.route_step >= person.route.size():
+	var sin_ruta := person.route.is_empty()
+	var ruta_acabada := not sin_ruta and person.route_step >= person.route.size()
+
+	# EN CADA TRAMO HAY QUE PARARSE A MIRAR, Y AHORA SE CUMPLE.
+	#
+	# La condicion era «llego y miro, O la ruta se acabo», y ese O se comia la
+	# regla: el andador sube `route_step` al pisar el ultimo hito -ver el paso
+	# de hito en [Marcha]-, asi que en el mismo tick de llegar ya se sorteaba
+	# el siguiente tramo, sin la media hora. Medido, dos ventanas de cinco
+	# jornadas desde el dia 151: CERO tramos de casi mil respetaban
+	# [MIRAR_EL_SITIO], y sortearlos era el 68 % del paso en los fotogramas
+	# malos. Ver la tarea 21.9 de docs/specs/LO_MISMO_MAS_DEPRISA.md.
+	#
+	# SI EL CAMINO NO LLEGA DEL TODO, SE MIRA DESDE DONDE ACABA. La ruta puede
+	# acabar antes del destino -el trazado amarra el destino a suelo pisable-,
+	# y esperar ahi con el destino puesto seria peor que no esperar: el
+	# andador vuelve a trazar hacia el en cada tick («la ruta agotada sin
+	# haber llegado es justamente cuando hay que volver a trazar», [Marcha]).
+	# Se da el sitio por alcanzado donde se esta.
+	if ruta_acabada and not arrived:
+		person.forage_target = person.position
+		person.target = person.position
+		arrived = true
+
+	var toca := false
+	if sin_ruta:
+		# SIN RUTA, UN RATO QUIETO Y SE VUELVE A PROBAR. Es la misma espera
+		# que la de la decision que no llevo a nada -ver
+		# [SettlementSim.ESPERA_PARA_REPENSAR]-: el monte no cambia en
+		# veinticuatro segundos. Y quieto de verdad: con el destino puesto, el
+		# andador volveria a trazar hacia el en cada tick.
+		toca = person.horas_en_el_tramo >= SettlementSim.ESPERA_PARA_REPENSAR
+		if not toca:
+			person.target = person.position
+	else:
+		toca = arrived and person.horas_en_el_tramo >= MIRAR_EL_SITIO
+
+	if toca:
+		var porque_tramo := "reconociendo: siguiente tramo (sin ruta)" if sin_ruta \
+			else "reconociendo: siguiente tramo (miro el sitio)"
 		person.horas_en_el_tramo = 0.0
+		Cronometro.tramo("reconociendo: siguiente tramo")
+		Cronometro.tramo(porque_tramo)
 		_next_survey_leg(person)
+		Cronometro.cierra(porque_tramo)
+		Cronometro.cierra("reconociendo: siguiente tramo")
 
 	if person.survey_hours >= needed:
+		Cronometro.tramo("reconociendo: terminar")
 		_finish_survey(person)
+		Cronometro.cierra("reconociendo: terminar")
 
 
 ## A qué nivel deja una jornada de reconocimiento lo que ha batido.
@@ -812,12 +961,27 @@ func _finish_survey(person: Inhabitant) -> void:
 	# Las huellas se solapan y `_paraje_at` devuelve el primero de la lista que
 	# contenga el punto —el mas antiguo—, asi que la jornada se le abonaba a un
 	# vecino que a lo mejor ya estaba conocido a fondo. Ver
-	# [Inhabitant.paraje_batido]. Se exige ademas estar DENTRO de el: si la
-	# batida se quedo a medio camino, no se ha batido nada.
+	# [Inhabitant.paraje_batido].
+	#
+	# Y HABER LLEGADO SE MIDE CON LA MISMA VARA QUE LA CORREA, no con la
+	# huella.
+	#
+	# Aqui se exigia estar DENTRO de la huella, y la correa que sujeta al
+	# batidor mientras bate usa otra cosa: el radio del paraje con un cuarto
+	# de margen -[SE_PASA_DE_LA_RAYA]-. Dos reglas para «¿esta en su sitio?»,
+	# y la de aqui es la mas estrecha.
+	#
+	# Lo pagaban LAS PESQUERAS. Un paraje de pesca abarca setenta metros
+	# -[Paraje.EXTENSION]- y su huella es una cinta que sigue el cauce, asi
+	# que el batidor acaba la jornada en la orilla, un paso fuera de la
+	# cinta: la correa lo daba por dentro y esto por fuera, y la jornada no
+	# resolvia ninguna incognita. Es la queja: «hay parajes, sobre todo de
+	# pesca, que no se descubren todos los ?? aunque esten al alcance».
 	var here := sim._paraje_at(person.work_centre)
 	if not person.paraje_batido.is_empty() and sim.parajes != null:
 		var mandado := sim.parajes.por_id(person.paraje_batido)
-		if mandado != null and mandado.contains(person.work_centre):
+		if mandado != null and Traversal.en_llano(mandado.position,
+			person.work_centre) <= mandado.extent * SE_PASA_DE_LA_RAYA:
 			here = mandado
 
 	# APRENDER EL TERRENO SE HACE SIEMPRE, se esté sobre un paraje o no.
@@ -1032,6 +1196,10 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.route_step = 0
 		person.forage_target = candidate
 		sim.marcha._send_to(person, candidate)
+		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			# No se ha mirado: se deja el tramo para el cuadro siguiente en
+			# vez de sortear otro. Ver [Marcha.Traza].
+			return
 
 		# Que HAYA camino no basta: batiendo un paraje pegado al agua, la
 		# otra orilla está comunicada por un vado lejano y el tramo de
@@ -1053,14 +1221,37 @@ func _next_survey_leg(person: Inhabitant) -> void:
 			return
 
 	# Si de verdad no hay por donde salir, se bate lo que se tenga a mano en
-	# vez de quedarse mirando la nada
-	var angle := sim._rng.randf() * TAU
-	var near := person.position + Vector3(
-		cos(angle) * sim.arrive_radius * 2.5, 0.0, sin(angle) * sim.arrive_radius * 2.5)
-	if sim._terrain:
-		near.y = sim._terrain.get_height_at(near)
-	person.forage_target = near
-	person.target = near
+	# vez de quedarse mirando la nada. EN ABANICO Y CON CAMINO, las dos cosas.
+	#
+	# Esto sorteaba UN punto al azar y lo metia en `person.target` a pelo, sin
+	# pedir ruta. Dos averias en dos lineas: la persona se quedaba andando en
+	# linea recta hacia un punto que nadie habia comprobado -y si de por medio
+	# habia cauce, contra el rio-, y como la ruta seguia vacia, el tramo se
+	# volvia a sortear AL TICK SIGUIENTE. Eso es el paseo aleatorio que se ve
+	# en los rastros como una vereda recorrida en bucle.
+	#
+	# Ahora se prueban ocho rumbos repartidos y se coge el primero que tenga
+	# camino de verdad; si ninguno lo tiene, es que aqui no hay nada que batir
+	# y se da la vuelta a casa, que es una respuesta y no un temblor.
+	var salida := sim._rng.randf() * TAU
+	for i in range(8):
+		var angle := salida + float(i) / 8.0 * TAU
+		var near := person.position + Vector3(
+			cos(angle) * sim.arrive_radius * 2.5, 0.0,
+			sin(angle) * sim.arrive_radius * 2.5)
+		if sim._terrain:
+			near.y = sim._terrain.get_height_at(near)
+		person.route = PackedVector3Array()
+		person.route_step = 0
+		sim.marcha._send_to(person, near)
+		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			return
+		if not person.route.is_empty():
+			person.forage_target = near
+			return
+
+	# Ni eso: se acaba el reconocimiento y a casa.
+	_finish_survey(person)
 
 
 ## Cuanto dura un sim.reconocimiento, segun de que salida sea.

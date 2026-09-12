@@ -193,6 +193,13 @@ const MARKER_REFERENCE := 260.0
 const MARKER_MIN_SCALE := 0.9
 const MARKER_MAX_SCALE := 4.5
 
+## Desde donde la chapa deja de pintarse. Ver [_scale_markers].
+##
+## El doble de donde deja de compensar la distancia: ahi ya se ve a la cuarta
+## parte de su tamaño, o sea que no es un asa sino una mota. El sitio sigue en
+## el minimapa y en la lista de parajes.
+const OCULTAR_MAS_ALLA := MARKER_REFERENCE * MARKER_MAX_SCALE * 2.0
+
 
 func _build(paraje: Paraje, terrain: TerrainGenerator) -> Node3D:
 	var holder := Node3D.new()
@@ -694,5 +701,25 @@ func _scale_markers() -> void:
 		if not holder.name.begins_with("Paraje_") 				and not holder.name.begins_with("Cima_"):
 			continue
 		var away := eye.distance_to(holder.global_position)
+		# LO QUE NO SE PUEDE LEER, NO SE PINTA.
+		#
+		# Cada chapa son dos cosas que se dibujan siempre -el icono y el
+		# rotulo- y ademas sin test de profundidad, asi que ni las tapa el
+		# monte. Con cuatro parajes daba igual; con la comarca entera abierta
+		# a la exploracion son doscientos largos, y eso son mil y pico
+		# llamadas de dibujo por cuadro que crecen con la partida.
+		#
+		# El corte no es un numero inventado: sale del propio marcador. Hasta
+		# [MARKER_REFERENCE] por [MARKER_MAX_SCALE] la chapa compensa la
+		# distancia y ocupa siempre lo mismo en pantalla —es «un asa que se
+		# puede ver y pinchar»—; pasado eso deja de compensar y empieza a
+		# encoger. Al doble ya es la cuarta parte de su tamaño: ni se lee ni
+		# se pincha, y el sitio sigue estando en el minimapa y en la lista de
+		# la ventana de parajes, que es donde se le busca de verdad.
+		var a_la_vista := away <= OCULTAR_MAS_ALLA
+		if holder.visible != a_la_vista:
+			holder.visible = a_la_vista
+		if not a_la_vista:
+			continue
 		holder.scale = Vector3.ONE * clampf(away / MARKER_REFERENCE,
 			MARKER_MIN_SCALE, MARKER_MAX_SCALE)

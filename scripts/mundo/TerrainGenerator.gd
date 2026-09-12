@@ -994,6 +994,40 @@ func crossing_difficulty_with(world_pos: Vector3, con_caudal: float) -> float:
 	return _ford_map[z * resolution + x] * con_caudal
 
 
+## Si una recta se anda entera sin toparse con agua que no se vadea.
+##
+## Es la misma cata que hacia [Marcha.cruza_el_agua] -un punto cada `cada`
+## metros, contando los dos extremos- pero SIN una llamada por punto: a tres
+## metros de cata, un tramo de doscientos sesenta metros son ochenta y siete
+## puntos, y cada uno costaba dos llamadas -la del vado y la del umbral-. En
+## GDScript la llamada pesa mas que la cuenta que hay dentro, y esto se hace
+## doce veces por candidato y hasta ocho veces por tramo sorteado: era el 95 %
+## del barrido del batidor. Ver la tarea 21 de
+## docs/specs/LO_MISMO_MAS_DEPRISA.md.
+##
+## El tope y si se compara estricto los decide [Hydrography.tope_de_vado], que
+## es donde sigue viviendo la regla del vado.
+func linea_sin_agua(desde: Vector3, hasta: Vector3, cada: float,
+		con_caudal: float, tope: float, estricto: bool) -> bool:
+	if _ford_map.is_empty() or resolution <= 1:
+		return true
+	var largo := Vector2(hasta.x - desde.x, hasta.z - desde.z).length()
+	var catas := maxi(int(ceil(largo / maxf(cada, 0.001))), 1)
+	var ultimo := resolution - 1
+	var ancho := float(terrain_size.x)
+	var alto := float(terrain_size.y)
+	for i in range(catas + 1):
+		var t := float(i) / float(catas)
+		var px := desde.x + (hasta.x - desde.x) * t
+		var pz := desde.z + (hasta.z - desde.z) * t
+		var x := clampi(int(round(px / ancho * float(ultimo))), 0, ultimo)
+		var z := clampi(int(round(pz / alto * float(ultimo))), 0, ultimo)
+		var dificultad := _ford_map[z * resolution + x] * con_caudal
+		if dificultad > tope or (estricto and dificultad == tope):
+			return false
+	return true
+
+
 ## Si un trayecto recto se puede recorrer a pie de principio a fin.
 ##
 ## Mira las DOS cosas que cortan el paso: el agua que no se vadea y la
@@ -1011,31 +1045,6 @@ func path_is_passable(from_pos: Vector3, to_pos: Vector3,
 				crossing_difficulty_at(point), has_boat, has_bridge):
 			return false
 	return true
-
-
-## Qué fracción de un trayecto recto es transitable, de 0 a 1.
-##
-## Existe porque `path_is_passable` es demasiado estricto para una batida de
-## reconocimiento. Sobre terreno real, una recta de un kilómetro casi siempre
-## toca alguna celda con demasiada pendiente, así que exigirla limpia entera
-## dejaba a los exploradores sin ningún destino válido: se quedaban parados en
-## el campamento y el mapa no se abría.
-##
-## Para ir al tajo todos los días sí hay que poder ir en recta. Para explorar
-## no: un batidor rodea el obstáculo, que es justo su trabajo.
-func passable_fraction(from_pos: Vector3, to_pos: Vector3,
-		has_boat: bool, has_bridge: bool) -> float:
-	var span := float(terrain_size.x) / float(maxi(resolution - 1, 1))
-	# Un paso cada varias celdas: aqui interesa la forma general del camino,
-	# no cada piedra, y muestrear fino cuesta mucho por candidato
-	var steps := maxi(int(from_pos.distance_to(to_pos) / maxf(span * 4.0, 1.0)), 1)
-	var clear := 0
-	for s in range(steps + 1):
-		var point := from_pos.lerp(to_pos, float(s) / float(steps))
-		if Traversal.is_passable(get_slope_at(point),
-				crossing_difficulty_at(point), has_boat, has_bridge):
-			clear += 1
-	return float(clear) / float(steps + 1)
 
 
 ## Peor punto de cruce en un trayecto recto entre dos puntos del mundo.

@@ -163,3 +163,88 @@ func test_sin_partida_la_fauna_anda_por_su_cuenta() -> void:
 	herds._process(0.5)
 	assert_gt(herds._hop_phase, still, "sin reloj al que atender, se anda")
 	herds.free()
+
+
+# --- La fauna anda al paso de la partida, no al del fotograma ------------
+#
+# docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0. Las manadas pensaban y se movían
+# en su propio `_process`, con el `delta` del fotograma, y la cacería las lee:
+# con eso la misma semilla no daba la misma caza.
+
+## Tres caballos puestos a mano sobre la meseta de mentira, sin mallas: lo que
+## se prueba es por dónde andan, no cómo se pintan.
+func _manada_suelta(semilla: int) -> WildlifeHerds:
+	var herds := WildlifeHerds.new()
+	herds._terrain = FakeTerrain.new()
+	herds._rng.seed = semilla
+	for i in range(3):
+		var inicio := Vector3(300.0 + float(i) * 40.0, 200.0, 300.0)
+		var animal := {
+			"species": "caballo", "slot": i, "position": inicio,
+			"target": inicio + Vector3(400.0, 0.0, 0.0), "anchor": inicio,
+			"timer": 1.0, "state": WildlifeHerds.State.VAGANDO, "heading": 0.0,
+			"hunger": 0.0, "thirst": 0.0, "trail": PackedVector3Array([inicio]),
+		}
+		herds._animals.append(animal)
+		herds._prey.append(animal)
+	return herds
+
+
+func _suelta(herds: WildlifeHerds) -> void:
+	herds._terrain.free()
+	herds.free()
+
+
+func test_con_partida_el_fotograma_solo_pinta() -> void:
+	var herds := _manada_suelta(5)
+	var sim := SettlementSim.new()
+	sim.time_scale = 20.0
+	herds.sim = sim
+	var antes: Vector3 = herds._animals[0]["position"]
+	herds._process(0.5)
+	assert_eq(herds._animals[0]["position"], antes,
+		"con partida, el fotograma no mueve a nadie: sólo pinta")
+	herds.avanzar(0.5 * 20.0)
+	assert_true(herds._animals[0]["position"] != antes,
+		"lo mueve el paso de la partida")
+	_suelta(herds)
+	sim.free()
+
+
+func test_el_mismo_paso_lleva_al_mismo_sitio() -> void:
+	var a := _manada_suelta(5)
+	var b := _manada_suelta(5)
+	for i in range(60):
+		a.avanzar(0.6667)
+		b.avanzar(0.6667)
+	for i in range(a._animals.size()):
+		assert_eq(a._animals[i]["position"], b._animals[i]["position"],
+			"el animal %d acaba en el mismo sitio" % i)
+	assert_eq(a._rng.state, b._rng.state, "con las mismas tiradas")
+	_suelta(a)
+	_suelta(b)
+
+
+## Un vado somero cada pocas celdas: muchas charcas candidatas, así que el
+## orden en que se barajen decide cuáles salen.
+class Somero extends FakeTerrain:
+	func crossing_difficulty_at(world_pos: Vector3) -> float:
+		return 0.1 if int(world_pos.x / 24.0) % 3 == 0 else 0.0
+
+
+func test_las_charcas_salen_siempre_las_mismas() -> void:
+	# Se barajaban con el azar global del motor, que no siembra nadie: cada
+	# corrida, otras charcas, y con ellas otras rutas de las manadas.
+	var a := WildlifeHerds.new()
+	var b := WildlifeHerds.new()
+	a._terrain = Somero.new()
+	b._terrain = Somero.new()
+	var azar := a._rng.state
+	a._find_waterholes()
+	b._find_waterholes()
+	assert_gt(float(a._waterholes.size()), 1.0, "hay charcas entre las que elegir")
+	assert_eq(a._waterholes, b._waterholes, "las mismas y en el mismo orden")
+	assert_eq(a._rng.state, azar,
+		"sin gastar ninguna tirada del azar de las manadas, que va detrás")
+	_suelta(a)
+	_suelta(b)

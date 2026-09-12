@@ -120,7 +120,9 @@ func _arbol(body: VBoxContainer) -> void:
 func _leyenda(body: VBoxContainer) -> void:
 	_escrito(body, "La casilla se llena de ocre según se avanza. Llena del todo, "
 		+ "dominada; a medias, en marcha; con el filo en carbón, todavía "
-		+ "fuera de alcance. Pon el ratón encima para ver qué pide. "
+		+ "fuera de alcance. Y con el filo en hematites, PARADA: no sube "
+		+ "aunque se practique, porque falta el material que se gasta "
+		+ "aprendiendo. Cada casilla dice qué la frena. "
 		+ "Haz clic sobre una técnica dominada para ver su hito en acción.", true)
 
 

@@ -31,6 +31,27 @@ var _since_redraw: float = 0.0
 ## cero es «no se sabe»: entonces se pintan todos, que es lo que hacia antes.
 var _today: int = -1
 
+## De donde se saca la jornada de hoy, cada vez que se repinta.
+##
+## LA VENTANA DE DIEZ DIAS TIENE QUE DESLIZARSE, y no lo hacia.
+##
+## `_today` se ponia UNA VEZ, al abrir el panel, y `_process` repinta cuatro
+## veces por segundo sin volver a mirarlo. Asi que `rastros_recientes` no
+## filtraba «los ultimos diez dias» sino «todo lo posterior al dia en que
+## abriste el panel»: cada jornada que pasa mete mas salidas en el repintado
+## y no sale ninguna.
+##
+## Es la queja, y explica por que empeora SOLA: «a medida que pasan los dias
+## los tirones se hacen mucho mas comunes». Con el panel de rastros abierto,
+## el dibujo crece sin tope; y como lo que cuesta es crear y tirar las mallas,
+## el gasto sale en el panel de F3 como motor y no como guion.
+var _sim: SettlementSim = null
+
+
+## Le dice de donde sacar la jornada. Lo llama quien monta la escena.
+func setup(settlement: SettlementSim) -> void:
+	_sim = settlement
+
 ## El rastro de UNA entidad suelta, que es lo que mira el censo.
 ##
 ## Va por su lado y no reutiliza `_job` porque contesta otra pregunta. El
@@ -116,6 +137,10 @@ func _process(delta: float) -> void:
 		Cronometro.cierra("vista: rastros")
 		return
 	_since_redraw = 0.0
+	# La jornada, AL DIA. Ver [_sim]: sin esto la ventana de diez dias deja
+	# de deslizarse en cuanto se abre el panel.
+	if _sim != null:
+		_today = _sim.day
 	if _job >= 0:
 		_repaint()
 	if _solo_source.is_valid():

@@ -27,6 +27,9 @@ enum Kind {
 	PERCANCE,   ## Algo ha salido mal ahí fuera
 	BERREA,     ## Empieza el otoño, y con él la caza que decide el invierno
 	RELATO,     ## Lo que se cuenta al volver, y que se puede dejar en la pared
+	INICIO,     ## Se funda el asentamiento: el objetivo, y que se puede perder
+	VICTORIA,   ## Se cierra un año vivo y con la cueva pintada
+	DERROTA,    ## La banda entera se ha extinguido
 }
 
 var kind: Kind = Kind.HALLAZGO

@@ -351,6 +351,95 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 					"centre": centre,
 					"hay": field.abundance_cell(activity, x, z)})
 
+	return _bautizar_candidatas(candidatas, field, day, terrain,
+		same_patch, tope, radio <= 0.0)
+
+
+## Los sitios que se ganaron el nombre y NO CUPIERON, esperando turno.
+##
+## Esta cola existía ya: era la variable local `candidatas` de [refresh], que
+## se calculaba entera, se usaba para bautizar UNO -ver
+## [Reconocimiento.DE_UNA_VUELTA]- y se tiraba. Y como se tiraba, para
+## encontrar a los que quedaban esperando había que volver a barrer las 4.096
+## celdas del campo, una y otra vez, a cada hora de luz.
+##
+## Guardarla convierte «buscar a los rezagados» en «sacar al siguiente de la
+## cola», que es lo que era desde el principio. Ver
+## [Reconocimiento.repasar_rezagados].
+var cola: Array[Dictionary] = []
+
+## Aviso de que hay que repasar el mapa entero, no solo la cola.
+##
+## Lo levanta quien cambia POR DONDE SE PASA -la estacion, la barca, el
+## puente, una celda que la banda tacha- porque eso es lo unico que puede
+## volver candidato a un sitio SIN que nadie haya ido a mirarlo: el avellanar
+## de la otra orilla llevaba ahi todo el invierno, y lo que ha cambiado en
+## agosto es el rio. Ver [Marcha.forget_routes] y
+## [Reconocimiento.repasar_rezagados].
+##
+## Empieza en true: al arrancar la partida no hay cola y el mapa esta sin
+## mirar.
+var revisar_el_mapa: bool = true
+
+
+## Mete una celda concreta en la cola, para bautizarla si le llega el turno.
+##
+## Lo llama quien SABE que esa celda acaba de cambiar -hoy, el rebrote del
+## cierre de jornada-. Es lo contrario de barrer el campo por si acaso: quien
+## produce el cambio lo cuenta.
+##
+## No se comprueba nada aqui: la cola se revalida entera al vaciarse, y hacerlo
+## dos veces seria otra copia de las mismas reglas. Ver [vaciar_cola].
+func encolar_celda(field: ResourceField, activity: Subsistence.Activity,
+		celda: int) -> void:
+	if field == null or field.width <= 0:
+		return
+	@warning_ignore("integer_division")
+	var z := celda / field.width
+	var x := celda % field.width
+	if z < 0 or z >= field.height:
+		return
+	cola.append({"act": activity, "x": x, "z": z,
+		"centre": field.cell_center(x, z),
+		"hay": field.abundance_cell(activity, x, z)})
+
+
+## Saca al siguiente de la cola. Devuelve cuántos han salido.
+##
+## Se revalida todo al sacarlo -la abundancia baja al esquilmar, el sitio
+## puede haberlo cubierto ya un vecino, el río puede haber crecido- porque
+## entre que se apuntó y le toca han pasado horas de juego.
+func vaciar_cola(field: ResourceField, knowledge: BandKnowledge, day: int,
+		terrain: TerrainGenerator, same_patch: Callable, tope: int,
+		se_llega: Callable) -> int:
+	if cola.is_empty() or field == null or knowledge == null:
+		return 0
+	var lote: Array[Dictionary] = []
+	for c: Dictionary in cola:
+		var act := c["act"] as Subsistence.Activity
+		var centre: Vector3 = c["centre"]
+		var hay := field.abundance_cell(act, int(c["x"]), int(c["z"]))
+		if hay < maxf(WORTH_NAMING, threshold_for(act)):
+			continue
+		if knowledge.familiarity_at(act, centre) < NAMED_AT:
+			continue
+		if se_llega.is_valid() and not se_llega.call(centre):
+			continue
+		lote.append({"act": act, "x": c["x"], "z": c["z"],
+			"centre": centre, "hay": hay})
+	cola.clear()
+	return _bautizar_candidatas(lote, field, day, terrain, same_patch,
+		tope, false)
+
+
+## Bautiza de lo mejor a lo peor, con tope, y GUARDA LO QUE NO CUPO.
+##
+## Una sola copia de las reglas de bautizar, que la usan el barrido y la cola.
+func _bautizar_candidatas(candidatas: Array[Dictionary],
+		field: ResourceField, day: int, terrain: TerrainGenerator,
+		same_patch: Callable, tope: int, retocar: bool) -> int:
+	var added := 0
+
 	# Y AHORA se bautiza, de lo mejor a lo peor y con tope.
 	#
 	# El tope es lo que hace que los sitios salgan de uno en uno y no en
@@ -365,7 +454,13 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 		return float(a["hay"]) > float(b["hay"]))
 	for c: Dictionary in candidatas:
 		if tope > 0 and added >= tope:
-			break
+			# EL RESTO SE GUARDA, no se tira.
+			#
+			# Aqui estaba el nudo: se calculaba la lista entera, se sacaba
+			# uno y se tiraba el resto, asi que para encontrar a los que
+			# quedaban esperando habia que barrer el campo otra vez.
+			cola.append(c)
+			continue
 		var activity := c["act"] as Subsistence.Activity
 		var centre: Vector3 = c["centre"]
 		# Si ya hay uno del mismo oficio cerca Y EN EL MISMO TROZO DE MONTE,
@@ -409,24 +504,34 @@ func refresh(field: ResourceField, knowledge: BandKnowledge,
 	# sacan en `bautizar`-: la mancha cambia con la estacion -un avellanar en
 	# enero no ocupa lo que en octubre- y con lo que se saca. Solo en el repaso
 	# COMPLETO: los acotados son muchos al dia y esto se reparte por jornadas.
-	if radio <= 0.0:
+	if retocar:
 		retocar_huellas(field, terrain)
 	return added
 
 
-## Cuanto se gasta como mucho en rehacer formas de una vez, en milisegundos.
+## Cuantas formas se rehacen como mucho en cada repaso.
 ##
-## Sacar la forma de los siete parajes de una partida recien empezada cuesta
-## quince milisegundos y medio -medido con `HuellaProbe`-, y eso es un cuadro
-## entero de tiron una vez al dia. A velocidad ultra, donde un dia son cuatro
-## cuadros, se nota de verdad.
+## Sacar la forma de un paraje cuesta un milisegundo y medio o dos -medido con
+## `HuellaProbe`-, y hacerlas todas de una vez es un cuadro entero de tiron una
+## vez al dia. A velocidad ultra, donde un dia son cuatro cuadros, se nota de
+## verdad.
 ##
 ## Asi que se reparte, igual que [HornoDeRejillas] amasa las rejillas: cada
-## repaso gasta lo suyo y deja el resto para el siguiente. La forma de un sitio
-## no tiene por que estar al dia HOY -cambia con la estacion, que dura cuarenta
-## y cinco jornadas- pero la de un paraje RECIEN NACIDO si, porque sin ella no
-## se puede ir a trabajar a el.
-const MS_POR_REPASO := 2.0
+## repaso hace unas pocas y deja el resto para el siguiente. La forma de un
+## sitio no tiene por que estar al dia HOY -cambia con la estacion, que dura
+## cuarenta y cinco jornadas- pero la de un paraje RECIEN NACIDO si, porque sin
+## ella no se puede ir a trabajar a el.
+##
+## SON FORMAS Y NO MILISEGUNDOS, y esa es la diferencia que importa: esto era
+## un presupuesto de dos milisegundos de RELOJ, o sea que cuantas formas se
+## ponian al dia lo decidia lo rapida que fuera la maquina... y la forma decide
+## donde se trabaja. Una maquina mas rapida jugaba otra partida, y abaratar
+## `Huella.de` la habria cambiado sin tocar una sola cifra de balanceo. Ver
+## docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0.
+##
+## Dos, que es lo que cabia en aquellos dos milisegundos en la maquina donde se
+## midio: seis repasos seguidos dieron 1, 2, 1, 2, 2 y 2.
+const POR_REPASO := 2
 
 ## Por donde iba el repaso. Da la vuelta a la lista sin dejarse ninguno.
 var _por_retocar: int = 0
@@ -445,10 +550,7 @@ func retocar_huellas(field: ResourceField, terrain: TerrainGenerator) -> int:
 			paraje.retocar(field, terrain)
 			hechas += 1
 
-	var hasta := Time.get_ticks_usec() + int(MS_POR_REPASO * 1000.0)
-	for vuelta in range(list.size()):
-		if Time.get_ticks_usec() >= hasta:
-			break
+	for vuelta in range(mini(POR_REPASO, list.size())):
 		_por_retocar = (_por_retocar + 1) % list.size()
 		list[_por_retocar].retocar(field, terrain)
 		hechas += 1
@@ -918,7 +1020,14 @@ const EXTRAS_BY_ACTIVITY := {
 		# recolección aunque suenen a materia prima. Estaban solo en la
 		# lista de materia prima, así que las traía a casa y no salían en
 		# la ficha de ningún prado.
-		Materia.Kind.YESCA, Materia.Kind.RESINA],
+		Materia.Kind.YESCA, Materia.Kind.RESINA,
+		# La cuerna de desmogue. La recolección de invierno la produce
+		# —`Tajo._gathering_yields`, 0,8 al día— y no salía en la ficha de
+		# ningún prado, así que no había forma de ir a por ella: es la
+		# puerta que dejaba la azagaya sin abrir, medida en 60 jornadas con
+		# once parajes bautizados y cero anunciando asta (`ArbolPasoProbe`).
+		# `SEASONAL_EXTRAS` ya la tenía por invernal; sólo faltaba la línea.
+		Materia.Kind.ASTA],
 	Subsistence.Activity.CAZA: [Materia.Kind.PIEL, Materia.Kind.HUESO,
 		Materia.Kind.TENDON, Materia.Kind.GRASA],
 	# La grasa del salmon grande. Sale solo con arpon y con red -ver
@@ -926,7 +1035,12 @@ const EXTRAS_BY_ACTIVITY := {
 	# traer de un sitio tiene que salir en la ficha del sitio.
 	Subsistence.Activity.PESCA: [Materia.Kind.GRASA],
 	Subsistence.Activity.MARISQUEO: [Materia.Kind.CONCHA, Materia.Kind.CARACOL],
-	Subsistence.Activity.MATERIA_PRIMA: [Materia.Kind.YESCA, Materia.Kind.RESINA],
+	# El asta, porque el desmogadero YA es un nombre de paraje de materia
+	# prima —cuatro papeletas de quince en [MATERIA_PRIMA_POOL]— y la tabla de
+	# la materia prima sólo daba piedra y ocre: se podía ir a un desmogadero y
+	# volver sin asta. La ficha no es que callara, es que mentía.
+	Subsistence.Activity.MATERIA_PRIMA: [Materia.Kind.YESCA, Materia.Kind.RESINA,
+		Materia.Kind.ASTA],
 }
 
 ## Cuántos extras como mucho, aparte del que da nombre.

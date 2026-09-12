@@ -820,6 +820,24 @@ func test_la_barca_invalida_las_cuatro() -> void:
 		"con barca cambian los pasos y hay que rehacerlas")
 
 
+func test_la_rejilla_que_se_pide_es_la_de_esa_estacion() -> void:
+	# docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0. Mientras se horneaba, se
+	# devolvía «la más parecida», y cuándo terminaba la de verdad dependía del
+	# reloj de la máquina: la banda cambiaba de caminos en un paso u otro según
+	# lo rápida que fuera. Ahora se termina la que se pide, en el momento.
+	var terrain := FakeTerrain.new()
+	var horno := HornoDeRejillas.new()
+	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+		Temporada.CAUDAL)
+	var invierno := horno.de(Subsistence.Season.INVIERNO)
+	assert_true(invierno.horneada(), "entera")
+	assert_eq(invierno.built_with_caudal,
+		float(Temporada.CAUDAL[Subsistence.Season.INVIERNO]),
+		"y medida con el río de enero, no otra que se le parezca")
+	assert_eq(horno.pendientes(), 2, "y ya no espera en la cola")
+	terrain.free()
+
+
 ## «Al otro lado del rio» no es lo mismo que «incomunicado».
 ##
 ## Queja literal: «uno de los parajes iniciales esta al otro lado del rio, que
@@ -857,4 +875,293 @@ func test_una_celda_desmentida_se_cierra() -> void:
 	assert_true(grid.cerrar(seco), "se cierra la celda que el terreno desmiente")
 	assert_false(grid.passable(seco), "y deja de existir para el trazado")
 	assert_false(grid.cerrar(seco), "cerrar lo ya cerrado no hace nada")
+	terrain.free()
+
+
+# --- el vado se cruza POR EL VADO ------------------------------------------
+#
+# El ovillo pegado al agua de la ventana de rastros salia de aqui, y no de una
+# celda mal medida: la rejilla abre una celda de agua porque tiene una linea
+# vadeable de lado a lado, y luego el trazado la cruzaba por otro sitio -en
+# diagonal, o de norte a sur una que solo se vadea de este a oeste- o el recorte
+# de la escalera deshacia el rodeo bueno con una recta de sesgo.
+#
+# El camino prometia un paso que sobre el terreno es agua honda. La persona
+# llegaba a la orilla, no lo encontraba, y se pasaba la jornada barriendola: se
+# mueve muchisimo y no se acerca nada, asi que la vigilancia de plantados no la
+# recogia hasta dos horas despues y con el motivo equivocado -«no avanza por el
+# camino trazado», con el hito perfectamente pisable al otro lado-.
+#
+# La prueba de fondo es una sola y vale para las tres averias: TODO TRAMO DE UN
+# CAMINO TRAZADO SE TIENE QUE PODER ANDAR.
+
+## Cada cuantos metros se cata un tramo del camino. Lo mismo que cata el andador
+## dentro de un paso -ver [Marcha.CATA_DEL_PASO]-, que es de quien se trata.
+const CATA := 3.0
+
+
+## El peor punto de agua de un camino ya trazado.
+func _lo_mas_hondo(terrain: TerrainGenerator, desde: Vector3,
+		route: PackedVector3Array) -> float:
+	var hondo := 0.0
+	var previo := desde
+	for punto: Vector3 in route:
+		var largo := Traversal.en_llano(previo, punto)
+		var catas := maxi(int(ceil(largo / CATA)), 1)
+		for i in range(catas + 1):
+			var at := previo.lerp(punto, float(i) / float(catas))
+			hondo = maxf(hondo, terrain.crossing_difficulty_at(at))
+		previo = punto
+	return hondo
+
+
+func test_el_vado_estrecho_no_cierra_el_valle() -> void:
+	# Primero, que el caso este bien montado: si el rio saliera cerrado del
+	# todo, las pruebas de abajo pasarian sin probar nada.
+	var terrain := VadoTerrain.new()
+	var grid := Navgrid.from_terrain(terrain, false, false)
+	assert_true(grid.connected(Vector3(820.0, 0.0, 900.0),
+		Vector3(820.0, 0.0, 1100.0)), "por el vado se pasa de una orilla a otra")
+
+	# Y el vado es UNO: lejos de él no se cruza, hay que ir a buscarlo. No se
+	# mira con `connected` —que contesta a «¿hay camino?» y lo hay, dando la
+	# vuelta— sino midiendo el camino: seiscientos metros de ida al vado y otros
+	# tantos de vuelta no caben en doscientos de línea recta.
+	var lejos_a := Vector3(200.0, 0.0, 940.0)
+	var lejos_b := Vector3(200.0, 0.0, 1060.0)
+	var rodeo := Wayfinder.find(grid, lejos_a, lejos_b)
+	assert_gt(rodeo.size(), 0, "hay camino de una orilla a otra")
+	var largo := 0.0
+	var previo := lejos_a
+	for punto: Vector3 in rodeo:
+		largo += Traversal.en_llano(previo, punto)
+		previo = punto
+	assert_gt(largo, 800.0,
+		"y lejos del vado hay que ir a buscarlo: %.0f m para %.0f de recta" % [
+			largo, Traversal.en_llano(lejos_a, lejos_b)])
+	terrain.free()
+
+
+func test_ningun_tramo_del_camino_se_mete_en_el_agua() -> void:
+	# La prueba de fondo. Se piden caminos que obligan a cruzar el rio viniendo
+	# de lejos y en diagonal -que es cuando el recorte de la escalera tiene algo
+	# que recortar- y se cata cada tramo como lo cataria quien lo anda.
+	var terrain := VadoTerrain.new()
+	var grid := Navgrid.from_terrain(terrain, false, false)
+
+	var pares := [
+		[Vector3(400.0, 0.0, 900.0), Vector3(1200.0, 0.0, 1100.0)],
+		[Vector3(1200.0, 0.0, 900.0), Vector3(400.0, 0.0, 1120.0)],
+		[Vector3(820.0, 0.0, 880.0), Vector3(1400.0, 0.0, 1200.0)],
+		[Vector3(600.0, 0.0, 1200.0), Vector3(1000.0, 0.0, 820.0)],
+	]
+	for par: Array in pares:
+		var desde: Vector3 = par[0]
+		var hasta: Vector3 = par[1]
+		var route := Wayfinder.find(grid, desde, hasta)
+		assert_gt(route.size(), 0, "hay camino de %s a %s" % [
+			str(Vector2i(int(desde.x), int(desde.z))),
+			str(Vector2i(int(hasta.x), int(hasta.z)))])
+		if route.is_empty():
+			continue
+		var hondo := _lo_mas_hondo(terrain, desde, route)
+		assert_true(Hydrography.can_cross(hondo, false, false),
+			"y se anda entero: lo mas hondo del camino a %s es %.2f" % [
+				str(Vector2i(int(hasta.x), int(hasta.z))), hondo])
+	terrain.free()
+
+
+func test_lo_que_dice_connected_lo_encuentra_el_buscador() -> void:
+	# Las dos respuestas tienen que salir de la MISMA regla. Con la inundacion
+	# de zonas mas permisiva que el A* -el caso de antes: solo el buscador
+	# miraba el vado-, `connected` daba que si, el A* se recorria la comarca
+	# entera y volvia sin camino, y eso desde fuera era «se quedo sin camino
+	# trazado» sobre un sitio que la rejilla juraba alcanzable.
+	var terrain := VadoTerrain.new()
+	var grid := Navgrid.from_terrain(terrain, false, false)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+
+	var mirados := 0
+	for _i in range(120):
+		var a := Vector3(rng.randf_range(100.0, 1900.0), 0.0,
+			rng.randf_range(100.0, 1900.0))
+		var b := Vector3(rng.randf_range(100.0, 1900.0), 0.0,
+			rng.randf_range(100.0, 1900.0))
+		if not grid.connected(a, b):
+			continue
+		mirados += 1
+		assert_gt(Wayfinder.find(grid, a, b).size(), 0,
+			"comunicados %s y %s, asi que hay camino" % [
+				str(Vector2i(int(a.x), int(a.z))),
+				str(Vector2i(int(b.x), int(b.z)))])
+	assert_gt(mirados, 40, "y se han mirado bastantes pares (%d)" % mirados)
+	terrain.free()
+
+
+## EL VADO DE ENFRENTE EXISTE EN VERANO, Y LA REJILLA TIENE QUE VERLO.
+##
+## Primera mitad de la queja del jugador: «empezamos en primavera con el río sin
+## vadear y todos los que van a un paraje de la otra orilla dan el mismo rodeo
+## largo hacia el oeste hasta un vado; cuando llega el verano y el río sí se
+## vadea, siguen haciendo el mismo rodeo en vez de cruzar por delante».
+##
+## Aquí sólo se mira LA REJILLA, que es la capa de abajo: si el camino de verano
+## que sale de ella ya viene con el rodeo puesto, no hay nada que buscar más
+## arriba. Ver [VadoDeVerano], que es esa comarca dibujada.
+func test_el_vado_de_enfrente_solo_se_cruza_en_verano() -> void:
+	var terrain := VadoDeVerano.new()
+	var casa := Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z - 120.0)
+	var enfrente := Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z + 120.0)
+	var recta := Traversal.en_llano(casa, enfrente)
+
+	var rodeos := {}
+	for estacion: int in [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO]:
+		var grid := Navgrid.from_terrain(terrain, false, false,
+			float(Temporada.CAUDAL[estacion]),
+			float(Temporada.ENCHARCA[estacion]))
+		assert_true(grid.connected(casa, enfrente),
+			"la otra orilla está comunicada en las dos estaciones: por el "
+				+ "vado de lejos si no hay otra")
+		rodeos[estacion] = _largo_del_camino(casa,
+			Wayfinder.find(grid, casa, enfrente)) / recta
+
+	assert_gt(float(rodeos[Subsistence.Season.PRIMAVERA]), 3.0,
+		"con el río crecido no queda más que el rodeo del oeste")
+	assert_lt(float(rodeos[Subsistence.Season.VERANO]), 1.6,
+		"y con el río bajo se cruza por delante")
+	terrain.free()
+
+
+## Y EL VIAJE SIGUIENTE TIENE QUE APROVECHARLO.
+##
+## Segunda mitad de la queja, y la que de verdad se ve: aunque la rejilla del
+## verano conozca el vado, entre ella y la persona hay tres cosas que se
+## guardan —los caminos por carril, el árbol del abrigo y sus recortes—, y
+## cualquiera de las tres que sobreviva al cambio de estación devuelve el rodeo
+## de primavera con el río ya bajo.
+##
+## Se pide el MISMO viaje en las dos estaciones, por donde lo pide la partida
+## —[Marcha._send_to]—, y con el reparto de tajos preguntando antes por el
+## sitio, que es lo que rehace el árbol. No se simula nada: se construye el
+## estado y se da el paso.
+func test_el_viaje_siguiente_cruza_por_delante_cuando_baja_el_rio() -> void:
+	var antes := GameState.season
+	var terrain := VadoDeVerano.new()
+	var sim := SettlementSim.new()
+	sim._terrain = terrain
+	sim.home_position = Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z - 120.0)
+	var enfrente := Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z + 120.0)
+	var recta := Traversal.en_llano(sim.home_position, enfrente)
+	var caminante := Inhabitant.new()
+
+	GameState.season = Subsistence.Season.PRIMAVERA
+	var primavera := _lo_que_se_anda(sim, caminante, enfrente) / recta
+	GameState.season = Subsistence.Season.VERANO
+	var verano := _lo_que_se_anda(sim, caminante, enfrente) / recta
+
+	assert_gt(primavera, 3.0,
+		"en primavera se rodea, y eso está bien: el río va crecido")
+	assert_lt(verano, 1.6,
+		"pero en verano se cruza por delante. Si esto falla, el rodeo se "
+			+ "hereda de la estación pasada y es la queja del jugador")
+
+	GameState.season = antes
+	sim.free()
+	terrain.free()
+
+
+## Lo que de verdad se anda en el viaje siguiente: el reparto de tajos pregunta
+## por el sitio —que es lo que rehace el árbol del abrigo— y se manda a alguien
+## desde la puerta con el destino y la ruta a cero, para que `_send_to` no se dé
+## media vuelta en la guarda del «mismo destino».
+func _lo_que_se_anda(sim: SettlementSim, quien: Inhabitant,
+		destino: Vector3) -> float:
+	sim.marcha.alcanzable_desde_casa(destino)
+	quien.position = sim.home_position
+	quien.route = PackedVector3Array()
+	quien.route_step = 0
+	quien.target = Vector3.ZERO
+	quien.unreachable = Vector3.ZERO
+	sim._path_nodes_this_frame = 0
+	sim._stranded_this_frame = 0
+	sim.marcha._send_to(quien, destino)
+	return _largo_del_camino(sim.home_position, quien.route)
+
+
+## Los metros de una polilínea. Es [Marcha.largo_de] sin necesitar una `Marcha`.
+func _largo_del_camino(desde: Vector3, camino: PackedVector3Array) -> float:
+	if camino.is_empty():
+		return 0.0
+	var largo := Traversal.en_llano(desde, camino[0])
+	for i in range(1, camino.size()):
+		largo += Traversal.en_llano(camino[i - 1], camino[i])
+	return largo
+
+
+## EL MIEDO NO PUEDE ENCARECER UN METRO MAS QUE EL RODEO QUE SE ANDA.
+##
+## Es la queja del rodeo dicha como invariante. El trazado minimiza coste, asi
+## que si el riesgo puede multiplicar el coste de una celda por quince, el
+## camino cambia kilometros de rodeo por no pisar cuarenta metros de cuesta.
+## Medido en el sitio 56 antes del tope: los mismos 213 trayectos pasaban de
+## rodeo x1,24 a x2,50 al llegar el verano, 84 empeoraban y ninguno mejoraba, y
+## 88 sitios se admitian con la regla del rodeo y se andaban por encima de ella.
+##
+## Las dos reglas salen del MISMO numero a proposito. Si alguien sube una y no
+## la otra, esto lo dice.
+func test_el_riesgo_no_encarece_mas_que_el_rodeo_que_se_anda() -> void:
+	assert_eq(Navgrid.RIESGO_MAXIMO, Marcha.RODEO_QUE_SE_ANDA,
+		"el tope al miedo y el tope al rodeo son la misma cifra")
+
+	# Y muerde: una celda de canchal en cuesta no puede costar mas de
+	# RIESGO_MAXIMO veces lo que cuesta el TIEMPO de andarla.
+	var terrain := VadoDeVerano.new()
+	var grid := Navgrid.from_terrain(terrain, false, false)
+	var llano := grid.cost[grid.cell_of(Vector3(
+		VadoDeVerano.ENFRENTE_X, 0.0, VadoDeVerano.RIO_Z - 400.0))]
+	assert_gt(llano, 0.0, "la meseta se anda")
+	var tiempo := 1.0 / Traversal.pace_both_ways(0.03, Traversal.Ground.PASTO, 0.0)
+	assert_lt(llano, tiempo * Navgrid.RIESGO_MAXIMO + 0.001,
+		"y el llano no lleva recargo de miedo ninguno: %.2f sobre %.2f" % [
+			llano, tiempo])
+	terrain.free()
+
+
+## Y LA REGLA DEL RODEO JUZGA EL CAMINO QUE SE ANDA, no otro mas corto.
+##
+## Aqui hubo dos Dijkstra: uno por coste para el camino y otro por metros para
+## la regla. Con eso la puerta admitia un sitio midiendo un camino de trescientos
+## metros y la persona andaba otro de mil quinientos. Ver
+## [Marcha._rehacer_el_mapa_de_casa].
+func test_la_regla_del_rodeo_mide_el_camino_que_se_anda() -> void:
+	var antes := GameState.season
+	GameState.season = Subsistence.Season.VERANO
+	var terrain := VadoDeVerano.new()
+	var sim := SettlementSim.new()
+	sim._terrain = terrain
+	sim.home_position = Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z - 120.0)
+	var enfrente := Vector3(VadoDeVerano.ENFRENTE_X, 100.0,
+		VadoDeVerano.RIO_Z + 120.0)
+
+	# El sitio se admite...
+	var admitido := sim.marcha.alcanzable_desde_casa(enfrente)
+	# ...y entonces lo que se anda tiene que caber en la regla que lo admitio.
+	var caminante := Inhabitant.new()
+	var andado := _lo_que_se_anda(sim, caminante, enfrente)
+	var recta := Traversal.en_llano(sim.home_position, caminante.target)
+	if admitido:
+		assert_lt(andado / maxf(recta, 1.0), Marcha.RODEO_QUE_SE_ANDA,
+			"admitido con la regla del rodeo, asi que se anda dentro de ella")
+	else:
+		assert_gt(andado / maxf(recta, 1.0), 1.0,
+			"y si no se admite, es que el camino de verdad no cabia")
+
+	GameState.season = antes
+	sim.free()
 	terrain.free()

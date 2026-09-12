@@ -107,6 +107,70 @@ func knows_tool(kind_value: Tool.Kind) -> bool:
 	return sim.techs.has(tech as TechTree.Tech)
 
 
+# --- curtir la piel: cruda no sirve para nada ------------------------------
+#
+# `Materia.Kind.PIEL` es la piel recien descarnada, y se pudre -ver su ficha
+# en Materia.gd-. Lo unico que la vuelve utilizable es curarla: raspar con
+# raedera, frotar con ocre y grasa, y darle su tiempo. Sin este paso, ODRE y
+# VESTIDO -que piden PIEL_CURTIDA, no PIEL- nunca tendrian con que hacerse.
+
+## Pieles curadas por JORNADA COMPLETA de trabajo, a rendimiento pleno.
+const CURTIDO_PER_DAY := 1.2
+
+## Ocre y grasa que gasta CADA piel que se cura. Sin ellos no cura -se queda
+## esperando a que alguien los traiga-, igual que cualquier receta del sim.taller.
+const CURTIDO_OCRE_POR_PIEL := 0.3
+const CURTIDO_GRASA_POR_PIEL := 0.5
+
+## Hasta cuantas pieles curtidas de sobra quiere tener el sim.taller antes de
+## volver a tallar odres o vestidos. Sin este tope, un peletero con piel cruda
+## de sobra curtiria sin parar y nunca coseria nada.
+const CURTIDO_RESERVA := 4.0
+
+
+## Curte piel cruda si toca. Devuelve si se ha gastado la jornada en ello -y
+## por tanto `_craft` no talla nada mas este tick-.
+func _curar_piel(person: Inhabitant, hours: float) -> bool:
+	if person.current_speciality != Profession.Speciality.PELETERIA:
+		return false
+	if sim.store.amount(Materia.Kind.PIEL_CURTIDA) >= CURTIDO_RESERVA:
+		return false
+	if sim.toolkit.count(Tool.Kind.RAEDERA) <= 0:
+		return false
+
+	var cruda := sim.store.amount(Materia.Kind.PIEL)
+	if cruda <= 0.0:
+		return false
+
+	var capacity := CURTIDO_PER_DAY * (hours / SettlementSim.HORAS_UTILES) \
+		* person.effectiveness()
+	if capacity <= 0.0:
+		return false
+
+	# Y sin pasarse de la reserva: un peletero no deja media piel a medio
+	# curtir, pero tampoco cura de mas solo porque el dia daba para ello.
+	var hueco := CURTIDO_RESERVA - sim.store.amount(Materia.Kind.PIEL_CURTIDA)
+	var curadas := minf(minf(capacity, cruda), maxf(hueco, 0.0))
+	var ocre := curadas * CURTIDO_OCRE_POR_PIEL
+	if sim.store.amount(Materia.Kind.OCRE) < ocre:
+		curadas = sim.store.amount(Materia.Kind.OCRE) / CURTIDO_OCRE_POR_PIEL
+	var grasa := curadas * CURTIDO_GRASA_POR_PIEL
+	if sim.store.amount(Materia.Kind.GRASA) < grasa:
+		curadas = minf(curadas, sim.store.amount(Materia.Kind.GRASA) / CURTIDO_GRASA_POR_PIEL)
+	if curadas <= 0.0:
+		# Hay piel y raedera pero falta ocre o grasa: se cuenta como jornada
+		# de peleteria gastada igual -es lo que estaba haciendo la persona-,
+		# no se cae a tallar un odre a medio curtir.
+		return true
+
+	sim.store.take(Materia.Kind.PIEL, curadas)
+	sim.store.take(Materia.Kind.OCRE, curadas * CURTIDO_OCRE_POR_PIEL)
+	sim.store.take(Materia.Kind.GRASA, curadas * CURTIDO_GRASA_POR_PIEL)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, curadas)
+	note_production(Materia.Kind.PIEL_CURTIDA, curadas)
+	return true
+
+
 ## Cuantas piezas de cada tipo le hacen falta a la banda ahora mismo.
 ##
 ## Sale de quien esta trabajando en que, no de una tabla fija: si el jugador
@@ -137,6 +201,9 @@ func tool_natural_demand() -> Dictionary:
 		Tool.Kind.PUNZON: 1,
 		Tool.Kind.CUERDA: 3,
 		Tool.Kind.ODRE: 2,
+		# Una prenda por persona: es la cobertura que de verdad abriga a toda
+		# la banda, no un numero de taller como el resto.
+		Tool.Kind.VESTIDO: sim.people.size(),
 		Tool.Kind.PUNTA: 2,
 		# El aparejo de pesca NO va con una cifra fija: va con la forma de
 		# pescar que la banda sepa. Pedir arpones desde el primer dia era
@@ -435,6 +502,12 @@ func _craft(person: Inhabitant, hours: float) -> void:
 	if fraction <= 0.0:
 		return
 
+	# Curtir va antes que tallar: una prenda o un odre no se hacen con piel
+	# cruda -ver `_curar_piel`-, así que si hay piel esperando y no hay
+	# curtida de sobra, la peletería se dedica a eso primero.
+	if _curar_piel(person, hours):
+		return
+
 	var speciality := person.current_speciality as Profession.Speciality
 	var kind := _next_piece(speciality)
 	if kind < 0:
@@ -566,6 +639,18 @@ func _yields_for(person: Inhabitant) -> Dictionary:
 	if speciality == Profession.Speciality.CAZA_MENOR 			or speciality == Profession.Speciality.CAZA_MAYOR:
 		return Hunting.yields_at(speciality, person.work_centre,
 			GameState.season as Subsistence.Season, sim.techs, sim.toolkit)
+	# El cantero recoge la cuerna de desmogue igual que el recolector: el
+	# desmogadero es un sitio de materia prima -uno de los cuatro nombres de
+	# `Parajes.MATERIA_PRIMA_POOL`- y esta rama no pasa por la tabla de
+	# `Tajo`, asi que se iba a por asta y se volvia con cantos. Va aqui y no
+	# en `SPECIALITY_YIELDS` porque la tabla es constante y esto es de
+	# temporada; la cifra la pone `Tajo`, que es donde vive la del otro oficio.
+	if speciality == Profession.Speciality.CANTERA \
+			and GameState.season == Subsistence.Season.INVIERNO:
+		var cantera: Dictionary = (SettlementSim.SPECIALITY_YIELDS[speciality]
+			as Dictionary).duplicate()
+		cantera[Materia.Kind.ASTA] = Tajo.ASTA_DE_DESMOGUE
+		return cantera
 	if SettlementSim.SPECIALITY_YIELDS.has(speciality):
 		return SettlementSim.SPECIALITY_YIELDS[speciality]
 	return sim.tajo._yield_materials(person.activity)

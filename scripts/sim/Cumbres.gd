@@ -37,14 +37,19 @@ func forget() -> void:
 	_peak_found = false
 
 
-## El punto mas alto al alcance de una ASCENSION. Se calcula una vez y se
-## guarda: no cambia de una jornada a otra, y recorrerlo cada vez que alguien
-## sale seria pagar setenta muestras de altura por nada.
+## Hasta donde se buscan cumbres: EL MAPA ENTERO.
 ##
-## Es un barrido radial burdo, no una busqueda de picos de verdad -no hay
-## lista de cumbres con nombre-, pero con el MDT real de por medio el punto
-## mas alto de la zona ES un sitio real desde el que se domina el valle, que
-## es lo unico que le pide la mecanica.
+## Era un radio de 2.200 m alrededor del abrigo, y eso es un limite de
+## distancia disfrazado de barrido: una cima perfectamente visible quedaba
+## fuera de la lista por estar a 2.300 m, y nadie la subia nunca.
+##
+## Una ascension duerme fuera. Lo que la limita no es la distancia sino lo
+## que se puede llevar encima —ver [Despensa._provision], que calcula los
+## dias de viaje y la comida que piden—, asi que el mapa se mira entero y
+## que decida la mochila.
+##
+## Y no cuesta mas: el circulo de 2.200 ya cubria casi todo un mapa de 4.096,
+## asi que son las mismas trescientas y pico semillas.
 const PEAK_SEARCH_RADIUS := 2200.0
 
 ## Separacion entre los puntos desde los que se sube, en metros.
@@ -128,13 +133,13 @@ func _find_peaks() -> Array[Dictionary]:
 	# que sus ocho vecinos aunque haya una cima a cincuenta metros. Subiendo,
 	# ese sesgo da igual.
 	var candidates: Array[Vector3] = []
-	var span := int(PEAK_SEARCH_RADIUS / PEAK_SEED_STEP)
-	for dz in range(-span, span + 1):
-		for dx in range(-span, span + 1):
-			var seed_point := sim.home_position + Vector3(
-				float(dx) * PEAK_SEED_STEP, 0.0, float(dz) * PEAK_SEED_STEP)
-			if seed_point.distance_to(sim.home_position) > PEAK_SEARCH_RADIUS:
-				continue
+	# EL MAPA ENTERO, sembrado en rejilla. Ver [PEAK_SEARCH_RADIUS].
+	var pasos_x := int(limit_x / PEAK_SEED_STEP) + 1
+	var pasos_z := int(limit_z / PEAK_SEED_STEP) + 1
+	for iz in range(pasos_z + 1):
+		for ix in range(pasos_x + 1):
+			var seed_point := Vector3(
+				float(ix) * PEAK_SEED_STEP, 0.0, float(iz) * PEAK_SEED_STEP)
 			if seed_point.x < margin or seed_point.z < margin 					or seed_point.x > limit_x - margin 					or seed_point.z > limit_z - margin:
 				continue
 			seed_point.y = sim._terrain.get_height_at(seed_point)

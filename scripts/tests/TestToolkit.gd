@@ -73,6 +73,21 @@ func test_el_asta_necesita_un_buril_que_hace_el_tallador() -> void:
 		"la talla no necesita nada previo: es el principio de la cadena")
 
 
+func test_el_vestido_se_hace_de_piel_y_se_cose_con_aguja() -> void:
+	# Es la pieza que faltaba para que "ropa cosida y ajustada" (la propia
+	# ficha de Tech.AGUJA) sea algo que se fabrica y no solo una frase.
+	var tool := Tool.make(Tool.Kind.VESTIDO, Tool.Stuff.PIEL)
+	assert_eq(tool.display_name(), "Vestido de piel", "nombre de la pieza")
+	assert_eq(Tool.default_stuff(Tool.Kind.VESTIDO), Tool.Stuff.PIEL,
+		"se hace de piel por defecto")
+	assert_eq(Tool.needs_tool(Tool.Kind.VESTIDO), Tool.Kind.AGUJA,
+		"no se cose sin aguja")
+	assert_eq(Tool.tech_of(Tool.Kind.VESTIDO), TechTree.Tech.AGUJA,
+		"la misma tecnica que desbloquea la aguja desbloquea el vestido")
+	assert_true(Tool.recipe(Tool.Kind.VESTIDO).has(Materia.Kind.PIEL_CURTIDA),
+		"la receta pide piel CURTIDA, no cruda -ver Taller._curar_piel-")
+
+
 # --- el utillaje de la banda -----------------------------------------------
 
 func test_se_apura_la_pieza_a_medias_antes_de_estrenar_otra() -> void:
@@ -95,6 +110,25 @@ func test_usar_gasta_la_pieza_y_la_rotura_queda_anotada() -> void:
 		"habia una raedera que usar")
 	assert_eq(kit.count(Tool.Kind.RAEDERA), 0, "y se ha roto")
 	assert_eq(kit.broken_today.size(), 1, "queda anotado para la cronica")
+
+
+func test_el_vestido_se_gasta_por_dia_y_no_por_tarea() -> void:
+	# A diferencia del resto del utillaje, una prenda se lleva puesta todo el
+	# rato: TODAS las piezas envejecen cada jornada, no solo la que "se usa".
+	var kit := Toolkit.new()
+	var a := kit.craft(Tool.Kind.VESTIDO, Tool.Stuff.PIEL)
+	var b := kit.craft(Tool.Kind.VESTIDO, Tool.Stuff.PIEL)
+	kit.wear_all(Tool.Kind.VESTIDO, 5.0)
+	assert_near(a.used, 5.0, 0.001, "la primera prenda envejece")
+	assert_near(b.used, 5.0, 0.001, "y la segunda tambien, no solo la peor")
+
+	var days := 0
+	while kit.count(Tool.Kind.VESTIDO) > 0 and days < 500:
+		kit.wear_all(Tool.Kind.VESTIDO, SettlementSim.VESTIDO_WEAR_PER_DAY)
+		kit.discard_spent()
+		days += 1
+	assert_true(days > 0 and days < 500,
+		"sin reponer, el vestido acaba gastandose del todo")
 
 
 func test_sin_piezas_no_se_puede_usar() -> void:
@@ -265,6 +299,136 @@ func test_el_artesano_no_pasa_por_trabajando() -> void:
 	var work := sim.taller.crafting_now(person)
 	assert_false(work.is_empty(), "en OCIOSO tambien se esta tallando")
 	assert_eq(work["progress"], 0.4, "y se sabe cuanto lleva")
+
+
+func test_la_peleteria_fabrica_vestido_con_aguja_y_piel() -> void:
+	# La especialidad ya decia "ropa, odres, cobijo" y solo hacia odres. Con
+	# aguja en el taller y piel en el almacen, tiene que empezar a coser.
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260912
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.age_years = 30
+	person.age_group = Inhabitant.Age.ADULTO
+	person.nursing = false
+	Profession.assign(Profession.Job.MANUFACTURA, person,
+		Profession.Speciality.PELETERIA)
+	sim.people = [person]
+	# Piel CRUDA, no curtida: hace falta que la peleteria la curta primero
+	# -raedera, ocre y grasa, ver `Taller._curar_piel`- antes de poder coser
+	# nada. Con eso de sobra, la cadena entera tiene que completarse sola.
+	sim.store.add(Materia.Kind.PIEL, 40.0)
+	sim.store.add(Materia.Kind.OCRE, 40.0)
+	sim.store.add(Materia.Kind.GRASA, 40.0)
+	# `sim.techs` es null sin `setup()`: `Taller.knows_tool` ya trata eso como
+	# "se sabe hacer todo" (comentario de `knows_tool`), asi que no hace falta
+	# construir un arbol de tecnicas solo para esta prueba.
+	sim.toolkit.craft(Tool.Kind.AGUJA, Tool.Stuff.HUESO)
+	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA)
+
+	var hecho := false
+	for day in range(30):
+		sim.taller._craft(person, SettlementSim.HORAS_UTILES)
+		if sim.toolkit.count(Tool.Kind.VESTIDO) > 0:
+			hecho = true
+			break
+	assert_true(hecho,
+		"con raedera, aguja, piel, ocre y grasa, la peleteria acaba curtiendo "
+			+ "y cosiendo un vestido")
+
+
+# --- curtir la piel: cruda no sirve para nada -----------------------------
+
+func _peletero(sim: SettlementSim) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260912
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.age_years = 30
+	person.age_group = Inhabitant.Age.ADULTO
+	person.nursing = false
+	Profession.assign(Profession.Job.MANUFACTURA, person,
+		Profession.Speciality.PELETERIA)
+	sim.people = [person]
+	return person
+
+
+func test_sin_raedera_no_se_curte_nada() -> void:
+	var sim := SettlementSim.new()
+	var person := _peletero(sim)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.OCRE, 10.0)
+	sim.store.add(Materia.Kind.GRASA, 10.0)
+
+	assert_false(sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES),
+		"sin raedera no hay con que descarnar")
+	assert_eq(sim.store.amount(Materia.Kind.PIEL_CURTIDA), 0.0,
+		"y no sale nada curtido")
+
+
+func test_con_raedera_ocre_y_grasa_se_curte_gastando_los_tres() -> void:
+	var sim := SettlementSim.new()
+	var person := _peletero(sim)
+	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.OCRE, 10.0)
+	sim.store.add(Materia.Kind.GRASA, 10.0)
+
+	assert_true(sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES),
+		"con raedera, ocre y grasa, cura")
+	assert_gt(sim.store.amount(Materia.Kind.PIEL_CURTIDA), 0.0,
+		"sale piel curtida")
+	assert_lt(sim.store.amount(Materia.Kind.PIEL), 10.0, "se gasta piel cruda")
+	assert_lt(sim.store.amount(Materia.Kind.OCRE), 10.0, "se gasta ocre")
+	assert_lt(sim.store.amount(Materia.Kind.GRASA), 10.0, "se gasta grasa")
+
+
+func test_sin_ocre_ni_grasa_no_cura_aunque_haya_piel_y_raedera() -> void:
+	var sim := SettlementSim.new()
+	var person := _peletero(sim)
+	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+
+	assert_true(sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES),
+		"la jornada de peleteria se gasta en el intento, no en otra cosa")
+	assert_eq(sim.store.amount(Materia.Kind.PIEL_CURTIDA), 0.0,
+		"pero sin ocre ni grasa no sale nada curtido")
+	assert_eq(sim.store.amount(Materia.Kind.PIEL), 10.0,
+		"y la piel cruda se queda donde estaba")
+
+
+func test_deja_de_curtir_al_llegar_a_la_reserva() -> void:
+	# Sin este tope, un peletero con piel de sobra curtiria sin parar y nunca
+	# coseria un odre ni un vestido.
+	var sim := SettlementSim.new()
+	var person := _peletero(sim)
+	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA)
+	sim.store.add(Materia.Kind.PIEL, 100.0)
+	sim.store.add(Materia.Kind.OCRE, 100.0)
+	sim.store.add(Materia.Kind.GRASA, 100.0)
+
+	for i in range(30):
+		sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES)
+
+	assert_true(sim.store.amount(Materia.Kind.PIEL_CURTIDA) <= Taller.CURTIDO_RESERVA + 0.01,
+		"no acumula curtida sin limite: hay que dejar sitio para coser")
+	assert_false(sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES),
+		"con la reserva llena, deja de curtir")
+
+
+func test_solo_curte_quien_es_peletero() -> void:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260912
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	Profession.assign(Profession.Job.MANUFACTURA, person, Profession.Speciality.TALLA)
+	sim.people = [person]
+	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.OCRE, 10.0)
+	sim.store.add(Materia.Kind.GRASA, 10.0)
+
+	assert_false(sim.taller._curar_piel(person, SettlementSim.HORAS_UTILES),
+		"un tallador no cura piel: eso es de peleteria")
 
 
 func test_de_noche_no_se_talla() -> void:
@@ -438,3 +602,82 @@ func test_explorar_hace_subir_las_tecnicas_de_exploracion() -> void:
 	tree.add_practice(Profession.Job.CAZA, 200.0)
 	assert_eq(tree.progress(TechTree.Tech.PASARELA), ahora,
 		"y doscientas de caza no la mueven nada")
+
+
+## Con que llega la banda al abrigo, y por que no puede llevar lo que no sabe
+## hacer.
+func test_el_utillaje_inicial_no_contradice_el_arbol() -> void:
+	# Llegaban con dos azagayas de asta y `Tool.tech_of` exige `Tech.AZAGAYA`
+	# para hacer una: la banda tenia puesto lo que no sabria reponer, y en
+	# cuanto se gastaran no habria forma de volver a tenerlas. Lo midio
+	# ESTADO.md §2 -«acabaron con dos azagayas de un utillaje que ni siquiera
+	# sabian diseñar»- y se quedo sin arreglar.
+	for entry: Dictionary in SettlementSim.UTILLAJE_INICIAL:
+		var kind := int(entry["kind"]) as Tool.Kind
+		assert_eq(Tool.tech_of(kind), -1,
+			"%s se lleva de partida, asi que no puede pedir tecnica"
+				% Tool.kind_name(kind))
+
+
+func test_la_lanza_de_mano_es_lo_que_hay_antes_de_la_azagaya() -> void:
+	# La punta litica enmangada no pide tecnica ni otra herramienta para
+	# hacerse, y `Fauna` ya deja cobrar corzo y rebeco con ella. Es lo que
+	# sostiene la caza menor hasta que llegue la azagaya de asta.
+	assert_eq(Tool.tech_of(Tool.Kind.PUNTA), -1, "la punta no pide tecnica")
+	assert_eq(Tool.needs_tool(Tool.Kind.PUNTA), -1, "ni otra herramienta")
+	assert_true((Fauna.armas_of("corzo") as Array).has(Tool.Kind.PUNTA),
+		"y con ella se cobra un corzo")
+	assert_eq(int(SettlementSim.SPECIALITY_TOOL[Profession.Speciality.CAZA_MENOR]),
+		int(Tool.Kind.PUNTA),
+		"asi que la caza menor pide punta, no azagaya: pedir azagaya cerraba "
+		+ "el bucle -sin tendon no hay azagaya y sin caza menor no hay tendon")
+
+
+## El panel tiene que decir POR QUE no avanza una tecnica, y las tres causas
+## se ven iguales desde fuera. Ver `TechTree.Freno` y docs/INTERFAZ.md §4.
+func test_el_arbol_dice_cual_de_las_tres_puertas_esta_cerrada() -> void:
+	var tree := TechTree.new()
+	var almacen := Storehouse.new()
+	tree.larder = almacen
+
+	# Sin la previa: prerrequisito, y se dice CUAL.
+	assert_eq(tree.freno(TechTree.Tech.AZAGAYA), TechTree.Freno.PRERREQUISITO,
+		"la azagaya cuelga de la talla laminar")
+	assert_true(tree.causa(TechTree.Tech.AZAGAYA).contains("laminar"),
+		"y la casilla manda a la que falta, no dice «falta lo de antes»")
+
+	# Con la previa y sin jornadas: jornadas, y se dice CUANTAS faltan.
+	assert_eq(tree.freno(TechTree.Tech.NUCLEO), TechTree.Freno.JORNADAS,
+		"el nucleo esta al alcance y solo le faltan jornadas")
+	var dice := tree.causa(TechTree.Tech.NUCLEO)
+	assert_true(dice.contains("45") and dice.contains("manufactura"),
+		"y dice cuantas y de que oficio, que es lo que decide a quien mover: "
+		+ dice)
+
+	# Con jornadas y sin material: PARADA. Es la que nadie adivinaba, porque
+	# `_ir_pagando` detiene el progreso y la casilla solo enseñaba un tanto
+	# por ciento que no se movia.
+	tree.add_practice(Profession.Job.MANUFACTURA, 45.0)
+	assert_eq(tree.freno(TechTree.Tech.NUCLEO), TechTree.Freno.MATERIAL,
+		"con las jornadas hechas y la despensa vacia, para")
+	assert_true(tree.causa(TechTree.Tech.NUCLEO).begins_with("parada"),
+		"y lo dice con esa palabra")
+	assert_lt(tree.progress(TechTree.Tech.NUCLEO), 1.0,
+		"el progreso no llega a uno sin material, que es de donde salia la queja")
+
+	# Y con la despensa llena y el cobro atrasado, NO es «parada»: es un tick
+	# de retraso que se cobra solo en cuanto alguien practique. Marcarlo en
+	# rojo era decirle al jugador que fuera a por piedra teniendola en casa.
+	almacen.add(Materia.Kind.PIEDRA, 40.0)
+	assert_eq(tree.freno(TechTree.Tech.NUCLEO), TechTree.Freno.JORNADAS,
+		"con material en el abrigo no esta parada aunque no se haya cobrado")
+	assert_true(tree.causa(TechTree.Tech.NUCLEO).is_empty()
+		or not tree.causa(TechTree.Tech.NUCLEO).begins_with("parada"),
+		"y no lo dice")
+
+	# Y con material, se aprende.
+	tree.add_practice(Profession.Job.MANUFACTURA, 1.0)
+	assert_true(tree.has(TechTree.Tech.NUCLEO),
+		"con nodulos que estropear, se aprende")
+	assert_eq(tree.freno(TechTree.Tech.NUCLEO), TechTree.Freno.NINGUNO,
+		"y ya no la frena nada")

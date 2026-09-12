@@ -236,6 +236,19 @@ var _animals: Array[Dictionary] = []
 ## coste: ver `_nearest_predator`.
 var _predators: Array[Dictionary] = []
 
+## Y los herbívoros, por lo mismo y con más motivo: ver `_nearest_prey`.
+##
+## Aquella recorría la lista ENTERA preguntándole a cada animal su dieta, y
+## preguntarla es dos búsquedas de diccionario y un texto por candidato. Con
+## ochocientos animales y un puñado de lobos hambrientos eso son decenas de
+## miles de accesos por fotograma, y era el grueso de lo que la fauna se lleva
+## del cuadro: medido con `PicoProbe`, el 42 % del tiempo de TODOS los tirones.
+##
+## La lista se mantiene donde se nace y donde se muere, igual que la de
+## carnívoros. La respuesta es la misma; lo que cambia es no preguntar
+## ochocientas veces por segundo algo que no cambia nunca.
+var _prey: Array[Dictionary] = []
+
 
 func setup(terrain: TerrainGenerator, field: ResourceField, herds: int = 5) -> void:
 	_terrain = terrain
@@ -353,6 +366,10 @@ static func _clip_table(model: String) -> Dictionary:
 		_: return {}
 
 
+## La semilla con la que se barajan las charcas. Ver [_find_waterholes].
+const CHARCAS_SEED := 20260911
+
+
 ## Un puñado de charcas: celdas donde el vadeo ya moja pero no ahoga, lo
 ## bastante repartidas para que no todos los animales converjan en la misma.
 func _find_waterholes() -> void:
@@ -364,7 +381,25 @@ func _find_waterholes() -> void:
 			var wet := _terrain.crossing_difficulty_at(point)
 			if wet > 0.03 and wet <= Hydrography.FORD_WADEABLE:
 				candidates.append(point)
-	candidates.shuffle()
+	# BARAJADAS CON SEMILLA PROPIA, no con `shuffle()`.
+	#
+	# `shuffle()` va con el azar GLOBAL del motor. Hoy ese azar arranca
+	# sembrado igual en cada corrida —nadie llama a `randomize()` salvo
+	# [BandaCrowd], que tiene el suyo—, así que las charcas salían iguales por
+	# casualidad; está medido en la tarea 9 de
+	# docs/specs/LO_MISMO_MAS_DEPRISA.md. Pero basta una tirada global de más
+	# en cualquier rincón para mover todas las charcas, y con ellas por dónde
+	# andan las manadas y qué se caza.
+	#
+	# Y no se usa `_rng`: las manadas se siembran justo después con él, y
+	# meterle tiradas por delante las cambiaría de sitio a todas.
+	var barajador := RandomNumberGenerator.new()
+	barajador.seed = CHARCAS_SEED
+	for i in range(candidates.size() - 1, 0, -1):
+		var j := barajador.randi_range(0, i)
+		var guarda := candidates[i]
+		candidates[i] = candidates[j]
+		candidates[j] = guarda
 	for candidate in candidates:
 		if _waterholes.size() >= 24:
 			break
@@ -435,6 +470,8 @@ func _spawn(species: String, anchor: Vector3) -> void:
 	_animals.append(animal)
 	if String((SPECIES_VISUAL[species] as Dictionary)["diet"]) == "carnivoro":
 		_predators.append(animal)
+	else:
+		_prey.append(animal)
 
 
 ## El reloj de la partida, para andar a su compas.
@@ -462,19 +499,39 @@ func _process(delta: float) -> void:
 		Cronometro.cierra("fauna (manadas)")
 		return
 
+	# CON PARTIDA, EL FOTOGRAMA SÓLO PINTA. Lo que cambia la partida -dónde
+	# está cada animal, qué hace, qué hambre tiene- lo lleva ella en su paso
+	# fijo: ver [avanzar]. Aquí pensaban y andaban con el `delta` del
+	# fotograma, y como la cacería los lee, la misma semilla no daba la misma
+	# caza: con fotogramas de 400 ms a x20, un ciervo daba saltos de ocho
+	# segundos de monte. Medido en docs/specs/LO_MISMO_MAS_DEPRISA.md, tareas
+	# 6 y 8.
+	#
+	# Sin partida que la lleve -las sondas de fauna suelta, las pruebas- se
+	# lleva sola, como siempre.
+	if sim == null:
+		avanzar(delta)
+	for animal: Dictionary in _animals:
+		_draw(animal, SPECIES_VISUAL[animal["species"] as String])
+	Cronometro.cierra("fauna (manadas)")
+
+
+## Lo que la fauna cambia de la partida en `delta` segundos de juego: qué
+## decide cada animal y cuánto anda. Lo llama la simulación en cada paso,
+## después de la gente -ver `SettlementSim._advance`-; pintarlo es cosa de
+## `_process`.
+func avanzar(delta: float) -> void:
+	if _terrain == null or delta <= 0.0:
+		return
 	for animal: Dictionary in _animals:
 		var config: Dictionary = SPECIES_VISUAL[animal["species"] as String]
 		_think(animal, config, delta)
 		_move(animal, config, delta)
-		_draw(animal, config)
 
 
 ## Decide el ESTADO: huir manda sobre todo lo demás, luego cazar o beber,
 ## y vagando -que ya implica pastar, porque el destino sesga a la hierba- de
 ## sobra.
-	Cronometro.cierra("fauna (manadas)")
-
-
 func _think(animal: Dictionary, config: Dictionary, delta: float) -> void:
 	var diet: String = config["diet"]
 	animal["thirst"] = minf(100.0, float(animal["thirst"]) + delta * 0.9)
@@ -671,9 +728,10 @@ func _nearest_prey(animal: Dictionary) -> Dictionary:
 	var position: Vector3 = animal["position"]
 	var best: Dictionary = {}
 	var best_dist := HUNT_RADIUS_M
-	for other: Dictionary in _animals:
-		if (SPECIES_VISUAL[other["species"] as String] as Dictionary)["diet"] != "herbivoro":
-			continue
+	# Por la lista de presas y no por la de todos preguntando dieta: la
+	# respuesta es la misma y no cuesta dos diccionarios por candidato.
+	# Ver [_prey].
+	for other: Dictionary in _prey:
 		var dist: float = position.distance_to(other["position"])
 		if dist < best_dist:
 			best_dist = dist
@@ -790,6 +848,12 @@ func place_for_test(species: String, at: Vector3) -> Dictionary:
 		"hunger": 0.0, "thirst": 0.0, "trail": PackedVector3Array([at]),
 	}
 	_animals.append(animal)
+	# Y en la lista que le toque, o las pruebas montarian un valle en el que
+	# los lobos no ven a nadie. Ver [_prey].
+	if String((SPECIES_VISUAL[species] as Dictionary)["diet"]) == "carnivoro":
+		_predators.append(animal)
+	else:
+		_prey.append(animal)
 	return animal
 
 
@@ -889,6 +953,7 @@ func retirar(animal: Dictionary) -> void:
 			ultimo = otro
 	_animals.erase(animal)
 	_predators.erase(animal)
+	_prey.erase(animal)
 	if not ultimo.is_empty() and ultimo != animal:
 		ultimo["slot"] = slot
 	_counts[species] = maxi(int(_counts[species]) - 1, 0)

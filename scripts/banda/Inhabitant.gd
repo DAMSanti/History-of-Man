@@ -271,6 +271,22 @@ var blocked_steps: int = 0
 ## contra la misma pared no la abre, sólo repite el intento.
 var blocked_replans: int = 0
 
+## Pasos de lado seguidos, bordeando lo que corta el paso.
+##
+## Se cuentan porque un paso de lado SÍ mueve a la persona, así que no lo recoge
+## `blocked_steps` y desde fuera no se distingue de andar. Es lo que dejaba a
+## alguien barriendo la orilla de un río durante horas sin que saltara nada.
+## Ver [SettlementSim.RODEOS_DE_ORILLA].
+var pasos_de_lado: int = 0
+
+## Hitos que le quedaban por andar la última vez que se le miró.
+##
+## Es la otra vara del vigilante de plantados, y la que dice la verdad en un
+## rodeo: ir tachando hitos es andar el camino que se trazó, aunque la línea
+## recta al destino no se acorte —ir a buscar el vado puede alejar—.
+## Ver [Marcha._watch_for_stuck].
+var hitos_pendientes: int = 0
+
 ## Los sitios a los que HOY se ha intentado llegar y no se ha podido.
 ##
 ## Va aparte de `unreachable` porque son dos memorias distintas: aquélla es del
@@ -533,6 +549,29 @@ func hurt_factor() -> float:
 	return clampf(float(hurt_days) / 8.0, 0.15, 0.55)
 
 
+## Días seguidos enferma de frío. Mismo patrón que `hurt_days`: un contador,
+## no un `State` nuevo. Sube mientras `cold` se queda por encima del umbral
+## de enfermar -ver [Relevo]-, baja cuando se entra en calor, y de sobrepasar
+## el techo de la edad sale muerta. Ver `docs/specs/QUE_SE_PUEDA_PERDER.md`.
+var cold_sick_days: int = 0
+
+
+## Si esta persona está enferma de frío ahora mismo, para pintarla y para no
+## repetir el aviso de la crónica cada jornada.
+func is_cold_sick() -> bool:
+	return cold_sick_days > 0
+
+
+## Lo mismo que `cold_sick_days`, pero por hambre sostenida en vez de frío.
+## Van separados -no un contador compartido- porque cada vector se calibra
+## por su cuenta: ver [Relevo].
+var hunger_sick_days: int = 0
+
+
+func is_hunger_sick() -> bool:
+	return hunger_sick_days > 0
+
+
 ## Progreso hacia la siguiente pieza del taller, de 0 a 1.
 ##
 ## Va por persona y no por banda porque si no, dos artesanos a medias de dos
@@ -587,6 +626,40 @@ var cold: float = 0.0
 var state: State = State.OCIOSO
 var activity: Subsistence.Activity = Subsistence.Activity.CAZA
 var has_task: bool = false
+
+## Antes de esta hora del juego -absoluta: jornada por 24 mas la hora- no se
+## vuelve a pensar la jornada.
+##
+## QUIEN NO HA PODIDO SALIR NO SE LO PREGUNTA CUARENTA VECES POR MINUTO.
+##
+## Pensar la jornada es caro: se elige especialidad, se arma la lista de tajos
+## conocidos y se traza el camino a cada uno hasta dar con uno que merezca
+## andarse. Quien no encuentra ninguno se queda ocioso y lo repite al tick
+## siguiente, que llega veinticuatro segundos de juego despues, con el mismo
+## monte, los mismos tajos y el mismo resultado. Medido a velocidad de juego:
+## 30.720 decisiones en cinco jornadas, casi todas recorriendo la lista entera
+## para no salir.
+##
+## Lo pone [SettlementSim._tick_daylight] cuando la decision no ha cambiado
+## nada, y se borra al empezar cada jornada. No aplaza nada mas: quien SI sale
+## no espera, y la primera decision de la manana tampoco se retrasa.
+var repensar_tras: float = -1.0
+
+## Desde donde y con cuanto alcance se dio la ultima ojeada al mapa.
+##
+## MIRAR DOS VECES DESDE EL MISMO SITIO NO ENSEÑA NADA NUEVO.
+##
+## `BandKnowledge.see_from` barre las celdas a la redonda y sube la claridad de
+## cada una a lo que se ve desde aqui. Nunca la baja -lo visto no se olvida-,
+## asi que repetirla desde el mismo punto y con el mismo alcance no puede
+## cambiar un solo numero: es un no-op caro. Y quien trabaja esta QUIETO, que
+## son seis de cada siete llamadas.
+##
+## No es estado de la partida sino de lo que ya se ha calculado: por eso queda
+## fuera de la instantanea. Perderla al restaurar solo cuesta una ojeada de mas
+## que tampoco cambia nada. Ver [Instantanea.FUERA].
+var ojeada_desde: Vector3 = Vector3(INF, INF, INF)
+var ojeada_alcance: float = -1.0
 
 ## Posiciones en el mapa local
 var position: Vector3 = Vector3.ZERO

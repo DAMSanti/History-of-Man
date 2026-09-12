@@ -29,8 +29,10 @@ func _init() -> void:
 	Cronometro.limite_ms = 100.0
 	if not OS.get_environment("LIMITE").is_empty():
 		Cronometro.limite_ms = float(OS.get_environment("LIMITE"))
-	# El panel de F3 tambien vacia la bandeja de picos —para eso esta— y se
-	# los quitaria a la sonda. Se aparta: su `_process` corta si no se ve.
+	# El panel de F3 se esconde para que no estorbe en la captura, pero ya no
+	# hace falta apartarlo para medir: la bandeja de picos no la vacia quien
+	# lee. Esconderlo TAMPOCO bastaba —su `_process` seguia corriendo— y por
+	# eso esta sonda contaba una fraccion de los tirones. Ver [Cronometro.picos].
 	for nodo: Node in get_root().find_children("*", "PerformanceOverlay", true, false):
 		(nodo as CanvasLayer).visible = false
 
@@ -49,7 +51,9 @@ func _init() -> void:
 		cuadros += 1
 		for pico: Dictionary in Cronometro.picos:
 			recogidos.append(pico)
-		Cronometro.picos.clear()
+		# No se vacía: la bandeja la limpia el cepo al abrir el fotograma
+		# siguiente, y así la leen esta sonda y el panel de F3 a la vez. Ver
+		# [Cronometro.picos].
 	var corridos := float(Time.get_ticks_msec() - t0) / 1000.0
 	Cronometro.activo = false
 
