@@ -1,3 +1,15 @@
+> **ARCHIVADO (2026-09-12).** Este documento ya no se edita. La documentación
+> se reorganizó para que lo único específico fueran las fichas de época, y
+> lo vivo está en **[SISTEMAS.md](../SISTEMAS.md) §14–§15** (los desechos y el lobo, y la bellota).
+>
+> Se conserva entero porque guarda **lo que no cabe en un documento permanente**:
+> qué se probó, qué salió, qué premisa se cayó a mitad y por qué se decidió lo
+> que se decidió. Nada de lo que sigue se ha tocado — incluidas las cosas que
+> hoy ya no son verdad, que se reconocen porque el documento permanente dice
+> otra cosa y **gana el permanente**.
+
+---
+
 # El perro y la bellota
 
 Dos mecánicas del Paleolítico superior, **ya implementadas**. Este documento

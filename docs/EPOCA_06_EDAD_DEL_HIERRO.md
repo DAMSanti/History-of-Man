@@ -39,7 +39,7 @@ importarlo. Es un contrapunto de diseño útil frente a la época anterior.
 | La salazón | interno | proceso nuevo de `ProcessRecipe` | — |
 | La comunidad castreña | **social, y es el cambio de unidad** | primer `Settlement` cuya identidad ya no es la banda/familia sino el castro entero | `Feature.CASTRO` (ya existe) |
 | El guerrero | social | primer `Job` de violencia sostenida por el resto | — |
-| El pacto entre castros | social | primera relación formal entre dos `Settlement` (`SISTEMAS_COMPARTIDOS.md` §7, "el primer sitio donde hace falta código nuevo de verdad") | — |
+| El pacto entre castros | social | primera relación formal entre dos `Settlement` (`SISTEMAS.md` §7, "el primer sitio donde hace falta código nuevo de verdad") | — |
 | La frontera | social | primer límite reconocido con nombre frente a un `Settlement` vecino | — |
 | **La legión en el collado** | **cierre, se sufre** | cuenta de años desde el inicio de la época, con margen; no es evitable | Un `Feature.ROMANO` (campamento) que puede convivir en el mismo emplazamiento que un `Feature.CASTRO` abandonado |
 
@@ -80,10 +80,11 @@ mineral de hierro local, cerrando el ciclo que abrió con la piedra verde.
    el objetivo de esta tanda: un castro vecino es, mecánicamente, la primera
    forma jugable de "otra tribu".
 2. **El asedio como hito que se sufre.** El patrón de "se sufre" definido en
-   `SISTEMAS_COMPARTIDOS.md` §6 se concreta aquí por primera vez con una
+   `SISTEMAS.md` §6 se concreta aquí por primera vez con una
    secuencia real (cerco → quema de campos → asalto o rendición), y ese
    mismo patrón —no el contenido romano en sí— es el que reutiliza el
-   Estado que se va (época 7) y la guerra de 1937 (época 12).
+   Estado que se va (época 7), que con el siglo corto retirado es ya el
+   último de los tres hitos que se sufren.
 
 ---
 

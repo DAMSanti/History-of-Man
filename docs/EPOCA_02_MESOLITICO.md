@@ -33,7 +33,7 @@ continuidad. Lo nuevo real de esta época es el **pico asturiense** y los
 **microlitos**, que hoy no tienen entrada en `TechTree`.
 
 **El techo térmico no cambia.** Sigue siendo el hogar abierto a ~700 °C: el
-Mesolítico no toca la escalera térmica de `SISTEMAS_COMPARTIDOS.md` §1.1, y
+Mesolítico no toca la escalera térmica de `SISTEMAS.md` §1.1, y
 por eso EPOCAS.md lo señala como el peor candidato para partirse en dos —no
 cambia ni dónde se vive, ni qué se fabrica del todo, ni quién decide—.
 
@@ -50,7 +50,7 @@ cambia ni dónde se vive, ni qué se fabrica del todo, ni quién decide—.
 | El conchero | interno | acumulación de subproducto de marisqueo sobre el mismo `Paraje`, ver §5 | `Feature` nuevo o marca sobre `ABRIGO`/`OTRO` |
 | El territorio pequeño | social, sin gatillo mecánico propio | se lee del patrón de exploración: radio de batida menor que en la época 1 | — |
 | El muerto en la basura | interno | entierro dentro del conchero, mismo requisito que "la sepultura" de la época 1 pero en otro lugar | — |
-| El vecino | social | primer contacto sostenido con otro grupo por la capa exterior de exploración (`SISTEMAS_COMPARTIDOS.md` §4) | — |
+| El vecino | social | primer contacto sostenido con otro grupo por la capa exterior de exploración (`SISTEMAS.md` §4) | — |
 | **El primer grano sembrado** | **cierre** | una sola siembra: alguien guarda semilla en vez de comérsela. No pide excedente ni granero, sólo la decisión de gastar comida de hoy en la de dentro de un año | — |
 
 **El hito de cierre es deliberadamente barato.** EPOCAS.md lo dice: "sin
@@ -93,7 +93,7 @@ Ningún `Job` nuevo. Cambios dentro de los que ya existen:
    soportado por `RegionEras`/`Site.coast_km_by_era`: no hace falta código
    nuevo, pero sí que el jugador lo note, porque sitios de la época anterior
    pueden quedar bajo el agua dentro de la misma partida.
-3. **El primer paso de la escalera del alimento** (`SISTEMAS_COMPARTIDOS.md`
+3. **El primer paso de la escalera del alimento** (`SISTEMAS.md`
    §1.3): "marisqueo y costa" como base de subsistencia dominante, no ya
    accesoria como en el Paleolítico.
 

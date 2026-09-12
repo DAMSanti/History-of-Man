@@ -39,7 +39,7 @@ impuesto, sin censo, sin mercado de moneda activo.
 | **La escritura sale del monasterio** | **cierre** | un documento no litúrgico: cartulario, carta puebla, cuenta | — |
 
 **Este cierre es el peldaño alto de la escalera del soporte**
-(`SISTEMAS_COMPARTIDOS.md` §1.2): antes hay que enseñar mostrando —arte
+(`SISTEMAS.md` §1.2): antes hay que enseñar mostrando —arte
 parietal, luego cerámica marcada—, después basta con contar. Con este
 documento se puede fundar una villa, que es la época siguiente: el hito no
 es sólo un logro cultural, es la llave mecánica que abre la Baja Edad Media.

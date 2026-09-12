@@ -33,7 +33,7 @@ el texto.
 
 Esto es lo que el objetivo de esta tanda pide sentar como base, no sólo
 como ficha de época. Tres piezas nuevas, siguiendo el patrón de
-`SISTEMAS_COMPARTIDOS.md` §1.3:
+`SISTEMAS.md` §1.3:
 
 1. **`Subsistence.Activity.SIEMBRA` y `.PASTOREO`.** Dos actividades nuevas
    junto a las cinco que ya existen (`CAZA`, `MARISQUEO`, `PESCA`,
@@ -65,8 +65,9 @@ de cría dirigida, medido en el mismo sistema de saber tácito que ya usa
 cría). La genética de verdad —cruces controlados, razas fijadas
 científicamente— no aparece hasta Robert Bakewell y la revolución agrícola
 británica del XVIII, y en el juego encaja mejor como hito técnico de la
-Edad Moderna o de El siglo corto (ver `EPOCA_10_EDAD_MODERNA.md` y
-`EPOCA_12_SIGLO_CORTO.md`), no aquí. Meterla en el Neolítico sería el mismo
+Edad Moderna (ver `EPOCA_10_EDAD_MODERNA.md`), no aquí. La genética como
+ciencia de laboratorio quedaba en el siglo corto, que ya no es una época
+jugable: ver `archivo/EPOCA_12_SIGLO_CORTO.md`. Meterla en el Neolítico sería el mismo
 error que empezar la partida descubriendo el fuego: un tópico que además es
 falso.
 
@@ -79,7 +80,7 @@ falso.
 | Horno de fosa | interno | obra de `CampProjects` construida | — |
 | El recipiente que no se pudre | interno | primera pieza de cerámica cocida | — |
 | El hacha pulimentada | interno | técnica nueva de `TechTree` | — |
-| Ovicaprinos | interno | primer rebaño adquirido (por intercambio, `SISTEMAS_COMPARTIDOS.md` §5, o por domesticación local si se decide modelarla) | — |
+| Ovicaprinos | interno | primer rebaño adquirido (por intercambio, `SISTEMAS.md` §5, o por domesticación local si se decide modelarla) | — |
 | El molino de vaivén | interno | obra construida | — |
 | La propiedad del rebaño | social | primer rebaño con dueño individual, no comunal | — |
 | La tumba colectiva | social, previa al cierre | primeros ortostatos movidos, sin llegar aún al dolmen completo | — |

@@ -1,9 +1,21 @@
+> **ARCHIVADO (2026-09-12).** Este documento ya no se edita. La documentación
+> se reorganizó para que lo único específico fueran las fichas de época, y
+> lo vivo está en **[EPOCA_01_PALEOLITICO.md](../EPOCA_01_PALEOLITICO.md)**, que lo absorbió entero.
+>
+> Se conserva entero porque guarda **lo que no cabe en un documento permanente**:
+> qué se probó, qué salió, qué premisa se cayó a mitad y por qué se decidió lo
+> que se decidió. Nada de lo que sigue se ha tocado — incluidas las cosas que
+> hoy ya no son verdad, que se reconocen porque el documento permanente dice
+> otra cosa y **gana el permanente**.
+
+---
+
 # Vertical slice — Paleolítico superior
 
 Diseño de la primera época, para saber qué hace falta construir antes de
 seguir. Cantabria, Magdaleniense (~17.000–12.000 a.C.).
 
-Ver [ROADMAP.md](ROADMAP.md) para el plan general y [SPECS.md](SPECS.md) para
+Ver [ROADMAP.md](../ROADMAP.md) para el plan general y [SPECS.md](../SPECS.md) para
 el contrato técnico.
 
 ---

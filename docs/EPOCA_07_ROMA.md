@@ -40,7 +40,7 @@ usará el concejo en la Alta Edad Media.
 | **El Estado se va** | **cierre, se sufre** | cuenta de años desde el fin del hito de cierre de la época 6, con margen mayor que el asedio porque es un declive, no un asalto | Retirada de mantenimiento sobre `Feature.ROMANO`, sin borrarlo |
 
 **Lo interesante es qué sobrevive, y el juego debe medirlo, no narrarlo.**
-Siguiendo el patrón de `SISTEMAS_COMPARTIDOS.md` §6: al disparar el hito,
+Siguiendo el patrón de `SISTEMAS.md` §6: al disparar el hito,
 cada obra construida durante la época comprueba si dependía del Estado para
 seguir funcionando. El molino sigue moliendo (no depende de nadie más que
 del agua), la calzada sigue andándose (se degrada con el tiempo, no
@@ -79,7 +79,7 @@ como lo que es sin que sea jugable como aspiración.
 2. **El estatuto de trabajo no elegible.** Primera vez que `Inhabitant`
    necesita un campo de condición social independiente del `Job` asignado.
 3. **El mercado de moneda**, como capa por encima del `Intercambio` de
-   trueque directo (`SISTEMAS_COMPARTIDOS.md` §5): mismo sistema, con un
+   trueque directo (`SISTEMAS.md` §5): mismo sistema, con un
    `Materia.Kind` de moneda que no se consume ni caduca.
 
 ---

@@ -1,9 +1,21 @@
+> **ARCHIVADO (2026-09-12).** Este documento ya no se edita. La documentación
+> se reorganizó para que lo único específico fueran las fichas de época, y
+> lo vivo está en **[GRAFICOS.md](../GRAFICOS.md)**; lo que quedaba pendiente, en [ROADMAP.md](../ROADMAP.md).
+>
+> Se conserva entero porque guarda **lo que no cabe en un documento permanente**:
+> qué se probó, qué salió, qué premisa se cayó a mitad y por qué se decidió lo
+> que se decidió. Nada de lo que sigue se ha tocado — incluidas las cosas que
+> hoy ya no son verdad, que se reconocen porque el documento permanente dice
+> otra cosa y **gana el permanente**.
+
+---
+
 # Revamp gráfico
 
 Plan para pasar de cuatro texturas procedurales y quince cápsulas a terreno PBR
 y una banda de personas a la que se le ve lo que están haciendo.
 
-Ver [ROADMAP.md](ROADMAP.md) para el plan general y [SPECS.md](SPECS.md) para el
+Ver [ROADMAP.md](../ROADMAP.md) para el plan general y [SPECS.md](../SPECS.md) para el
 contrato técnico. Este documento cubre **sólo lo visual**; no cambia ninguna
 mecánica.
 
@@ -495,8 +507,8 @@ Va **antes que la gente**, y no por gusto:
 
 - El sistema ya existe. `ResourceProps` siembra las ocho materias de
   `Materia.Kind` en `MultiMesh` con densidad por celda, rareza y balanceo de
-  viento, cableado al campo de recursos; `MultiMeshVegetation` hace lo propio con
-  los árboles. Falta la MALLA, no el sistema: hoy son `SphereMesh`,
+  viento, cableado al campo de recursos; `Forest` hace lo propio con los árboles
+  —eran `MultiMeshVegetation` cuando se escribió esto—. Falta la MALLA, no el sistema: hoy son `SphereMesh`,
   `CylinderMesh` y `PrismMesh` pintadas de un color. Es el mismo perfil de
   trabajo que las texturas, y por tanto barato.
 - Cierra la deuda de G2 y tapa el hueco de escala de 1 a 5 m del §8, que sólo se

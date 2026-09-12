@@ -1,9 +1,17 @@
 # Época 11 — El vapor: la fábrica y el ferrocarril
 
-c. 1830–1900. `Site.Era.HISTORICA`. Desde aquí el valle deja de ser un
-sistema cerrado: lo que se produce, lo que vale y quién lo compra se decide
-fuera del mapa. Es también donde cambia el método de esta documentación —de
-aquí en adelante la fuente ya no es arqueológica, es de archivo y prensa.
+c. 1830–1900. `Site.Era.HISTORICA`. **La última época jugable**, desde que
+el siglo corto se retiró (ver `archivo/EPOCA_12_SIGLO_CORTO.md` y
+EPOCAS.md §2). Desde aquí el valle deja de ser un sistema cerrado: lo que se
+produce, lo que vale y quién lo compra se decide fuera del mapa. Es también
+donde cambia el método de esta documentación —de aquí en adelante la fuente
+ya no es arqueológica, es de archivo y prensa.
+
+> **Aviso de alcance.** Esta ficha se conserva con la misma advertencia que
+> tumbó a la 12: el jornal y el capital de fuera **no se simulan** con el
+> motor de jornadas y calorías que existe hoy, y EPOCAS.md §7 la señala como
+> la siguiente candidata a caer si hay que recortar. Está escrita como
+> destino, no como compromiso.
 
 **Punto de partida.** Alto horno en marcha, provincia constituida (1778),
 monte comunal ya en trance de privatizarse (cierre de la época anterior).
@@ -21,7 +29,7 @@ monte comunal ya en trance de privatizarse (cierre de la época anterior).
 | Conserva y salazón industrial | la salazón (época 6) escalada | `OBRERO` | El pescado deja de ser comida y pasa a ser producto | ATESTIGUADO (anchoa de Santoña, maestros italianos) |
 
 El coque es el peldaño que cierra la escalera térmica clásica de
-`SISTEMAS_COMPARTIDOS.md` §1.1: a partir de aquí el límite no es una
+`SISTEMAS.md` §1.1: a partir de aquí el límite no es una
 temperatura, es el dinero. Es la señal más limpia de que el juego cambia de
 género.
 
@@ -61,7 +69,7 @@ vacían mano de obra rural sin que el campo deje de existir.
 ## 4. Mecánicas nuevas
 
 1. **La decisión que se toma fuera del mapa.** El sistema de `Intercambio`
-   de `SISTEMAS_COMPARTIDOS.md` §5 necesita un cuarto peldaño: un mercado
+   de `SISTEMAS.md` §5 necesita un cuarto peldaño: un mercado
    cuyo precio no lo fija nadie dentro de la partida — el jugador reacciona
    a un precio externo, no lo negocia.
 2. **El paisaje que cambia a escala de mapa por una sola decisión.** La mina

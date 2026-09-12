@@ -1,3 +1,15 @@
+> **ARCHIVADO (2026-09-12).** Este documento ya no se edita. La documentación
+> se reorganizó para que lo único específico fueran las fichas de época, y
+> lo que salió de aquí está repartido entre **[ESTADO.md](../ESTADO.md)** y **[SISTEMAS.md](../SISTEMAS.md)**.
+>
+> Se conserva entero porque guarda **lo que no cabe en un documento permanente**:
+> qué se probó, qué salió, qué premisa se cayó a mitad y por qué se decidió lo
+> que se decidió. Nada de lo que sigue se ha tocado — incluidas las cosas que
+> hoy ya no son verdad, que se reconocen porque el documento permanente dice
+> otra cosa y **gana el permanente**.
+
+---
+
 # Cierre de la slice — dejar el Paleolítico jugable
 
 Ata los flecos de la primera época para que deje de ser una demo de sistemas
@@ -5,8 +17,8 @@ sueltos y pase a ser una slice **jugable y balanceable**. No abre alcance
 nuevo: cierra contradicciones y huecos de lo que ya existe.
 
 Ver [SLICE_PALEOLITICO.md](SLICE_PALEOLITICO.md) para el diseño de la época,
-[ROADMAP.md](ROADMAP.md) para el plan general, [REVAMP_GRAFICO.md](REVAMP_GRAFICO.md)
-para el plan visual y [SPECS.md](SPECS.md) para el contrato técnico.
+[ROADMAP.md](../ROADMAP.md) para el plan general, [REVAMP_GRAFICO.md](REVAMP_GRAFICO.md)
+para el plan visual y [SPECS.md](../SPECS.md) para el contrato técnico.
 
 **Nota de método.** Varios de los "flecos" reportados ya estaban resueltos en
 el código y no se tocan aquí: el reparto de recolección/exploración entre

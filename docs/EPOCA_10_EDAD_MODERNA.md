@@ -22,7 +22,7 @@ anterior), villa con fuero, lonja y ruta comercial activa.
 Cuarto y último peldaño de temperatura de la escalera clásica: el alto
 horno funde hierro (1538 °C) en vez de darlo en esponja. A partir de aquí
 —época 11— el límite deja de ser térmico y pasa a ser económico (coque y
-capital), tal como ya anticipa `SISTEMAS_COMPARTIDOS.md` §1.1.
+capital), tal como ya anticipa `SISTEMAS.md` §1.1.
 
 ---
 
@@ -41,8 +41,10 @@ del Neolítico: aquí se puede introducir como una técnica de `LABRIEGO`/
 mejora el rendimiento del rebaño de forma permanente y acumulativa, distinta
 del rendimiento por trabajo que ya modela `TechTree` para el resto de
 oficios. La genética como ciencia de laboratorio (Mendel, y mucho después
-la genética molecular) es ya del siglo XX y encaja en
-`EPOCA_12_SIGLO_CORTO.md`, no aquí.
+la genética molecular) es ya del siglo XX: caía en el siglo corto, que se
+retiró de las épocas jugables, así que **no tiene época donde ocurrir** y no
+debe colarse aquí para rellenar el hueco. Ver
+`archivo/EPOCA_12_SIGLO_CORTO.md`.
 
 ---
 

@@ -42,7 +42,7 @@ cobre y estaño, y el estaño sigue sin estar en Cantabria.
 | **El ocre da metal** | **cierre** | el mismo `Materia.Kind.OCRE` que se recoge desde la época 1 se identifica y funde como mineral de hierro | — |
 
 **Este es el mejor hito del juego y ya está escrito, sin que haya que
-inventarlo**: `SLICE_PALEOLITICO.md` §4, en la fila del ocre, dice
+inventarlo**: `archivo/SLICE_PALEOLITICO.md` §4, en la fila del ocre, dice
 literalmente "el mismo mineral que 30.000 años después se funde en hierro".
 El hito no es fundirlo bien —eso es la época siguiente—, es **verlo**: que
 el jugador conecte un material que lleva usando treinta mil años de partida

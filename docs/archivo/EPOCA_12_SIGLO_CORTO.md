@@ -1,3 +1,24 @@
+> **DESCARTADA (2026-09-12).** Esta época salió de las once jugables y este
+> documento se conserva por lo que documenta, no como compromiso de construirlo.
+>
+> El motivo es el que el propio [EPOCAS.md](../EPOCAS.md) §7 ya anticipaba: *«si
+> hay que recortar, el orden es al revés del de escritura: primero se caen la 11
+> y la 12, que son las que menos se apoyan en el motor que existe»*. El jornal,
+> el capital de fuera y la reconversión no se simulan con jornadas y calorías,
+> que es lo único que el motor sabe hacer hoy. Escribir la ficha no lo cambiaba.
+>
+> **Qué se llevó con ella, y hay que saberlo:** el final circular de la partida
+> —*el mapa se cierra sobre `data/boundaries/cantabria.json`, los 5304 km² con
+> los que arrancó el juego en la primera pantalla*—. Era el mejor cierre escrito
+> del proyecto y ahora no tiene época donde ocurrir. **Queda como decisión
+> pendiente**, anotada en `EPOCAS.md` §2, y no se ha resuelto a la ligera
+> colgándola de El vapor: 1900 no cierra ningún mapa.
+>
+> Si algún día se retoma, se retoma entera y desde aquí. Nada de lo que sigue se
+> ha tocado.
+
+---
+
 # Época 12 — El siglo corto: hasta el mapa de hoy
 
 1900–1982. `Site.Era.HISTORICA`. No hay cierre de progreso: hay un final de

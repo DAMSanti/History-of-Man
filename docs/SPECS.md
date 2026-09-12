@@ -1,122 +1,421 @@
-# SPECS.md — CityBuilder ("History of Man")
+# SPECS — el contrato técnico
 
-Especificación técnica del proyecto. Documenta qué existe, cómo encajan las piezas, y qué contratos debe respetar cualquier código nuevo. No es un tutorial: es la referencia para tomar decisiones de diseño consistentes.
+Qué existe hoy en *History of Man*, con qué contrato, y qué no se puede romper
+sin romper otra cosa. Es la referencia para tomar decisiones consistentes: si
+vas a escribir código nuevo, esto es lo que ya está decidido.
 
-Motor: **Godot 4.5.1** · Lenguaje: **GDScript** · Renderer: **Forward+**
+Motor **Godot 4.5.1** · **GDScript** · **Forward+** · `config/name="History of Man"`
+
+**Este documento no es el único, y no repite lo que dicen los otros.** Si algo
+está aquí y también allí, allí manda:
+
+| Pregunta | Documento |
+|---|---|
+| Cómo se escribe código aquí, cómo se trocea una clase, cómo se mide | [ARQUITECTURA.md](ARQUITECTURA.md) |
+| Qué se va a construir y en qué orden | [ROADMAP.md](ROADMAP.md) |
+| Qué hace hoy el juego y qué le falta, con cifras medidas | [ESTADO.md](ESTADO.md) |
+| Las once épocas y sus hitos | [EPOCAS.md](EPOCAS.md) · [SISTEMAS.md](SISTEMAS.md) |
+| Cómo trabajan varios agentes a la vez sin pisarse | [AGENTES.md](AGENTES.md) |
+
+> **Nota de historia.** La versión anterior de este documento describía un
+> prototipo de *city builder* —`Chunk`, `Architecto`, `RawMaterial`,
+> `BlockData`, `TimeManager` como autoload, «no hay suite de pruebas»— que
+> **ya no existe**: se retiró entero (ARQUITECTURA.md §8) y el documento se
+> quedó atrás sin que nadie lo tocara. Lo que sigue está contrastado contra
+> `scripts/` el 2026-09-12, con la suite en verde: **887 pruebas, 6 163
+> comprobaciones**. Si vuelve a haber discrepancia, gana el código y este
+> documento está pendiente de arreglar.
 
 ---
 
-## 1. Visión general
+## Dónde mirar
 
-Simulador de construcción de ciudades en 3D con:
-- Terreno procedural (altura / humedad / geología) generado por ruido.
-- Recursos físicos (minerales, madera, piedra) distribuidos en el terreno y extraíbles.
-- Construcción con reglas físicas simplificadas (dureza del suelo vs. peso del edificio) y colapso estructural.
-- Ciclo de tiempo (ticks → días → estaciones → años) que retroalimenta iluminación y clima.
-- Gráficos PBR con SDFGI, niebla volumétrica y shader triplanar para el terreno.
+| Si buscas… | Ve a |
+|---|---|
+| Las dos escalas, su malla y su resolución | §2.1 |
+| **Por qué no hay autoloads y dónde vive el estado global** | **§2.2** |
+| Quién cablea con quién | §2.3 |
+| El paso fijo, y por qué la partida no depende de los fps | §3.1 |
+| **Qué señal usar: `hour_passed`, `day_passed` o `paso_cerrado`** | **§3.2** |
+| El determinismo y de dónde sale el azar | §3.3 |
+| La trampa de `scripts/datos/` y los `.res` | §4.1 |
+| **Quién contesta «¿se puede pasar?» y «¿cuánto cuesta andar?»** | **§4.3** |
+| `SettlementSim` como fachada y las reglas del troceado | §4.4 |
+| La ración, y qué limita la despensa | §4.5 |
+| Las capas de física, y cuáles no se usan | §5 |
+| Rendimiento medido, y el aviso del contador roto | §6.1 |
+| Cómo se comprueba que dos corridas son la misma partida | §6.2 |
+| La suite, y por qué se mira el total de comprobaciones | §6.3 |
+| **Lo que rompe el juego sin dar un error de compilación** | **§7** |
 
-> Nota de identidad: `project.godot` define `config/name="CityBuilder"`, y así se refieren a sí mismos el README y el ROADMAP originales. El repositorio se llama "History of Man". Mientras no se decida un nombre único, este documento usa **CityBuilder** para el proyecto técnico.
+Cómo se escribe código está en [ARQUITECTURA.md](ARQUITECTURA.md), no aquí.
+
+---
+
+## 1. Qué es
+
+Una simulación de una banda paleolítica en la Cantabria del Magdaleniense sobre
+relieve real. No se construye una ciudad: se lleva a quince personas a través de
+un año. El jugador no da órdenes de tarea — reparte prioridades y cada mañana la
+banda se organiza sola con lo que puede hacer ese día.
 
 ---
 
 ## 2. Arquitectura
 
-### 2.1 Autoloads (globales)
-- `TimeManager` (`scripts/TimeManager.gd`) — único autoload declarado en `project.godot`. Gestiona ticks/días/estaciones/años y emite `tick_advance`, `day_changed`, `season_changed`, `year_changed`, `time_paused`.
+### 2.1. Dos escalas, un solo conjunto de datos
 
-### 2.2 Patrón de composición actual
-`scripts/DemoMain.gd` construye **todo el árbol de escena por código** en `_ready()` (`TerrainGenerator.new()`, `Chunk.new()`, `MultiMeshVegetation.new()`, `Architecto.new()`, cámara, UI de debug…). La única escena real es `scenes/demo_main.tscn`, que solo contiene el nodo raíz `DemoMain` + `WorldEnvironment.tscn` instanciado.
+| | Capa regional | Capa local |
+|---|---|---|
+| Escena | `scenes/region_map.tscn` (`RegionMap.gd`) | `scenes/demo_main.tscn` (`DemoMain.gd`) |
+| Qué es | Cantabria entera, tablero de decisión | La simulación: la banda vive aquí |
+| Escala de mundo | 1 unidad = **100 m** | 1 unidad = **1 m** |
+| Extensión | 199 × 171 km | 4 096 m de lado (`Expedition.local_size_m`) |
+| Malla | 1025² vértices, exageración vertical ×2,5 | 513² vértices → **8 m por vértice** |
+| Reloj | estaciones | días y horas |
 
-**Esto es deliberado para el prototipo pero es deuda a medio plazo**: impide previsualizar/editar el mundo en el editor, dificulta el reuso de nodos como escenas independientes, y hace que cualquier ajuste fino (posición de cámara, materiales de vegetación) solo se pueda hacer recompilando el script. Ver ROADMAP para el plan de migración a escenas `.tscn` reales con `@export` de referencias a nodos.
+La escala regional no es cosmética: a 1 unidad = 1 m, Cantabria daría un mundo
+de 171 000 unidades, con problemas de precisión de coma flotante y un plano
+lejano imposible.
 
-### 2.3 Flujo de arranque (`DemoMain._ready`)
+**No hay streaming de chunks y no lo va a haber.** Un mapa local de 4 km cabe en
+una malla única; la antigua fase de chunking está cancelada, no aplazada.
+
+### 2.2. Estado global: no hay autoloads
+
+`project.godot` tiene la sección `[autoload]` **vacía, y es deliberado**. Lo que
+tiene que sobrevivir a un cambio de escena va en `static var` de un script, que
+queda cargado igual y no obliga a tocar `project.godot`:
+
+| Clase | Qué guarda | Contrato |
+|---|---|---|
+| `Expedition` (`region/`) | El traspaso regional → local: qué `Site`, qué relieve, qué recuadro, qué cota del mar, qué época | Lo escribe el mapa regional al fundar y lo lee `DemoMain._ready`. `is_active()` decide si la capa local arranca de una partida o de sus valores de demo |
+| `GameState` (`region/`) | La partida: emplazamiento de arranque, población inicial, estación, qué se lleva la banda | Constantes de diseño (`HOME_LAT`, `START_POPULATION := 15`) más el estado que cruza escenas |
+| `UISkin.era` (`ui/`) | La era que lleva puesta la interfaz | Se viste con `UISkin.vestir(era)`; los colores son `static var` y no `const` justamente porque cambian con la era |
+
+**Regla: no se añaden autoloads.** Si algo parece necesitar ser global, se
+pregunta primero si de verdad lo necesita; si lo necesita, va como estática con
+su comentario de por qué.
+
+### 2.3. El cableado
+
+`DemoMain.gd` es **el único sitio** donde se conectan unos subsistemas con
+otros: monta terreno, campo de recursos, fauna, vegetación, `SettlementSim` y
+`GameUI`, y los enlaza. No se cablean entre sí por su cuenta.
+
+---
+
+## 3. Los relojes, y el contrato que de verdad importa
+
+### 3.1. Paso fijo
+
+`SettlementSim` avanza en **pasos de tamaño fijo** (`PASO_FIJO := 1.0/30.0`),
+con tope de `PASOS_POR_CUADRO := 8` por fotograma. Lo que sobra no se tira: se
+queda en `_pendiente` y se hace en el fotograma siguiente.
+
+**Consecuencia, y es un contrato duro: la partida no depende de los fps.** Una
+máquina lenta va más despacio, no juega otra partida. Esto se rompe con una
+facilidad sorprendente, y por eso existe el instrumental del §6.2.
+
+`time_scale` es una variable de `SettlementSim`, **no** `Engine.time_scale`:
+congelar el motor congelaría también la interfaz y la cámara.
+
+### 3.2. Las tres señales, y cuál usar
+
+| Señal | Cuándo se emite | Para qué |
+|---|---|---|
+| `hour_passed(day, hour)` | **dentro** del paso, a horas de juego | Todo lo que tenga que ocurrir a una hora concreta. Lo que va «cada N fotogramas» cambia de sitio al cambiar los fps, y eso ya apuntó la misma cueva a dos horas distintas |
+| `day_passed(day)` | **dentro** del paso, al cerrar la jornada y **antes** del tick de la gente | Cierre de contabilidad diaria |
+| `paso_cerrado(day)` | al terminar el paso **entero** | El único límite limpio de la partida. **Una instantánea se toma aquí**: tomada en `day_passed` es media partida a medio paso |
+
+Además: `season_changed(season, year)`, `storage_full(units_lost)`,
+`moment_raised(moment)`.
+
+### 3.3. Determinismo
+
+`SettlementSim` tiene **un** `RandomNumberGenerator` (`_rng`), sembrado desde
+`game_seed`. **La misma semilla tiene que dar la misma partida**, año entero.
+No es un deseo: está medido, y hay herramienta para comprobarlo (§6.2).
+
+Quien necesite azar lo pide al `_rng` de la simulación. Un `randf()` global, un
+`Time.get_ticks_msec()` o un contador de fotogramas dentro de la lógica de
+partida rompen esto sin dar ningún error.
+
+---
+
+## 4. Módulos y contratos
+
+Una clase por fichero, y el fichero se llama como la clase. Las carpetas son
+contratos, no cajones:
+
+### 4.1. `scripts/datos/` — lo que se serializa
+
+`Site`, `SiteSet`, `HeightmapData`, `RegionBoundary`, `RegionEras`,
+`TerrainGenerationCache`, `TerrainSurroundCache`, `TerrainTextureSet`,
+`TerrainTextureArrays`, `PropLibrary`.
+
+**Contrato: un `.res` binario lleva escrita la ruta del `.gd` de cada objeto que
+contiene.** Mover el fichero rompe el dato, y la ruta no se parchea a mano. Si
+hay que moverlos se usa `tools/MigrarEsquema.gd`, y el orden importa; el
+procedimiento exacto y lo que costó equivocarse están en ARQUITECTURA.md §6.
+
+`Site` es el objeto puente entre las dos escalas. Sus atributos **no se escriben
+a mano**: se derivan del relieve real (`SiteDeriver`). `Site.Era` tiene cinco
+valores y **las once épocas de `EPOCAS.md` se reparten sobre esos cinco**: no
+hace falta tocar el `enum` para añadir una época.
+
+### 4.2. `scripts/region/` — la capa regional
+
+`RegionMap`, `SiteDeriver`, `DEMImporter` (teselas Terrarium de AWS),
+`IGNImporter` (MDT05 LiDAR, el fino), `OSMWays`, `Expedition`, `GameState`.
+
+Contrato de importación: el relieve **se descarga una vez y se hornea**; a
+partir de ahí se lee de `data/dem/local/`. La primera fundación de un
+emplazamiento paga la descarga, las siguientes no.
+
+### 4.3. `scripts/mundo/` — relieve, agua y por dónde se pasa
+
+`TerrainGenerator` (procedural y real), `MallaDelTerreno`, `TerrainSurround`,
+`TerrainInpainter`, `TerrainLayers`, `TerrainMaterialManager`,
+`ProceduralTextureGenerator` (hoy **sólo el agua**), `Erosion`, `Hydrography`,
+`Temporada`, `Navgrid`, `Traversal`, `Wayfinder`, `HornoDeRejillas`.
+
+**Contrato único de tránsito, y es el que más ha costado.** Hubo seis capas
+contestando distinto a la misma pregunta, y el resultado fueron 41 atascos por
+partida y 5 741 pasos sobre terreno cortado. Hoy:
+
+- **Si se puede pasar de una celda a otra** lo dice `Navgrid.paso_entre`, y
+  nadie más. En marcha, la única pregunta es `Marcha.agua_deja_pasar`.
+- **Lo que cuesta andar un metro** lo dice `Traversal.pace_fraction`, y nadie
+  más. Hubo dos modelos, y un comentario jurando que era uno.
+- **Cuántos metros hay de casa a una celda** lo dice `Wayfinder.metros_desde`:
+  un Dijkstra desde el abrigo —que es siempre el mismo origen—, rehecho al
+  cambiar la rejilla, o sea una vez por estación. **No se pregunta con un A\*
+  por candidato**: eso fueron 79 búsquedas en un fotograma de 2 541 ms.
+- **Nadie da un paso sin camino debajo.** Quedarse sin ruta no es salir derecho
+  hacia el destino.
+
+`HornoDeRejillas` amasa las rejillas de la estación siguiente en trozos, **aun
+con el reloj parado**, con presupuesto por cuadro. Un presupuesto más fino que
+el grano que sabes cortar no es un presupuesto: corta a mitad de fila.
+
+### 4.4. `scripts/sim/` — la simulación
+
+`SettlementSim` es el objeto central y es una **fachada**: los temas cerrados
+viven en su propia clase, construida con `Clase.new(self)`, y el simulador deja
+pasamanos para no reescribir las llamadas de fuera.
+
+Subsistemas hoy: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`, `Cronista`,
+`Cumbres`, `Desechos`, `Despensa`, `ElLobo`, `Hogar`, `Marcha`, `Nasas`,
+`Partida`, `Percances`, `Pinturas`, `Reconocimiento`, `Relevo`, `Reparto`,
+`Tajo`, `Taller`, `Tanteo`, `Trampas`.
+
+Y alrededor: `Exploration`, `Fauna`, `Fishing`, `Huella`, `Hunt`, `Hunting`,
+`Paraje`, `Parajes`, `Poblaciones`, `Querencia`, `ResourceField`,
+`ResourceMapper`, `Subsistence`, `Weather`, `WildlifeHerds`.
+
+**Contrato del troceado** — la receta completa, con sus siete reglas y lo que
+costó saltárselas, está en ARQUITECTURA.md §3. Lo que no es negociable:
+
+- Las constantes se piden **por la clase** (`SettlementSim.MIN_HEARTH`), nunca
+  por la instancia: por la instancia se pierde el tipo y deja de compilar.
+- Al sacar una clase hay que **redirigir lo que llamaba desde fuera, variables
+  incluidas**. GDScript no avisa en compilación. Se comprueba con
+  `tools/LlamadasHuerfanas.gd`, que tiene que decir `llamadas huerfanas: 0`.
+
+### 4.5. `scripts/economia/` — materiales, utillaje, técnica
+
+`Materia`, `Storehouse`, `Toolkit`, `Tool`, `Trap`, `Nasa`, `TechTree`.
+
+**Contrato de unidad, y es el más fácil de romper: una unidad significa una sola
+cosa en todo el juego.** La ración es `Materia.KCAL_RACION` — media jornada de
+una persona, `KCAL_DIA * 0.5` con `KCAL_DIA := 2500`. Hubo doce materiales cuya
+«ración» valía entre 0,06 y 1,36 raciones: veintitrés veces de diferencia entre
+dos cosas con el mismo nombre.
+
+**Lo que limita la despensa es en qué se guarda**, no un número:
+`Storehouse.capacidad_de_comida` es el volumen a granel (`A_GRANEL`) más lo que
+quepa en los cestos (`POR_CESTO`) y odres (`POR_ODRE`) que existan, recalculado
+al cerrar cada jornada porque los cestos se rompen. Un tope en raciones no es
+una mecánica: es un número, y nada en el mundo impide seguir amontonando.
+
+`TechTree`: las técnicas **se aprenden practicando**, no investigando. El
+prerrequisito manda, y es lo que hoy deja la caza mayor fuera de un año de
+partida (`AZAGAYA` ← `HOJA` ← `NUCLEO` ← `LASCA`). Eso es un hallazgo medido,
+no un fallo por arreglar a ciegas.
+
+### 4.6. `scripts/banda/` — las personas
+
+`Inhabitant`, `Profession`, `BandKnowledge`, `Chronicle`, `Diario`, `Tale`,
+`Moment`, `Mishap`.
+
+- `Profession.can_do()` es **la única puerta** de quién puede hacer qué. Ningún
+  oficio de época posterior necesita un campo nuevo en `Inhabitant`: el
+  `enum Job` crece, el resto del sistema no.
+- La pericia crece practicando y **se transmite de noche**.
+- `Moment` es el contrato de «la partida deja de ser gestión y te mira»: se
+  levanta desde dentro de un paso y la interfaz pone `time_scale` a cero ahí
+  mismo. El bucle del §3.1 corta ahí por eso.
+
+### 4.7. `scripts/vista/` y `scripts/ui/`
+
+Dibujo y ventanas. `GameUI` es fachada igual que `SettlementSim`, con sus
+paneles sacados (`PanelAlmacen`, `PanelCenso`, `PanelObras`, `PanelOficios`,
+`PanelRastros`, `PanelSitios`, `PanelTecnicas`, `PanelTrabajos`,
+`PanelCronica`, `BarraSuperior`).
+
+**La vista no decide nada de la partida.** Lee el estado y lo dibuja. Un
+contador propio en la vista es un segundo modelo de algo que ya está simulado, y
+tarde o temprano dice otra cosa.
+
+### 4.8. `scripts/tools/` — herramientas, no juego
+
+Horneado, ingesta, atlas, y el instrumental de medida (`Cronometro`,
+`Instantanea`, `FirmaDiaria`, `CosteIndireccion`, `LlamadasHuerfanas`,
+`MigrarEsquema`).
+
+**El juego no depende de `tools/` para su lógica**, y ninguna de estas
+herramientas promete que un fichero de hoy sirva mañana.
+
+**La excepción es `Cronometro`, y hay que conocerla.** Sus marcas
+(`tramo_raiz`, `tramo`, `cierra`) están repartidas por unos veinte scripts del
+juego —`SettlementSim`, `Marcha`, `Wayfinder`, `WildlifeHerds`, la vista
+entera—, porque medir un tirón desde fuera no dice quién lo causó. Sólo cuenta
+mientras el panel de F3 está encendido. **Contrato: una marca que se abre se
+cierra**, también por los caminos de salida temprana; un `tramo` sin su
+`cierra` desplaza todo lo que venga detrás. Y lo que no está marcado se
+atribuye a EL MOTOR (§6.1), así que una marca que falta se lee como un tirón
+del motor que no existe.
+
+---
+
+## 5. Capas de física
+
+`project.godot` nombra cuatro: `terrain` (1), `props` (2), `resources` (3),
+`banda` (4).
+
+**Estado real: sólo se asigna la 1**, en `MallaDelTerreno` (la colisión del
+terreno). Las otras tres están declaradas y sin usar. Es deuda conocida: o se
+usan al añadir colisión, o se retiran de `project.godot`. Mientras tanto, no se
+asume que un `CollisionShape3D` creado por código tenga capa — hoy no la tiene.
+
+---
+
+## 6. Requisitos no funcionales
+
+### 6.1. Rendimiento
+
+El objetivo no es un número de fps: es **que no haya tirones, y sobre todo que
+no crezcan con los días**. La media está bien, y ése es justo el problema — una
+media no encuentra un tirón.
+
+Lo medido y en pie hoy: **a velocidad de juego (×5), un año de 180 jornadas va
+a 39,1 ms de fotograma medio, con 150 tirones de más de 100 ms en 109 968
+cuadros y ninguno grave** — medido con `TironAnualProbe`, semilla 123, con el
+cepo puesto, que cuesta un 20 %. Sobre las noventa primeras jornadas, contra la
+línea base: de 19,9 a 24,4 fps medios por jornada, y de 1 787 tirones a 114.
+
+Y todo eso **sin que cambie la partida**: las firmas del año salen idénticas y
+el año termina con la misma gente y las mismas técnicas.
+
+> **Dos avisos que valen más que las cifras**, y están al principio de
+> [archivo/LO_MISMO_MAS_DEPRISA.md](archivo/LO_MISMO_MAS_DEPRISA.md):
+>
+> **Todo recuento de tirones anterior al arreglo del contador es basura.** El
+> panel de F3 y la sonda leían la misma bandeja de picos y **la vaciaba quien
+> leyera primero**, así que el segundo contaba de menos: el cepo empujaba 92
+> picos y la sonda contaba 3. Lo destapó el usuario, que veía tirones cada
+> 0,2 s en su F3 mientras la sonda informaba de ocho en todo el año. Si una
+> cifra de tirones no dice que es posterior a ese arreglo, no se usa.
+>
+> **Y la velocidad importa: ×20 no es velocidad de juego.** La partida llega
+> como mucho a ×5, y a ×5 el reparto del coste es otro. Una medida a ×20 no
+> describe la partida que se juega.
+
+Instrumento: `Cronometro` más el panel de **F3** (`PerformanceOverlay`), que
+caza el fotograma malo y le pregunta qué hizo de más. Lo que no está marcado se
+atribuye a **EL MOTOR**, con nodos, objetos y llamadas de dibujo al lado; no
+existe un «SIN EXPLICAR».
+
+**Cuidado al comparar corridas:** el cepo mide reloj de pared. Dos corridas con
+la máquina en estado distinto no se comparan, y una sonda de número fijo de
+fotogramas avanza menos horas de juego si la máquina va cargada.
+
+### 6.2. Determinismo: cómo se comprueba
+
+No es una promesa, es un procedimiento:
+
+- `Instantanea` recorre el estado **por reflexión** desde pocas raíces y saca la
+  partida entera a algo comparable. No hay un serializador por módulo que haya
+  que mantener a mano cada vez que alguien añade un campo.
+- `FirmaDiaria` da tres piezas por jornada: la **firma** (SHA-256 de la
+  instantánea, sin tolerancias — una millonésima de hambre ya la cambia), el
+  **resumen** en claro, y el **detalle** por `Clase.campo`.
+- `Cotejo` compara dos corridas y dice en qué jornada se separan y qué campo no
+  cuadra. Sale con 0 si son la misma partida.
+
 ```
-_load_materials() → _setup_terrain() → _setup_chunk() → _setup_vegetation()
-→ _setup_architecto() → _setup_resource_visualizer() → _setup_camera() → _setup_ui()
-→ _connect_signals() → terrain.generate() → _populate_resources() → _visualize_resources()
-→ _spawn_test_buildings()
+godot --headless --path . --script res://scripts/tests/Cotejo.gd -- firmas A.txt B.txt
 ```
 
----
+### 6.3. Pruebas
 
-## 3. Módulos y contratos
+```
+godot --headless --path . --script res://scripts/tests/RunTests.gd
+```
 
-### 3.1 `RawMaterial` (`scripts/RawMaterial.gd`) — `Resource`, `@tool`
-Propiedades físicas de un material: `density`, `melting_point`, `hardness` (0-10), `conductivity`, `category`, `is_flammable`, `base_value`. Métodos puros: `calculate_weight(volume)`, `can_support_weight(weight, area)`, `would_melt_at(temp)`, `would_ignite_at(temp)`, `to_dict()/from_dict()`.
-Instancias `.tres` en `materials/`: Iron, Stone, Straw, Coal, Wood, Copper, Clay.
+**887 pruebas, 6 163 comprobaciones**, todas en verde, siempre. Una prueba
+comprueba **una regla del juego**, no una línea de código.
 
-### 3.2 `Chunk` (`scripts/Chunk.gd`) — `Node3D`
-Almacena depósitos de recursos (`ResourceDeposit`: material, amount, quality) en un `Dictionary[Vector2i, Array[ResourceDeposit]]` indexado por celda. API: `add_resource_at`, `get_resources_at`, `extract_resource`, `remove_resource_at`, `get_hardest_material_at`, `get_total_weight_at`, `serialize()/deserialize()`.
+Las **sondas** (`scripts/tests/*Probe.gd`) son otra cosa y no se mezclan: no
+pasan ni fallan, **miden**. El balanceo se ajusta midiendo.
 
-**Contrato de diseño no cumplido actualmente**: `Chunk` está pensado para representar *un fragmento* del mundo (streaming por chunks), pero `DemoMain` instancia un único `Chunk` cuyo `chunk_size` es igual a `terrain_size` completo. No hay chunking real ni carga/descarga por proximidad. Cualquier trabajo de "mundo grande" requiere resolver esto primero (ver ROADMAP FASE 6).
+**No se mira sólo el número de pruebas.** Una prueba que revienta antes de su
+primer `assert` no falla: pasa. Lo que la delata es el total de comprobaciones.
 
-### 3.3 `TerrainGenerator` (`scripts/TerrainGenerator.gd`) — `Node3D`, `@tool`
-Genera 3 mapas `PackedFloat32Array` (altura, humedad, geología) vía `FastNoiseLite`, construye un único mesh (`SurfaceTool`) + colisión trimesh, y expone consultas de mundo: `get_height_at`, `get_humidity_at`, `get_geology_at`, `get_slope_at`, `populate_chunk_resources(chunk, materials_map, threshold)`, `get_vegetation_positions(...)`.
-Regla de recursos: geología > `threshold` → hierro; geología < `1 - threshold` → carbón; pendiente > 0.5 → piedra.
+### 6.4. Persistencia
 
-Limitación conocida: todo el terreno es **un solo mesh monolítico** sin LOD ni subdivisión — válido para el tamaño de demo (128×128) pero no escala a mundos grandes.
+**No existe**, y conviene no confundirla con lo que sí hay. `Instantanea` es un
+instrumento de medida, no un guardado: no sobrevive a un cambio de esquema y no
+lo pretende. El guardado de partida es la FASE A3 del ROADMAP.
 
-### 3.4 `Architecto` (`scripts/Architecto.gd`) — `Node`
-Valida colocación de edificios: `hardness_suelo / (peso / weight_factor) >= safety_factor`, y pendiente máxima 0.7. Gestiona colapso en cascada (`_check_cascade_collapse`) cuando se retira un soporte, con animación vía `Tween`.
+### 6.5. Datos
 
-Simplificaciones explícitas (aceptadas para el MVP, documentadas como riesgo):
-- El registro de edificios usa `Dictionary[Vector3, BuildingData]` con la posición exacta como clave — sensible a error de punto flotante y no soporta dos edificios que difieran solo en Y.
-- La detección de "soporte" es un chequeo de distancia (`< 2.0` y `pos.y > removed.y`), no un grafo de dependencias estructurales real.
-- Los edificios colocados (`MeshInstance3D` puro, ver `DemoMain._place_building_at`) **no tienen `CollisionShape3D`**, por lo que el raycast de colocación no los detecta: se pueden solapar edificios sin aviso.
+`data/dem/`, `models/` y `textures/terrain/` **no se versionan**: son cientos de
+MB que se reconstruyen con las herramientas de `scripts/tools/`. La tabla de qué
+rehace cada cosa está en ARQUITECTURA.md §7. Sí se versionan `data/sites/*.res`,
+`data/boundaries/*.res` y los `.json` de origen.
 
-### 3.5 `TimeManager` (`scripts/TimeManager.gd`) — `Node`, autoload
-Ticks configurables (`ticks_per_second`, `ticks_per_day`, `days_per_season`, `seasons_per_year`), `time_speed` como multiplicador, pausa. Expone `get_time_state()/set_time_state()` pensado para guardado, pero **nada llama a estos métodos todavía** (no hay sistema de guardado).
+### 6.6. Plataforma
 
-### 3.6 `WorldEnvironmentSetup` (`scripts/WorldEnvironmentSetup.gd`) — `Node3D`
-Configura `Environment` (SDFGI, SSAO, SSIL, niebla volumétrica, tone mapping ACES, glow) y un `DirectionalLight3D`. Se suscribe a `TimeManager.tick_advance`/`season_changed` para mover el sol y variar niebla/cielo según hora y estación.
-
-### 3.7 `MultiMeshVegetation` (`scripts/MultiMeshVegetation.gd`) — `MultiMeshInstance3D`
-Puebla vegetación consultando `TerrainGenerator.get_vegetation_positions()` (humedad/pendiente/altura), con soporte de LOD vía `visibility_range_begin/end`. Límite configurable de instancias (`max_instances`).
-
-### 3.8 `ResourceVisualizer` (`scripts/ResourceVisualizer.gd`) — `Node3D`
-Genera un `MultiMeshInstance3D` por tipo de material presente en el `Chunk` (mesh de "roca" para stone/clay, mesh de "cristal" para el resto), coloreado según `_material_colors`. Se conecta a las señales del `Chunk` pero **el refresco automático está deshabilitado a propósito** (`_on_resource_added/_removed` son no-ops) — hay que llamar `refresh_all()` manualmente.
-
-### 3.9 `TerrainMaterialManager` / `ProceduralTextureGenerator` (`scripts/*.gd`) — `RefCounted`, `@tool`
-`ProceduralTextureGenerator` genera 4 texturas de albedo (grass/rock/snow/sand) + 4 normal maps a 512×512 **pixel a pixel en GDScript** (`Image.set_pixel` en bucle anidado, ~2M iteraciones totales) cada vez que se crea el material del terreno. `TerrainMaterialManager` las aplica al shader `shaders/triplanar.gdshader` (blend por altura + pendiente, triplanar mapping).
-
-Impacto: genera un hitch perceptible en el arranque y se repite en cada `TerrainGenerator.generate()` (incluyendo regeneraciones en editor con `auto_generate`). Ver ROADMAP FASE 5.1.
-
-### 3.10 `CameraController` (`scripts/CameraController.gd`) — `Camera3D`
-Cámara orbital: WASD/acciones de movimiento, rotación con click derecho + arrastre, zoom con scroll/Q/E. **Duplica el chequeo de movimiento**: lee tanto teclas físicas (`Input.is_key_pressed(KEY_W)`) como acciones del InputMap (`move_forward`, etc.) para el mismo eje, lo cual anula el remapeo de teclas configurado en `project.godot` (ver ROADMAP).
-
-### 3.11 Módulos declarados pero **vacíos** ⚠️
-- `scripts/BlockData.gd` — **0 líneas**. `buildings/StoneWall.tres`, `WoodenFloor.tres`, `StrawRoof.tres` declaran `script_class="BlockData"` y propiedades (`block_name`, `weight`, `primary_material`, `support_factor`, `is_structural`, …) que **no existen en ningún script**. Godot no podrá resolver estas propiedades como una clase tipada; se cargan como `Resource` genérico y las propiedades específicas del `.tres` se pierden o generan advertencias.
-- `scripts/Inventory.gd` — **0 líneas**. Referenciado como "completado" en el ROADMAP anterior; no es así.
-- `scripts/GameUtils.gd` — **0 líneas**.
-
-Esto es la prioridad #1 de la deuda técnica (ver ROADMAP, Fase 3.5).
+Windows/desktop sobre el editor Godot 4.5.1. No hay `export_presets.cfg` ni
+build de exportación configurada.
 
 ---
 
-## 4. Convenciones
+## 7. Invariantes
 
-- GDScript tipado estáticamente donde sea posible (`var x: Type := value`); el código existente ya sigue este patrón de forma consistente — mantenerlo.
-- Comentarios de documentación con `##` sobre `@export` y funciones públicas (patrón ya establecido en `Chunk.gd`, `RawMaterial.gd`).
-- Español para nombres de dominio del juego que ya están en español en el código existente (`Architecto`, señales como `cambio_de_estacion`) — **inconsistencia existente**: `TimeManager` emite tanto `cambio_de_estacion` como `season_changed` con el mismo propósito (ver deuda técnica). Nuevo código debe usar inglés para nombres de sistema (ya es el patrón dominante) y evitar duplicar señales.
-- Escenas de recursos físicos (`RawMaterial`, `BlockData`) se guardan como `.tres` en `materials/` y `buildings/` respectivamente.
-- Capas de física ya nombradas en `project.godot`: `terrain` (1), `buildings` (2), `resources` (3), `player` (4) — usarlas consistentemente; actualmente nada asigna capas explícitas a los `CollisionShape3D` creados por código.
+Lo que rompe el juego sin dar un solo error de compilación:
+
+1. **Una unidad, un significado.** §4.5.
+2. **La misma semilla, la misma partida.** §3.3.
+3. **Una pregunta, un sitio que la contesta.** Si «¿se puede pasar?» o «¿cuánto
+   cuesta andar un metro?» se responden desde dos sitios, tarde o temprano
+   responden distinto. §4.3.
+4. **Lo que pasa a horas de juego va en `hour_passed`**, no cada N fotogramas.
+5. **Cifras de balanceo, con nombre y con su porqué.** Si la cifra viene de una
+   medida, va la medida; si viene de una decisión, se dice que es una decisión.
+6. **No se deja código muerto** ni propiedades apuntando a donde ya no está.
+7. **Compilar no es funcionar.** GDScript no avisa de asignar una propiedad que
+   no existe: `sim.wildlife = herds` tuvo la fauna desconectada de la caza
+   durante meses sin que se notara.
 
 ---
 
-## 5. Requisitos no funcionales
-
-- **Rendimiento objetivo**: 60 FPS en hardware de gama media con un terreno de 128×128 y ≤3000 instancias de vegetación (configuración actual del demo). No hay medición ni profiling automatizado todavía.
-- **Escalado de mundo**: fuera de alcance del MVP actual (un único `Chunk`/mesh cubre todo el mundo). Cualquier expansión a mundos más grandes requiere chunking real primero.
-- **Plataforma**: Windows/desktop vía editor Godot 4.5.1; sin build de exportación configurada (`export_presets.cfg` no existe).
-- **Persistencia**: no implementada. `Chunk.serialize/deserialize` y `TimeManager.get_time_state/set_time_state` son las únicas piezas preparadas para ello.
-- **Tests**: no hay suite de pruebas (GUT u otro) — mencionado como pendiente en el ROADMAP desde la Fase 3.
-
----
-
-## 6. Fuera de alcance (por ahora)
+## 8. Fuera de alcance
 
 - Multijugador.
-- IA de NPCs/trabajadores.
-- Guardado/carga persistente en disco.
-- Exportación a build distribuible.
-- Editor de niveles/herramientas custom más allá de los gizmos de `@tool`.
+- Streaming de chunks (cancelado, no aplazado).
+- Guardado/carga persistente (FASE A3, todavía no).
+- Build de exportación.
+- Autoloads nuevos (§2.2).

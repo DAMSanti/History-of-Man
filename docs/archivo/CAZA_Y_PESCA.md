@@ -1,3 +1,15 @@
+> **ARCHIVADO (2026-09-12).** Este documento ya no se edita. La documentación
+> se reorganizó para que lo único específico fueran las fichas de época, y
+> lo vivo está en **[SISTEMAS.md](../SISTEMAS.md) §10–§13** (despensa, caza, pesca, y lo que se cuenta y se pinta).
+>
+> Se conserva entero porque guarda **lo que no cabe en un documento permanente**:
+> qué se probó, qué salió, qué premisa se cayó a mitad y por qué se decidió lo
+> que se decidió. Nada de lo que sigue se ha tocado — incluidas las cosas que
+> hoy ya no son verdad, que se reconocen porque el documento permanente dice
+> otra cosa y **gana el permanente**.
+
+---
+
 # Caza, pesca y memoria de la banda
 
 Cierra el hueco entre lo que la banda **hace** y lo que el jugador **ve**. Los
@@ -11,7 +23,7 @@ aritmética, y pone en pantalla lo que ya pasaba en silencio.
 
 Ver [SLICE_PALEOLITICO.md](SLICE_PALEOLITICO.md) para el diseño de la época,
 [CIERRE_SLICE.md](CIERRE_SLICE.md) para el goal anterior y
-[SPECS.md](SPECS.md) para el contrato técnico.
+[SPECS.md](../SPECS.md) para el contrato técnico.
 
 ---
 

@@ -58,7 +58,7 @@ públicos: mismo `Job`, alcance mayor.
 ## 4. Mecánicas nuevas
 
 1. **La villa como unidad de decisión**, sustituyendo al valle: es el
-   segundo caso, tras el castro, de `SISTEMAS_COMPARTIDOS.md` §7 — y aquí sí
+   segundo caso, tras el castro, de `SISTEMAS.md` §7 — y aquí sí
    hace falta relación entre unidades de verdad, porque la hermandad es un
    pacto explícito entre villas, con condiciones, no una alianza tácita.
 2. **La especialidad `ALTURA` deja de estar apagada.** `Profession.needs_craft(Speciality.ALTURA)`

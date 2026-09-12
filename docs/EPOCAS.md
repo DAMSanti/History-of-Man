@@ -1,14 +1,18 @@
 # Las épocas y sus hitos
 
-Doce épocas con cultura material documentada en Cantabria, del Paleolítico al
-siglo XX, y **qué hito cierra cada una**. Es el contenido de la FASE D del
+Once épocas con cultura material documentada en Cantabria, del Paleolítico al
+siglo XIX, y **qué hito cierra cada una**. Es el contenido de la FASE D del
 [ROADMAP.md](ROADMAP.md), que hasta hoy era una línea que decía «diez épocas»
 sin decir cuáles.
 
-Diez llegan a la Edad Moderna, que era el final previsto, y **dos más llevan la
-partida hasta 1982**. Esas dos se decidieron después y con el coste sobre la
-mesa: el §4 lo deja escrito en su propia ficha, porque el motor que hay hoy
-—prioridades de trabajo, jornadas y calorías— no simula jornal ni capital.
+Diez llegan a la Edad Moderna, que era el final previsto, y **una más lleva la
+partida hasta 1900**. Hubo una duodécima —el siglo corto, 1900–1982— y **se ha
+retirado**: está archivada en
+[archivo/EPOCA_12_SIGLO_CORTO.md](archivo/EPOCA_12_SIGLO_CORTO.md) con el
+porqué. El motivo es el que el §7 ya anticipaba: el motor que hay hoy
+—prioridades de trabajo, jornadas y calorías— no simula jornal ni capital, y
+esas dos últimas épocas eran las que menos se apoyaban en él. El vapor se
+queda, en el mismo estado de aviso: el §4 lo deja escrito en su propia ficha.
 
 Con el Paleolítico entero contando como **una**. La primera versión de
 este documento lo partía en cuatro —Achelense, Musteriense, Paleolítico superior
@@ -17,7 +21,25 @@ frontera de juego, y el §3 explica por qué, porque el argumento destapa una
 contradicción que ya estaba en el repositorio. Las dos épocas que salen en su
 lugar son el **Calcolítico**, separado del Bronce, y la **Edad Media partida en
 dos**, alta y baja. El §2 justifica las dos fronteras con la misma regla con la
-que se cayeron las otras.
+que se cayeron las otras, y con la que se cayó después el siglo corto.
+
+---
+
+## Dónde mirar
+
+| Si buscas… | Ve a |
+|---|---|
+| Por qué el tiempo avanza por hitos y no por calendario | **§1** |
+| **La tabla de las once**: intervalo, `Site.Era`, mar, dónde se vive, hito de cierre | **§2** |
+| Por qué son estas fronteras y no otras, y cuáles se descartaron | §2, «Por qué estas dos fronteras» |
+| Por qué el Paleolítico no se parte en cuatro | §3 |
+| **La ficha de una época concreta** | **§4**, en orden del 1 al 11 — y su documento propio, `EPOCA_NN_*.md` |
+| Las tres escaleras (térmica, soporte, alimento) | §5 — el detalle, en [SISTEMAS.md](SISTEMAS.md) §1 |
+| El recurso `Hito` y el orden de trabajo | §6 |
+| Qué NO promete este documento, y el orden de recorte | §7 |
+
+Lo que hay que construir para llegar a cada hito está en las fichas; lo que
+comparten todas, en [SISTEMAS.md](SISTEMAS.md).
 
 ---
 
@@ -53,18 +75,22 @@ solos y ninguno obliga a decidir nada.
 **capacidad demostrada que ya no se puede deshacer**: una vez hecha, el mundo
 anterior no vuelve. Almacenar no es saber.
 
-**Y cuatro de los doce no los hace el jugador: le ocurren.** El bosque que cierra
-el valle, la legión en el collado, el Estado que se va y el frente del norte en
-1937. Son los cuatro momentos en que Cantabria deja de decidir su propia
-historia, y el juego no debe ofrecer ganarlos.
+**Y tres de las once no los hace el jugador: le ocurren.** El bosque que cierra
+el valle, la legión en el collado y el Estado que se va. Son los momentos en que
+Cantabria deja de decidir su propia historia, y el juego no debe ofrecer
+ganarlos. Eran cuatro: el frente del norte en 1937 se fue con el siglo corto, y
+con él el único que iba por fecha fija y no por condición de estado —lo cual
+simplifica el sistema de `Hito` de
+[SISTEMAS.md](SISTEMAS.md) §6, que ya no necesita dos
+caminos de disparo—.
 
 ---
 
-## 2. Las doce, de un vistazo
+## 2. Las once, de un vistazo
 
 `Era` es el valor de `Site.Era` con el que se juega esa época: define qué
 emplazamientos son ocupables (`Site.is_usable_in`) y qué piel lleva la interfaz
-(`UISkin.vestir`, ver [INTERFAZ.md](INTERFAZ.md)). Doce épocas sobre cinco
+(`UISkin.vestir`, ver [INTERFAZ.md](INTERFAZ.md)). Once épocas sobre cinco
 valores, y no hay que tocar el `enum`.
 
 | # | Época | Intervalo | `Site.Era` | Mar | Dónde se vive | Hito de cierre |
@@ -79,8 +105,18 @@ valores, y no hay que tocar el `enum`.
 | 8 | **Alta Edad Media** | s. V–XI | HISTORICA | 0 | Valle con concejo, monasterio | La escritura sale del monasterio |
 | 9 | **Baja Edad Media** | s. XI–XV | HISTORICA | 0 | Villa con fuero y puerto | El barquín lo mueve el agua |
 | 10 | **Edad Moderna** | s. XVI–XVIII | HISTORICA | 0 | Villa portuaria, casona, Real Fábrica | La tierra cambia de dueño |
-| 11 | **El vapor** | c. 1830–1900 | HISTORICA | 0 | Barrio obrero, mina, cuenca del ferrocarril | El capital de fuera |
-| 12 | **El siglo corto** | 1900–1982 | HISTORICA | 0 | Ciudad, polígono, pueblo que se vacía | (final de la partida) |
+| 11 | **El vapor** | c. 1830–1900 | HISTORICA | 0 | Barrio obrero, mina, cuenca del ferrocarril | El capital de fuera *(fin de la partida)* |
+
+**La partida termina en la 11, y con un cabo suelto que hay que decir.** El
+final escrito del proyecto —*el mapa se cierra: el territorio ocupado durante
+cuarenta mil años pasa a coincidir exactamente con `data/boundaries/cantabria.json`,
+los 5304 km² que se dieron a elegir en la primera pantalla*— vivía en la ficha
+del siglo corto y se ha ido con ella. **No se ha colgado de El vapor**, porque
+1900 no cierra ningún mapa y forzarlo sería inventar un hito, que es justo lo
+que el §1 prohíbe. Hoy la partida acaba con el hito de cierre de la 11, «el
+capital de fuera», que es un cierre de época y no un final. **Queda pendiente
+decidir cuál es el final**, y es una decisión de diseño, no una tarea de
+escritura.
 
 ### Por qué estas dos fronteras y no otras
 
@@ -93,18 +129,17 @@ quién decide—. Las dos nuevas la cumplen:
 | **Calcolítico ≠ Bronce** | *Qué se puede fabricar*: la cubeta con fuelle (~1100 °C) funde cobre, y no hace bronce. El bronce necesita estaño de fuera y un horno mejor (~1200 °C). Son dos peldaños térmicos y dos economías: una de piedra verde del monte, otra de red comercial a mil kilómetros |
 | **Alta ≠ Baja Edad Media** | Las tres últimas a la vez: se pasa del valle con monasterio a la villa con fuero y puerto —`Site.Kind.COSTERO` cambia de valor de golpe—, de la ferrería de monte a la hidráulica (~1350 °C), y **la unidad deja de ser el valle y pasa a ser la villa**, que tiene ley propia y vecindad escrita |
 
-Las dos últimas, las que llevan del XVIII al XX, pasan por la tercera y la
-cuarta a la vez, y no por poco:
+Y la última, la que lleva del XVIII al XIX, pasa por la tercera y la cuarta a
+la vez, y no por poco:
 
 | Frontera | Qué cambia |
 |---|---|
 | **Moderna ≠ El vapor** | *Qué se fabrica*: el coque libera al alto horno del carbón vegetal, o sea del bosque, que había sido el techo de la industria desde el Neolítico; y la máquina de vapor desengancha la energía del río y de la estación. *Quién decide*: aparece el jornal, y con él un trabajo que se vende por horas |
-| **El vapor ≠ El siglo corto** | *Quién decide*, otra vez y más fuerte: la decisión de qué se produce en el valle se toma fuera del valle, en un consejo de administración que no vive aquí. El resto —electricidad, hormigón, química— viene detrás |
 
 **La cuarta regla, la social, también repasa las fronteras que ya estaban**, y
 dos salen reforzadas: Hierro → Roma cambia la unidad del castro al Estado, y
 Neolítico → Calcolítico es la única que se sostiene *sin* ella (va por la
-tercera). Ninguna de las doce pasa sólo por la cuarta, y eso está bien: un
+tercera). Ninguna de las once pasa sólo por la cuarta, y eso está bien: un
 cambio social que no deja huella material tampoco deja `Feature` en el mapa.
 
 Y las que descarté, por si prefieres cambiar el reparto:
@@ -114,7 +149,7 @@ Y las que descarté, por si prefieres cambiar el reparto:
   fábrica de cientos de personas y la provincia de 1778 sí cambian quién decide.
   Falla la tercera —el alto horno ya está en 1622—, así que entra sólo por lo
   social. **Si quieres cambiar una por otra, funde el Calcolítico en el Bronce y
-  parte la Moderna en dos**: sigue habiendo doce y el reparto queda mejor
+  parte la Moderna en dos**: sigue habiendo once y el reparto queda mejor
   documentado, porque el XVIII cántabro está escrito y el Calcolítico no.
 - **Partir el Hierro** (primera / segunda Edad del Hierro). El registro cántabro
   de la primera es demasiado delgado para sostener una época jugable.
@@ -159,7 +194,7 @@ santuario son cosas que la banda hace, no otra manera de organizarse—. Lo que
 cambia es el **rendimiento**: más filo por kilo, menos jornadas por presa, mejor
 conservación. Y eso ya tiene su sistema, que es `TechTree` —se mejora haciendo—
 más la externalización de la FASE C. Está dicho literalmente en
-[SLICE_PALEOLITICO.md](SLICE_PALEOLITICO.md) §2: «la progresión de la primera
+[archivo/SLICE_PALEOLITICO.md](archivo/SLICE_PALEOLITICO.md) §2: «la progresión de la primera
 época es de rendimiento, no de repertorio».
 
 Achelense y Musteriense fallan la prueba por el otro lado: sí cambian el
@@ -199,7 +234,7 @@ repositorio, entre dos documentos que se leen por separado:
 
 | | Dice |
 |---|---|
-| `SLICE_PALEOLITICO.md` §1 | La banda **ya sabe** talla laminar, propulsor, azagaya, arpón y aguja |
+| `archivo/SLICE_PALEOLITICO.md` §1 | La banda **ya sabe** talla laminar, propulsor, azagaya, arpón y aguja |
 | `TechTree.gd` | Esas cinco **se aprenden practicando**: el arpón, 850 jornadas de pesca |
 
 Las dos no pueden ser verdad. **La recomendación es que gane `TechTree`**, por
@@ -230,14 +265,14 @@ error de diseño que esa época invita a cometer—.
 que retoma esta ficha y baja al nivel de implementación: catálogo de técnicas
 al estilo `TechTree`, condición de disparo de cada hito, qué `Profession.Job`
 nuevo hace falta y cuáles cambian, y qué clase concreta escribir en el árbol
-de `scripts/`. Lo que cruza las doce fichas —las tres escaleras, el sistema
+de `scripts/`. Lo que cruza las once fichas —las tres escaleras, el sistema
 de hito, el comercio, los hitos que se sufren— vive en
-[SISTEMAS_COMPARTIDOS.md](SISTEMAS_COMPARTIDOS.md) y no se repite época a
+[SISTEMAS.md](SISTEMAS.md) y no se repite época a
 época.
 
 | # | Época | Documento |
 |---|---|---|
-| 1 | Paleolítico | [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) (y [SLICE_PALEOLITICO.md](SLICE_PALEOLITICO.md), el diseño detallado) |
+| 1 | Paleolítico | [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) (y [archivo/SLICE_PALEOLITICO.md](archivo/SLICE_PALEOLITICO.md), el diseño detallado) |
 | 2 | Mesolítico | [EPOCA_02_MESOLITICO.md](EPOCA_02_MESOLITICO.md) |
 | 3 | Neolítico | [EPOCA_03_NEOLITICO.md](EPOCA_03_NEOLITICO.md) |
 | 4 | Calcolítico | [EPOCA_04_CALCOLITICO.md](EPOCA_04_CALCOLITICO.md) |
@@ -248,7 +283,8 @@ de hito, el comercio, los hitos que se sufren— vive en
 | 9 | Baja Edad Media | [EPOCA_09_BAJA_EDAD_MEDIA.md](EPOCA_09_BAJA_EDAD_MEDIA.md) |
 | 10 | Edad Moderna | [EPOCA_10_EDAD_MODERNA.md](EPOCA_10_EDAD_MODERNA.md) |
 | 11 | El vapor | [EPOCA_11_EL_VAPOR.md](EPOCA_11_EL_VAPOR.md) |
-| 12 | El siglo corto | [EPOCA_12_SIGLO_CORTO.md](EPOCA_12_SIGLO_CORTO.md) |
+
+Y fuera de las once, archivada: [El siglo corto](archivo/EPOCA_12_SIGLO_CORTO.md).
 
 ---
 
@@ -377,7 +413,7 @@ pide.
 
 ### 4. Calcolítico — la piedra que era metal
 
-La época más corta y la de registro más flojo de las doce, y hay que jugarla
+La época más corta y la de registro más flojo de las once, y hay que jugarla
 como tal: pocas decisiones, una sola idea.
 
 **El registro cántabro.** Sigue el megalitismo, siguen las cuevas sepulcrales, y
@@ -620,7 +656,7 @@ casa y el calendario; la casona montañesa, y la emigración a Indias.
 | **La provincia** | Los Nueve Valles se dan gobierno común (1778): el mapa regional se cierra sobre sí mismo |
 
 **Cierre: la tierra cambia de dueño.** Las desamortizaciones del XIX sacan a
-subasta lo del monasterio y lo del común. Es el hito más social de los doce y
+subasta lo del monasterio y lo del común. Es el hito más social de los once y
 uno de los pocos que **quita** en vez de dar: el monte que el concejo llevaba
 gestionando desde la Alta Edad Media —§8, la institución más cántabra de todas—
 deja de ser del concejo. Sin ese cambio no hay obrero, porque quien tiene monte
@@ -667,6 +703,11 @@ cuenta en la enciclopedia de la FASE E4.
 dinero que no es del valle —Solvay en Barreda, 1908, con capital belga—. La
 decisión de qué se produce aquí deja de tomarse aquí, y eso es el siglo XX.
 
+**Y aquí se acaba la partida**, desde que el siglo corto salió de la lista. Es
+un cierre de época haciendo de final, y el §2 lo dice sin disimulo: el final
+bueno —el mapa que se cierra sobre sí mismo— se fue con la ficha archivada y
+está pendiente de decidir. No se ha colgado de aquí para no inventar un hito.
+
 **La trampa.** Que se convierta en un *tycoon*. El juego no es de construir la
 fábrica: es de **qué le pasa al valle cuando la fábrica llega**. Quién deja el
 ganado, quién se va a América, qué monte se vende y qué río se ensucia. Si el
@@ -675,65 +716,34 @@ distinto a este proyecto.
 
 ---
 
-### 12. El siglo corto — hasta el mapa de hoy
-
-**El registro cántabro.** El Palacio de la Magdalena y el veraneo (1913); el
-frente del norte y la caída de Santander (1937); el incendio de Santander
-(1941); Sniace en Torrelavega (1941) y la química del Besaya; la emigración a
-Europa de los sesenta; el turismo de costa; la reconversión industrial de los
-ochenta, y el Estatuto de Autonomía (1981–82). **ATESTIGUADO**, con la misma
-advertencia de método que la época anterior.
-
-| Hitos técnicos | |
-|---|---|
-| **La electricidad** | La luz llega al valle. La jornada deja de acabarse con el sol, por primera vez desde la lámpara de grasa |
-| **El hormigón** | Se construye en cualquier sitio y con material que no es del sitio |
-| **El automóvil** | Y con él la carretera asfaltada: el pueblo de montaña deja de estar a un día de todo |
-| **La química** | Solvay y Sniace. Producen bien y **el río paga la factura**: el Besaya es un dato del juego, no una moraleja |
-| **El frigorífico** | Se acabó la conservación por humo, sal y estación. Cae la última mecánica que venía del Paleolítico |
-
-| Hitos sociales | |
-|---|---|
-| **El veraneante** | La playa y el verde valen dinero sin que nadie los trabaje. El paisaje se vuelve producto |
-| **La guerra** | 1937: el cuarto y último hito que le ocurre al jugador. No hay bando que jugar |
-| **El éxodo rural** | El pueblo se vacía hacia Torrelavega, Santander y Europa. Emplazamientos ocupados desde el Neolítico se quedan sin nadie |
-| **La reconversión** | Lo que trajo el jornal se lo lleva, y deja el edificio puesto |
-
-**Final: el mapa se cierra.** Cantabria se constituye en comunidad autónoma y el
-territorio de la partida pasa a coincidir **exactamente** con
-`data/boundaries/cantabria.json`: los 5304 km² con los que arrancó el juego. La
-partida termina cuando el mapa que has ido ocupando durante cuarenta mil años se
-convierte en el mapa que se te dio a elegir en la primera pantalla. No hay
-victoria; hay reconocimiento.
-
-**La trampa.** Dos, y las dos fáciles de pisar. Una, contar la contaminación y
-la reconversión como moraleja: son consecuencias medibles, y el juego mide.
-Dos, seguir hasta hoy. De 1982 en adelante no hay distancia suficiente para
-convertir nada en mecánica, y el registro deja de ser registro para ser opinión.
-
----
-
 ## 5. Las tres escaleras que cruzan todas las épocas
 
 **Ninguna es contenido nuevo**: las tres están ya escritas en el proyecto, y son
-el esqueleto que impide que las doce épocas sean doce listas sueltas. Además son
+el esqueleto que impide que las once épocas sean once listas sueltas. Además son
 las que llevan la progresión *dentro* de una época, que es justo lo que hace
 falta ahora que el Paleolítico es una sola.
 
 ### La escalera térmica
 
-`RawMaterial` guarda punto de fusión e ignición, o sea que el árbol tecnológico
-ya está escrito y sólo hay que leerlo (ROADMAP B2). **Un peldaño por época desde
-el Neolítico**, que es lo que hace que las diez tengan ritmo:
+> **Corrección (2026-09-12).** Este párrafo decía que «`RawMaterial` guarda
+> punto de fusión e ignición, o sea que el árbol tecnológico ya está escrito y
+> sólo hay que leerlo». **Es falso**: `RawMaterial` se retiró con el resto de la
+> capa de *city builder*. La secuencia de temperaturas de abajo es correcta,
+> pero hay que **escribirla de cero** cuando le toque. El sitio natural es
+> `Materia.gd` — ver [SISTEMAS.md](SISTEMAS.md) §1.1.
+
+**Un peldaño por época desde el Neolítico**, que es lo que hace que las nueve
+tengan ritmo:
 
 hogar ~700 °C (1–2) → horno de fosa ~900 (3) → cubeta con fuelle ~1100 (4) →
 horno mejorado ~1200 (5) → cuba baja ~1250 (6) → ferrería de monte (8) →
 ferrería hidráulica ~1350 (9) → alto horno ~1550 (10) → **coque y vapor (11)**.
 
-El último peldaño es distinto de los diez anteriores y por eso cierra la
+El último peldaño es distinto de los ocho anteriores y por eso cierra la
 escalera: con el coque **el límite deja de ser una temperatura y pasa a ser el
-dinero**. Es la señal más limpia de que el juego ha cambiado de género, y de que
-conviene que ahí queden sólo dos épocas y no seis.
+dinero**. Es la señal más limpia de que el juego ha cambiado de género — y es
+también el argumento que acabó retirando el siglo corto: pasado el coque, lo que
+queda de simular no son grados, son balances, y el motor no sabe de balances.
 
 ### La escalera del soporte
 
@@ -741,7 +751,7 @@ De la FASE C. Es la que decide **qué saber sobrevive al relevo generacional**:
 
 pared y mobiliar (1) → canto pintado (2) → cerámica (3) → molde y marca de
 propiedad (4–5) → estela (6) → escritura (7) → cartulario y fuero (8–9) →
-imprenta (10) → prensa y fotografía (11) → radio (12).
+imprenta (10) → **prensa y fotografía (11)**.
 
 ### La escalera del alimento
 
@@ -750,11 +760,15 @@ Y con ella, cuánta gente cabe en el mismo sitio:
 recolección y caza (1) → marisqueo y costa (2) → siembra y rebaño (3) →
 excedente almacenable (4–6) → mercado y compra (7) → rotación y molino (8) →
 comercio de la villa (9) → maíz y ultramar (10) → mercado nacional por
-ferrocarril (11) → frío, conserva y salario (12).
+**ferrocarril (11)**.
 
-En la 12 se cierra el círculo entero: la comida deja de depender de la estación
-y del sitio, que es la restricción sobre la que está construido todo el juego
-desde la primera pantalla.
+**Esta escalera se queda sin último peldaño, y es lo que más se nota de haber
+retirado la 12.** El cierre del círculo —frío, conserva y salario: la comida
+deja de depender de la estación y del sitio— era el peldaño doce, y esa
+restricción es sobre la que está construido todo el juego desde la primera
+pantalla. Con el mercado nacional por ferrocarril la restricción se afloja, pero
+no se levanta: sigue habiendo estación y sigue habiendo sitio. Queda así a
+propósito. Cerrarla del todo era precisamente lo que el motor no sabe simular.
 
 ---
 
@@ -763,7 +777,7 @@ desde la primera pantalla.
 `Site.Era` se queda en cinco valores y **no hace falta tocarlo**: es lo que
 gobierna qué emplazamientos son ocupables y qué piel lleva la interfaz. La época
 concreta va aparte, porque son dos preguntas distintas —«qué cultura material
-tengo» y «qué clase de sitio puedo habitar»—. Con doce épocas sobre cinco
+tengo» y «qué clase de sitio puedo habitar»—. Con once épocas sobre cinco
 `Site.Era` la correspondencia es la de la tabla del §2 y no hace falta más.
 
 ```gdscript
@@ -771,7 +785,7 @@ class_name Hito
 extends Resource
 
 @export var id: StringName             # "la_aleacion"
-@export var epoca: int                 # índice de las doce
+@export var epoca: int                 # índice de las once
 @export var nombre: String
 @export var descripcion: String
 @export var cierra_epoca: bool = false # sólo uno por época
@@ -798,7 +812,7 @@ que se paga durante años.
 3. **El Neolítico**, que es el primer peldaño térmico propio y la primera vez
    que se construye en vez de ocupar.
 
-De ahí en adelante, de una en una y hacia delante. Las doce fichas son el
+De ahí en adelante, de una en una y hacia delante. Las once fichas son el
 destino, no el plan de la semana.
 
 ---
@@ -810,7 +824,7 @@ ajuste excelente a un mundo nuevo, y el Neolítico cántabro llega tarde y a
 regañadientes. El juego no debe tener una flecha de progreso dibujada.
 
 **La proporción de PLAUSIBLE no es pareja.** El Calcolítico es la época con menos
-suelo documentado de las doce y el Paleolítico la que más tiene; en la Edad Media
+suelo documentado de las once y el Paleolítico la que más tiene; en la Edad Media
 el problema es el contrario, que hay tanto que elegir qué contar ya es una
 interpretación. Lo que se garantiza no es acertar: es que **ninguna afirmación
 esté sin etiqueta** (FASE E4).
@@ -822,11 +836,13 @@ fuente, es **otra**, y la enciclopedia de la FASE E4 debería distinguirlas en v
 de meter una estela discoidea y una acta de la Solvay bajo la misma etiqueta de
 ATESTIGUADO.
 
-**Doce épocas son mucho más de lo que cabe.** Está dicho en los riesgos del
-ROADMAP y se repite aquí: esto es el mapa del destino, no un compromiso de
-llegar. Si hay que recortar, el orden es al revés del de escritura: **primero se
-caen la 11 y la 12**, que son las que menos se apoyan en el motor que existe —el
-jornal y el capital de fuera no se simulan con jornadas y calorías—, luego se
+**Once épocas siguen siendo mucho más de lo que cabe.** Está dicho en los
+riesgos del ROADMAP y se repite aquí: esto es el mapa del destino, no un
+compromiso de llegar. El orden de recorte es al revés del de escritura, y **ya
+se ha ejecutado el primer paso**: la 12 salió
+([archivo/EPOCA_12_SIGLO_CORTO.md](archivo/EPOCA_12_SIGLO_CORTO.md)). Si
+hay que seguir recortando, **la siguiente es la 11**, por el mismo motivo —el
+jornal y el capital de fuera no se simulan con jornadas y calorías—; luego se
 funde el Calcolítico con el Bronce, y luego se juntan las dos mitades de la Edad
-Media. Con eso se vuelve a ocho sin perder nada estructural. Y si sólo se hacen
+Media. Con eso se baja a ocho sin perder nada estructural. Y si sólo se hacen
 tres, que sean tres enteras.

@@ -21,7 +21,7 @@ horno.
 | Punzón y lezna | recocido | `METALURGO` | Lo primero que se hace de metal es herramienta de coser, no arma | PLAUSIBLE |
 | El campaniforme | cerámica neolítica + comercio | `MANUFACTURA`/alfarería | Un recipiente que se enseña, no que se usa | ATESTIGUADO (vaso campaniforme) |
 
-Un solo peldaño de la escalera térmica (`SISTEMAS_COMPARTIDOS.md` §1.1): la
+Un solo peldaño de la escalera térmica (`SISTEMAS.md` §1.1): la
 cubeta con fuelle. No hay bronce todavía — eso pide el horno mejorado de la
 época 5, con estaño que no está en Cantabria.
 
@@ -38,7 +38,7 @@ cubeta con fuelle. No hay bronce todavía — eso pide el horno mejorado de la
 | El buscador | social | primer `PROSPECTOR` asignado de forma sostenida | — |
 | El objeto que no sirve | social | primera pieza de metal fabricada con peor rendimiento funcional que su equivalente de piedra, y aun así producida | — |
 | El secreto del oficio | social | primer saber marcado como no transmisible fuera del linaje/oficio (mecánica de discreción, no existe hoy) | — |
-| **La aleación** | **cierre** | primera ruta de `Intercambio` (`SISTEMAS_COMPARTIDOS.md` §5) que trae estaño desde fuera de Cantabria, y primera colada de bronce con él | — |
+| **La aleación** | **cierre** | primera ruta de `Intercambio` (`SISTEMAS.md` §5) que trae estaño desde fuera de Cantabria, y primera colada de bronce con él | — |
 
 **El cierre de esta época depende del sistema de comercio, no de un avance
 técnico local.** Es el argumento central de EPOCAS.md: el estaño no está en

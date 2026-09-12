@@ -31,7 +31,7 @@ La primera vez que se funda un emplazamiento se descarga su relieve del IGN
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-716 pruebas, 5 171 comprobaciones. Tienen que estar todas en verde.
+887 pruebas, 6 163 comprobaciones. Tienen que estar todas en verde.
 
 Aparte están las **sondas** (`scripts/tests/*Probe.gd`), que no pasan ni
 fallan: miden. El balanceo de este proyecto se ajusta midiendo.
@@ -56,17 +56,23 @@ del Paleolítico sale con la tipografía de serie.
 
 ## Documentación
 
+`docs/` tiene un **conjunto fijo** de documentos. No se crea uno nuevo por cada
+trabajo: lo único específico son las once fichas de época.
+
 | | |
 |---|---|
+| [docs/SPECS.md](docs/SPECS.md) | **el contrato técnico: qué existe y qué no se puede romper** |
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | **cómo está montado y cómo se escribe código aquí** |
-| [docs/ESTADO_DE_LA_SLICE.md](docs/ESTADO_DE_LA_SLICE.md) | **qué hace hoy, qué falta para que sea jugable, medido** |
+| [docs/ESTADO.md](docs/ESTADO.md) | **qué hace hoy, qué falta para que sea jugable, medido** |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | por dónde va, qué falta, y las tareas en curso |
+| [docs/SISTEMAS.md](docs/SISTEMAS.md) | los sistemas del juego: la caza, la pesca, la despensa, el relato, los hitos, el comercio |
+| [docs/EPOCAS.md](docs/EPOCAS.md) | las once épocas y el hito que cierra cada una |
+| [docs/EPOCA_01…11_*.md](docs/EPOCA_01_PALEOLITICO.md) | una ficha por época — **lo único específico** |
+| [docs/GRAFICOS.md](docs/GRAFICOS.md) | cómo se dibuja, qué cuesta y el presupuesto de fotograma |
 | [docs/INTERFAZ.md](docs/INTERFAZ.md) | la piel de la interfaz y cómo cambia con las eras |
-| [docs/PERRO_Y_BELLOTA.md](docs/PERRO_Y_BELLOTA.md) | dos mecánicas de época, listas para implementar |
-| [docs/SLICE_PALEOLITICO.md](docs/SLICE_PALEOLITICO.md) | qué tiene que demostrar la rebanada jugable |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | por dónde va y qué falta |
-| [docs/EPOCAS.md](docs/EPOCAS.md) | las doce épocas y el hito que cierra cada una |
-| [docs/CAZA_Y_PESCA.md](docs/CAZA_Y_PESCA.md) | el modelo de subsistencia, con sus medidas |
-| [docs/REVAMP_GRAFICO.md](docs/REVAMP_GRAFICO.md) | el trabajo de imagen y su coste medido |
-| [docs/CIERRE_SLICE.md](docs/CIERRE_SLICE.md) | el cierre de la rebanada |
-| [docs/SPECS.md](docs/SPECS.md) | especificación de partida |
+| [docs/AGENTES.md](docs/AGENTES.md) | cómo trabajan varios agentes a la vez sin pisarse |
 | [docs/CREDITOS.md](docs/CREDITOS.md) | de dónde sale cada dato y cada modelo |
+| [docs/archivo/](docs/archivo/README.md) | lo cerrado: specs terminadas y diseño descartado. **No se edita** |
+
+La tabla de qué documento se lee y se actualiza para cada clase de trabajo está
+en [CLAUDE.md](CLAUDE.md).

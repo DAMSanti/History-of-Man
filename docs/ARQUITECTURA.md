@@ -6,6 +6,25 @@ repositorio está pendiente de arreglar.
 
 ---
 
+## Dónde mirar
+
+> **Aviso para buscar aquí:** `grep "^## "` devuelve también los comentarios
+> `##` de los ejemplos de GDScript. Para los encabezados de verdad,
+> `grep -n "^## [0-9]"`.
+
+| Si buscas… | Ve a |
+|---|---|
+| Qué carpeta es para qué, y cuánto pesa cada una | §2 |
+| **Cómo se saca un sistema de `SettlementSim`, y las siete trampas** | **§3** |
+| Estilo: tipado, nombres, qué comentario sirve, cifras de balanceo | §4 |
+| Pruebas y sondas, y en qué se diferencian | §5 |
+| **Cuánto cuesta medir y cómo no pagarlo** | **§5.1** |
+| Por qué `scripts/datos/` no se mueve a la ligera | §6 |
+| Qué se versiona y con qué se rehace lo que no | §7 |
+| Los errores que ya se cometieron y no se repiten | §8 |
+
+---
+
 ## 1. Qué es esto
 
 Una simulación de una banda paleolítica en la Cantabria del Magdaleniense,
@@ -45,16 +64,19 @@ Tamaños al día de hoy, para saber dónde duele:
 
 | carpeta | ficheros | líneas |
 |---|---|---|
-| `tests/` | 106 | 21 238 |
-| `sim/` | 28 | 14 701 |
-| `vista/` | 23 | 7 196 |
-| `ui/` | 13 | 6 535 |
-| `mundo/` | 12 | 5 081 |
-| `tools/` | 26 | 3 931 |
-| `region/` | 7 | 2 936 |
-| `banda/` | 7 | 2 170 |
-| `economia/` | 7 | 1 897 |
-| `datos/` | 10 | 1 350 |
+| `tests/` | 143 | 30 090 |
+| `sim/` | 38 | 21 034 |
+| `ui/` | 22 | 8 560 |
+| `vista/` | 26 | 8 185 |
+| `mundo/` | 14 | 6 329 |
+| `tools/` | 32 | 5 552 |
+| `region/` | 7 | 2 929 |
+| `banda/` | 8 | 2 552 |
+| `economia/` | 7 | 2 214 |
+| `datos/` | 10 | 1 340 |
+
+(Medido el 2026-09-12. `tests/` es un tercio del repositorio y eso está bien:
+es lo que sostiene que las cifras de la documentación se puedan comprobar.)
 
 **Una clase por fichero, y el fichero se llama como la clase.** Sin excepciones.
 
@@ -62,9 +84,8 @@ Tamaños al día de hoy, para saber dónde duele:
 
 ## 3. Cómo se descompone un sistema grande
 
-`SettlementSim` es el objeto central y ha llegado a tener 9 276 líneas. Se
-adelgaza sacando **temas cerrados** a su propia clase, siempre con el mismo
-patrón:
+`SettlementSim` es el objeto central y llegó a tener 9 276 líneas. Se adelgaza
+sacando **temas cerrados** a su propia clase, siempre con el mismo patrón:
 
 ```gdscript
 class_name Caceria
@@ -83,15 +104,22 @@ y en `SettlementSim`:
 var caceria: Caceria = Caceria.new(self)
 ```
 
-Ya salieron así `Caceria`, `Cumbres`, `Despensa`, `Hogar`, `Marcha`, `Nasas`,
-`Percances`, `Pinturas`, `Reconocimiento`, `Reparto`, `Tajo`, `Taller` y
-`Trampas`; de `GameUI`, `BarraSuperior`, `PanelAlmacen`, `PanelCenso`,
-`PanelOficios`, `PanelRastros`, `PanelSitios` y `PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de
-`DemoMain`, `Minimapa`.
+Ya salieron así veintidós: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`,
+`Cronista`, `Cumbres`, `Desechos`, `Despensa`, `ElLobo`, `Hogar`, `Marcha`,
+`Nasas`, `Partida`, `Percances`, `Pinturas`, `Reconocimiento`, `Relevo`,
+`Reparto`, `Tajo`, `Taller`, `Tanteo` y `Trampas`. De `GameUI` salieron
+`BarraSuperior`, `PanelAlmacen`, `PanelCenso`, `PanelCronica`, `PanelObras`,
+`PanelOficios`, `PanelRastros`, `PanelSitios`, `PanelTecnicas` y
+`PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de `DemoMain`,
+`Minimapa`.
 
-`SettlementSim` ha pasado de **9 276 líneas a 3 100** por ese camino, `GameUI`
-de **5 015 a 1 266**, `TerrainGenerator` de 1 715 a 1 182 y `DemoMain` de 2 007
-a 1 485.
+`SettlementSim` bajó de **9 276 líneas a 3 100** por ese camino. Hoy está en
+**4 119**, `GameUI` en 1 377, `TerrainGenerator` en 1 263 y `DemoMain` en 1 642.
+
+**Que `SettlementSim` haya vuelto a subir mil líneas no es un fallo del método,
+es el método funcionando**: se corta cuando estorba, no cuando se cruza un
+número. Pero conviene mirarlo: si el siguiente tema cerrado ya se distingue
+—y a este tamaño suele distinguirse—, toca cortar otra vez.
 
 **Reglas del troceado:**
 
@@ -208,7 +236,7 @@ verde siempre:
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-Hoy: 716 pruebas, 5 171 comprobaciones. Una prueba comprueba una regla del
+Hoy: **887 pruebas, 6 163 comprobaciones** (2026-09-12). Una prueba comprueba una regla del
 juego, no una línea de código, y su nombre lo dice:
 `test_lo_que_gasta_el_almacen_es_lo_que_come_la_banda`.
 
@@ -217,14 +245,64 @@ y escriben una tabla. Son la herramienta de trabajo del balanceo, y el
 proyecto se ajusta midiendo, no a ojo. `JornadaCazadorProbe` fue quien dijo que
 un cazador estaba el 0,8 % de su vida en estado de trabajo.
 
-Tres cosas que cuestan tiempo si se olvidan:
+### 5.1. Lo que cuesta medir, y cómo no pagarlo
+
+**Una corrida de un año a `time_scale = 5` pasa de una hora de reloj.** Esa
+cifra decide cómo se comprueba todo lo demás, y olvidarla sale caro: en una
+tanda se llegó a planear **más de diez comprobaciones de un año y una de tres**
+— entre dieciséis y dieciocho horas de máquina—. **La de tres años acabó
+resolviéndose con una prueba que tardó segundos.**
+
+**Primero: ¿qué estás comprobando de verdad?** Casi siempre la respuesta barata
+existe, y la cara es pereza disfrazada de rigor:
+
+| Si lo que quieres saber es… | Se comprueba con | Cuesta |
+|---|---|---|
+| **Una regla**: «si pasa X, entonces Y» | una prueba de `scripts/tests/` | segundos |
+| **Un estado lejano**: qué pasa en el año 3, con la banda envejecida | una prueba que **construye ese estado** y da un paso | segundos |
+| **Una curva corta**: cuánto se agota un tajo, cuánto cura el secadero | una sonda de 8–45 jornadas | minutos |
+| **Interacción entre estaciones**, deriva que crece con los días, rendimiento sobre la partida real | una sonda de año | **más de una hora** |
+
+**La regla que sale de ahí: no simules para llegar a un estado — constrúyelo.**
+Si la pregunta es «¿qué pasa cuando alguien cumple cuarenta años?», se pone la
+edad a cuarenta y se da un paso. Correr tres años para que envejezca solo no
+comprueba nada más y cuesta cinco horas. Lo mismo vale para una despensa vacía,
+un utillaje roto o un paraje esquilmado: **son estados, y un estado se
+escribe**.
+
+`Instantanea` está para exactamente esto —arrancar en la jornada N sin correr
+las anteriores—, y `Instantanea.volcar` es la mitad que falta para que sirva
+(ver ROADMAP.md «En curso»).
+
+**Segundo: si de verdad hace falta un año, que ese año conteste TODAS las
+preguntas.** Una corrida larga es cara por arrancarla, no por lo que mide.
+Instrumentarla para que saque ocho cifras en vez de una cuesta lo mismo. **Diez
+preguntas no son diez corridas de un año: son una corrida con diez contadores.**
+
+Antes de lanzar nada largo, junta la lista entera de lo que quieres saber de esa
+partida — incluidas las preguntas de tareas que vengan después— y métela toda en
+la misma pasada.
+
+**Tercero: di lo que va a costar antes de gastarlo.** Si un plan implica más de
+unos minutos de máquina, el número va en el plan y se pregunta. Dieciséis horas
+de sondas no es una decisión técnica: es una decisión de quien dirige el
+proyecto, y se toma antes, no cuando ya lleva ocho corriendo.
+
+Y recuerda que **una cifra de una sola corrida no es una cifra** si la sonda no
+es determinista: eso son dos corridas, no una. Cuenta las dos al presupuestar.
+
+---
+
+Tres cosas más que cuestan tiempo si se olvidan:
 
 - **Las capturas de pantalla necesitan ventana.** Con `--headless`,
   `get_texture().get_image()` devuelve null. Las capturas van a
   `%APPDATA%/Godot/app_userdata/History of Man/`.
 - **Las medidas no se corren en paralelo** ni se solapan con edición de
   ficheros: cada proceso de Godot parsea todos los scripts al arrancar, y tocar
-  un `.gd` a mitad de una tanda la rompe por dentro.
+  un `.gd` a mitad de una tanda la rompe por dentro. Si sois varios agentes,
+  esto deja de ser un consejo y pasa a ser un turno: ver
+  [AGENTES.md](AGENTES.md) §3.
 - **Hay sondas que NO son deterministas, y hay que saber cuales.** Las que
   corren un numero fijo de fotogramas -`MarchaProbe`- avanzan menos horas de
   juego si la maquina va cargada, porque la simulacion acumula tiempo real con
