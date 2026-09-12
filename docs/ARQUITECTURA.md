@@ -236,8 +236,10 @@ verde siempre:
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-Hoy: **887 pruebas, 6 163 comprobaciones** (2026-09-12). Una prueba comprueba una regla del
-juego, no una línea de código, y su nombre lo dice:
+Tiene que salir en verde, y el total de comprobaciones no puede bajar del que
+diera al empezar. El total medido vive en [ESTADO.md](ESTADO.md) §3 y sólo
+ahí. Una prueba comprueba una regla del juego, no una línea de código, y su
+nombre lo dice:
 `test_lo_que_gasta_el_almacen_es_lo_que_come_la_banda`.
 
 **`scripts/tests/*Probe.gd`** — sondas de medida. No pasan ni fallan: **miden**
@@ -246,6 +248,43 @@ proyecto se ajusta midiendo, no a ojo. `JornadaCazadorProbe` fue quien dijo que
 un cazador estaba el 0,8 % de su vida en estado de trabajo.
 
 ### 5.1. Lo que cuesta medir, y cómo no pagarlo
+
+> **Antes que nada: TODA MEDIDA COMPARATIVA LLEVA `SEMILLA=`.**
+>
+> `SettlementSim` siembra con el reloj si nadie le pasa una semilla
+> (`SettlementSim.setup`, y su comentario avisa de esto), y **las
+> sondas no la fijan por su cuenta**: ni `AtascoProbe`, ni `RodeoProbe`, ni
+> `TironAnualProbe`. Así que dos corridas seguidas de la misma sonda con el
+> mismo código son **dos partidas distintas**.
+>
+> Medido el 2026-09-12, y por eso está escrito aquí: `AtascoProbe` sin semilla,
+> ocho jornadas, sin tocar una línea de código entre corridas, dio **2 200,
+> 1 747, 303 y 219** pasos cortados. Con `SEMILLA=42` da **2 295 dos veces
+> seguidas, exacto**. Sobre aquella primera tanda se llegaron a sacar dos
+> conclusiones y a escribirlas en ESTADO.md; las dos eran ruido y hubo que
+> retirarlas.
+>
+> El síntoma es fácil de reconocer: **si una cifra no cuadra con la de hace un
+> momento y el código no ha cambiado, el roto es el instrumento**, no el juego.
+> Y la primera pregunta que se le hace al instrumento es si fijó la semilla.
+
+> **Y la segunda regla, que costó lo mismo el mismo día: MIENTRAS UNA MEDIDA
+> ESTÁ EN VUELO, EL CÓDIGO NO SE TOCA.**
+>
+> Una corrida larga tarda media hora, y media hora da para seguir trabajando.
+> El 2026-09-12 se lanzó una pareja de 60 jornadas para comprobar que acelerar
+> la noche no cambiaba la partida y, mientras corría, se cambiaron tres cosas
+> de esa misma noche: la condición de entrada, el presupuesto por cuadro y un
+> corte nuevo al cerrar la jornada. **La corrida dio «divergen» y se tardó hora
+> y media en entender que no comparaba dos configuraciones, sino dos versiones
+> del código** — ninguna de ellas la que había al terminar.
+>
+> Con la versión final, la misma comprobación da idénticas.
+>
+> En corto: una sonda larga es una **foto del árbol de trabajo en el momento de
+> lanzarla**. Si hay que tocar algo mientras corre, se toca sabiendo que el
+> resultado no describirá lo que quede, y se vuelve a lanzar. Lo barato es
+> repetir la corrida; lo caro es creerse la primera.
 
 **Una corrida de un año a `time_scale = 5` pasa de una hora de reloj.** Esa
 cifra decide cómo se comprueba todo lo demás, y olvidarla sale caro: en una

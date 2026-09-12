@@ -270,7 +270,7 @@ func _initialize() -> void:
 
 	print("=== COSTE DE CAMINOS ===")
 	print("   rejilla construida en %d ms, una vez" % sim.grid_build_ms)
-	print("   caminos guardados: %d" % sim._route_cache.size())
+	print("   caminos guardados: %d" % sim.knowledge.veredas_recordadas())
 	print("   nodos de busqueda en toda la partida: %d" % _nodes_total)
 	print("   fotograma mas caro: %d nodos (~%.1f ms)" % [
 		_worst_frame, float(_worst_frame) * 0.008])

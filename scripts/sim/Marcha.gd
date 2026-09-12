@@ -106,9 +106,36 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 		# `next_waypoint` caia al destino y la persona salia derecha a
 		# seiscientos metros sin plan, que es el atasco «no avanza por el
 		# camino trazado».
+		#
+		# Y SI SIGUE SIN HABER CAMINO, NO SE ANDA.
+		#
+		# Volver a trazar no siempre da ruta -el destino se ha vuelto
+		# inalcanzable, o la traza fallo-, y aqui se seguia adelante igual:
+		# `next_waypoint` devuelve el destino cuando la ruta esta vacia, asi
+		# que la persona salia DERECHA hacia el, cruzara lo que cruzara. Es
+		# como se llega a la orilla de un rio que no se pasa.
+		#
+		# Medido con `AtascoProbe` en el sitio 56: el 22,9 % de los fotogramas
+		# andando se andaban asi, sin un camino debajo. Casi un cuarto del
+		# movimiento de la banda no lo habia trazado nadie.
 		if person.route_step >= person.route.size() \
 				and person.position.distance_to(person.target) > sim.arrive_radius * 2.0:
 			_send_to(person, person.target)
+			if person.route_step >= person.route.size():
+				# Sin presupuesto es que HOY no toca buscar, no que no haya
+				# camino: se espera al cuadro siguiente y ya esta.
+				#
+				# Y soltar el destino es cosa de quien VIAJA. Quien busca una
+				# pieza o trabaja una mancha tiene su propia forma de darse por
+				# vencido -el rastro se pierde, la mata se acaba-, y meterle
+				# aqui un cambio de estado seria decidir por ella. Lo que si
+				# vale para todos es no andar sin camino.
+				var viajando := person.state == Inhabitant.State.YENDO \
+					or person.state == Inhabitant.State.VOLVIENDO \
+					or person.state == Inhabitant.State.RECONOCIENDO
+				if viajando and ultima_traza == Traza.IMPOSIBLE:
+					_sin_rumbo(person)
+				return
 
 		var to_target := person.next_waypoint() - person.position
 		to_target.y = 0.0
@@ -128,6 +155,18 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 		# Cada uno por su carril. El paso de hito se mide sobre el hito de verdad
 		# -arriba-, y el carril sólo tuerce hacia dónde se camina: si desviara
 		# también la cuenta de hitos, el camino se recorrería torcido.
+		#
+		# EL EJE SE GUARDA. El carril aparta hasta dos metros y medio de la
+		# línea que el trazado ha comprobado, y esa línea es la única de la
+		# que hay palabra: pegada a un cortado o a la orilla, el desvío mete
+		# a la persona en la celda de al lado, que está cerrada. Entonces se
+		# la manda a RODEAR algo que no le estorbaba —el eje estaba libre—,
+		# y eso son pasos de lado, tiempo y un rastro que no se entiende.
+		#
+		# Medido con `AtascoProbe`: 5.741 pasos cortados en ocho jornadas con
+		# el carril puesto a ciegas. El carril es un apaño de presentación
+		# —que no vayan en fila india— y no puede mandar sobre el trazado.
+		var eje := to_target
 		to_target = _lane_shift(person, to_target)
 		if to_target.length() > 0.5:
 			var direction := to_target.normalized()
@@ -160,8 +199,22 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 			# hasta el borde, que es lo que hace cualquiera, y desde ahi se
 			# busca por donde rodear.
 			var libre := _avance_libre(person.position, step)
+
+			# Y SI LO QUE ESTORBA ES EL CARRIL, SE VUELVE AL EJE.
+			#
+			# Antes de dar nada por bloqueado se prueba la línea del trazado
+			# sin desviar. Rodear es caro y se reserva para lo que estorba de
+			# verdad; que a uno no le quepa su carril no es que no haya paso.
+			if libre.length() <= CATA_DEL_PASO * 0.5 and eje.length() > 0.5:
+				var derecho := eje.normalized() * step.length()
+				var libre_eje := _avance_libre(person.position, derecho)
+				if libre_eje.length() > CATA_DEL_PASO * 0.5:
+					step = derecho
+					libre = libre_eje
+
 			if libre.length() > CATA_DEL_PASO * 0.5:
 				step = libre
+				person.pasos_de_lado = 0
 			else:
 				# Ni el primer tramo: hay que rodear. El paso de lado mide LO
 				# MISMO que el que se iba a dar, no la zancada entera a
@@ -174,11 +227,54 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 					> step.length() * 0.9
 				var right_ok := _avance_libre(person.position, -side).length() \
 					> step.length() * 0.9
-				if left_ok and (not right_ok
+
+				# EL CAMINO PROMETIO UN PASO QUE NO EXISTE.
+				#
+				# Aqui, y no en cualquier roce con el agua: esto es que NI EL
+				# PRIMER TRAMO del paso se puede andar, o sea que hay que
+				# rodear. Es LA cifra que dice si el trazado y el que anda estan
+				# de acuerdo sobre el agua, porque cada una de estas es una
+				# persona plantada en una orilla donde la rejilla le habia dicho
+				# que se pasa. De ahi sale el ovillo de la ventana de rastros.
+				#
+				# Y se apunta CUAL DE LOS DOS lo corta, porque son averias
+				# distintas: el agua es que el vado no esta donde la rejilla
+				# dice, y la celda cerrada es que el camino trazado roza algo
+				# por lo que no se pasa -un recorte de escalera demasiado
+				# alegre, o una ruta pegada al cortado-.
+				pasos_cortados += 1
+				var cata := person.position + direction * CATA_DEL_PASO
+				var rejilla := _navgrid()
+				if rejilla.is_ready() \
+					and rejilla.cost[rejilla.cell_of(cata)] <= Navgrid.BLOCKED:
+					pasos_cortados_celda += 1
+				else:
+					pasos_cortados_agua += 1
+				# Y EL RODEO DE ORILLA TIENE UN TOPE.
+				#
+				# Este apaño es para bordear un charco: dos o tres pasos de
+				# lado y se sigue. Sin tope se convierte en lo contrario de lo
+				# que parece: como el paso de lado SÍ mueve a la persona, la
+				# cuenta de bloqueos se reinicia cada cuadro y no salta nunca
+				# el replanteo. La persona camina la orilla de un lado para
+				# otro durante horas —anda muchísimo y no se acerca nada— y de
+				# ahí no la saca más que la vigilancia de atascos, dos horas de
+				# juego después.
+				#
+				# Es el ovillo pegado al agua de la ventana de rastros, y el
+				# motivo de que se leyera como «no avanza por el camino
+				# trazado»: el hito estaba perfectamente pisable, al otro lado.
+				#
+				# Pasado el tope se deja de barrer y se pide camino, que es lo
+				# que de verdad sabe por dónde se cruza.
+				var barriendo := person.pasos_de_lado >= SettlementSim.RODEOS_DE_ORILLA
+				if not barriendo and left_ok and (not right_ok
 						or left.distance_to(person.target) < right.distance_to(person.target)):
 					step = side
-				elif right_ok:
+					person.pasos_de_lado += 1
+				elif not barriendo and right_ok:
 					step = -side
+					person.pasos_de_lado += 1
 				else:
 					# Ni por un lado ni por otro. Antes se paraba y ya: el
 					# esquive de orilla es un apano para bordear un charco, no
@@ -193,6 +289,9 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 					if person.blocked_steps > SettlementSim.BLOCKED_BEFORE_REPLAN:
 						person.blocked_steps = 0
 						person.blocked_replans += 1
+						# Camino nuevo, rodeo de orilla nuevo: el tope es por
+						# tramo, no de por vida. Ver [SettlementSim.RODEOS_DE_ORILLA].
+						person.pasos_de_lado = 0
 						# Y SE APUNTA QUE POR AHI NO SE PASA.
 						#
 						# Es la diferencia entre tropezar una vez y tropezar
@@ -211,7 +310,7 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 						# el juego delante: diez cierres en dos jornadas, y no
 						# todos eran agua.
 						var delante := person.position + direction 							* Navgrid.CELL * 0.5
-						var estorba_el_agua := sim._terrain != null 							and sim._terrain.crossing_difficulty_at(delante) > 0.05
+						var estorba_el_agua := sim._terrain != null 							and sim._terrain.crossing_difficulty_at(delante) > Hydrography.ROZA_EL_AGUA
 						if estorba_el_agua and _navgrid().cerrar(delante):
 							forget_routes()
 							sim._note(Chronicle.Kind.TIERRA,
@@ -242,6 +341,17 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 						else:
 							_send_to(person, goal)
 
+			# UN PASO SIN NINGUN CAMINO DEBAJO. Tiene que quedarse en cero: es
+			# el tiro en linea recta que llevaba a la gente contra el rio.
+			#
+			# Se pregunta por la ruta VACIA y no por la ruta AGOTADA, que son
+			# cosas distintas: agotarla es haber llegado al final del camino
+			# —lo normal— y los ultimos metros hasta el destino se andan
+			# derechos a proposito. Lo que no puede pasar es andar sin haber
+			# tenido camino nunca.
+			if step.length() > 0.01 and person.route.is_empty() \
+				and person.position.distance_to(person.target) > sim.arrive_radius * 2.0:
+				pasos_sin_camino += 1
 			person.position += step
 			person.note_step(step.length(), sim.home_position)
 			if step.length() > 0.01:
@@ -249,12 +359,135 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 				person.blocked_replans = 0
 				# Sólo un paso con recorrido real gira a la persona; uno de
 				# longitud cero -parada, bloqueo- no dice hacia dónde mira.
-				sim._headings[index] = atan2(step.x, step.z)
+				#
+				# Y sólo si hay dónde apuntarla. `_headings` se llena al crear
+				# la banda, al lado del cuerpo de cada uno: un montaje de
+				# prueba que mete gente en `people` a mano no tiene cuerpos, y
+				# escribir en el índice 0 de un array vacío reventaba la prueba
+				# ANTES de su primer assert. Eso no falla: PASA. Mirar hacia
+				# dónde se anda es cosa de la vista, así que sin cuerpo no hay
+				# nada que girar.
+				if index < sim._headings.size():
+					sim._headings[index] = atan2(step.x, step.z)
 			person.position.y = sim._terrain.get_height_at(person.position)
 			# Andar cansa. Hace falta para que la batida tenga final: sin esto
 			# el explorador nunca acumulaba fatiga y no volvia jamas.
 			person.fatigue = clampf(
 				person.fatigue + hours * 2.6 * person.fatigue_factor(), 0.0, 100.0)
+
+
+## Alguien se ha quedado sin camino a donde iba, andando.
+##
+## No es un atasco -no se ha perdido el dia peleandose con nada- ni una
+## renuncia por haber topado con el terreno: es que el destino ha dejado de
+## tener ruta mientras se iba hacia el. Lo que corresponde es soltarlo y que el
+## reparto le de otro sitio, que es lo que habria pasado si se hubiera sabido
+## antes de salir.
+##
+## Se cuenta aparte porque dice una cosa distinta de las demas: si esto sube,
+## quien elige los destinos esta mandando gente a sitios sin comprobar el
+## camino. Ver [SettlementSim.SIN_RUMBO].
+func _sin_rumbo(person: Inhabitant) -> void:
+	var goal := person.target
+	sim.stuck_tally[SettlementSim.SIN_RUMBO] = int(
+		sim.stuck_tally.get(SettlementSim.SIN_RUMBO, 0)) + 1
+	_record_stuck(person, SettlementSim.SIN_RUMBO)
+	person.route = PackedVector3Array()
+	person.route_step = 0
+	person.survey_hours = 0.0
+	person.horas_en_el_tramo = 0.0
+
+	# DE CASA NO SE RENUNCIA NUNCA.
+	#
+	# Volver es la salida de emergencia de todo lo demas: si el abrigo se
+	# apunta como imposible, `_send_to` deja de trazarle ruta y la persona se
+	# queda en el monte para siempre. Y ademas casi nunca es verdad —el trozo
+	# de casa se abre a la fuerza, ver [Navgrid.open_around_home]—: lo que
+	# suele pasar es que se ha quedado en un rincon del que hay que salir, y de
+	# eso ya se encarga la vigilancia de plantados.
+	if Traversal.en_llano(goal, sim.home_position) <= SettlementSim.SALIDA_DE_CASA:
+		person.state = Inhabitant.State.OCIOSO
+		return
+
+	person.unreachable = goal
+	if not _given_up_on(person, goal):
+		person.given_up.append(goal)
+	if not person.journey.is_empty():
+		person.end_journey(sim.day,
+			sim.parajes.place_name(person.position, sim.home_position),
+			"se quedo sin camino: se le dara otro sitio")
+	person.state = Inhabitant.State.OCIOSO
+
+
+## Como acabo la ultima llamada a [_send_to].
+##
+## ESTO ES LO QUE FALTABA, Y COSTABA CARO.
+##
+## `_send_to` deja la ruta vacia por CUATRO motivos que no significan lo mismo
+## -no hay camino, ya se sabia imposible, no se ha buscado por presupuesto, o
+## se ha buscado y no ha salido- y quien llamaba solo veia `route.is_empty()`.
+## Los cuatro se leian como el primero.
+##
+## De ahi salia el fallo mas gordo que quedaba, y esta medido: `_send_to_work`
+## prueba VARIOS tajos, cada uno cuesta una busqueda, y el presupuesto es de
+## unos pocos nodos por cuadro. Agotado el presupuesto, los candidatos que
+## quedaban volvian con la ruta vacia -sin haberse mirado siquiera- y el
+## reparto lo leia como «a ninguno de estos tajos hay camino»: se anotaba el
+## atasco, se marcaba la actividad como inalcanzable y la persona se quedaba
+## ociosa la jornada entera. Medido en el sitio 56, jornada 1: seis personas
+## con «no hay camino hasta ningun tajo» a 211 m de casa, con la rejilla
+## diciendo `zona 0 -> 0` y todo el suelo pisable.
+##
+## No se llegaba a estrellar contra nada: se decidia que no habia camino sin
+## haberlo buscado.
+enum Traza {
+	TRAZADO,          ## Hay ruta -nueva, guardada, o la que ya llevaba-.
+	IMPOSIBLE,        ## No hay camino: otra zona, o la busqueda no lo encontro.
+	SIN_PRESUPUESTO,  ## NO SE HA MIRADO. No dice nada del camino.
+}
+
+## Como acabo la ultima traza. Se mira JUNTO a la ruta, nunca en su lugar.
+var ultima_traza: Traza = Traza.TRAZADO
+
+## Pasos dados SIN un camino debajo. Tiene que quedarse en cero.
+##
+## `next_waypoint` devuelve el destino cuando la ruta esta vacia, asi que
+## andar sin camino es andar EN LINEA RECTA hacia el, cruzara lo que
+## cruzara. No se mide desde fuera —desde fuera, quien acaba de gastar su
+## ruta y quien nunca la tuvo se ven igual—, asi que se cuenta aqui.
+var pasos_sin_camino: int = 0
+
+## Pasos que el terreno cortó a pesar de haber camino trazado.
+##
+## Es la cifra que dice si el trazado y el andador estan de acuerdo sobre el
+## agua: cada uno es alguien llegando a una orilla donde la rejilla le habia
+## dicho que se pasa. Lo que sale de ahi es el ovillo de la ventana de
+## rastros. Ver [Navgrid.vado].
+var pasos_cortados: int = 0
+
+## De esos, los que corta una celda por la que no se pasa.
+var pasos_cortados_celda: int = 0
+
+## Y los que corta el agua.
+var pasos_cortados_agua: int = 0
+
+## Caminos entregados que NO merecian andarse, y de cuantos en total.
+##
+## Es la queja medida: «en ocasiones multiplica la distancia en linea recta
+## por muchas veces». Se mide con [rodeo_aceptable], que es la misma vara con
+## la que se decide si un sitio esta al alcance.
+var rodeos_malos: int = 0
+var rodeos_mirados: int = 0
+
+
+## Apunta si el camino que se acaba de entregar merecia andarse.
+func _apuntar_el_rodeo(person: Inhabitant, destino: Vector3) -> void:
+	if person.route.is_empty():
+		return
+	rodeos_mirados += 1
+	if not rodeo_aceptable(Traversal.en_llano(person.position, destino),
+		largo_de(person.position, person.route)):
+		rodeos_malos += 1
 
 
 ## Se abandona un destino al que no se consigue llegar.
@@ -333,8 +566,16 @@ func _lane_shift(person: Inhabitant, to_target: Vector3) -> Vector3:
 	# medio a un lado de un vado estrecho es el rio, y ahi el andador se planta:
 	# es el ovillo pegado al agua que se veia en los rastros, y con varios a la
 	# vez porque cada carril daba en un sitio distinto de la misma orilla.
-	if sim._terrain != null 			and sim._terrain.crossing_difficulty_at(person.position) > 0.05:
-		return to_target
+	#
+	# Y SE DESHACE ANTES DE ENTRAR, no al estar ya dentro. Preguntando por el
+	# punto que se pisa, el carril seguia vivo durante toda la aproximacion y
+	# se llegaba a la orilla dos metros y medio al lado del vado: justo donde
+	# no se pasa. Se pregunta por la CELDA -la de aqui y la del hito al que se
+	# va- que es la misma unidad en la que la rejilla mide el vado.
+	if sim._terrain != null:
+		var grid := _navgrid()
+		if grid.moja(person.position) or grid.moja(person.next_waypoint()):
+			return to_target
 
 	var lane := (fmod(float(person.id) * 0.618, 1.0) - 0.5) * 2.0 * SettlementSim.LANE_SPREAD
 	var side := Vector3(-to_target.z, 0.0, to_target.x) / reach
@@ -365,9 +606,13 @@ func _terrain_speed(person: Inhabitant, direction: Vector3, hours: float = 0.0) 
 	var load := clampf(person.carrying / maxf(sim.carry_capacity, 0.001), 0.0, 1.0)
 
 	# La curva de Tobler da km/h; aqui interesa la PROPORCION respecto al llano
-	# de vacio, para no tocar la escala de tiempo que ya estaba calibrada
-	var reference := Traversal.travel_speed(0.0, Traversal.Ground.PASTO, 0.0)
-	var here := Traversal.travel_speed(slope, ground, load)
+	# de vacio, para no tocar la escala de tiempo que ya estaba calibrada.
+	#
+	# Y sale de [Traversal.pace_fraction] y no de una division escrita aqui,
+	# porque es LA MISMA cuenta que hace la rejilla al costear una celda
+	# -ver [Navgrid._measure]-. Estaban las dos escritas por separado y no
+	# decian lo mismo: el trazado se olvidaba del suelo.
+	var here := Traversal.pace_fraction(slope, ground, load)
 
 	# Y LA NIEVE, que es lo que pone el calendario encima de todo lo demas. No
 	# es un tinte en el terreno: por encima de la cota se anda como por barro
@@ -416,7 +661,7 @@ func _terrain_speed(person: Inhabitant, direction: Vector3, hours: float = 0.0) 
 	# aplastaba los dos casos contra el mismo número y quien sabía nadar cruzaba
 	# la marisma exactamente igual que quien no. El suelo dice «nadie se queda
 	# clavado»; el saber nadar sigue siendo una ventaja sobre eso.
-	var ratio := maxf(here / maxf(reference, 0.001), SettlementSim.MIN_PACE)
+	var ratio := maxf(here, SettlementSim.MIN_PACE)
 	return sim.walk_speed * ratio * swim
 
 
@@ -449,6 +694,62 @@ func _avance_libre(desde: Vector3, step: Vector3) -> Vector3:
 	if bueno == catas:
 		return step
 	return step * (float(bueno) / float(catas))
+
+
+## Si en este punto el agua deja pasar.
+##
+## ES LA PREGUNTA SOBRE EL AGUA, y se hace aqui para que la contesten igual los
+## dos que tienen que estar de acuerdo: el que anda y el que elige adonde ir.
+## Estaba escrita en tres sitios con tres respuestas distintas, y esa
+## discrepancia es exactamente de donde salen los atascos —se elige un destino
+## creyendo que no hay cauce de por medio, se traza el camino creyendo otra cosa,
+## y quien anda se encuentra el rio—.
+##
+## Y AL CAUDAL CON EL QUE SE TRAZAN LOS CAMINOS, no al del paisaje de hoy.
+##
+## El rio que se ve no cambia de golpe: [Temporada] lo lleva del caudal de una
+## estacion al de la siguiente en unas jornadas, para que el valle no vire a
+## medianoche. La rejilla, en cambio, entra entera el dia que cambia la
+## estacion y esta medida con el caudal DE DESTINO. Preguntando por el de hoy,
+## durante los dias de transicion el planificador y el andador miraban dos rios
+## distintos: yendo a verano —de 1,25 a 0,60— el andador ve mas agua que la que
+## la rejilla dio por vadeable, asi que se traza el camino por un vado, la
+## persona llega y no lo encuentra, y se pasa la tarde barriendo la orilla.
+## Cuatro o cinco jornadas asi en cada cambio de estacion, cuatro veces al año.
+##
+## Tampoco se le suma aqui el arreglo estacional de [Hydrography.can_cross]: eso
+## seria contar la estacion dos veces, una en el caudal y otra en el umbral, y
+## dejaria pasar por sitios que la rejilla ha cerrado.
+func agua_deja_pasar(world_position: Vector3) -> bool:
+	if sim._terrain == null:
+		return true
+	return agua_deja_pasar_con(world_position, caudal_de_hoy())
+
+
+## El caudal con el que se midio la rejilla que se esta usando.
+##
+## Va aparte para poder PREGUNTARLO UNA VEZ por recorrido en vez de una vez por
+## cata. `_navgrid()` no es gratis -mira si el horno sirve, pide la rejilla de
+## la estacion y la compara con la puesta- y `cruza_el_agua` la llamaba en cada
+## cata: un candidato de doscientos sesenta metros son ochenta y siete catas, y
+## ochenta y siete veces la misma pregunta. Ver la tarea 21 de
+## docs/specs/LO_MISMO_MAS_DEPRISA.md.
+##
+## Sacarla del bucle no cambia nada: lo que `_navgrid()` hace de verdad -montar
+## la rejilla, o cambiar a la de la estacion nueva- lo hacia ya en la PRIMERA
+## cata, y las otras ochenta y seis eran la misma consulta sin efecto.
+func caudal_de_hoy() -> float:
+	var grid := _navgrid()
+	return grid.built_with_caudal if grid != null and grid.is_ready() else 1.0
+
+
+## Lo mismo que [agua_deja_pasar] con el caudal ya sabido.
+func agua_deja_pasar_con(world_position: Vector3, caudal: float) -> bool:
+	if sim._terrain == null:
+		return true
+	return Hydrography.can_cross(
+		sim._terrain.crossing_difficulty_with(world_position, caudal),
+		sim.has_boat, sim.has_bridge)
 
 
 ## Si se puede poner el pie en un punto concreto.
@@ -492,9 +793,11 @@ func _can_step_into(world_position: Vector3) -> bool:
 		# existian, y de ahi salian los atascos. Ver el comentario de arriba.
 		# Si el paso se moja, `_tick_step` ya sabe apartarse a un lado y
 		# replantear: se arrima al vado en vez de meterse en la poza.
-		return Hydrography.can_cross(
-			sim._terrain.crossing_difficulty_at(world_position),
-			sim.has_boat, sim.has_bridge)
+		# Con el caudal de la rejilla que ya se tiene aqui: preguntarlo otra vez
+		# por dentro seria pedir `_navgrid()` dos veces por cata. Ver
+		# [caudal_de_hoy].
+		return agua_deja_pasar_con(world_position,
+			grid.built_with_caudal if grid.is_ready() else 1.0)
 
 	var slope := sim._terrain.get_slope_at(world_position)
 	return Traversal.is_passable(slope,
@@ -518,6 +821,42 @@ func _can_step_into(world_position: Vector3) -> bool:
 ## es. Pendiente de playtest.
 const RODEO_QUE_SE_ANDA := 2.5
 
+## Por debajo de esto no se mide rodeo ninguno: es andar, no irse lejos.
+##
+## Dos celdas. A veinte metros, bordear una roca ya multiplica por tres el
+## trayecto, y eso no es un rodeo: es el ancho de la rejilla.
+const SALTO_CORTO := Navgrid.CELL * 2.0
+
+
+## LA REGLA DEL RODEO, Y UNA SOLA.
+##
+## Estaba escrita dos veces con dos fórmulas distintas para la misma pregunta
+## —«¿este camino merece andarse?»—: `alcanzable_de_verdad` daba vía libre por
+## debajo de una celda y sin holgura, y `merece_el_camino` por debajo de dos y
+## con dos celdas de holgura. O sea que un sitio a sesenta metros pasaba una y
+## no la otra.
+##
+## Y las dos deciden sobre lo mismo, encadenadas: la primera filtra qué parajes
+## se le ofrecen a la batida y la segunda decide si sale. Con dos varas, el
+## batidor elegía un paraje que su propia salida rechazaba, volvía a elegir, y
+## desde fuera eso es «dan vueltas entre varios parajes sin orden».
+##
+## `derecho` es la línea recta y `andado` lo que mide el camino trazado.
+## `veces` es cuanto se consiente rodear. Va como parametro y no fijo porque
+## NO es igual para todos: [RODEO_QUE_SE_ANDA] es el de quien vuelve a cenar,
+## y quien duerme fuera —expedicion, ascension— puede permitirse dar la
+## vuelta al rio por un vado lejano, que para el es un tramo mas del viaje.
+##
+## Hoy esas dos salidas no aplican NINGUNA regla de rodeo -ver la rama de
+## exploracion de `SettlementSim._decide_the_day`, que solo mira si hay
+## camino-. Cual es su numero es cosa de playtest y no de una corazonada, asi
+## que el hueco esta aqui, con nombre, esperandolo.
+func rodeo_aceptable(derecho: float, andado: float,
+		veces: float = RODEO_QUE_SE_ANDA) -> bool:
+	if derecho <= SALTO_CORTO:
+		return true
+	return andado <= derecho * veces + SALTO_CORTO
+
 
 ## Lo mismo, pero DESDE EL ABRIGO y con memoria.
 ##
@@ -532,65 +871,165 @@ const RODEO_QUE_SE_ANDA := 2.5
 ## cuarenta metros: dos puntos de la misma celda tienen la misma respuesta, y
 ## eso reduce cuatro mil preguntas a las pocas decenas de celdas que de verdad
 ## se miran.
+## POR QUE no se llega a un sitio desde el abrigo, o "" si se llega.
+##
+## Es la misma cuenta que [alcanzable_desde_casa] —el mismo mapa de
+## distancias, la misma regla de rodeo— pero contando el porque, para que el
+## jugador lo vea en la ventana de parajes en vez de tener que adivinarlo:
+## «quiero que en las temporadas en las que haya parajes no alcanzables lo
+## marque».
+##
+## Se contesta AQUI y no en la ventana porque la razon la sabe la rejilla, y
+## una segunda copia de la regla en la interfaz acabaria diciendo otra cosa
+## que la que de verdad manda a la gente.
+func por_que_no_se_llega(punto: Vector3) -> String:
+	var grid := _navgrid()
+	if grid == null or not grid.is_ready():
+		return ""
+	if _mapa_de != grid:
+		_mapa_de = grid
+		_rehacer_el_mapa_de_casa(grid)
+
+	var celda := grid.nearest_open(punto)
+	if celda < 0:
+		return "no hay suelo que pisar"
+	if celda >= _metros_desde_casa.size() or is_inf(_metros_desde_casa[celda]):
+		# Incomunicado. Lo que corta el paso en este valle es el agua, y la
+		# rejilla de cada estacion se mide con SU caudal: si en verano se
+		# llegaba y ahora no, es que el rio ha subido.
+		if grid.moja(punto) or _hay_agua_de_por_medio(punto):
+			return "el rio va crecido"
+		return "no hay paso hasta alli"
+
+	var derecho := Traversal.en_llano(sim.home_position, punto)
+	if not rodeo_aceptable(derecho, _metros_desde_casa[celda]):
+		return "solo se llega dando la vuelta (%d m para %d en recta)" % [
+			int(_metros_desde_casa[celda]), int(derecho)]
+	return ""
+
+
+## Si entre el abrigo y ese punto hay cauce, aunque no sea lo que corta.
+func _hay_agua_de_por_medio(punto: Vector3) -> bool:
+	var grid := _navgrid()
+	if grid == null or not grid.is_ready():
+		return false
+	var largo := Traversal.en_llano(sim.home_position, punto)
+	var catas := maxi(int(largo / Navgrid.CELL), 1)
+	for i in range(catas + 1):
+		if grid.moja(sim.home_position.lerp(punto, float(i) / float(catas))):
+			return true
+	return false
+
+
 func alcanzable_desde_casa(punto: Vector3) -> bool:
 	var grid := _navgrid()
 	if grid == null or not grid.is_ready():
 		return true
-	# La memoria se tira entera cuando cambia la rejilla: comparar la instancia
-	# basta, el horno entrega una nueva por temporada.
-	if _memoria_de != grid:
-		_memoria_de = grid
-		_memoria.clear()
+
+	# EL MAPA DE DISTANCIAS, hecho una vez por rejilla.
+	#
+	# Esto era una busqueda por pregunta, con memoria por celda y un
+	# presupuesto por cuadro. Los tres apanos venian del mismo sitio: la
+	# pregunta se creia cara. Y no lo es, porque EL ORIGEN ES SIEMPRE EL
+	# MISMO -el abrigo-: un solo Dijkstra da los metros exactos hasta cada
+	# celda del mapa por lo que costaba UNA de aquellas busquedas.
+	#
+	# Y al dejar de ser cara desaparecen los tres apanos de golpe: no hace
+	# falta memoria -el mapa ES la memoria-, ni presupuesto -no se busca-, ni
+	# aplazar la respuesta, que era lo que degradaba las decisiones.
+	if _mapa_de != grid:
+		_mapa_de = grid
+		_rehacer_el_mapa_de_casa(grid)
+
 	var celda := grid.nearest_open(punto)
-	if celda < 0:
+	if celda < 0 or celda >= _metros_desde_casa.size():
 		return false
-	if _memoria.has(celda):
-		return bool(_memoria[celda])
-
-	# Y UN PRESUPUESTO POR CUADRO.
-	#
-	# La memoria quita las preguntas repetidas, pero la primera vez que se
-	# barre el campo hay decenas de celdas nuevas y cada una cuesta una
-	# busqueda de veinticuatro milisegundos: veintiseis en un cuadro son
-	# seiscientos treinta y cinco, y eso es un tiron por si solo. Medido con
-	# `PicoProbe`.
-	#
-	# Agotado el presupuesto se contesta con lo barato —estar en la misma zona
-	# de la rejilla— y NO SE GUARDA, para que la respuesta buena se calcule en
-	# el cuadro siguiente. Lo que se pierde es que un sitio al otro lado de un
-	# vado lejano puede colarse un momento; lo que se gana es que la jornada no
-	# se para. Y quien de verdad decide si se va —ver `merece_el_camino`—
-	# vuelve a mirar el camino entero antes de mandar a nadie.
-	if _quedan_caminos <= 0:
-		return grid.connected(sim.home_position, punto)
-	_quedan_caminos -= 1
-
-	var respuesta := alcanzable_de_verdad(sim.home_position, punto)
-	_memoria[celda] = respuesta
-	return respuesta
+	var andado := _metros_desde_casa[celda]
+	if is_inf(andado):
+		return false
+	return rodeo_aceptable(Traversal.en_llano(sim.home_position, punto), andado)
 
 
-## Cuantas busquedas caras quedan en este cuadro. Ver [alcanzable_desde_casa].
-var _quedan_caminos: int = CAMINOS_POR_CUADRO
+## Los metros de camino hasta cada celda, desde el abrigo, POR EL CAMINO QUE SE
+## ANDA -el del arbol- y no por el mas corto que existiria. Ver
+## [alcanzable_desde_casa] y [_rehacer_el_mapa_de_casa].
+var _metros_desde_casa: PackedFloat64Array = PackedFloat64Array()
 
-## Cuantas busquedas de «se llega desde casa» se consienten por cuadro.
+## Y EL ARBOL: de que celda se viene al llegar a cada una, saliendo del abrigo.
 ##
-## Cuatro: a veinticuatro milisegundos la pieza son unos cien de tope, que es
-## justo el limite que se pide —«todo lo que sea menor a 100 ms de momento me
-## vale»—. Pendiente de playtest, y de que el propio A* adelgace.
-const CAMINOS_POR_CUADRO := 4
+## Con el, el camino de casa a cualquier sitio -y de cualquier sitio a casa-
+## sale tirando del hilo y es EXACTO. Es lo que quita de en medio el reparto de
+## caminos guardados en los viajes que de verdad se repiten, que son los del
+## abrigo: ahi es donde uno se comia el rodeo de otro. Ver
+## [Wayfinder.camino_por_el_arbol].
+var _arbol_desde_casa: PackedInt32Array = PackedInt32Array()
+
+## Los caminos del arbol ya recortados, por celda. Es COSTE Y NO PARTIDA: el
+## recorte es una funcion del arbol, la rejilla y la celda, asi que guardarlo
+## da lo mismo que rehacerlo. Se vacia al rehacer el arbol.
+##
+## Lo que evita: `Wayfinder._pull_string` es cuadratico y mira si se ve una
+## celda desde otra, y se llamaba UNA VEZ POR CANDIDATO Y POR TICK. Medido en
+## tres jornadas de otoño: 100.897 ms de los 104.544 de probar candidatos, que
+## a su vez son el 92 % de decidir la jornada. Ver la tarea 21 de
+## docs/specs/LO_MISMO_MAS_DEPRISA.md.
+var _recortes_del_arbol: Dictionary = {}
 
 
-## Devuelve el presupuesto al empezar el cuadro.
+## Rehace el mapa y el arbol del abrigo. UN Dijkstra, una vez por rejilla.
+##
+## El arbol va por COSTE: es el camino que se ANDA, y rodea el canchal y la
+## marisma porque ahi es donde uno se rompe un tobillo. Y los metros que se
+## guardan son LOS DE ESE MISMO CAMINO -[Wayfinder.metros_desde] los acumula
+## sobre el arbol que construye-, que es lo que pregunta la regla del rodeo.
+##
+## AQUI HUBO DOS DIJKSTRA, y esa es la historia. El segundo media el camino mas
+## corto EN METROS, o sea otro camino distinto del que se anda, y se puso para
+## tapar esto: al pasar de primavera a verano, 44 parajes de 182 se volvian
+## inalcanzables el dia que BAJA el rio. Con dos caminos el sintoma desaparecia
+## —la puerta juzgaba uno corto y la gente andaba otro largo— pero la causa
+## seguia entera, y se veia en la partida: el jugador miraba las estelas y veia
+## rodeos enormes a sitios que se ven desde la puerta.
+##
+## Medido en el sitio 56, y por eso se deshace: en verano habia 88 sitios que
+## la regla del rodeo ADMITIA y que luego se andaban por encima de su propio
+## tope de x2,5. Una regla que se comprueba sobre un camino y se incumple en
+## otro no es una regla.
+##
+## La causa era el coste, no la medicion: el riesgo multiplicaba el tiempo sin
+## tope y una ladera costaba mas que kilometros de rodeo. Ver
+## [Navgrid.RIESGO_MAXIMO]. Con el tope puesto, esta pregunta se puede volver a
+## hacer sobre el camino de verdad.
+func _rehacer_el_mapa_de_casa(grid: Navgrid) -> void:
+	var caminos := Wayfinder.metros_desde(grid, sim.home_position)
+	_arbol_desde_casa = caminos["arbol"]
+	# Arbol nuevo, recortes viejos que ya no valen. Ver [_recortes_del_arbol].
+	_recortes_del_arbol.clear()
+	_metros_desde_casa = caminos["metros"]
+
+## De que rejilla es ese mapa. Otra rejilla, otras distancias.
+var _mapa_de: Navgrid = null
+
+
+## Si ya se ha gastado lo que este cuadro consiente buscar.
+##
+## UN SOLO BOTE, y se mira aqui. Habia dos -este por nodos y otro por
+## numero de busquedas- y ademas tres caminos que no pasaban por ninguno:
+## `Querencia` preguntando dentro de un bucle, el paraje heredado de la
+## batida y el reparto de tajos. Un tope que se puede rodear no es un tope,
+## y se veia: setenta y nueve busquedas en un fotograma de 2.541 ms.
+func presupuesto_agotado() -> bool:
+	return sim._path_nodes_this_frame >= SettlementSim.NODES_PER_FRAME
+
+
+## Empieza el cuadro.
+##
+## Ya no reparte presupuesto de busquedas: no hay busquedas que repartir.
+## La pregunta que se las comia -«¿se llega desde casa?»- se contesta ahora
+## leyendo un mapa de distancias hecho una vez por rejilla. Ver
+## [alcanzable_desde_casa].
 func nuevo_cuadro() -> void:
-	_quedan_caminos = CAMINOS_POR_CUADRO
-
-
-## Lo contestado ya, por celda de rejilla. Ver [alcanzable_desde_casa].
-var _memoria: Dictionary = {}
-
-## De que rejilla es esa memoria. Otra rejilla, otras respuestas.
-var _memoria_de: Navgrid = null
+	pass
 
 
 ## Si a este punto se llega DE VERDAD desde aqui.
@@ -611,12 +1050,35 @@ func alcanzable_de_verdad(desde: Vector3, hasta: Vector3) -> bool:
 		return false
 
 	var derecho := Traversal.en_llano(desde, hasta)
-	if derecho <= Navgrid.CELL:
+	if derecho <= SALTO_CORTO:
 		return true
+
+	# Y ESTA BUSQUEDA SE PAGA DEL MISMO BOTE QUE LAS DEMAS.
+	#
+	# Habia dos presupuestos para lo mismo -el de `_send_to` por nodos y el
+	# de `alcanzable_desde_casa` por busquedas- y este camino no pasaba por
+	# ninguno. Un tope que se puede rodear no es un tope: medido con el
+	# panel de F3, el peor cuadro de la jornada 1 eran 950 ms, y 871 de
+	# ellos TREINTA Y DOS busquedas en un solo cuadro.
+	#
+	# Y SI EL BOTE ESTA GASTADO, NO SE BUSCA. No es un consejo: es el tope.
+	#
+	# Apuntar lo que cuesta sin cortar no sirve de nada -era lo que habia-,
+	# porque quien llama esta dentro de un bucle y no mira la cuenta. El
+	# tope tiene que estar donde se gasta.
+	#
+	# Se avisa con [Traza.SIN_PRESUPUESTO] y se devuelve `false`, que es lo
+	# conservador: quien llama, si sabe esperar, aplaza; y si no, se queda
+	# con un candidato menos este cuadro y lo tendra al siguiente.
+	if presupuesto_agotado():
+		ultima_traza = Traza.SIN_PRESUPUESTO
+		return false
+
 	var camino := Wayfinder.find(grid, desde, hasta)
+	sim._path_nodes_this_frame += Wayfinder.last_nodes
 	if camino.is_empty():
 		return false
-	return largo_de(desde, camino) <= derecho * RODEO_QUE_SE_ANDA
+	return rodeo_aceptable(derecho, largo_de(desde, camino))
 
 
 ## Si en línea recta entre estos dos puntos hay agua que no se vadea.
@@ -636,13 +1098,14 @@ func cruza_el_agua(desde: Vector3, hasta: Vector3) -> bool:
 	var largo := Traversal.en_llano(desde, hasta)
 	if largo <= 0.001:
 		return false
-	var catas := maxi(int(ceil(largo / CATA_DEL_PASO)), 1)
-	for i in range(catas + 1):
-		var punto := desde.lerp(hasta, float(i) / float(catas))
-		if not Hydrography.can_cross(sim._terrain.crossing_difficulty_at(punto),
-				sim.has_boat, sim.has_bridge, int(GameState.season)):
-			return true
-	return false
+	# LA CATA ENTERA LA HACE EL TERRENO, de una llamada: ver
+	# [TerrainGenerator.linea_sin_agua]. Aqui se hacian dos llamadas por punto
+	# y ochenta y siete puntos por candidato.
+	var tope := Hydrography.tope_de_vado(sim.has_boat, sim.has_bridge)
+	return not sim._terrain.linea_sin_agua(desde, hasta, CATA_DEL_PASO,
+		caudal_de_hoy(), tope.x, tope.y > 0.5)
+
+
 
 
 ## Lo que mide un camino ya trazado, en metros.
@@ -675,13 +1138,58 @@ func merece_el_camino(person: Inhabitant, destino: Vector3) -> bool:
 	if person.route.is_empty():
 		return false
 	var derecho := Traversal.en_llano(person.position, destino)
-	if derecho <= Navgrid.CELL * 2.0:
-		return true
-	return largo_de(person.position, person.route) \
-		<= derecho * RODEO_QUE_SE_ANDA + Navgrid.CELL * 2.0
+	return rodeo_aceptable(derecho,
+		largo_de(person.position, person.route))
+
+
+## Amarra el ARRANQUE del camino, que es el unico tramo que nadie comprueba.
+##
+## Un camino trazado es una cadena de CENTROS DE CELDA: el A* encadena celdas y
+## el recorte de la escalera comprueba el pasillo de centro a centro -ver
+## [Wayfinder._clear_between]-. O sea que lo que esta comprobado es la linea que
+## sale del CENTRO de la celda de partida.
+##
+## Y quien anda no esta en el centro de su celda: esta donde esta, hasta a
+## veintiocho metros en diagonal. La recta de ahi al primer hito no la ha
+## mirado nadie, y por ahi puede haber una celda cerrada. Eso vale para
+## CUALQUIER camino, no solo para los guardados: los guardados solo lo hacen
+## mas probable, porque ademas se comparten entre gente de la misma celda.
+##
+## El arreglo es meter el centro de la celda propia como primer hito cuando la
+## recta no esta limpia. Entonces todos los tramos del camino son exactamente
+## los que se comprobaron, y el unico trozo nuevo es de la persona al centro de
+## SU PROPIA celda, que esta abierta -por eso se puede estar en ella-.
+##
+## Se probo antes a DESCARTAR el camino guardado cuando la recta no salia
+## limpia, y salio carisimo: cada descarte caia en una busqueda nueva, eso
+## agotaba el presupuesto de nodos del cuadro y media banda se quedaba
+## esperando -medido: 2.567 atascos en cuatro jornadas-. Esto no descarta nada
+## ni busca nada: mira una recta y, como mucho, añade un punto.
+func _amarrar_la_entrada(person: Inhabitant) -> void:
+	if person.route.is_empty():
+		return
+	var grid := _navgrid()
+	if not grid.is_ready():
+		return
+	if Wayfinder.linea_limpia(grid, person.position, person.route[0]):
+		return
+
+	var centro := grid.point_of(grid.cell_of(person.position))
+	if sim._terrain != null:
+		centro.y = sim._terrain.get_height_at(centro)
+	# Si ya se esta practicamente en el centro, meterlo seria un hito de cero
+	# metros: el problema entonces no es el arranque y no hay nada que amarrar.
+	if Traversal.en_llano(centro, person.position) < 1.0:
+		return
+
+	var con_entrada := PackedVector3Array([centro])
+	con_entrada.append_array(person.route)
+	person.route = con_entrada
+	person.route_step = 0
 
 
 func _send_to(person: Inhabitant, destination: Vector3) -> void:
+	ultima_traza = Traza.TRAZADO
 	var same := Vector2(person.target.x - destination.x,
 		person.target.z - destination.z).length() < 1.0
 
@@ -710,12 +1218,15 @@ func _send_to(person: Inhabitant, destination: Vector3) -> void:
 	if Vector2(person.unreachable.x - destination.x,
 			person.unreachable.z - destination.z).length() < 1.0:
 		person.target = destination
+		ultima_traza = Traza.IMPOSIBLE
 		return
 
 	# Todo destino se amarra a celda abierta ANTES de nada. Lo hacia solo el
 	# buscador de caminos, asi que `_best_known_spot` y compania seguian
 	# mandando gente a tajos que la rejilla da por cerrados.
+	Cronometro.tramo("send_to: suelo firme")
 	destination = _firm_ground(destination)
+	Cronometro.cierra("send_to: suelo firme")
 	person.target = destination
 	# Destino nuevo, cuenta nueva de lo cerca que se ha estado. Ver
 	# [Inhabitant.lo_mas_cerca].
@@ -725,34 +1236,118 @@ func _send_to(person: Inhabitant, destination: Vector3) -> void:
 	# cuesta nada: la rejilla trae marcados los trozos comunicados entre si.
 	# Antes esto era una busqueda exhaustiva de doce mil nodos, y se lanzaba
 	# cada vez que alguien apuntaba al otro lado de un rio.
-	if not _navgrid().connected(person.position, destination):
+	Cronometro.tramo("send_to: ¿comunicados?")
+	var comunicados := _navgrid().connected(person.position, destination)
+	Cronometro.cierra("send_to: ¿comunicados?")
+	if not comunicados:
 		person.route = PackedVector3Array()
 		person.route_step = 0
 		person.unreachable = destination
+		ultima_traza = Traza.IMPOSIBLE
 		return
 
 	# El presupuesto se mira antes de buscar. Quien va sin camino pasa
 	# igualmente, o se quedaria parado para siempre; pero solo uno por
 	# fotograma, que es lo que impide que la manana en que la banda entera
 	# sale a la vez se coma medio segundo.
+	# El presupuesto se mira antes de buscar. Quien va sin camino pasa
+	# igualmente, o se quedaria parado para siempre; pero solo uno por
+	# paso de simulacion, que es lo que impide que la manana en que la banda
+	# entera sale a la vez se coma medio segundo.
+	#
+	# QUIEN YA LLEVA UN CAMINO SIGUE CON EL. Y si, el camino que lleva no va
+	# a donde se acaba de pedir -para llegar aqui hay que haber pasado la
+	# guarda de «mismo destino»-, asi que durante un cuadro anda hacia el
+	# sitio de antes con el destino nuevo puesto.
+	#
+	# Esta apuntado porque es un apaño y hay que saberlo: es el COLCHON que
+	# sostiene el bote de nodos. Se probo a quitarlo -que nadie ande nunca
+	# con la ruta de otro viaje- y tambien a devolver el destino de antes
+	# para que ruta y destino casaran; las dos cosas dejan a la banda
+	# plantada, medido en ocho jornadas: 329 y 292 atascos contra 3.
+	#
+	# El colchon hace falta mientras cada viaje cueste una busqueda. Deja de
+	# hacer falta el dia que los caminos de casa salgan del arbol de
+	# Dijkstra, que es el arreglo de verdad. Ver [Vereda.clave_de].
 	if sim._path_nodes_this_frame >= SettlementSim.NODES_PER_FRAME:
 		if not person.route.is_empty():
 			return
 		if sim._stranded_this_frame > 0:
+			# Ruta vacia por PRESUPUESTO, que NO ES LO MISMO que no haberla:
+			# aqui no se ha mirado. Ver [Traza].
+			ultima_traza = Traza.SIN_PRESUPUESTO
 			return
 		sim._stranded_this_frame += 1
 
-	# La banda repite trayectos: los mismos quince salen del mismo abrigo a
-	# los mismos cuatro tajos todas las mananas y vuelven por donde fueron.
-	# Buscar de nuevo un camino que ya se busco ayer es el gasto mas tonto que
-	# habia, asi que se guarda por par de celdas.
-	var lane := _lane_key(person.position, destination)
-	var kept: Variant = sim._route_cache.get(lane, null)
-	if kept != null:
-		person.route = _retarget(kept as PackedVector3Array, destination)
-		person.route_step = 0
-		person.unreachable = Vector3.ZERO
-		return
+	# LOS VIAJES DEL ABRIGO SALEN DEL ARBOL, exactos y sin buscar.
+	#
+	# Son la mayoria: por la manana los quince salen de casa a sus tajos y
+	# por la tarde vuelven. Y son justo donde se veia la queja -«siguiendo
+	# el camino de otros pobladores que van a sitios diferentes»-, porque
+	# es donde la cache repartia: quince personas saliendo del mismo cubo de
+	# cuarenta y ocho metros a destinos distintos se prestaban el camino, y
+	# quien lo tomaba se comia el rodeo del otro.
+	#
+	# El arbol no reparte nada: da EL camino de este viaje. Y no cuesta
+	# busqueda, porque ya esta hecho -un Dijkstra por rejilla, ver
+	# [_rehacer_el_mapa_de_casa]-.
+	var del_abrigo := Traversal.en_llano(person.position, sim.home_position) \
+		<= SettlementSim.SALIDA_DE_CASA
+	var al_abrigo := Traversal.en_llano(destination, sim.home_position) \
+		<= SettlementSim.SALIDA_DE_CASA
+	if _arbol_desde_casa.size() == _navgrid().cost.size() \
+		and (del_abrigo or al_abrigo):
+		var grid_casa := _navgrid()
+		Cronometro.tramo("send_to: punta del arbol")
+		var punta := grid_casa.nearest_open(destination if del_abrigo \
+			else person.position)
+		Cronometro.cierra("send_to: punta del arbol")
+		if punta >= 0:
+			Cronometro.tramo("send_to: camino por el arbol")
+			var por_el_arbol := Wayfinder.camino_por_el_arbol(grid_casa,
+				_arbol_desde_casa, punta,
+				destination, al_abrigo and not del_abrigo,
+				_recortes_del_arbol)
+			Cronometro.cierra("send_to: camino por el arbol")
+			if not por_el_arbol.is_empty():
+				person.route = por_el_arbol
+				person.route_step = 0
+				person.unreachable = Vector3.ZERO
+				_amarrar_la_entrada(person)
+				_apuntar_el_rodeo(person, destination)
+				return
+
+	# LA VEREDA DE ESTE TRAYECTO, si la banda ya la sabe. Se entra a ella por
+	# donde toca y se sale por un remate catado, que es lo que la diferencia de
+	# la cache que habia: los dos extremos se miran. Ver [Vereda.clave_de],
+	# donde esta medido por que la clave es el par y no solo el destino.
+	var lane := Vereda.clave_de(person.position, destination)
+	var sabida: Vereda = null
+	if sim.knowledge != null:
+		sabida = sim.knowledge.vereda(lane, _navgrid())
+	if sabida != null and not sabida.hitos.is_empty():
+		# Y EL ULTIMO TRAMO SE CATA IGUAL QUE EL PRIMERO.
+		#
+		# Una vereda es del SITIO, y el sitio es un cubo de [Vereda.CELDA]: su
+		# ultimo hito puede estar a setenta metros del punto exacto al que va
+		# esta persona. Rematar ahi sin mirar era lo que hacia la cache vieja
+		# -lo hacia `_retarget`, ya borrado- y con la clave por destino es
+		# el remate de TODOS los viajes al sitio, no solo de los que salian
+		# del mismo cubo.
+		#
+		# Medido, ocho jornadas en el sitio 56: sin catarlo, los pasos que el
+		# terreno corta con camino trazado suben de 79 a 1.471. Con la cata,
+		# ver el parte de ESTADO.md §2.
+		var por_la_vereda := sabida.remate(person.position, destination,
+			_navgrid())
+		if not por_la_vereda.is_empty():
+			person.route = por_la_vereda
+			sabida.recorridos += 1
+			person.route_step = 0
+			person.unreachable = Vector3.ZERO
+			_amarrar_la_entrada(person)
+			_apuntar_el_rodeo(person, destination)
+			return
 
 	var route := Wayfinder.find(_navgrid(), person.position, destination)
 	sim._path_nodes_this_frame += Wayfinder.last_nodes
@@ -766,11 +1361,14 @@ func _send_to(person: Inhabitant, destination: Vector3) -> void:
 		person.route = PackedVector3Array()
 		person.route_step = 0
 		person.unreachable = destination
+		ultima_traza = Traza.IMPOSIBLE
 		return
 
 	person.route = route
 	person.route_step = 0
 	person.unreachable = Vector3.ZERO
+	_amarrar_la_entrada(person)
+	_apuntar_el_rodeo(person, destination)
 
 
 ## Lo que arriesga el camino que lleva ahora mismo, de 0 a 1. Lo usa la ficha
@@ -813,7 +1411,8 @@ func _navgrid() -> Navgrid:
 	if not sim.horno.sirven(sim.has_boat, sim.has_bridge):
 		var started := Time.get_ticks_msec()
 		sim.horno.encargar(sim._terrain, sim.has_boat, sim.has_bridge,
-			GameState.season as Subsistence.Season, Temporada.CAUDAL)
+			GameState.season as Subsistence.Season, Temporada.CAUDAL,
+			Temporada.ENCHARCA)
 		sim._grid = sim.horno.de(GameState.season as Subsistence.Season)
 		sim.grid_build_ms = Time.get_ticks_msec() - started
 		# Los caminos de antes de la barca ya no son los mejores
@@ -869,45 +1468,27 @@ func _reachable(person: Inhabitant, point: Vector3) -> bool:
 	return _navgrid().connected(person.position, point)
 
 
-func _lane_key(from_point: Vector3, to_point: Vector3) -> String:
-	return "%d_%d>%d_%d" % [
-		int(from_point.x / SettlementSim.LANE_CELL), int(from_point.z / SettlementSim.LANE_CELL),
-		int(to_point.x / SettlementSim.LANE_CELL), int(to_point.z / SettlementSim.LANE_CELL)]
-
-
+## Se aprende el camino. El tope y el sello los pone [BandKnowledge].
 func _remember_route(lane: String, route: PackedVector3Array) -> void:
-	if not sim._route_cache.has(lane):
-		sim._route_order.append(lane)
-	sim._route_cache[lane] = route
-
-	# Se suelta lo mas viejo. Sin tope, una partida larga se llena de rutas de
-	# sitios donde la banda no ha vuelto a poner un pie.
-	while sim._route_order.size() > SettlementSim.ROUTE_CACHE_LIMIT:
-		var oldest: String = sim._route_order[0]
-		sim._route_order.remove_at(0)
-		sim._route_cache.erase(oldest)
-
-
-## El camino guardado, con el ultimo tramo llevado al destino exacto.
-##
-## El camino se guardo entre CELDAS, asi que su final es el centro de una
-## celda y no el sitio al que va esta persona. Los tramos de en medio valen
-## igual -son los mismos cuarenta metros de terreno-, pero el ultimo hay que
-## rematarlo o se dejaria a la gente parada a veinte metros de su sim.tajo.
-func _retarget(route: PackedVector3Array, destination: Vector3) -> PackedVector3Array:
-	var out := PackedVector3Array(route)
-	if out.is_empty():
-		out.append(destination)
-	else:
-		out[out.size() - 1] = destination
-	return out
+	if sim.knowledge == null:
+		return
+	sim.knowledge.recordar_vereda(lane, route, _navgrid())
 
 
 ## Se tiran los caminos guardados. Lo llama quien cambie el terreno o lo que
 ## se puede cruzar: un camino de antes del puente ya no es el mejor.
 func forget_routes() -> void:
-	sim._route_cache.clear()
-	sim._route_order.clear()
+	if sim.knowledge != null:
+		sim.knowledge.olvidar_veredas()
+	# Y SE AVISA DE QUE HAY QUE REPASAR EL MAPA.
+	#
+	# Cambiar por donde se pasa cambia qué sitios se pueden bautizar sin que
+	# nadie haya ido a mirarlos: un avellanar descartado en enero porque el
+	# río iba crecido es candidato en agosto. Es el único caso en que hace
+	# falta barrer el campo, y por eso el barrido cuelga de aquí en vez de
+	# correr a cada hora por si acaso. Ver [Parajes.revisar_el_mapa].
+	if sim.parajes != null:
+		sim.parajes.revisar_el_mapa = true
 
 
 ## Saca de la parálisis a quien lleve horas sin moverse.
@@ -974,6 +1555,28 @@ func _watch_for_stuck(person: Inhabitant, hours: float) -> void:
 	# [Navgrid._has_ford]- y el andador pregunta por el punto concreto que pisa
 	# -ver `_can_step_into`-, que casi nunca es esa linea. La rejilla traza el
 	# camino por el vado y quien anda no lo encuentra.
+	# QUIEN VA TACHANDO HITOS ESTÁ ANDANDO SU CAMINO, y eso no es atascarse
+	# aunque la distancia al destino no baje.
+	#
+	# La vara de abajo mide la línea recta al destino, y un camino de verdad no
+	# es una línea recta: para pasar al otro lado se sube el reguero, se rodea
+	# el canchal, se va A BUSCAR EL VADO —que puede estar en dirección
+	# contraria—. Durante todo ese tramo la distancia al destino no baja o
+	# incluso sube, y quien lo anda no tiene nada de averiado: está haciendo
+	# exactamente lo que se le trazó.
+	#
+	# Sin esto, un rodeo largo se cierra como «no avanza por el camino trazado»
+	# —el hito siguiente es perfectamente pisable, claro— y la persona se va a
+	# casa a media jornada. Es un atasco de mentira que además tapa a los de
+	# verdad en el recuento.
+	var quedan := person.route.size() - person.route_step
+	if not person.route.is_empty() and quedan < person.hitos_pendientes:
+		person.hitos_pendientes = quedan
+		person.stuck_hours = 0.0
+		person.stuck_where = person.position
+		return
+	person.hitos_pendientes = quedan if not person.route.is_empty() else 0
+
 	var falta := person.position.distance_to(person.target)
 	if is_inf(person.lo_mas_cerca):
 		# Marca sin estrenar: solo se toma la referencia. Reiniciando aqui el
@@ -1132,7 +1735,13 @@ func _record_stuck(person: Inhabitant, why: String) -> void:
 		"lejos_casa": person.position.distance_to(sim.home_position),
 		"hitos": person.route.size(),
 		"hito_actual": person.route_step,
-		"lejos_hito": person.position.distance_to(waypoint),
+		# EN LLANO, que el hito viene de la rejilla y trae `y = 0`.
+		#
+		# Restar una celda de un punto con cota no mide una distancia:
+		# mide la altitud. En este valle el relieve va de 96 a 718 m, asi
+		# que el parte forense decia «el siguiente hito a 441 m» de un
+		# hito que estaba a cuarenta. Ver [Traversal.en_llano].
+		"lejos_hito": Traversal.en_llano(person.position, waypoint),
 		# El suelo, visto por los dos que tienen que estar de acuerdo
 		"celda_pisable": grid.cost[here] > Navgrid.BLOCKED,
 		"destino_pisable": grid.cost[goal] > Navgrid.BLOCKED,

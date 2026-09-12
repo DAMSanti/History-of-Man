@@ -21,6 +21,8 @@ Lo que hace hoy el juego **medido**, con qué sonda y con qué cifra, está en
 | [§13](#13-lo-que-se-cuenta-y-lo-que-se-pinta) | Lo que se cuenta al volver, y lo que se queda en la pared |
 | [§14](#14-los-desechos-y-el-lobo) | Los desechos, el conchero y el lobo que viene a ellos |
 | [§15](#15-la-bellota) | La bellota: la comida que hay que preparar en otoño |
+| [§16](#16-el-curtido-de-piel) | El curtido de piel |
+| [§17](#17-el-agua-odres-y-por-qué-llenar-uno-puede-ser-una-salida) | El agua: odres, y por qué llenar uno puede ser una salida |
 
 **Diseño de destino** — lo que cruza las once épocas y aún no existe entero:
 
@@ -35,6 +37,8 @@ Lo que hace hoy el juego **medido**, con qué sonda y con qué cifra, está en
 | [§7](#7-el-asentamiento-cambia-de-escala-no-sólo-de-nombre) | El asentamiento cambia de escala |
 | [§8](#8-fidelidad-histórica) | Fidelidad histórica |
 | [§9](#9-cómo-se-usa-esto-con-el-roadmap) | Cómo se usa esto con el ROADMAP |
+| [§18](#18-los-caminos-que-la-banda-aprende) | Los caminos que la banda aprende, y por qué caducan |
+| [§19](#19-la-temperatura-y-el-abrigo-que-se-lleva-puesto) | La temperatura, y el abrigo que se lleva puesto |
 
 Las once fichas de época (`EPOCA_01_PALEOLITICO.md`… `EPOCA_11_EL_VAPOR.md`)
 serían once listas sueltas sin este esqueleto. Fueron doce: el siglo corto
@@ -277,6 +281,23 @@ de que hay banda vecina desde el principio, aunque nunca se la vea en
 pantalla. Formalizar el contacto es sólo dar forma a algo que la ficha del
 Paleolítico ya exige que exista.
 
+> **Spec (2026-09-12), de `/epoca 1` y `/spec`.** Las dos capas que faltan se
+> construyen **juntas y en ese orden**, y el propósito de la expedición es
+> **encontrar gente con la que tratar**, no sólo descubrir terreno: la capa
+> regional pone la niebla, y la exterior pone a alguien al final del camino.
+> Descubrir puntos regionales y haber mandado una expedición fuera pasan a ser
+> **dos de las tres condiciones que cierran la primera fase** del Paleolítico
+> —ver [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §10.1—, así que esto
+> deja de ser infraestructura opcional y se vuelve el camino crítico.
+>
+> Los criterios están en §10.1, tanda 2, frente 5, y son cuatro: que al empezar
+> `PanelSitios` liste un puñado de emplazamientos y no 862; que una expedición
+> suba ese número, y cuánto; que **cueste** jornadas-persona y raciones contadas,
+> también si vuelve sin llegar; y que alcanzar un `Site` ocupado deje **contacto**
+> que sobreviva a la expedición, porque es lo que el trueque de §5 va a usar.
+> **La capa regional va antes**: sin niebla no hay nada que descubrir, y la
+> expedición no tendría adonde llegar.
+
 ---
 
 ## 5. El comercio, de la concha de lejos al mercado nacional
@@ -309,6 +330,36 @@ enseña, no que se usa") y **el ajuar desigual del Bronce** son la misma
 mecánica de comercio vista desde el prestigio en vez de desde la necesidad:
 el sistema no necesita distinguir "trueque de subsistencia" de "trueque de
 estatus" en el código, sólo en qué materiales mueve cada ruta.
+
+> **Spec (2026-09-12), de `/epoca 1` y `/spec`.** El primer peldaño **ya está
+> construido y es demasiado poco**: `Intercambio.gd` ofrece `FRUTO_SECO` 6,0,
+> pide `SILEX` 3,0, acierta el 55 % de las veces, se intenta solo una vez por
+> estación y **el jugador no decide nada ni se entera**. Lo que falta es
+> convertirlo en decisión, y son cuatro:
+>
+> - **con quién**, y eso tiene memoria — la contraparte recuerda si fuiste
+>   generoso o si regateaste, igual que `ElLobo.trato`, y el 55 % fijo deja de
+>   ser fijo;
+> - **qué se ofrece y cuánto** — hoy está clavado en fruto seco porque es lo
+>   que sobra (ESTADO.md §2); desprenderse de lo que **no** sobra tiene que
+>   doler en invierno;
+> - **qué se pide** — sílex, concha (el hito "la concha de lejos"), o gente,
+>   que es como funcionaban de verdad las redes paleolíticas;
+> - **si se va** — el trueque deja de ocurrir solo: hay que mandar a alguien, y
+>   esas jornadas no se recolectan.
+>
+> La memoria de la contraparte es lo que hace que este peldaño escale a los
+> otros tres de la tabla sin rehacerse: una ruta fiable del Bronce y una lonja
+> con fuero son la misma relación con más historia detrás.
+>
+> **Cómo se sabe que está hecho** (criterios completos en §10.1, tanda 2, frente
+> 6): en un año simulado sin que el jugador decida nada, **cero** intercambios
+> consumados —hoy ocurren solos—; dos corridas con la misma semilla, una siendo
+> generoso y otra regateando, dan tasas de éxito **distintas**, con lo que el 55 %
+> fijo deja de ser fijo; ofrecer lo que no sobra se nota en la despensa de las
+> jornadas siguientes; las jornadas del que va no se recolectan; y se puede pedir
+> sílex, concha o gente, con las tres llegando. **Depende de §4**: sin contacto no
+> hay «con quién», y sin «con quién» no hay memoria que recordar.
 
 ---
 
@@ -465,6 +516,14 @@ Cada especie de `Fauna` declara con qué se le puede entrar:
 | Corzo, rebeco | azagaya **o** punta | Una lanza de mano basta, y es muchísimo más vieja que la azagaya de asta |
 | Lobo | azagaya | La única pieza MENOR que no admite lanza: a un lobo no se le espera a corta distancia |
 | Ciervo, jabalí, caballo, uro | azagaya | A mil kilos no se le entra con un palo endurecido |
+
+> **Y la especialidad pide lo mismo que la pieza (2026-09-12, `/depurar`).**
+> `SettlementSim.SPECIALITY_TOOL` exigía **azagaya** para la caza menor mientras
+> esta tabla decía que al corzo y al rebeco se les entra con lanza de mano. No
+> era una discrepancia de adorno: cerraba un bucle: el tendón para aprender la
+> azagaya sale de la caza, y la caza menor pedía la azagaya que no se podía
+> aprender. Gana la tabla, que es la que describe la pieza. La caza **mayor**
+> sigue pidiendo azagaya.
 
 Tres decisiones que conviene tener escritas:
 
@@ -800,3 +859,194 @@ pegadas al agua»*.
 tiene un coste real y recurrente en jornadas de HOGAR, no solo narrativo.
 Fundar junto al agua vuelve a ser una decisión con consecuencia, no un
 supuesto de diseño.
+
+---
+
+## 18. Los caminos que la banda aprende
+
+> **Spec (2026-09-12).** Escrita con `/spec` sobre la intención de `/epoca 1`.
+> Los criterios de aceptación, con las cifras de partida, están en
+> [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §10.1, tanda 1, frente 1 —
+> aquí está el mecanismo y **por qué es de las once épocas**, no de una.
+
+**Qué se quiere.** Que la ruta a un sitio al que se va muchas veces **mejore
+con el uso y se reutilice**, en vez de buscarse entera cada vez. Es un sistema
+de las once épocas, no del Paleolítico: la vereda que se afina es la misma
+pieza que después es camino de carro, calzada y carretera. Lo que cambia por
+época es cuánto baja el coste y quién lo mantiene, no el mecanismo.
+
+**Por qué así y no de la otra manera.** La alternativa era la senda física —el
+paso repetido abarata la celda del terreno— y se descartó a propósito: es
+bonita, pero no explica el síntoma del que sale la petición. El jugador lo
+describió como conocimiento, no como suelo:
+
+> «al principio no saben llegar de otra manera […] con el tiempo, cosa de un
+> par de estaciones como mucho, que vayan depurando el camino».
+
+Así que lo que mejora es lo que la banda **sabe**, y encaja donde ya vive lo
+que la banda sabe: `BandKnowledge`. La ruta se guarda por destino y se
+reintenta mejor cada recorrido hasta converger.
+
+> **Corregido (2026-09-12, `/depurar`).** Este apartado daba por hecho que el
+> rodeo del río era una ruta memorizada que no caducaba. **No lo era**, y
+> conviene saberlo antes de diseñar encima: era el coste del riesgo, que
+> multiplicaba el tiempo sin tope y hacía que cuarenta metros de ladera
+> costaran kilómetros de rodeo. Está arreglado y medido —ver
+> [ESTADO.md](ESTADO.md) §2—. Lo que este apartado propone sigue en pie como
+> sistema, pero **ya no tiene un fallo que arreglar debajo**: si se implementa,
+> es porque la vereda que se afina es una pieza de las once épocas, no porque
+> el rodeo esté roto.
+
+**El riesgo, y es el que decide el diseño.** `Navgrid` se rehorna **una vez por
+estación** (`Navgrid.from_terrain`, `HornoDeRejillas`), porque el caudal y el
+encharcamiento cambian qué se vadea y qué es marisma. Un vado que no existe en
+primavera existe en verano. Si la ruta aprendida se guarda sin caducar, un
+camino puede sobrevivir a la rejilla con la que se trazó y quedarse dando una
+vuelta que ya no hace falta: **hoy eso no pasa** —`Marcha.forget_routes` tira
+los caminos guardados en cada cambio de rejilla, comprobado— y el sistema nuevo
+no puede reintroducirlo.
+
+**La regla, entonces:** ninguna ruta memorizada sobrevive a la rejilla con la
+que se trazó. `Navgrid.built_with_caudal` y `built_with_encharque` ya dicen con
+qué se horneó cada una, así que la memoria se sella con ese par y se tira al
+cambiar. Converger otra vez cuesta unos recorridos, que es exactamente lo que
+debe costar: el valle ha cambiado.
+
+> **Construido el 2026-09-12.** La memoria es `BandKnowledge.veredas`, y cada
+> entrada es una [Vereda]: sus hitos más el caudal y el encharcamiento de la
+> rejilla que la trazó. `BandKnowledge.vereda(clave, rejilla)` **la descarta al
+> leerla** si el sello no coincide, y la borra en vez de dejarla ocupando
+> sitio. El tope es `BandKnowledge.VEREDAS_QUE_SE_RECUERDAN` (200).
+>
+> **Y esto cambió algo que este apartado daba por resuelto.** Decía que la
+> regla ya se cumplía porque `Marcha.forget_routes` vacía la memoria en cada
+> cambio de rejilla, y es cierto — pero eso es **un aviso**, y un aviso no se
+> puede comprobar con una prueba: sólo se puede confiar en que nadie toque ese
+> camino. Con el sello pegado al dato la regla es comprobable, y lo está:
+> `TestVeredas`, once pruebas, de las que tres se ponen rojas si se quita el
+> sello. `forget_routes` se queda —también levanta `Parajes.revisar_el_mapa`—
+> pero ya no es lo único que sostiene la regla.
+>
+> Antes vivía en `SettlementSim._route_cache` / `_route_order`, que es donde
+> acaban las cosas cuando nadie decide de quién son.
+
+> **Y lo de «por destino» se probó y NO sale. Corregido el 2026-09-12, contra
+> lo que este apartado pedía.** La idea era que la vereda fuese «el camino al
+> avellanar» y la compartieran todos los que van allí, enganchándose por donde
+> les pillara. Medido, multiplica por 135 los pasos que el terreno corta
+> teniendo camino trazado: de 17 con la clave por par a 2 295 con la clave por
+> destino (`AtascoProbe`, `SEMILLA=42`, 8 jornadas; la tabla entera en
+> [ESTADO.md](ESTADO.md) §2).
+>
+> **El motivo es geométrico, no de afinado.** Con la clave por par, quien
+> reutiliza la vereda está siempre dentro del cubo de origen —setenta metros
+> como mucho del primer hito—. Con la clave por destino puede estar a
+> kilómetros, y el enganche pasa a ser una recta larguísima que ninguna cata
+> razonable cubre: `Wayfinder.linea_limpia` mira el eje cada veinte metros, y
+> **lo que la banda anda no es el eje** —cada persona va por su carril—. Catar
+> más fino y con el ancho del carril llevó la sonda de 48 segundos a más de
+> diez minutos: la comprobación sale más cara que la búsqueda que ahorraba.
+>
+> **Lo que sí quedó, y es la mejora de verdad: los dos extremos se catan.** Una
+> vereda tiene dos tramos que antes no miraba nadie —de la persona al primer
+> hito (`Vereda.enganchar`) y del último hito al punto exacto al que va
+> (`Vereda.remate`)—. Con ellos: 0 atascos contra 1, menos proporción de
+> caminos que no merecen andarse, y más reuso.
+>
+> **Lo que el sistema SÍ entrega, medido: el 39 % de las búsquedas.**
+> `Wayfinder.busquedas` cuenta las búsquedas completas dentro de `find`, que es
+> por donde pasan todas. Con `SEMILLA=42` y ocho jornadas: **265,8 búsquedas
+> por jornada sin memoria de veredas, 161,1 con ella**. Era la otra mitad de lo
+> que este apartado pedía —«y que no se busque de cero»— y resultó ser la mitad
+> que de verdad aporta.
+>
+> **Y lo de que la vereda mejore con el uso no está hecho.** Se construyó
+> —borrar el hito que sobra cuando el atajo se ve *y* sale más barato por la
+> vara del trazado— y se retiró: fabricar tramos rectos nuevos es exactamente
+> lo que este mismo apartado acaba de aprender que es caro de comprobar. Ver
+> ROADMAP «En curso» → Tanda 1, tarea C3.
+
+---
+
+## 19. La temperatura, y el abrigo que se lleva puesto
+
+> **Spec (2026-09-12).** Escrita con `/spec` sobre la intención de `/epoca 1`.
+> Los criterios están en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md)
+> §10.1, y **las tres piezas van en tandas distintas**: los grados visibles se
+> comprueban en una jornada (tanda 1, frente 3), y el vestido como necesidad y el
+> frío que cierra sitios sólo se comprueban en dos inviernos (tanda 2, frente 7).
+
+**El hueco.** El juego tiene frío pero no tiene temperatura. `Inhabitant.cold`
+es un 0 a 100 abstracto que sube durmiendo lejos del fuego y que
+`Relevo.revisar_frio` convierte en enfermedad y en muerte; el vestido existe
+como pieza (`Tool.Kind.VESTIDO`), se gasta 0,6 al día
+(`SettlementSim.VESTIDO_WEAR_PER_DAY`) y quita el 60 % del frío
+(`VESTIDO_COLD_MITIGATION`). **Nada de eso se ve en pantalla, y no hay grados
+en ninguna parte del juego.** Es la razón de que el sistema de ropa esté sin
+probar: no se puede jugar con lo que no se puede leer.
+
+**Qué se quiere, en tres piezas.**
+
+1. **Temperatura en grados, visible.** Sale de estación, hora, altitud y el
+   paleoclima, que ya está calculado para el nivel del mar (`RegionEras`,
+   EPOCAS.md §2). Que exista en grados es lo que hace legibles a la vez la
+   escalera térmica (§1.1), el hogar, el vivac y la ropa.
+2. **El vestido como necesidad**, no como modificador. La ficha del Paleolítico
+   §4 ya lo listaba como necesidad del grupo y decía que no existía; pasa a
+   existir, con la consecuencia que ya sabe aplicar `Relevo.revisar_frio`.
+3. **El frío cierra sitios.** Sin ropa buena no se sube al roquedo en invierno
+   ni se duerme al raso. Eso convierte la peletería en una **puerta** —como la
+   azagaya lo es para la caza mayor— en vez de en un porcentaje, y le da al
+   invierno una decisión propia que hoy no tiene.
+
+> **Construido el 2026-09-12: `Termometro` (`scripts/mundo/`), y contesta solo
+> él.** Tres sumandos, cada uno con fuente o con razón: la media de la estación
+> al nivel del mar hoy, más el desfase frío de la época, más la vuelta del día,
+> menos lo que enfría subir. Las fuentes, en [CREDITOS.md](CREDITOS.md).
+>
+> **Y la época se fija al FINAL del Magdaleniense, hacia el 12 000 a.C.**
+> (decidido por el usuario el 2026-09-12). Hacía falta decidirlo: el
+> Magdaleniense cantábrico va de ~17 000 a ~11 700 a.C. y **abarca la
+> deglaciación entera**, así que «la temperatura del Magdaleniense» no era una
+> sola cosa. 12 000 a.C. son ~14 ka cal BP, dentro del interestadial
+> Bølling–Allerød.
+>
+> **El hallazgo, y no es la cifra sino la forma: aquello no era «como hoy pero
+> más frío», era MÁS ESTACIONAL.** De Tarroso et al. (2016), cuyo grupo C1 es
+> la Iberia del norte y noroeste:
+>
+> | | desfase respecto de hoy |
+> |---|---|
+> | Invierno | **−5 °C** — su mínima de enero sube ~5,5 °C en 15 000 años |
+> | Verano | **−2 °C** — su julio sólo se mueve ~2,5 |
+>
+> El verano se parecía al de ahora y el invierno no se parecía en nada. **Eso
+> es lo que sostiene que el abrigo sea una puerta y no un porcentaje**, que es
+> lo que pedía la pieza 3 de aquí abajo: si la época fuera uniformemente cinco
+> grados más fría, el verano también cerraría sitios y la peletería sería un
+> impuesto en vez de una decisión de invierno.
+>
+> En la boca de la cueva (~120 m) sale una tarde de verano a ~20,7 °C y una
+> noche de invierno a ~0,7 °C.
+>
+> **Lo que NO es una cifra de balanceo y no se toca:** el gradiente vertical,
+> 0,65 °C por cada 100 m, que es física. Si el roquedo sale inhabitable, lo que
+> se cambia es el roquedo.
+
+**Por qué cruza las once épocas.** La temperatura ambiente no cambia de
+naturaleza con la época: cambia con qué se responde a ella. Paravientos y piel
+cosida aquí; casa de adobe, hogar cerrado, chimenea, estufa y vidrio en las
+ventanas después. Es la misma magnitud leída por escaleras distintas, y hasta
+que exista en grados ninguna de esas respuestas se puede calibrar contra nada.
+
+**Qué se mide, y la única cifra que no se discute.** El gradiente vertical es el
+**físico** —del orden de 0,65 °C por cada 100 m de cota—: no es una cifra de
+balanceo y no se toca para que cuadre una partida. Lo demás sí se calibra, y con
+grados en pantalla se puede: que mediodía de verano y noche de invierno no se
+parezcan, que la cueva y el roquedo se lleven la diferencia que les toca por
+altitud, y que dormir al raso en enero no sea lo mismo que en julio
+(`Inhabitant.cold`). Y una regla de arquitectura: «¿cuántos grados hace aquí y
+ahora?» se contesta **desde un solo sitio** —invariante 3 de SPECS.md §7—, porque
+el hogar, el vivac, la ropa y la escalera térmica van a preguntarlo los cuatro.
+
+---

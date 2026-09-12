@@ -153,6 +153,68 @@ func _sim_on_fake() -> SettlementSim:
 	return sim
 
 
+# --- La hora, por pasos: docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0 --------
+#
+# Lo que escribe en la partida se engancha a las horas de la PARTIDA, no a los
+# fotogramas: el cotejo de cuevas iba cada noventa fotogramas y, con
+# fotogramas más rápidos, la misma cueva se apuntaba a otra hora.
+
+func _sim_con_reloj() -> SettlementSim:
+	var sim := _sim_on_fake()
+	sim.people = [Inhabitant.create(0, sim.home_position, sim._rng)]
+	# SIN SALTARSE LA NOCHE, y hace falta decirlo: desde que existe
+	# —`SettlementSim.nadie_trabaja`, EPOCA_01 §10.1 frente 2— una banda
+	# dormida recibe pasos de más por cuadro, y entonces cuánta hora de juego
+	# cabe en cuatro segundos de reloj ya no es fija. Lo que estas pruebas
+	# aseguran es otra cosa, y sigue en pie: que el flujo de horas no dependa
+	# de cómo se parta el fotograma.
+	sim.noche_acelerada = false
+	sim.time_scale = 20.0
+	sim.hour = 6.5
+	return sim
+
+
+## Las horas que da `hour_passed` dando `cuanto` segundos de reloj en trozos de
+## `trozo`.
+func _horas_de(sim: SettlementSim, trozo: float, cuanto: float) -> Array:
+	var horas: Array = []
+	sim.hour_passed.connect(func(dia: int, hora: int) -> void: horas.append([dia, hora]))
+	var hecho := 0.0
+	while hecho < cuanto - 0.0001:
+		sim._process(trozo)
+		hecho += trozo
+	return horas
+
+
+func test_hour_passed_da_las_horas_sin_depender_del_fotograma() -> void:
+	# Cuatro segundos de reloj a x20 son dieciséis horas de partida: de las
+	# 6:30 a las 22:30, sin cruzar la medianoche.
+	var de_uno_en_uno := _horas_de(_sim_con_reloj(), SettlementSim.PASO_FIJO, 4.0)
+	var de_ocho_en_ocho := _horas_de(_sim_con_reloj(), SettlementSim.PASO_FIJO * 8.0, 4.0)
+	assert_eq(de_uno_en_uno.size(), 16, "dieciséis horas enteras")
+	assert_eq(de_uno_en_uno.front() if not de_uno_en_uno.is_empty() else null, [1, 7],
+		"la primera, las siete del primer día")
+	assert_eq(de_ocho_en_ocho, de_uno_en_uno,
+		"y las mismas, en el mismo orden, lo parta el fotograma como lo parta")
+
+
+func test_si_el_reloj_se_para_a_mitad_de_fotograma_no_se_dan_mas_pasos() -> void:
+	# Una decisión para el reloj DESDE DENTRO de un paso. Los pasos que le
+	# quedaban a ese fotograma se daban igual, con tiempo cero, y cuántos
+	# quedaban dependía del fotograma.
+	var sim := _sim_con_reloj()
+	sim.hour = 6.95
+	sim.hour_passed.connect(func(_dia: int, _hora: int) -> void: sim.time_scale = 0.0)
+	Cronometro.activo = true
+	Cronometro.reinicia()
+	sim._process(SettlementSim.PASO_FIJO * 8.0)
+	var pasos := int(Cronometro._veces.get("paso de simulacion", 0))
+	Cronometro.activo = false
+	Cronometro.reinicia()
+	assert_eq(pasos, 1,
+		"la hora cambia en el primer paso, y ahí se acaba el fotograma")
+
+
 func test_reconocer_mueve_a_la_persona_por_la_zona() -> void:
 	# La queja literal: el explorador llegaba a su destino y se quedaba nueve
 	# horas quieto para decir «explorado». No era el sorteo del siguiente
@@ -1092,9 +1154,18 @@ func test_terminar_de_reconocer_terreno_nuevo_lo_deja_a_punto_de_nombrarse() -> 
 				% speciality)
 
 
-# --------------- grupo minimo para explorar lejos: no vale ir solo -------
+# ------------- lejos se va: lo que para es la mochila, no el mapa -------
+#
+# Habia aqui dos pruebas que fijaban lo contrario: pasados 2.600 m se le
+# cambiaba el destino por otro mas cerca si la banda no tenia tres personas
+# dedicadas a expedicion. Eso limitaba por DISTANCIA y por PLANTILLA, y una
+# expedicion no se limita asi: se limita por lo que se puede llevar encima.
+#
+# La regla nueva, dicha al derecho: «no debe haber limite en la distancia que
+# recorren las expediciones y las ascensiones; el unico limite real es la
+# comida y el agua que pueden llevar encima los trabajadores».
 
-func test_una_partida_corta_no_va_al_borde_del_mapa() -> void:
+func test_una_expedicion_va_tan_lejos_como_se_le_senale() -> void:
 	var sim := _sim_on_fake()
 	sim.knowledge = BandKnowledge.new()
 	sim.knowledge.setup(64, 64, Vector2(4800.0, 4800.0))
@@ -1105,39 +1176,34 @@ func test_una_partida_corta_no_va_al_borde_del_mapa() -> void:
 	person.position = sim.home_position
 	sim.people = [person]
 
-	# Rumbo del jugador al borde del mapa, muy por encima de REGIONAL_DISTANCE
+	# Uno solo, y el rumbo del jugador al borde del mapa.
 	sim.has_scout_order = true
 	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
 
 	var destino := sim.reconocimiento._scout_target(person)
-	assert_lt(destino.distance_to(sim.home_position), Despensa.REGIONAL_DISTANCE,
-		"solo, no se aventura tan lejos aunque el jugador lo señale")
+	assert_gt(destino.distance_to(sim.home_position), 2600.0,
+		"va adonde se le manda, aunque vaya solo")
 
 
-func test_con_grupo_numeroso_si_se_va_lejos() -> void:
+func test_sin_comida_que_llevar_no_sale_la_expedicion() -> void:
+	# Y ESTE es el limite de verdad. El almacen vacio para y el lleno deja
+	# salir; el mapa no tiene nada que decir.
 	var sim := _sim_on_fake()
-	sim.knowledge = BandKnowledge.new()
-	sim.knowledge.setup(64, 64, Vector2(4800.0, 4800.0))
-
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.job = Profession.Job.EXPLORACION
 	person.current_speciality = Profession.Speciality.EXPEDICION
-	person.position = sim.home_position
+	sim.people = [person]
 
-	var companeros: Array[Inhabitant] = [person]
-	for i in range(1, Despensa.MIN_GROUP_FOR_REGIONAL):
-		var otro := Inhabitant.create(i, sim.home_position, sim._rng)
-		otro.job = Profession.Job.EXPLORACION
-		otro.current_speciality = Profession.Speciality.EXPEDICION
-		companeros.append(otro)
-	sim.people = companeros
+	assert_false(sim.despensa._provision(person, 3500.0),
+		"con el almacen vacio no se sale a tres kilometros y medio")
 
-	sim.has_scout_order = true
-	sim.scout_order = sim.home_position + Vector3(4000.0, 0.0, 0.0)
-
-	var destino := sim.reconocimiento._scout_target(person)
-	assert_gt(destino.distance_to(sim.home_position), Despensa.REGIONAL_DISTANCE,
-		"con bastante gente puesta en ello, si se llega al rumbo lejano")
+	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
+	sim.store.add(Materia.Kind.FRUTO_SECO, 400.0)
+	var otro := Inhabitant.create(1, sim.home_position, sim._rng)
+	otro.job = Profession.Job.EXPLORACION
+	otro.current_speciality = Profession.Speciality.EXPEDICION
+	assert_true(sim.despensa._provision(otro, 3500.0),
+		"y con comida en el almacen, si")
 
 
 # --------------------------------- vados: un hito que se lleva una vez ----

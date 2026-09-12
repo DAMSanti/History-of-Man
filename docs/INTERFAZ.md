@@ -92,6 +92,97 @@ de un vistazo que un relleno continuo.
 - Alarma: **hematites**, un rojo más terroso y menos naranja que el actual.
 - Bien: **verde de liquen**, apagado.
 
+### Dos cosas que hoy no se pueden leer
+
+> **Spec (2026-09-12).** La mitad de la temperatura está especificada en
+> [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §10.1, tanda 1, frente 3;
+> la del panel de técnicas **ya está hecha** —ver el bloque de abajo— y se deja
+> escrita para que no se rehaga.
+
+**La temperatura no existe en pantalla.** Hay frío —`Inhabitant.cold`, que
+enferma y mata— pero no hay grados en ninguna parte, y por eso el sistema de
+ropa lleva desde que se construyó sin probarse: no se juega con lo que no se
+lee. La magnitud y de dónde sale están en [SISTEMAS.md](SISTEMAS.md) §19; lo
+que toca a este documento es que **la barra superior lleve grados** y que se
+vea, persona a persona, quién va vestido y con qué desgaste
+(`SettlementSim.VESTIDO_WEAR_PER_DAY`).
+
+> **Hecho el 2026-09-12, con una salvedad que hay que saber.** La barra lleva
+> los grados del abrigo —`Termometro`, SISTEMAS.md §19— y al lado cómo va de
+> abrigo la banda. Van juntos a propósito: el frío sin el abrigo es un número
+> con el que no se puede hacer nada, y el abrigo sin el frío es un inventario.
+>
+> **Se enseña la PEOR pieza, no la media** (`Toolkit.peor_condicion`, nueva). La
+> media no se mueve cuando una sola se está acabando, y es ésa la que se va a
+> romper: lo que hace falta es que dé tiempo a mandar coser. Se lee
+> `1 °C   abrigo 8 de 15, la peor al 35 %`.
+>
+> **Y la captura sirvió para lo que sirve: el rótulo salía tapado.** En texto
+> decía lo que tenía que decir; en pantalla caía **debajo de la barra de
+> progreso del invierno** y no se leía. La tira de arriba va sobrada de sitio, y
+> como el `ProgressBar` tiene mínimo propio y no encoge, lo que se come el hueco
+> son las etiquetas. Se arregló poniendo los grados junto al reloj, a la
+> izquierda, con ancho reservado. **Eso no se ve leyendo el código ni pasando
+> una prueba** — es exactamente para lo que este apartado manda mirar la
+> pantalla.
+>
+> Tres capturas, con ventana: `21 °C   sin abrigo` en ocre una tarde de verano,
+> `1 °C   sin abrigo` en hematites una noche de invierno, y
+> `1 °C   abrigo 8 de 15, la peor al 28 %` con abrigo puesto. La sonda es
+> `scripts/tests/TermometroCaptura.gd`.
+>
+> **Dos capturas del par estación/hora y no cuatro con el roquedo**, porque la
+> barra enseña los grados **del abrigo**: el par cueva/roquedo no depende de
+> dónde mires y no se puede retratar. Esa mitad la cubre `TestTermometro`, que
+> comprueba los 1,82 grados de los 280 m de desnivel.
+
+> **Y NO es persona a persona, como pedía este apartado.** No se puede:
+> `Toolkit` guarda `pieces: Array[Tool]` **sin dueño**, así que «quién va
+> vestido» no tiene respuesta en el modelo de hoy. Repartir el utillaje por
+> persona es un cambio de modelo y es lo que la tanda 2 va a necesitar para «el
+> vestido como necesidad» — frente 7—. Hasta entonces, cobertura de banda.
+
+**Y cómo se comprueba, porque una lectura sí se puede comprobar:** captura de la
+barra con la misma partida en cuatro momentos —mediodía de verano y noche de
+invierno, en la cueva y en el roquedo— y los cuatro números distintos y en el
+orden que les toca. **La captura necesita ventana**: con `--headless`,
+`get_texture().get_image()` devuelve null, así que esto no se comprueba desde una
+sonda sin pantalla. Y el desgaste del vestido se ve **antes** de que la pieza se
+rompa, que es lo que hace que el jugador mande coser a tiempo.
+
+**El panel de técnicas no dice por qué una técnica está parada.** Es la queja
+literal del jugador —«hay varias técnicas que no se desbloquean, no sé por
+qué»— y tiene tres causas distintas que hoy se ven igual: falta el
+prerrequisito, faltan jornadas del oficio, o **falta material**, que es la que
+nadie adivina porque `TechTree._ir_pagando` **detiene el progreso** cuando la
+despensa no da para seguir practicando. Decir «parada: faltan 6 de asta» vale
+para las veinte técnicas del árbol, no sólo para la azagaya. Va por `/depurar`
+junto con el resto de los fallos, pero la decisión de diseño —el panel dice la
+causa, no sólo el porcentaje— se anota aquí.
+
+> **Hecho (2026-09-12, `/depurar`), y la causa dominante no era la que se
+> creía.** Medido con `ArbolPasoProbe`, **ninguna técnica estaba parada por
+> material**: todas lo estaban por **jornadas**, con el núcleo preparado
+> esperando gente en el taller día tras día. O sea que la causa invisible no era
+> sólo el material: era el **oficio que nadie practica**, y un «82 %» que no se
+> mueve tampoco lo dice. Las cifras, en [ESTADO.md](ESTADO.md) §2 —que es donde
+> viven las medidas, y la única copia que hay que tocar si cambian—.
+>
+> Cómo quedó, y por qué así:
+>
+> - La causa la decide **un solo sitio**, `TechTree.freno` / `TechTree.causa`.
+>   Antes la casilla y el aviso emergente la decidían cada uno por su cuenta, y
+>   por eso la casilla decía «43 %» mientras el aviso decía «PARADA por falta de
+>   asta».
+> - **La casilla dice la causa**, no el porcentaje: «tras talla laminar»,
+>   «faltan 43 de manufactura», «parada: falta 6 asta». Con las jornadas se
+>   añade el tanto por ciento si cabe en la línea; la cifra que hace falta para
+>   decidir es **la que queda**, porque dice a quién mover de oficio.
+> - **Sólo la de material lleva marca**, un doble filete de hematites. Parada es
+>   la que no sube aunque se practique; la de las jornadas va despacio, y
+>   marcarlas todas sería no marcar ninguna. Son dos decisiones distintas: traer
+>   asta, o poner gente en el taller.
+
 ---
 
 ## 5. Cómo se implementa sin rehacer nada

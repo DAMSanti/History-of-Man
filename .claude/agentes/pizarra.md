@@ -22,8 +22,3 @@ docs/AGENTES.md §3. No se anota aquí: se toma con `mkdir`.
 
 <!-- Los bloques van debajo de esta línea. Si no hay ninguno, nadie está
      trabajando y el repositorio está libre. -->
-
-## epoca-paleolitico-2a — 2026-09-12
-tarea: /epoca 1 — escribir la intención de «los dos primeros años»
-toco: docs/EPOCA_01_PALEOLITICO.md, docs/SISTEMAS.md, docs/ROADMAP.md
-puede que toque: docs/INTERFAZ.md

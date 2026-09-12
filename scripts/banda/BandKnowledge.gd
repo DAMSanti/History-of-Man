@@ -67,6 +67,73 @@ var height: int = 0
 var world_size: Vector2 = Vector2.ZERO
 
 
+# --- las veredas: los caminos que la banda ya sabe ------------------------
+#
+# Viven AQUI y no en `SettlementSim` porque son lo que la banda SABE, igual
+# que la familiaridad con un tajo o las estaciones ya vividas. Estaban en
+# `SettlementSim._route_cache` / `_route_order`, que es donde acaban las cosas
+# cuando nadie decide de quien son. Ver docs/SISTEMAS.md §18.
+
+## Las veredas guardadas, por clave de trayecto: {String: Vereda}.
+var veredas: Dictionary = {}
+
+## En que orden se aprendieron, para soltar la mas vieja al llegar al tope.
+var _veredas_orden: Array[String] = []
+
+## Cuantas veredas se recuerdan.
+##
+## Doscientas cubren de sobra los trayectos de una temporada; guardarlas todas
+## seria pagar memoria por caminos que no se van a repetir nunca. Era
+## `SettlementSim.ROUTE_CACHE_LIMIT` y se movio con la memoria.
+const VEREDAS_QUE_SE_RECUERDAN := 200
+
+
+## La vereda a ese trayecto, si se sabe Y SIRVE CON LA REJILLA DE HOY.
+##
+## Devuelve `null` si no hay, y tambien si la que hay se trazo con otro rio:
+## ahi se descarta de verdad -se borra- en vez de dejarla ocupando sitio hasta
+## que alguien avise. Ver [Vereda.sirve_en].
+func vereda(clave: String, grid: Navgrid) -> Vereda:
+	var guardada: Variant = veredas.get(clave, null)
+	if guardada == null:
+		return null
+	var camino := guardada as Vereda
+	if not camino.sirve_en(grid):
+		_olvidar(clave)
+		return null
+	return camino
+
+
+## Se aprende un camino, sellado con la rejilla que lo trazo.
+func recordar_vereda(clave: String, camino: PackedVector3Array,
+		grid: Navgrid) -> void:
+	if not veredas.has(clave):
+		_veredas_orden.append(clave)
+	veredas[clave] = Vereda.de(camino, grid)
+	while _veredas_orden.size() > VEREDAS_QUE_SE_RECUERDAN:
+		_olvidar(_veredas_orden[0])
+
+
+## Se olvidan todas. Lo llama quien cambie por donde se pasa.
+##
+## El sello de [Vereda] ya impide que una vereda de otra rejilla se ande, asi
+## que esto no es lo que sostiene la regla: es la limpieza, para no arrastrar
+## doscientas veredas muertas hasta que el tope las empuje.
+func olvidar_veredas() -> void:
+	veredas.clear()
+	_veredas_orden.clear()
+
+
+## Cuantas veredas hay guardadas. Es el tope que pide EPOCA_01 §10.1, frente 4.
+func veredas_recordadas() -> int:
+	return veredas.size()
+
+
+func _olvidar(clave: String) -> void:
+	veredas.erase(clave)
+	_veredas_orden.erase(clave)
+
+
 func setup(cells_x: int, cells_z: int, world_extent: Vector2) -> void:
 	width = maxi(cells_x, 1)
 	height = maxi(cells_z, 1)

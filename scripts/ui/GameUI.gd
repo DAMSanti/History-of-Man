@@ -330,6 +330,14 @@ var _band_label: Label
 var _hunger_bar: Muescas
 var _tired_bar: Muescas
 
+## Cuánta gente está enfermando de verdad -de frío o de hambre sostenidos,
+## no un mal día-, todo el año y no sólo en otoño. Ver
+## [BarraSuperior._update_band_gauge].
+var _risk_bar: Muescas
+
+## Los grados que hace en el abrigo, y cómo va de abrigo la banda.
+var _temp_label: Label
+
 var _winter_label: Label
 var _winter_bar: ProgressBar
 var _clock_minute: int = -1

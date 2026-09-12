@@ -9,6 +9,26 @@ extends Node3D
 
 signal day_passed(day: int)
 
+## Ha cambiado la hora del reloj de la partida. Se emite DENTRO del paso de
+## simulación, así que cae siempre en el mismo sitio de la partida corra la
+## máquina como corra.
+##
+## Es para lo que tiene que ocurrir a horas de juego y no cada tantos
+## fotogramas: el cotejo de cuevas descubiertas iba cada noventa fotogramas y
+## escribe en la crónica, así que con fotogramas más rápidos la misma cueva se
+## apuntaba a otra hora. Ver docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0.
+signal hour_passed(day: int, hour: int)
+
+## Un paso de simulación ha terminado ENTERO: la gente y la fauna ya han hecho
+## lo suyo. Es el único punto donde la partida está en un límite limpio.
+##
+## La usan las sondas que guardan la partida: [day_passed] se emite DENTRO del
+## paso —justo tras cerrar la jornada y ANTES de que la gente dé su tick—, así
+## que una instantánea tomada ahí es media partida a medio paso, y al arrancar
+## de ella se pierde la otra media. Ver docs/specs/LO_MISMO_MAS_DEPRISA.md,
+## tarea 17.
+signal paso_cerrado(day: int)
+
 ## Se emite cuando el reloj local hace cambiar la estación. Antes esto solo
 ## pasaba a mano desde el mapa regional: jugar cien jornadas en el
 ## asentamiento no traía nunca el otoño.
@@ -44,6 +64,39 @@ signal moment_raised(moment: Moment)
 ## unas nueve horas utiles en invierno y quince en verano, pero de momento se
 ## usa una jornada fija y honesta de doce.
 const HORA_DESPERTAR := 6.0
+## Cada cuantos pasos de simulacion piensa y anda la fauna.
+##
+## LA FAUNA ES UN INTEGRADOR, NO UNA DECISION POR TICK.
+##
+## Andar es `posicion += direccion * velocidad * delta`, y el hambre, la sed y
+## los relojes del susto suben todos multiplicados por `delta`: cuatro pasos de
+## `delta` y uno de `cuatro delta` dan lo mismo hasta el ultimo decimal en todo
+## eso. Lo que NO da lo mismo es preguntarle al relieve: cada animal consulta
+## dificultad de paso y altura en cada paso, y son seiscientos animales. Medido
+## a velocidad de juego: 11,2 ms por paso, el 30 % del paso entero.
+##
+## Cuatro es el numero grande que todavia no se ve: a x1 la fauna se mueve
+## siete veces y media por segundo, y lo que anda un ciervo entre dos de esas
+## veces es menos de medio metro.
+##
+## Lo pendiente se acumula en `_fauna_pendiente` y se entrega entero, asi que
+## la fauna no anda menos: anda a zancadas mas largas. Y va por pasos y no por
+## reloj para que siga siendo repetible.
+const PASOS_DE_FAUNA := 4
+
+## Cuantos pasos de simulacion se han dado desde que la fauna penso por ultima
+## vez, y cuanto tiempo le queda por andar. Ver [PASOS_DE_FAUNA].
+var _pasos_de_fauna: int = 0
+var _fauna_pendiente: float = 0.0
+
+## Cuanto se espera antes de volver a pensar una jornada que no llevo a nada,
+## en horas de juego. Seis minutos: quince ticks de simulacion.
+##
+## No es un numero de balanceo ni un umbral de decision: no cambia lo que se
+## decide, solo cada cuanto se vuelve a preguntar lo mismo. Ver
+## [Inhabitant.repensar_tras].
+const ESPERA_PARA_REPENSAR := 0.1
+
 const HORA_SALIDA := 7.0      ## Antes de esto se desayuna y se prepara
 ## La parada de mediodia. Ya NO se come en ella -se come dos veces al dia, ver
 ## [HORA_DESAYUNO] y [HORA_CENA]-, pero se sigue descontando de las horas
@@ -359,6 +412,42 @@ var cumbres: Cumbres = Cumbres.new(self)
 ## Lo que puede salir mal en el monte. Ver [Percances].
 var percances: Percances = Percances.new(self)
 
+## Quién envejece, quién enferma de hambre o de frío, quién muere de vejez y
+## quién nace. Ver [Relevo].
+var relevo: Relevo = Relevo.new(self)
+
+## Cómo se cierra la partida: victoria, derrota, o todavía nada. Ver [Partida].
+enum Desenlace { NINGUNO, VICTORIA, DERROTA }
+var desenlace: Desenlace = Desenlace.NINGUNO
+
+## En qué jornada se decidió el desenlace. -1 mientras no haya ninguno.
+var desenlace_dia: int = -1
+
+
+## Si la partida ha terminado y el reloj ya no va a avanzar más.
+##
+## LA PREGUNTA VIVE AQUÍ Y EN UN SOLO SITIO, y no es una comodidad: es lo que
+## costó diecisiete minutos de un núcleo entero sin escribir una línea de log.
+##
+## `_process` no avanza nada si `people` está vacía —no hay partida que simular
+## sin banda—, así que `day` se queda clavado para siempre. Una sonda que
+## espera con `while sim.day < hasta` está esperando una jornada que ya no va a
+## llegar: gira en fotogramas vacíos hasta que alguien la mata a mano. Eso es
+## exactamente lo que era el 🔴 «el cuelgue de la hambruna total», y no era un
+## bucle del juego: era el instrumento esperando a un muerto.
+##
+## Quien espere jornadas pregunta esto y para. Ver `AnoProbe` y `CuelgueProbe`.
+func partida_terminada() -> bool:
+	return desenlace != Desenlace.NINGUNO or people.is_empty()
+
+## Cuántos relatos pintados en la pared cuentan como "la cueva está pintada".
+## Sin calibrar -pendiente de playtest, igual que el resto de umbrales de
+## esta época.
+const CUEVA_PINTADA_MINIMO := 3
+
+## El objetivo, y qué pasa cuando se gana o se pierde. Ver [Partida].
+var partida: Partida = Partida.new(self)
+
 ## Quien hace que cada manana. Ver [Reparto].
 var reparto: Reparto = Reparto.new(self)
 
@@ -373,6 +462,10 @@ var pinturas: Pinturas = Pinturas.new(self)
 
 ## Lo que se fabrica y lo que se gasta. Ver [Taller].
 var taller: Taller = Taller.new(self)
+
+## Trueque con la banda vecina: sílex a cambio de lo que sobra. Ver
+## [Intercambio].
+var intercambio: Intercambio = Intercambio.new(self)
 
 ## Comer, beber y salir avituallado. Ver [Despensa].
 var despensa: Despensa = Despensa.new(self)
@@ -427,27 +520,12 @@ const NATACION_TRAINING_RATE := 0.00006
 ## Ya se ha marcado que celdas de materia prima no vuelven a crecer.
 var _veins_frozen := false
 
-## Caminos ya trazados, por par de celdas.
-##
-## Existe porque el patron de una partida es repetitivo hasta el aburrimiento:
-## el abrigo, los tres tajos de la temporada y la vuelta. El primero que va
-## paga la busqueda; los otros catorce, y el mismo manana, no pagan nada.
-##
-## La clave es la celda gruesa y no el punto exacto: dos personas que salen
-## del abrigo con veinte metros de diferencia no necesitan dos caminos
-## distintos, y exigir el punto exacto convertiria la cache en un adorno.
-var _route_cache: Dictionary = {}
+# Los caminos ya trazados ESTABAN AQUI -`_route_cache` y `_route_order`- y se
+# mudaron a `BandKnowledge.veredas` el 2026-09-12: son lo que la banda sabe, no
+# estado del simulador. Ver docs/SISTEMAS.md §18 y [Vereda].
 
-var _route_order: Array[String] = []
-
-## Cuantos caminos se guardan. Doscientos cubren de sobra los trayectos de una
-## temporada; guardarlos todos seria pagar memoria por rutas que no se van a
-## repetir nunca.
-const ROUTE_CACHE_LIMIT := 200
-
-## Metros por celda de la cache. Mas gruesa que la de navegacion a proposito:
-## lo que se quiere es que los quince del campamento compartan camino.
-const LANE_CELL := 48.0
+# Y con ellos se fue `LANE_CELL`, que era la celda de esa memoria: hoy es
+# `Vereda.CELDA`.
 
 
 # --- lo que el taller comparte con el resto --------------------------------
@@ -458,6 +536,21 @@ const LANE_CELL := 48.0
 ## se resuelva solo con el esquive -que para eso esta- y pocos para que nadie
 ## se pase la jornada empujando una pared.
 const BLOCKED_BEFORE_REPLAN := 30
+
+## Cuantos pasos de LADO seguidos se consienten bordeando algo.
+##
+## Veinticuatro, que a paso de persona son unos pocos metros de orilla: lo que
+## cuesta rodear un charco o una peña, que es para lo que esta el esquive.
+##
+## Hacia falta un tope porque el paso de lado mueve a la persona, y moverse
+## reinicia la cuenta de `blocked_steps`: sin esto el esquive nunca dejaba paso
+## al replanteo y alguien podia caminar la orilla de un rio de un lado para otro
+## durante horas. Anda muchisimo y no se acerca nada, que es la definicion misma
+## del ovillo que se veia en los rastros.
+##
+## Pendiente de playtest: subirlo deja bordear obstaculos mas largos, bajarlo
+## manda a pedir camino antes.
+const RODEOS_DE_ORILLA := 24
 
 ## A qué distancia de un sitio que se dio por imposible sigue contando como el
 ## mismo sitio. Un cotarro mide decenas de metros: cien es «el de detrás del
@@ -516,6 +609,13 @@ var grid_build_ms: int = 0
 var _quarry_lamented: Dictionary = {}
 
 ## Semilla de esta partida. Se imprime al empezar para poder repetirla.
+## La semilla con la que arranca todo lo que se lanza con `--script`.
+##
+## No es una cifra de balanceo: es «un numero cualquiera, pero SIEMPRE EL
+## MISMO», que es lo que hace que dos corridas de una sonda se puedan comparar.
+## Ver [_semilla_de_esta_corrida].
+const SEMILLA_DE_SONDA := 42
+
 var game_seed: int = 0
 
 ## Horas quieto a partir de las cuales se da por plantado a alguien.
@@ -562,7 +662,7 @@ const SPECIALITY_MAKES := {
 		Tool.Kind.BURIL, Tool.Kind.PUNTA, Tool.Kind.LAMPARA],
 	Profession.Speciality.ASTA: [Tool.Kind.AZAGAYA, Tool.Kind.ARPON,
 		Tool.Kind.AGUJA, Tool.Kind.PUNZON, Tool.Kind.ANZUELO],
-	Profession.Speciality.PELETERIA: [Tool.Kind.ODRE],
+	Profession.Speciality.PELETERIA: [Tool.Kind.ODRE, Tool.Kind.VESTIDO],
 	Profession.Speciality.CORDELERIA: [Tool.Kind.CUERDA, Tool.Kind.CESTO,
 		Tool.Kind.NASA, Tool.Kind.RED],
 }
@@ -599,12 +699,24 @@ var history: Dictionary = {}
 ## primera busqueda sale cara, las demas esperan al siguiente y mientras tanto
 ## cada cual sigue con el camino que llevaba.
 ## Medido sobre la comarca de prueba: unos 8 microsegundos por nodo. Con
-## quinientos, lo que puede gastar un fotograma en buscar caminos son cuatro
-## milisegundos, y lo que no entre espera al siguiente.
+## tres mil, lo que puede gastar un fotograma en buscar caminos son unos
+## veinticuatro milisegundos, y lo que no entre espera al siguiente.
 ##
 ## El tope de verdad no es este: es que la mayoria de las busquedas ya no
 ## llegan aqui. Las que van a un sitio incomunicado se resuelven comparando
-## dos enteros, y las repetidas salen de la cache.
+## dos enteros, las repetidas salen de la cache, y «¿se llega desde casa?» se
+## contesta leyendo el mapa de distancias -ver [Wayfinder.metros_desde]-.
+##
+## ESTUVO EN QUINIENTOS, y quinientos no daban ni para UNA busqueda: una sola
+## puede costar miles de nodos, asi que el bote se agotaba con la primera y
+## todo lo demas del cuadro se quedaba esperando. Mientras la cache tapaba el
+## agujero -prestando caminos a quien no le servian- no se notaba; en cuanto se
+## le exigio a la cache que el camino prestado valiera para el viaje, media
+## banda se quedo plantada: medido, 353 atascos en ocho jornadas.
+##
+## Un tope que no deja pasar ni una unidad de lo que mide no es un tope: es un
+## cerrojo. Tres mil dejan pasar unas pocas busquedas, que es lo que pide una
+## manana en la que la banda entera sale a la vez.
 const NODES_PER_FRAME := 500
 
 var _path_nodes_this_frame: int = 0
@@ -671,6 +783,36 @@ const AHUMADO_BONUS := 1.6
 ## Fatiga por hora que añade dormir en el abrigo con el fuego apagado, y sólo
 ## en invierno: el resto del año una cueva se aguanta sin fuego.
 const HEARTH_COLD_FATIGUE := 3.0
+
+## Lo mismo, pero para `Inhabitant.cold`: el campo ya existe y ya entra en
+## `effectiveness()`, pero hasta ahora nada de la simulación real le daba
+## valor. Sube más despacio de lo que baja -misma asimetría que la
+## proteína en `Despensa.pasar_cuenta_de_proteina`-: pasar frío se
+## arrastra, entrar en calor es casi inmediato en cuanto vuelve el fuego o
+## pasa el invierno.
+const HEARTH_COLD_RISE := 4.0
+const HEARTH_COLD_RECOVERY := 8.0
+
+## Cuánto se gasta cada `VESTIDO` por JORNADA DE CALENDARIO, se trabaje o no
+## con él. A diferencia del resto del utillaje -que sólo se desgasta cuando
+## alguien lo usa en una tarea, ver `Tool.WEAR_PER_DAY`-, una prenda se lleva
+## puesta todo el rato: el desgaste no depende de la actividad, depende de
+## los días. Con `Tool.DURABILITY[Stuff.PIEL]` (80 usos) esto da algo más de
+## dos estaciones por prenda antes de tener que coser otra.
+const VESTIDO_WEAR_PER_DAY := 0.6
+
+## Cuánto de `HEARTH_COLD_RISE` cancela la cobertura de vestido COMPLETA (una
+## prenda por persona). No es 1.0 a propósito: el vestido se suma al hogar,
+## no lo sustituye -dormir sin fuego y sin vestido sigue siendo lo peor-.
+const VESTIDO_COLD_MITIGATION := 0.6
+
+## Fatiga y frío de más por hora que se lleva quien duerme en un abrigo por
+## encima de `plazas_abrigo()`. Más suaves que `HEARTH_COLD_FATIGUE`/
+## `HEARTH_COLD_RISE` a propósito -apretujarse molesta menos que pasar frío
+## de verdad-, y se suman a lo que ya toque por hogar y estación: no
+## sustituyen esos contadores, los alimentan.
+const ABARROTADO_FATIGUE_RISE := 1.5
+const ABARROTADO_COLD_RISE := 1.5
 
 ## Piel de tienda por persona. NO se gasta: se lleva y se devuelve al abrigo,
 ## que es lo que se hace con una tienda. Lo que se pierde es la noche que no se
@@ -817,6 +959,44 @@ func _yield_per_day(activity: Subsistence.Activity, kind: Materia.Kind) -> float
 ## Dias transcurridos en la estacion en curso. Ver [_advance_local_season].
 var season_day: int = 0
 
+## --- Rachas de hambre severa, para decidir si el año fue bueno -----------
+##
+## No es lo mismo hambre puntual -un día flojo- que hambre sostenida: lo que
+## de verdad amenaza a la banda es una racha larga, no un pico suelto. Se
+## lleva aparte de `Inhabitant.hunger`, que es individual, porque esto mide
+## a la BANDA: el hambre media de todos, no la de cualquiera en concreto.
+## Ver `docs/specs/QUE_SE_PUEDA_PERDER.md`, tarea 8, y `Relevo` para dónde se
+## usa al cerrar el año.
+
+## A partir de qué hambre MEDIA de la banda se cuenta como "severa".
+const HAMBRE_SEVERA_UMBRAL := 60.0
+
+## Jornadas SEGUIDAS que la banda lleva con hambre media severa ahora mismo.
+## Se resetea en cuanto la media vuelve a bajar del umbral.
+var hambre_severa_racha: int = 0
+
+## La racha más larga que ha habido en lo que va de año. `_advance_local_season`
+## la lee para decidir "año bueno" y la pone a cero al empezar el siguiente.
+var hambre_severa_peor_racha_del_anyo: int = 0
+
+
+## Se llama una vez al cerrar la jornada, desde `_end_of_day`.
+func _revisar_hambre_de_la_banda() -> void:
+	if people.is_empty():
+		hambre_severa_racha = 0
+		return
+	var total := 0.0
+	for person: Inhabitant in people:
+		total += person.hunger
+	var media := total / float(people.size())
+
+	if media >= HAMBRE_SEVERA_UMBRAL:
+		hambre_severa_racha += 1
+		hambre_severa_peor_racha_del_anyo = maxi(
+			hambre_severa_peor_racha_del_anyo, hambre_severa_racha)
+	else:
+		hambre_severa_racha = 0
+
 
 ## Sitios de trabajo por actividad, en coordenadas de mundo
 var work_sites: Dictionary = {}
@@ -854,6 +1034,46 @@ var _rng := RandomNumberGenerator.new()
 
 
 ## Arranca con la poblacion y las reservas que trae la partida
+## Con que semilla arranca esta corrida.
+##
+## Tres casos, y el de en medio es el que costo aprender:
+##
+##   - `SEMILLA=123` en el entorno manda siempre. Es como se repite una partida
+##     concreta y como se comparan dos variantes.
+##   - **Si esto se lanzo con `--script`, o sea una sonda o la suite, la
+##     semilla es [SEMILLA_DE_SONDA] y no el reloj.** Una medida es una medida:
+##     dos corridas de la misma sonda tienen que ser la misma partida o no hay
+##     nada que comparar.
+##   - Jugando, el reloj. Cada partida, distinta. Estuvo clavada en una fecha y
+##     la comarca entera se comportaba igual siempre: los mismos picos en el
+##     mismo orden, los mismos percances, el mismo tiempo.
+##
+## ## Por que el caso de en medio es el DEFECTO y no algo que pida cada sonda
+##
+## Porque se pedia y no se hacia. Ninguna sonda del repositorio fijaba la
+## semilla —ni `AtascoProbe`, ni `RodeoProbe`, ni `TironAnualProbe`— y el aviso
+## vivia aqui, en un comentario que hay que leer antes de medir. Medido el
+## 2026-09-12: `AtascoProbe` sin semilla, ocho jornadas, sin tocar una linea de
+## codigo entre corridas, dio 2.200, 1.747, 303 y 219 pasos cortados; con
+## semilla fija da 2.295 dos veces seguidas, exacto. Sobre aquellas cifras se
+## llegaron a escribir dos conclusiones falsas en ESTADO.md.
+##
+## Un aviso que hay que acordarse de seguir no es una garantia. Esto si.
+##
+## Si alguna sonda quiere de verdad varias tiradas, `SEMILLA=azar` le devuelve
+## el reloj; y para barrer varias, se le pasa cada una a mano, que es lo que
+## hay que hacer para poder promediar.
+func _semilla_de_esta_corrida() -> int:
+	var puesta := OS.get_environment("SEMILLA")
+	if puesta == "azar":
+		return int(Time.get_unix_time_from_system() * 1000.0) & 0x7fffffff
+	if not puesta.is_empty():
+		return int(puesta)
+	if OS.get_cmdline_args().has("--script"):
+		return SEMILLA_DE_SONDA
+	return int(Time.get_unix_time_from_system() * 1000.0) & 0x7fffffff
+
+
 func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: float) -> void:
 	_terrain = terrain
 	home_position = home
@@ -874,28 +1094,24 @@ func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: floa
 	# La semilla se IMPRIME. Un juego con azar de verdad es imposible de
 	# depurar si no se puede repetir una partida concreta, y basta con poder
 	# ponerla a mano cuando algo sale raro.
-	# Y se puede FIJAR desde fuera: `SEMILLA=123` en el entorno. Sin eso, dos
-	# ejecuciones de la misma sonda salen con valles distintos y no hay forma de
-	# saber si un número mejoró por el arreglo o por la tirada.
-	var forced := OS.get_environment("SEMILLA")
-	game_seed = int(forced) if not forced.is_empty() 		else int(Time.get_unix_time_from_system() * 1000.0) & 0x7fffffff
+	#
+	# Y SE FIJA SOLA CUANDO ESTO NO ES UNA PARTIDA, SINO UNA MEDIDA. Ver
+	# [_semilla_de_esta_corrida].
+	game_seed = _semilla_de_esta_corrida()
 	_rng.seed = game_seed
 	print("Semilla de partida: %d" % game_seed)
 
-	# El utillaje con el que se llega al abrigo. Va CORTO a proposito: da para
-	# arrancar y no para acomodarse, asi que la primera escasez de filo llega
-	# a las pocas semanas y con ella la razon de poner a alguien a tallar.
-	#
-	# Todo de cuarcita, que es lo que hay en cualquier playa del Cantabrico. El
-	# silex bueno esta lejos, y encontrarlo es media aventura.
+	# `NOCHE=0` apaga el saltarse la noche, y esta aqui por lo mismo que
+	# `SEMILLA`: la corrida que demuestra que acelerar NO cambia la partida
+	# necesita la pareja, con y sin, y no se le puede pedir a cada sonda que se
+	# invente el interruptor. Ver [noche_acelerada].
+	noche_acelerada = OS.get_environment("NOCHE") != "0"
+
 	toolkit = Toolkit.new()
-	for i in range(8):
-		toolkit.craft(Tool.Kind.LASCA, Tool.Stuff.CUARCITA, 0.5)
-	for i in range(2):
-		toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA, 0.5)
-	toolkit.craft(Tool.Kind.BURIL, Tool.Stuff.CUARCITA, 0.5)
-	for i in range(2):
-		toolkit.craft(Tool.Kind.AZAGAYA, Tool.Stuff.ASTA, 0.5)
+	for entry: Dictionary in UTILLAJE_INICIAL:
+		for i in range(int(entry["cuantas"])):
+			toolkit.craft(int(entry["kind"]) as Tool.Kind,
+				int(entry["stuff"]) as Tool.Stuff, 0.5)
 	# NI CESTOS NI ODRES. Se llega con el filo justo y con las manos: el cesto
 	# dobla lo que se trae de una jornada y el odre es lo que permite pasar el
 	# dia lejos del agua -ver `_hand_out_containers`-, o sea que regalarlos al
@@ -1017,6 +1233,82 @@ const PASO_FIJO := 1.0 / 30.0
 ## que la partida se retrasa pero no pierde tiempo ni deja de ser repetible.
 const PASOS_POR_CUADRO := 8
 
+## Si ahora mismo no hay NADIE trabajando, que es cuando no hay nada que mirar.
+##
+## Una pregunta, un sitio -invariante 3 de SPECS.md §7-, porque la van a
+## preguntar la aceleracion de la noche y, el dia que se enseñe, la interfaz.
+##
+## ## Es «nadie trabaja» y no «todos duermen», y a eso se llego MIDIENDO
+##
+## Se construyo primero con la lectura estricta -todos en `DURMIENDO`- y al
+## probarlo en el juego la noche seguia yendo lenta. Medido con `PicoProbe`,
+## `VEL=5`, 4 jornadas, la misma maquina y la misma sesion:
+##
+##   sin saltarse la noche ......... 90 s
+##   con «todos duermen» ........... 71 s
+##   con «nadie trabaja» ........... 62 s
+##
+## El motivo es que la banda no se acuesta a la vez: se va acostando, y el que
+## vuelve andando del monte bloqueaba la aceleracion durante toda esa hora
+## larga. La spec decia «cuando nadie esta trabajando» desde el principio
+## -EPOCA_01 §10.1, frente 2-; la lectura estricta era mia.
+##
+## **El que vivaquea entra solo**, que es el criterio explicito de la spec: si
+## no contara, un solo cazador a tres kilometros bloquearia la noche entera.
+##
+## Frenan `TRABAJANDO`, `BUSCANDO` y `RECONOCIENDO`: son los tres estados en
+## los que pasa algo que el jugador puede querer ver. Andar, comer y dormir no.
+func nadie_trabaja() -> bool:
+	if people.is_empty():
+		return false
+	for person: Inhabitant in people:
+		match person.state:
+			Inhabitant.State.TRABAJANDO, Inhabitant.State.BUSCANDO, 			Inhabitant.State.RECONOCIENDO:
+				return false
+	return true
+
+
+## Cuanto se le deja a la noche comerse de un fotograma, en milisegundos.
+##
+## NO ES UN MULTIPLICADOR DE VELOCIDAD, y la diferencia es el frente 4 entero.
+##
+## Acelerar subiendo `time_scale` cambiaria cuanta hora de juego avanza cada
+## paso, y con ella el instante en que salta `hour_passed` y el tamaño del
+## trozo de fauna que entrega `_fauna_pendiente`: **seria otra partida**. Lo
+## que se hace es dar MAS PASOS DEL MISMO TAMAÑO, asi que la sucesion de
+## `_advance` es identica a la de una corrida sin acelerar y la firma diaria
+## sale igual POR CONSTRUCCION, no por suerte.
+##
+## Y como es un presupuesto de cuadro y no una velocidad, la noche corre «a
+## todo lo que de» en la maquina que sea y **el fotograma malo queda acotado
+## por arriba**, que es justo lo que el frente 4 pide. El precedente es
+## [HornoDeRejillas.MS_POR_CUADRO], que amasa rejillas con la misma idea.
+##
+## ## El 8 esta medido, y el barrido dice que mas no compra nada
+##
+## `PicoProbe`, VEL=5, 4 jornadas, con «nadie trabaja». Reloj de las 4 jornadas
+## y fotograma medio:
+##
+##   4 ms ..... 66 s · 39,9 ms          24 ms .... 60 s · 42,5 ms
+##   8 ms ..... 62 s · 41,0 ms          48 ms .... 59 s · 45,1 ms · 14 tirones
+##   16 ms .... 62 s · 41,4 ms          96 ms .... 58 s · 46,7 ms · 70 tirones
+##
+## El ahorro se agota en 8: de ahi en adelante se compran uno o dos segundos y
+## se paga en fotograma medio, y pasados los 24 en tirones. Por debajo, se
+## pierde ahorro. Contra los 90 s de no saltarse la noche, **8 ms ahorra el
+## 31 % del reloj**.
+const MS_DE_NOCHE_POR_CUADRO := 8.0
+
+## Si la noche se salta. Se apaga PARA MEDIR, no para jugar.
+##
+## Hace falta porque la comparacion que prueba que esto no cambia la partida
+## -misma semilla, misma firma diaria- necesita las dos corridas, con y sin. Y
+## porque una prueba que mida cuanta hora de juego cabe en un segundo de reloj
+## deja de tener respuesta fija en cuanto la noche corre sola.
+##
+## No es estado de partida: no lo lee nada de la simulacion, solo este bucle.
+var noche_acelerada: bool = true
+
 ## El tiempo real que aun no se ha simulado.
 var _pendiente := 0.0
 
@@ -1042,6 +1334,43 @@ func _process(delta: float) -> void:
 		Cronometro.tramo("paso de simulacion")
 		_advance(PASO_FIJO)
 		Cronometro.cierra("paso de simulacion")
+		# SI EL RELOJ SE PARA A MITAD DE FOTOGRAMA, AQUI SE ACABA.
+		#
+		# Una decision para el reloj -[Moment]- se levanta DESDE DENTRO de un
+		# paso y la interfaz pone la velocidad a cero ahi mismo. Los pasos que
+		# le quedaban al fotograma se daban igual, con `scaled` a cero: un tick
+		# de cada persona sin que pase el tiempo, y cuantos de esos se daban
+		# dependia de cuantos pasos le quedaran al fotograma. Lo pendiente NO
+		# se pierde -sigue en `_pendiente`- y se hace al reanudar.
+		if time_scale <= 0.0:
+			break
+
+	# Y AQUI SE SALTA LA NOCHE.
+	#
+	# Con todos durmiendo no hay nada que mirar, asi que se siguen dando pasos
+	# -del MISMO tamaño, ver [MS_DE_NOCHE_POR_CUADRO]- hasta gastar el
+	# presupuesto del cuadro. Lo que avanza de mas no sale de `_pendiente`:
+	# `_pendiente` es reloj real por simular y esto es reloj de juego regalado,
+	# que es en lo que consiste saltarse la noche.
+	#
+	# Se relee `nadie_trabaja` en cada vuelta porque alguien se despierta
+	# dentro de un paso -a las seis-, y desde ese paso ya no se acelera.
+	if noche_acelerada and nadie_trabaja():
+		var hasta := Time.get_ticks_usec() + int(MS_DE_NOCHE_POR_CUADRO * 1000.0)
+		var dia_al_entrar := day
+		Cronometro.tramo("noche acelerada")
+		while time_scale > 0.0 and Time.get_ticks_usec() < hasta:
+			_advance(PASO_FIJO)
+			# EL CIERRE DE JORNADA CORTA EL CUADRO, y esto no es cosmetica: el
+			# peor fotograma de la partida ES la contabilidad de medianoche
+			# -medido, 113 ms de los que 42 son el cierre, ESTADO.md §2- y la
+			# medianoche cae justo dentro de la noche acelerada. Sin este
+			# corte, ese fotograma se come ademas el presupuesto entero.
+			if day != dia_al_entrar:
+				break
+			if not nadie_trabaja():
+				break
+		Cronometro.cierra("noche acelerada")
 	Cronometro.cierra("simulacion (SettlementSim)")
 
 
@@ -1075,6 +1404,12 @@ func _advance(delta: float) -> void:
 		reconocimiento.repasar_rezagados()
 		Cronometro.cierra("repaso de rezagados")
 
+	# Y LA HORA SE DICE, para todo lo que tiene que ocurrir a horas de juego y
+	# no cada tantos fotogramas. Ver [hour_passed]. Va tambien en el cambio de
+	# dia, donde la hora entera pasa de 23 a 0.
+	if int(hour) != hora_antes:
+		hour_passed.emit(day, int(hour))
+
 
 	# El tick se parte en trozos para que acelerar no cambie el resultado: con
 	# un solo paso largo la gente atraviesa obstaculos que a velocidad normal
@@ -1082,9 +1417,33 @@ func _advance(delta: float) -> void:
 	var steps := maxi(int(ceil(time_scale)), 1)
 	var slice := scaled / float(steps)
 	var slice_hours := hours / float(steps)
+	Cronometro.tramo("gente (todos los ticks)")
 	for _s in range(steps):
 		for i in range(people.size()):
 			_tick_person(people[i], i, slice_hours, slice)
+	Cronometro.cierra("gente (todos los ticks)")
+
+	# LA FAUNA, EN EL MISMO PASO Y DESPUÉS DE LA GENTE. Pensaba y andaba en su
+	# propio `_process`, con el `delta` del fotograma, fuera del paso fijo, y la
+	# cacería la lee: la misma semilla no daba la misma caza. Gente primero y
+	# fauna después es el orden que ya había, porque `DemoMain` cuelga la
+	# simulación antes que la fauna y su `_process` corría antes en cada
+	# fotograma. Ver `WildlifeHerds.avanzar` y
+	# docs/specs/LO_MISMO_MAS_DEPRISA.md, tarea 8.
+	#
+	# Y DE CUATRO PASOS EN CUATRO, no uno por paso. Ver [PASOS_DE_FAUNA].
+	if caceria != null and caceria.wildlife != null:
+		_pasos_de_fauna += 1
+		_fauna_pendiente += scaled
+		if _pasos_de_fauna >= PASOS_DE_FAUNA:
+			Cronometro.tramo("fauna (en el paso)")
+			caceria.wildlife.avanzar(_fauna_pendiente)
+			Cronometro.cierra("fauna (en el paso)")
+			_pasos_de_fauna = 0
+			_fauna_pendiente = 0.0
+
+	# Y el paso queda cerrado. Ver [paso_cerrado].
+	paso_cerrado.emit(day)
 
 
 ## Cuanto suben los rasgos fisicos por el uso, por hora. Muchisimo mas lento
@@ -1099,11 +1458,27 @@ const RESISTENCIA_TRAINING_RATE := 0.00003
 const RESISTENCIA_TRAINING_THRESHOLD := 55.0
 
 
+## Como se llama el tramo de la rutina segun el estado en que se entra. Es
+## solo para el cepo: ver [_tick_person].
+const RUTINA_POR_ESTADO := {
+	Inhabitant.State.DURMIENDO: "rutina: durmiendo",
+	Inhabitant.State.OCIOSO: "rutina: ocioso (decide el dia)",
+	Inhabitant.State.COMIENDO: "rutina: comiendo",
+	Inhabitant.State.YENDO: "rutina: yendo",
+	Inhabitant.State.BUSCANDO: "rutina: buscando",
+	Inhabitant.State.TRABAJANDO: "rutina: trabajando",
+	Inhabitant.State.RECONOCIENDO: "rutina: reconociendo",
+	Inhabitant.State.VOLVIENDO: "rutina: volviendo",
+}
+
+
 func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) -> void:
 	# Las necesidades corren para todos, trabajen o no
 	person.hunger = clampf(person.hunger + hours * HAMBRE_POR_HORA, 0.0, 100.0)
+	Cronometro.tramo("gente: rastro y atascos")
 	person.mark_trail(day, hour)
 	marcha._watch_for_stuck(person, hours)
+	Cronometro.cierra("gente: rastro y atascos")
 
 	# Las horas se apuntan SIEMPRE que este de servicio, ande o trabaje. Sin
 	# las de andar, «la recoleccion no trae nada» no se distingue de «la
@@ -1154,10 +1529,10 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 	# ya esta apuntado: ver [Inhabitant.note_step]. Se coge lo mayor de las dos
 	# cuentas, que es lo prudente: equivocarse volviendo pronto cuesta un rato
 	# de trabajo, y equivocarse volviendo tarde cuesta la noche a la intemperie.
+	Cronometro.tramo("gente: decidir la vuelta")
 	var derecho := person.position.distance_to(home_position)
 	var vuelta_m := maxf(derecho * RODEO_DE_VUELTA,
 		float(person.journey.get("ida", 0.0)))
-	var walk_home := marcha.hours_to_walk(derecho)
 	var winding_down := hour + marcha.hours_to_walk(vuelta_m) >= HORA_REGRESO \
 		and hour < HORA_DORMIR
 	var morning := hour >= HORA_DESPERTAR and hour < HORA_SALIDA
@@ -1169,7 +1544,7 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 			and not (hogar._works_at_camp(person) and hogar._can_work_at_night(person)):
 		var on_expedition := person.job == Profession.Job.EXPLORACION \
 			and person.current_speciality != Profession.Speciality.BATIDA \
-			and person.position.distance_to(home_position) > arrive_radius * 4.0
+			and not _saliendo_de_casa(person)
 		if not on_expedition:
 			if _at_shelter(person):
 				despensa._deliver(person)
@@ -1212,14 +1587,31 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 			and _at_shelter(person) and store.food_rations() > 0.0 \
 			and person.state != Inhabitant.State.DURMIENDO:
 		person.state = Inhabitant.State.COMIENDO
+	Cronometro.cierra("gente: decidir la vuelta")
 
 	# Y la noche respeta la mesa: quien esta cenando cena, y se acuesta cuando
 	# termina. Esto se resolvia con un `return` que se saltaba el resto del
 	# tick -incluida la vigilancia de atascos, que contaba la cena como una
 	# hora sin moverse y sacaba un «llego y el estado no se entero»-.
+	# Las marcas del cepo van por PIEZA y no por persona: quince personas por
+	# veinte trozos por ocho pasos son dos mil cuatrocientas llamadas en un
+	# fotograma, y una marca por persona costaria mas que lo que mide. Ver
+	# docs/specs/LO_MISMO_MAS_DEPRISA.md, tarea 18.
+	# La rutina, y ADEMAS por el estado en que se entra: es el tramo que se
+	# lleva el 70 % del año -ver la linea base en la spec- y «rutina» a secas
+	# no dice si eso es trabajar, andar, decidir la jornada o dormir. El nombre
+	# se saca ANTES, porque la rutina cambia el estado por el camino.
+	var cual: String = "rutina: noche" if night else String(
+		RUTINA_POR_ESTADO.get(person.state, "rutina: otro"))
+	Cronometro.tramo("gente: rutina")
+	Cronometro.tramo(cual)
 	_tick_routine(person, hours, delta, night)
+	Cronometro.cierra(cual)
+	Cronometro.cierra("gente: rutina")
 
+	Cronometro.tramo("gente: marcha")
 	marcha._tick_step(person, index, hours, delta)
+	Cronometro.cierra("gente: marcha")
 
 	# Las pruebas montan una `SettlementSim` a medias -gente y reservas, sin
 	# pasar por [setup]- para probar la lógica sin pagar el terreno ni la
@@ -1229,19 +1621,30 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 	# demás. Ver `_settle_at_home`.
 	# El agua del dia. Va aqui, al final del tick, para que mire la posicion en
 	# la que la persona ha ACABADO el paso y no la de antes de darlo.
+	Cronometro.tramo("gente: agua")
 	despensa._drink_and_thirst(person, hours)
+	Cronometro.cierra("gente: agua")
 
+	Cronometro.tramo("gente: sitio en casa")
 	_settle_at_home(person, delta)
+	Cronometro.cierra("gente: sitio en casa")
 
 	if _crowd and index < _bodies.size():
+		Cronometro.tramo("gente: cuerpos (vista)")
 		_crowd.update(_bodies[index], person.position, _headings[index], person.state,
 			person.age_group)
+		Cronometro.cierra("gente: cuerpos (vista)")
+
+	Cronometro.tramo("gente: aprender")
 	_learn_from(person, delta)
+	Cronometro.cierra("gente: aprender")
 
 	# Y el ultimo en mirar es quien lo apunta: el diario de cada cual se
 	# escribe leyendo COMO HA QUEDADO la persona tras el tick entero. Ver
 	# [Cronista].
+	Cronometro.tramo("gente: cronista")
 	cronista.mirar(person)
+	Cronometro.cierra("gente: cronista")
 
 
 ## Cuanto multiplica la destreza de expedicion los dias de comida que se
@@ -1344,6 +1747,13 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 			# sea y se duerme lo que quede de noche. Ver [CANSA_DE_NOCHE].
 			if not _home_reached(person):
 				marcha._send_to(person, home_position)
+				if marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+					# NO SE HA MIRADO, que no es lo mismo que no haber camino.
+					#
+					# Y aqui el error tiene precio: leyendo el silencio como «no
+					# hay camino a casa» se manda a dormir al raso a quien solo
+					# tenia que esperar un cuadro. Ver [Marcha.Traza].
+					return
 				if not person.route.is_empty():
 					person.state = Inhabitant.State.VOLVIENDO
 					person.fatigue = clampf(person.fatigue
@@ -1381,6 +1791,29 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 						and GameState.season == Subsistence.Season.INVIERNO:
 					person.fatigue = clampf(
 						person.fatigue + hours * HEARTH_COLD_FATIGUE, 0.0, 100.0)
+					# El vestido se SUMA al hogar, no lo sustituye: con cobertura
+					# completa se pasa menos frio, pero sin fuego y sin vestido
+					# sigue siendo lo peor de las cuatro combinaciones.
+					var abrigo := 1.0 - vestido_coverage() * VESTIDO_COLD_MITIGATION
+					person.cold = clampf(
+						person.cold + hours * HEARTH_COLD_RISE * abrigo, 0.0, 100.0)
+				else:
+					# Con el fuego encendido, o fuera de invierno, se entra en
+					# calor: `cold` no se queda clavado en lo peor de la
+					# última mala noche para el resto de la partida.
+					person.cold = maxf(
+						person.cold - hours * HEARTH_COLD_RECOVERY, 0.0)
+				# Superar el aforo del abrigo no es un muro -no impide nacer
+				# ni expulsa a nadie-: alimenta los mismos contadores que ya
+				# castigan dormir mal, no un cuarto camino de muerte aparte.
+				# Aparte de estación y de hogar: apretujarse molesta todo el
+				# año, no sólo en invierno.
+				if population() > plazas_abrigo():
+					person.fatigue = clampf(
+						person.fatigue + hours * ABARROTADO_FATIGUE_RISE,
+						0.0, 100.0)
+					person.cold = clampf(
+						person.cold + hours * ABARROTADO_COLD_RISE, 0.0, 100.0)
 			else:
 				# No puede volver y no le queda comida: duerme donde le coge
 				# la noche. Es lo que hace cualquiera, y sin esto era una
@@ -1474,7 +1907,39 @@ func _radio_de_llegada(hours: float) -> float:
 func _tick_daylight(person: Inhabitant, hours: float) -> void:
 	match person.state:
 		Inhabitant.State.DURMIENDO, Inhabitant.State.OCIOSO:
+			# Y POR OFICIO, que es lo que decide cuanto cuesta: decidir la
+			# jornada sale a 0,17 ms de media y a SIETE en los fotogramas
+			# malos -medido en el año de cierre: 6.894 ms de un tiron de
+			# 7.255-. Hace falta saber de cual de las tres ramas es. Se marca
+			# aqui y no dentro porque `_decide_the_day` esta lleno de
+			# `return`, y una marca que no se cierra ensucia a la siguiente
+			# persona. Ver la tarea 21 de docs/specs/LO_MISMO_MAS_DEPRISA.md.
+			# Y NO CUARENTA VECES POR MINUTO DE JUEGO. Ver
+			# [Inhabitant.repensar_tras]: quien acaba de pensar la jornada y no
+			# ha podido salir no vuelve a pensarla hasta dentro de un rato.
+			# Quien SI sale no espera nada, que es lo que hace que esto no se
+			# note jugando.
+			var ahora := float(day) * 24.0 + hour
+			if ahora < person.repensar_tras:
+				return
+			var quien := "decide: tajo"
+			if person.job == Profession.Job.EXPLORACION:
+				quien = "decide: batida" if person.current_speciality 					== Profession.Speciality.BATIDA else "decide: expedicion"
+			Cronometro.tramo(quien)
 			_decide_the_day(person, hours)
+			Cronometro.cierra(quien)
+			if person.state == Inhabitant.State.OCIOSO \
+					or person.state == Inhabitant.State.DURMIENDO:
+				# La decision no ha cambiado nada: se espera un rato.
+				#
+				# De noche la espera no cuenta desde ahora sino HASTA LA HORA DE
+				# SALIR: aplazar la primera decision de la manana seria retrasar
+				# la jornada entera de la banda, y eso ya no seria «lo mismo mas
+				# deprisa».
+				if hour < HORA_SALIDA:
+					person.repensar_tras = float(day) * 24.0 + HORA_SALIDA
+				else:
+					person.repensar_tras = ahora + ESPERA_PARA_REPENSAR
 		Inhabitant.State.COMIENDO:
 			despensa._eat_meal(person, hours)
 		Inhabitant.State.YENDO:
@@ -1499,6 +1964,13 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 					cumbres._try_ascent(person)
 					marcha._send_to(person, home_position)
 					person.state = Inhabitant.State.VOLVIENDO
+					return
+				if person.job == Profession.Job.HOGAR:
+					# De camino al agua, no a un paraje -ver
+					# [Hogar._fetch_water]-: el hogar no tiene otra razón
+					# para salir del abrigo, así que llegar YENDO siempre
+					# es llegar a la orilla.
+					hogar._arrive_at_water(person)
 					return
 				# Si conoce el paraje, se pone a trabajar. Si no, primero
 				# tiene que ENCONTRAR lo que ha venido a buscar.
@@ -1653,7 +2125,7 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 	if person.job == Profession.Job.EXPLORACION \
 			and person.current_speciality != Profession.Speciality.BATIDA \
 			and person.fatigue > 70.0 \
-			and person.position.distance_to(home_position) > arrive_radius * 4.0:
+			and not _saliendo_de_casa(person):
 		# Reventado EN EL CAMPO: se vuelve al campamento a
 		# reponer. La condicion de distancia es la que faltaba:
 		# sin ella, alguien que ya estaba en casa y seguia
@@ -1685,7 +2157,16 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 			return
 		var target := reconocimiento._batida_target(person)
 		if target.distance_to(person.position) > arrive_radius:
+			# Ruta vacia antes de pedirla. `_batida_target` deja puesta la del
+			# ultimo candidato que probo, asi que sin esto «hay camino» podia
+			# ser verdad de OTRO destino y el batidor salia siguiendo una ruta
+			# que no llevaba adonde se le mandaba.
+			person.route = PackedVector3Array()
+			person.route_step = 0
 			marcha._send_to(person, target)
+			if marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+				# No se ha mirado: no se concluye nada. Ver [Marcha.Traza].
+				return
 			if not person.route.is_empty():
 				if person.journey.is_empty():
 					person.begin_journey("Batida", day, hour,
@@ -1719,8 +2200,7 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 		# no hay ida y vuelta que reservar. Lo que si hace falta es no
 		# empezarla de noche. A quien YA esta fuera no le afecta: sigue su
 		# viaje a la hora que sea.
-		var at_home := person.position.distance_to(home_position) \
-			< arrive_radius * 4.0
+		var at_home := _saliendo_de_casa(person)
 		if at_home and hour >= HORA_REGRESO:
 			return
 
@@ -1761,8 +2241,16 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 			person.state = Inhabitant.State.OCIOSO
 		else:
 			if frontier.distance_to(person.position) > arrive_radius:
+				# Ruta vacia antes de pedirla: «no hay camino» tiene que hablar de
+				# ESTA frontera y no de la ruta que la persona traia puesta.
+				person.route = PackedVector3Array()
+				person.route_step = 0
 				marcha._send_to(person, frontier)
-				if person.route.is_empty():
+				if marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+					# No se ha mirado: se reintenta al cuadro siguiente en vez
+					# de dar la frontera por imposible. Ver [Marcha.Traza].
+					person.state = Inhabitant.State.OCIOSO
+				elif person.route.is_empty():
 					# No hay por donde llegar -un rio de por medio,
 					# un cortado-: se busca otro sitio en vez de
 					# salir andando derecho al agua
@@ -1823,6 +2311,16 @@ func raise_moment(moment: Moment) -> void:
 	moment_raised.emit(moment)
 
 
+## Dispara el momento inicial (objetivo, derrota posible, primera decisión).
+##
+## Quien monta la escena lo llama a mano, DESPUÉS de que la interfaz ya esté
+## escuchando `moment_raised` -si se llamara desde `setup()`, que corre antes
+## de `ui.barra.watch_moments`, se perdería sin avisar a nadie. Ver
+## [Partida.momento_inicial] y docs/specs/QUE_FALTA_PARA_JUGARLO.md.
+func iniciar_partida() -> void:
+	raise_moment(partida.momento_inicial())
+
+
 ## Dónde se pone esta persona cuando está en el abrigo, según lo que hace.
 ##
 ## Estable por `id`, igual que el carril de la marcha y el reparto del tajo: si
@@ -1860,6 +2358,37 @@ func _home_spot(person: Inhabitant, inside: bool) -> Vector3:
 ## El alcance no es un numero elegido: es hasta donde llega la propia campa.
 func _at_shelter(person: Inhabitant) -> bool:
 	return person.position.distance_to(home_position) <= _shelter_reach()
+
+
+## TRES PREGUNTAS DISTINTAS SOBRE «ESTAR EN CASA», Y HAY QUE SABER CUAL SE HACE.
+##
+## Estaban las tres escritas a mano y repartidas, con cuatro numeros distintos
+## para lo que parecia lo mismo. No lo es, y por eso siguen siendo tres; lo que
+## no puede ser es que cada sitio se invente el suyo:
+##
+##   `_at_shelter`      ESTAR DENTRO. La galeria y la campa —ver
+##                      [_shelter_reach]—. Es la de dormir, comer y repartirse
+##                      sitio, y su alcance sale de donde se pone la gente.
+##   `_home_reached`    HABER LLEGADO. Lo anterior, o sin camino por delante y
+##                      a menos de una celda: la rejilla no sabe dejar a nadie
+##                      mas cerca. Es la de entregar la carga y cerrar la
+##                      salida.
+##   `_saliendo_de_casa` SALIR DE AQUI. Un radio mas ancho, porque la pregunta
+##                      es «¿empieza esta jornada en el campamento?» y quien
+##                      esta a veinte metros la empieza en el campamento.
+##
+## El numero de la tercera era `arrive_radius * 4.0` escrito en cinco sitios.
+## Aqui esta una vez.
+func _saliendo_de_casa(person: Inhabitant) -> bool:
+	return Traversal.en_llano(person.position, home_position) <= SALIDA_DE_CASA
+
+
+## Hasta donde se cuenta que una jornada empieza EN el campamento.
+##
+## Veinticuatro metros: cuatro veces el radio de llegada, que es el numero que
+## ya estaba repartido por el fichero. Se le pone nombre para poder discutirlo
+## en un sitio en vez de en cinco.
+const SALIDA_DE_CASA := 24.0
 
 
 ## Hasta donde llega el abrigo, en metros.
@@ -1958,7 +2487,9 @@ const RENUNCIA := "por ahi no se pasa"
 func _send_to_work(person: Inhabitant) -> void:
 	# Lo primero, qué se hace hoy: quien no tiene especialidad fijada la elige
 	# según lo que más falte
+	Cronometro.tramo("tajo: elegir especialidad")
 	person.current_speciality = _choose_speciality(person)
+	Cronometro.cierra("tajo: elegir especialidad")
 	# La actividad la manda la ESPECIALIDAD, no el oficio: «cantera» y
 	# «fruto y raiz» son el mismo oficio para el jugador y dos sitios muy
 	# distintos del monte para el terreno.
@@ -2031,12 +2562,24 @@ func _send_to_work(person: Inhabitant) -> void:
 	#
 	# Reconocer el entorno sí deja algo: revela terreno —y con él nacen parajes,
 	# ver [Reconocimiento]—, y de paso se recoge lo que se encuentra.
+	Cronometro.tramo("tajo: ¿hay sitio?")
 	person.investigando = barbecho.sin_sitio(person.activity)
+	Cronometro.cierra("tajo: ¿hay sitio?")
 	if person.investigando:
+		Cronometro.tramo("tajo: donde investigar")
 		var mirar := reconocimiento._least_known_around(home_position,
 			Reconocimiento.BATIDA_RADIUS * 0.25,
 			Reconocimiento.BATIDA_RADIUS, person)
+		Cronometro.cierra("tajo: donde investigar")
+		# Ruta vacia antes de pedirla, para que «hay camino» hable de ESTE
+		# destino y no del anterior. Ver el bucle de candidatos de mas abajo.
+		person.route = PackedVector3Array()
+		person.route_step = 0
 		marcha._send_to(person, mirar)
+		if marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			# No se ha mirado. Ver [Marcha.Traza].
+			person.state = Inhabitant.State.OCIOSO
+			return
 		if not person.route.is_empty():
 			person.has_task = true
 			if person.journey.is_empty():
@@ -2054,13 +2597,47 @@ func _send_to_work(person: Inhabitant) -> void:
 	# [Marcha.merece_el_camino].
 	var destination := Vector3.ZERO
 	var descartados := 0
-	for candidate: Vector3 in _work_candidates(person):
+	var sin_mirar := false
+	Cronometro.tramo("tajo: lista de candidatos")
+	var candidatos := _work_candidates(person)
+	Cronometro.cierra("tajo: lista de candidatos")
+	for candidate: Vector3 in candidatos:
+		# La ruta se vacia antes de pedir la del siguiente. Sin esto, a un
+		# candidato que `_send_to` descarta de entrada -por sabido imposible,
+		# o por presupuesto- se le mide la ruta del candidato ANTERIOR: se le
+		# da por bueno un camino que no es suyo y se manda a la persona a un
+		# sitio al que no se le ha trazado nada.
+		person.route = PackedVector3Array()
+		person.route_step = 0
+		Cronometro.tramo("tajo: probar candidato")
 		marcha._send_to(person, candidate)
+		Cronometro.cierra("tajo: probar candidato")
+
+		# Y SI NO SE HA MIRADO, NO SE CONCLUYE NADA.
+		#
+		# Cada candidato cuesta una busqueda y el presupuesto del cuadro son
+		# unos pocos nodos; agotado, los que quedan vuelven con la ruta vacia
+		# SIN HABERSE MIRADO. Leyendo eso como «no hay camino» se cerraba el
+		# oficio entero por la manana: medido en el sitio 56, seis personas la
+		# jornada 1 con «no hay camino hasta ningun tajo» a 211 m de casa y la
+		# rejilla diciendo que estaban en la misma zona.
+		#
+		# Lo que toca es dejarlo para el cuadro siguiente, que llega en
+		# milesimas. Ver [Marcha.Traza].
+		if marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			sin_mirar = true
+			break
+
 		if marcha.merece_el_camino(person, candidate):
 			destination = candidate
 			break
 		if not person.route.is_empty():
 			descartados += 1
+
+	if destination == Vector3.ZERO and sin_mirar:
+		# Ni se sale ni se cierra el oficio: se vuelve a intentar enseguida.
+		person.state = Inhabitant.State.OCIOSO
+		return
 
 	# Si TODOS los candidatos salian por un rodeo que no se anda, se apunta:
 	# es un dato distinto de «no hay camino» y se lee distinto en los atascos.
@@ -2111,7 +2688,9 @@ const SED_HORAS_SIN_ODRE := HORAS_UTILES * 0.5
 ## preferencia. El primero que tenga camino se lleva la jornada.
 func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 	var out: Array[Vector3] = []
+	Cronometro.tramo("candidatos: el mejor conocido")
 	var best := tajo._best_known_spot(person)
+	Cronometro.cierra("candidatos: el mejor conocido")
 	if best != Vector3.ZERO:
 		out.append(best)
 
@@ -2130,7 +2709,10 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 	# El tanteo va DETRAS del buscar como candidato: si hay un sitio bueno al
 	# alcance se va a el, y si no, se da la vuelta. Lo que ya no pasa es
 	# quedarse en el abrigo.
-	if barbecho.sin_sitio(person.activity):
+	Cronometro.tramo("candidatos: ¿hay sitio?")
+	var sin_sitio := barbecho.sin_sitio(person.activity)
+	Cronometro.cierra("candidatos: ¿hay sitio?")
+	if sin_sitio:
 		# LO PRIMERO, EL PARAJE DE LO SUYO MAS CERCANO CON «???».
 		#
 		# Por delante de buscar y de tantear, que son las dos formas de irse
@@ -2138,17 +2720,23 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 		# que tiene es mejor apuesta que el mejor punto del campo de recursos a
 		# dos kilometros, y ademas deja algo aprendido. Ver
 		# [Tajo._paraje_por_prospectar].
+		Cronometro.tramo("candidatos: donde buscar")
 		var buscando := barbecho.donde_buscar(person.activity, person.position)
+		Cronometro.cierra("candidatos: donde buscar")
 		if buscando != Vector3.ZERO:
 			out.insert(0, buscando)
 
 		# Y este por delante de aquel: los dos van antes que el mejor conocido
 		# -que aqui es un sitio muerto- pero prospectar un paraje que ya esta
 		# en el mapa gana a mudarse a un punto del campo de recursos.
+		Cronometro.tramo("candidatos: paraje por prospectar")
 		var prospectar := tajo._paraje_por_prospectar(person)
+		Cronometro.cierra("candidatos: paraje por prospectar")
 		if prospectar != Vector3.ZERO:
 			out.insert(0, prospectar)
+		Cronometro.tramo("candidatos: tanteo")
 		var tanteando := tanteo.adonde(person)
+		Cronometro.cierra("candidatos: tanteo")
 		if tanteando != Vector3.ZERO and not out.has(tanteando):
 			out.append(tanteando)
 
@@ -2381,7 +2969,14 @@ func _learn_from(person: Inhabitant, delta: float) -> void:
 	# Andar descubre mapa. Va aparte de la familiaridad con el recurso: se
 	# puede cruzar un valle entero sin aprender nada de su caza y aun asi
 	# conocer el camino y haber visto las bocas de cueva del paso.
-	knowledge.see_from(person.position, sight_range * weather.sight_factor())
+	# Y NO DOS VECES DESDE EL MISMO SITIO. Ver [Inhabitant.ojeada_desde]: la
+	# ojeada es idempotente, asi que repetirla sin haberse movido ni haber
+	# cambiado el tiempo que hace es un barrido de celdas para no tocar nada.
+	var alcance := sight_range * weather.sight_factor()
+	if person.position != person.ojeada_desde or alcance != person.ojeada_alcance:
+		knowledge.see_from(person.position, alcance)
+		person.ojeada_desde = person.position
+		person.ojeada_alcance = alcance
 
 	# El ritmo se escala con el dia de juego para que aprender un paraje
 	# lleve jornadas y no segundos
@@ -2469,6 +3064,12 @@ func tool_history_of(kind: Tool.Kind) -> PackedFloat32Array:
 
 
 func _end_of_day() -> void:
+
+	# El frío y el hambre sostenidos enferman y, si no se cortan, matan. Ver
+	# [Relevo].
+	relevo.revisar_frio()
+	relevo.revisar_hambre()
+	_revisar_hambre_de_la_banda()
 	# Cuanta comida cabe cambia con el taller: los cestos se rompen y se
 	# trenzan otros. Ver [_ajustar_despensa].
 	_ajustar_despensa()
@@ -2484,7 +3085,12 @@ func _end_of_day() -> void:
 	# Y el lavadero, que no pide fuego pero se atiende igual: se saca lo que ya
 	# está dulce y se vuelve a llenar el cesto. Ver [Hogar._lavar_bellota].
 	hogar._lavar_bellota()
+	# Y los odres vacíos, con quien esté en el hogar. Ver [Hogar._fill_waterskins].
+	hogar._fill_waterskins()
 	store.age(1)
+	# El vestido se lleva puesto, no se usa a ratos: se gasta por dia de
+	# calendario, no por tarea. Ver `VESTIDO_WEAR_PER_DAY`.
+	toolkit.wear_all(Tool.Kind.VESTIDO, VESTIDO_WEAR_PER_DAY)
 	desechos.nuevo_dia()
 	# Y la cuenta de la PROTEINA del dia: comer no es lo mismo que comer bien.
 	# Ver [Despensa.pasar_cuenta_de_proteina].
@@ -2522,7 +3128,17 @@ func _end_of_day() -> void:
 		for activity: int in [Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
 				Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
 				Subsistence.Activity.MATERIA_PRIMA]:
-			field.regrow(activity as Subsistence.Activity, 0.045)
+			# Y LO QUE REBROTA POR ENCIMA DEL UMBRAL ENTRA EN LA COLA.
+			#
+			# Es la unica forma de que un sitio se gane un nombre sin que
+			# nadie haya ido a mirarlo: una veta esquilmada que vuelve a dar.
+			# Apuntarlo aqui -donde se sabe- es lo que permite que nadie
+			# tenga que barrer el campo por si acaso. Ver [Parajes.cola].
+			var act := activity as Subsistence.Activity
+			var umbral := maxf(Parajes.WORTH_NAMING,
+				parajes.threshold_for(act))
+			for celda: int in field.regrow(act, 0.045, umbral):
+				parajes.encolar_celda(field, act, celda)
 	# La comida se consume DURANTE el dia, en el estado COMIENDO. Aqui solo se
 	# pasa cuenta de quien no ha conseguido comer.
 	#
@@ -2561,6 +3177,11 @@ func _end_of_day() -> void:
 	# bajaba, un canchal con nieve. Ver `Inhabitant.given_up`.
 	for person: Inhabitant in people:
 		person.given_up.clear()
+		# Y nadie empieza la jornada esperando: el reparto de arriba acaba de
+		# repartir los oficios, asi que la primera decision de la manana es
+		# nueva aunque la de anoche no llevara a nada. Ver
+		# [Inhabitant.repensar_tras].
+		person.repensar_tras = -1.0
 
 	_note_daily_state()
 	# Lo que se vio pasar hoy se olvida: manana la banda puede tener ya la
@@ -2720,6 +3341,13 @@ func _advance_local_season() -> void:
 	GameState.season = ((GameState.season + 1) % 4) as Subsistence.Season
 	if GameState.season == Subsistence.Season.PRIMAVERA:
 		GameState.year += 1
+		relevo.cumplir_anyos()
+		relevo.revisar_vejez()
+		relevo.evaluar_nacimiento()
+		partida.evaluar_victoria()
+	# Un intento de trueque por estación, las cuatro, no solo en el giro de
+	# año -a diferencia de nacimientos y vejez, que son un suceso ANUAL.
+	intercambio.intentar()
 	GameState.last_report = "Empieza %s, año %d." % [
 		Subsistence.season_name(GameState.season), GameState.year]
 	_note(Chronicle.Kind.TIERRA, _season_line(), 2)
@@ -2812,6 +3440,66 @@ func _season_line() -> String:
 
 func population() -> int:
 	return people.size()
+
+
+## Cuánta gente cabe en el abrigo sin paraviento. Quince es la banda de
+## partida por defecto; un margen pequeño encima para que empezar a crecer
+## no penalice el primer nacimiento.
+const PLAZAS_ABRIGO_BASE := 18
+
+## Cuánto más cabe con un `CampProjects.Kind.PARAVIENTO` levantado.
+##
+## `camp_built` guarda como mucho UN paraviento -es un `Dictionary[Kind,
+## bool]`, no un contador, igual que el hogar o el secadero: sólo se levanta
+## uno de cada obra-. Si algún día la banda necesita más de uno, esto deja
+## de ser un booleano; hoy con "se levanta o no se levanta" basta para que
+## la mecánica tenga efecto, y partir la banda en más de un abrigo queda
+## fuera de esta spec (ver "Fuera de alcance").
+const PLAZAS_ABRIGO_POR_PARAVIENTO := 8
+
+
+## Cuánta gente cabe hoy en el abrigo. Sale de lo construido, no de un
+## número fijo de partida -mismo principio que `Storehouse.capacidad_de_
+## comida` con cestos y odres-.
+func plazas_abrigo() -> int:
+	var plazas := PLAZAS_ABRIGO_BASE
+	if camp_built.get(CampProjects.Kind.PARAVIENTO, false):
+		plazas += PLAZAS_ABRIGO_POR_PARAVIENTO
+	return plazas
+
+
+## De 0 a 1: qué parte de la banda podría llevar un `VESTIDO` de sobra hoy.
+## Cobertura AGREGADA -no se sabe ni hace falta saber quién lleva cuál, igual
+## que `Tool.Kind.CESTO` no dice qué recolector usa qué cesto-.
+func vestido_coverage() -> float:
+	var pop := population()
+	if pop <= 0:
+		return 1.0
+	return clampf(float(toolkit.count(Tool.Kind.VESTIDO)) / float(pop), 0.0, 1.0)
+
+
+## El único sitio por el que alguien deja la partida para siempre.
+##
+## Hambre, frío, vejez y percance grave son cuatro caminos hasta aquí, y
+## esta función es la única que de verdad quita a nadie de `people`.
+## Escribirla cuatro veces -una por causa- sería la misma "regla en varios
+## sitios" que el propio flujo de specs de este proyecto existe para evitar.
+##
+## No hace falta avisar a `reparto` por separado: `job_counts`, `idle_count`
+## y el resto recorren `sim.people` cada vez que se les pregunta, así que en
+## cuanto esta persona sale de la lista deja de contar en todos ellos sin
+## tocar nada más. El texto de la crónica lo trae ya redactado quien llama
+## -hambre, frío, vejez y percance se cuentan cada uno a su manera-, esto
+## sólo se ocupa de sacarla y de que quede constancia.
+func _person_dies(person: Inhabitant, texto: String) -> void:
+	var idx := people.find(person)
+	if idx < 0:
+		return
+	people.remove_at(idx)
+	_note(Chronicle.Kind.GENTE, texto, 2)
+
+	if people.is_empty():
+		partida.declarar_derrota(texto)
 
 
 ## Cuantos estan en cada estado, para la interfaz
@@ -3140,10 +3828,16 @@ var _comarca_known: bool = false
 var _peaks_done: bool = false
 
 
-## Los dos motivos de atasco que NO son del terreno, con nombre fijo para
-## poder contarlos.
+## Los motivos de atasco que NO son del terreno, con nombre fijo para poder
+## contarlos.
 const LLEGADA_COLGADA := "llego y el estado no se entero"
 const SUELO_MALO := "estaba metido donde no se pisa"
+
+## Iba a un sitio y por el camino dejo de haber ruta hasta el.
+##
+## Se cuenta aparte de los demas porque apunta a otra pieza: no al andador ni
+## al terreno, sino a QUIEN ELIGE LOS DESTINOS. Ver [Marcha._sin_rumbo].
+const SIN_RUMBO := "se quedo sin camino a donde iba"
 
 
 ## Cuantas cargas se han perdido por salir de nuevo sin haber entregado.
@@ -3202,6 +3896,29 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 			continue
 		if paraje.distance_from(home_position) > alcance:
 			continue
+		# LOS MISMOS DOS FILTROS QUE MIRAN LOS OTROS DOS.
+		#
+		# Un paraje que descansa —o al que esta persona ya renuncio hoy—
+		# lo descartan `Reconocimiento._batida_target` al heredar el sitio
+		# de la salida anterior y `Tajo._paraje_por_prospectar` al
+		# repartir trabajo. Aqui no se miraban, asi que ESTA capa lo
+		# elegia y la siguiente lo rechazaba: el batidor entraba en el
+		# sitio y a la salida siguiente se le mandaba a otro.
+		#
+		# Las tres deciden sobre el mismo paraje: tienen que mirar lo
+		# mismo o el ir y venir esta garantizado.
+		# `paraje.resting` y no `_is_resting`: aquello recorre la lista ENTERA
+		# de parajes buscando vecinos que descansen, y esto ya esta dentro de
+		# un bucle sobre la misma lista. Cuadratico, y con el mapa entero
+		# abierto a la exploracion la lista pasa de cuatro a noventa parajes.
+		#
+		# Y no hace falta: `_is_resting` contesta «¿descansa ALGO en esta
+		# zona?», que es la pregunta de quien mira un punto suelto del monte.
+		# Aqui se tiene el paraje delante y se le puede preguntar a el.
+		if paraje.resting:
+			continue
+		if marcha._given_up_on(person, paraje.position):
+			continue
 		# Comunicado no es alcanzable: la otra orilla lo está, por un vado a
 		# kilómetro y medio.
 		#
@@ -3223,7 +3940,8 @@ func _paraje_to_survey(person: Inhabitant) -> Paraje:
 		var taken := false
 		for other: Inhabitant in people:
 			if other != person and other.job == Profession.Job.EXPLORACION \
-					and reconocimiento._exploration_anchor(other).distance_to(paraje.position) < 120.0:
+					and Traversal.en_llano(reconocimiento._exploration_anchor(other),
+					paraje.position) < Reconocimiento.YA_HAY_OTRO:
 				taken = true
 				break
 		if taken:
@@ -3319,10 +4037,49 @@ const SPECIALITY_YIELDS := {
 ## Es la otra mitad de lo que las distingue. La trampa no pide filo -pide
 ## cordel, y eso ya lo cobra el taller-, y la caza mayor sin azagaya no es
 ## caza mayor: es mirar pasar al ciervo.
+## El utillaje con el que se llega al abrigo.
+##
+## Va CORTO a proposito: da para arrancar y no para acomodarse, asi que la
+## primera escasez de filo llega a las pocas semanas y con ella la razon de
+## poner a alguien a tallar.
+##
+## Todo de cuarcita, que es lo que hay en cualquier playa del Cantabrico. El
+## silex bueno esta lejos, y encontrarlo es media aventura.
+##
+## ## Por que ya no hay azagayas
+##
+## Llegaban con dos, y `Tool.tech_of` exige `Tech.AZAGAYA` para fabricar una:
+## la banda tenia puesto lo que no sabria reponer. [ESTADO.md] §2 lo midio
+## -«acabaron con dos azagayas de un utillaje que ni siquiera sabian
+## diseñar»- y se quedo sin arreglar.
+##
+## En su lugar van dos PUNTAS liticas, que es lo historico: la lanza de mano
+## es lo anterior a la punta de asta enmangada, no pide tecnica ni otra
+## herramienta para hacerse, y `Fauna` ya deja cobrar corzo y rebeco con ella.
+## Asi la caza menor sigue viva desde el primer dia -y con ella el tendon, que
+## es lo que hace falta para aprender la azagaya-.
+##
+## Es UNA LISTA y no ocho lineas de `craft` porque hay una regla que
+## comprobar: nada de aqui puede pedir tecnica. Ver `TestToolkit`.
+const UTILLAJE_INICIAL := [
+	{"kind": Tool.Kind.LASCA, "stuff": Tool.Stuff.CUARCITA, "cuantas": 8},
+	{"kind": Tool.Kind.RAEDERA, "stuff": Tool.Stuff.CUARCITA, "cuantas": 2},
+	{"kind": Tool.Kind.BURIL, "stuff": Tool.Stuff.CUARCITA, "cuantas": 1},
+	{"kind": Tool.Kind.PUNTA, "stuff": Tool.Stuff.CUARCITA, "cuantas": 2},
+]
+
+
 const SPECIALITY_TOOL := {
 	Profession.Speciality.FORRAJEO: Tool.Kind.CESTO,
 	Profession.Speciality.CANTERA: Tool.Kind.LASCA,
-	Profession.Speciality.CAZA_MENOR: Tool.Kind.AZAGAYA,
+	# La caza menor con PUNTA, no con azagaya. Eran dos verdades sobre lo
+	# mismo: `Fauna` ya decia que al corzo y al rebeco se les entra con lanza
+	# de mano -«es lo que hubo mucho antes que la azagaya»- y esta tabla exigia
+	# azagaya, que es lo que cerraba el bucle: sin tendon no se aprende la
+	# azagaya y sin caza menor no hay tendon. Gana `Fauna`, que es la que
+	# describe la pieza. La caza MAYOR si la sigue pidiendo: a un uro no se le
+	# espera a distancia de brazo.
+	Profession.Speciality.CAZA_MENOR: Tool.Kind.PUNTA,
 	Profession.Speciality.CAZA_MAYOR: Tool.Kind.AZAGAYA,
 	Profession.Speciality.MARISQUEO: Tool.Kind.CESTO,
 	Profession.Speciality.ORILLA: Tool.Kind.ARPON,

@@ -22,9 +22,9 @@ está aquí y también allí, allí manda:
 > `BlockData`, `TimeManager` como autoload, «no hay suite de pruebas»— que
 > **ya no existe**: se retiró entero (ARQUITECTURA.md §8) y el documento se
 > quedó atrás sin que nadie lo tocara. Lo que sigue está contrastado contra
-> `scripts/` el 2026-09-12, con la suite en verde: **887 pruebas, 6 163
-> comprobaciones**. Si vuelve a haber discrepancia, gana el código y este
-> documento está pendiente de arreglar.
+> `scripts/` el 2026-09-12, con la suite en verde —el total de ese día está en
+> [ESTADO.md](ESTADO.md) §3, que es donde vive esa cifra—. Si vuelve a haber
+> discrepancia, gana el código y este documento está pendiente de arreglar.
 
 ---
 
@@ -120,6 +120,32 @@ facilidad sorprendente, y por eso existe el instrumental del §6.2.
 `time_scale` es una variable de `SettlementSim`, **no** `Engine.time_scale`:
 congelar el motor congelaría también la interfaz y la cámara.
 
+**Y la noche se salta dando MÁS PASOS, no pasos más largos** (2026-09-12).
+Cuando `SettlementSim.nadie_trabaja()` —nadie en `TRABAJANDO`, `BUSCANDO` ni
+`RECONOCIENDO`— se siguen dando pasos de `PASO_FIJO` hasta gastar
+`MS_DE_NOCHE_POR_CUADRO` (8 ms) del cuadro.
+
+Esto **no rompe el contrato de arriba, y la distinción es la clave del diseño**:
+subir `time_scale` cambiaría cuánta hora de juego avanza cada paso, y con ella
+el instante en que salta `hour_passed` y el trozo de fauna que entrega
+`_fauna_pendiente` — sería otra partida. Dando más pasos del mismo tamaño, la
+sucesión de `_advance` es **idéntica** a la de una corrida sin acelerar; lo
+único que cambia es en cuántos fotogramas se reparte. Comprobado con `Cotejo`.
+
+Que eso valga depende de que **nada de la simulación dependa del fotograma**, y
+está comprobado: `Marcha.nuevo_cuadro()` es un `pass`, y `_path_nodes_this_frame`
+y `_stranded_this_frame` se ponen a cero dentro de `_advance`. Si alguien mete
+estado por cuadro, rompe esto sin dar un error.
+
+Se apaga con `NOCHE=0` **para medir**, no para jugar: la corrida que demuestra
+que la partida no cambia necesita la pareja con y sin. Y el interruptor está en
+`Instantanea.FUERA`, porque es ritmo de reloj y no partida.
+
+**Y la semilla se fija sola cuando esto no es una partida sino una medida.** Lo
+lanzado con `--script` arranca con `SettlementSim.SEMILLA_DE_SONDA`, no con el
+reloj: ninguna sonda la fijaba por su cuenta y comparar dos corridas era
+comparar dos partidas distintas. Ver ARQUITECTURA.md §5.1.
+
 ### 3.2. Las tres señales, y cuál usar
 
 | Señal | Cuándo se emite | Para qué |
@@ -192,6 +218,16 @@ partida y 5 741 pasos sobre terreno cortado. Hoy:
   un Dijkstra desde el abrigo —que es siempre el mismo origen—, rehecho al
   cambiar la rejilla, o sea una vez por estación. **No se pregunta con un A\*
   por candidato**: eso fueron 79 búsquedas en un fotograma de 2 541 ms.
+- **Y son los metros del camino que SE ANDA**, no los del más corto que
+  existiría. Uno solo, no dos: el mismo Dijkstra da el árbol —por coste— y los
+  metros acumulados sobre él. Hubo dos, y con ellos la regla del rodeo admitía
+  un sitio midiendo un camino y la persona andaba otro; medido, 88 sitios en
+  verano admitidos y luego andados por encima del tope que los admitió.
+- **El miedo no encarece un metro más que el rodeo que se anda.**
+  `Navgrid.RIESGO_MAXIMO` **es** `Marcha.RODEO_QUE_SE_ANDA`, no una copia: si
+  esquivar lo peligroso no puede multiplicar el coste de una celda más que eso,
+  tampoco puede provocar un rodeo mayor. El tope es al recargo por riesgo, no
+  al tiempo: lo que se tarda en subir una cuesta sigue entero.
 - **Nadie da un paso sin camino debajo.** Quedarse sin ruta no es salir derecho
   hacia el destino.
 
@@ -246,13 +282,18 @@ no un fallo por arreglar a ciegas.
 
 ### 4.6. `scripts/banda/` — las personas
 
-`Inhabitant`, `Profession`, `BandKnowledge`, `Chronicle`, `Diario`, `Tale`,
-`Moment`, `Mishap`.
+`Inhabitant`, `Profession`, `BandKnowledge`, `Vereda`, `Chronicle`, `Diario`,
+`Tale`, `Moment`, `Mishap`.
 
 - `Profession.can_do()` es **la única puerta** de quién puede hacer qué. Ningún
   oficio de época posterior necesita un campo nuevo en `Inhabitant`: el
   `enum Job` crece, el resto del sistema no.
 - La pericia crece practicando y **se transmite de noche**.
+- **Los caminos que la banda sabe son de la banda**, no del simulador:
+  `BandKnowledge.veredas`, cada uno una `Vereda` sellada con el caudal y el
+  encharcamiento de la rejilla que lo trazó, y descartado al leerlo si el sello
+  no cuadra. Estuvo en `SettlementSim._route_cache` hasta el 2026-09-12.
+  Ver SISTEMAS.md §18.
 - `Moment` es el contrato de «la partida deja de ser gestión y te mira»: se
   levanta desde dentro de un paso y la interfaz pone `time_scale` a cero ahí
   mismo. El bucle del §3.1 corta ahí por eso.
@@ -364,8 +405,9 @@ godot --headless --path . --script res://scripts/tests/Cotejo.gd -- firmas A.txt
 godot --headless --path . --script res://scripts/tests/RunTests.gd
 ```
 
-**887 pruebas, 6 163 comprobaciones**, todas en verde, siempre. Una prueba
-comprueba **una regla del juego**, no una línea de código.
+**Todas en verde, siempre**, y el total de comprobaciones no baja del que diera
+al empezar. El total medido está en [ESTADO.md](ESTADO.md) §3 y sólo ahí. Una
+prueba comprueba **una regla del juego**, no una línea de código.
 
 Las **sondas** (`scripts/tests/*Probe.gd`) son otra cosa y no se mezclan: no
 pasan ni fallan, **miden**. El balanceo se ajusta midiendo.

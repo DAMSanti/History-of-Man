@@ -130,6 +130,18 @@ func use(kind: Tool.Kind, amount: float = 1.0) -> bool:
 var broke_last_use: String = ""
 
 
+## Gasta TODAS las piezas de un tipo por igual, en vez de sólo la peor.
+##
+## `use()` es para lo que gasta UNA persona trabajando con UNA pieza; esto es
+## para lo que se lleva puesto todo el rato -el vestido, ver [Tool.Kind.VESTIDO]-,
+## donde cada pieza que existe se desgasta un poco cada jornada, la use quien
+## la use.
+func wear_all(kind: Tool.Kind, amount: float) -> void:
+	for tool: Tool in pieces:
+		if tool.kind == kind and not tool.is_spent():
+			tool.wear(amount)
+
+
 ## Cuánto rinde un trabajo según el filo disponible, de 0 a 1.
 ##
 ## `needed` es cuántas piezas pide el trabajo para ir a pleno rendimiento -una
@@ -157,6 +169,23 @@ func condition(kind: Tool.Kind) -> float:
 	if pieces_found == 0:
 		return -1.0
 	return total / float(pieces_found)
+
+
+## Lo gastada que está la PEOR pieza de un tipo, de 1 (nueva) a 0. -1 si no hay.
+##
+## No es lo mismo que [condition], que da la media, y la diferencia importa
+## para lo que se enseña: la media no se mueve cuando una sola pieza se está
+## acabando, y es justo ésa la que se va a romper. El jugador tiene que poder
+## mandar coser ANTES de quedarse sin abrigo, no después. Ver INTERFAZ.md §4.
+func peor_condicion(kind: Tool.Kind) -> float:
+	var peor := -1.0
+	for tool: Tool in pieces:
+		if tool.kind != kind or tool.is_spent():
+			continue
+		var suya := tool.condition()
+		if peor < 0.0 or suya < peor:
+			peor = suya
+	return peor
 
 
 ## Tira las piezas agotadas. Devuelve cuántas se han retirado.

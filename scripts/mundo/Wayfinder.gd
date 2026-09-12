@@ -47,6 +47,18 @@ const HEURISTIC_PUSH := 4.0
 ## igual, y por eso un solo destino imposible se comía el fotograma.
 static var last_nodes: int = 0
 
+## Cuantas busquedas COMPLETAS se han lanzado en total.
+##
+## Es la otra mitad de lo que las veredas tienen que ahorrar: la primera es que
+## el camino sea bueno, y esta es no volver a buscar uno que ya se busco -ver
+## docs/SISTEMAS.md §18-. Se cuenta AQUI DENTRO y no en quien llama, porque
+## todo el que busca pasa por [find] y un contador que se puede rodear no
+## cuenta nada.
+##
+## No es estado de partida: no lo lee nadie del juego, solo las sondas, y por
+## eso vive en una estatica y no en `SettlementSim`.
+static var busquedas: int = 0
+
 
 ## El camino de un punto a otro, como lista de puntos del mundo.
 ##
@@ -56,6 +68,7 @@ static var last_nodes: int = 0
 static func find(grid: Navgrid, from_point: Vector3,
 		to_point: Vector3) -> PackedVector3Array:
 	last_nodes = 0
+	busquedas += 1
 	Cronometro.tramo("A* (Wayfinder.find)")
 	var straight := PackedVector3Array([to_point])
 	if grid == null or not grid.is_ready():
@@ -88,7 +101,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# sitio, o sea justo dentro del atajo, y cerraba el 81 % de sus salidas con
 	# «atascado».
 	var span := Vector2(to_point.x - from_point.x, to_point.z - from_point.z).length()
-	if span < Navgrid.CELL * 1.5 and _clear_line(grid, from_point, to_point):
+	if span < Navgrid.CELL * 1.5 and linea_limpia(grid, from_point, to_point):
 		Cronometro.cierra("A* (Wayfinder.find)")
 		return straight
 
@@ -172,6 +185,18 @@ static func find(grid: Navgrid, from_point: Vector3,
 	var closed := PackedByteArray()
 	closed.resize(cells)
 
+	# EL VADO SE MIRA AQUI ANTES DE PREGUNTARSELO A LA REJILLA.
+	#
+	# `Navgrid.paso_entre` es la regla del agua y no se toca, pero casi todas
+	# las celdas no tienen cauce, y entonces lo unico que hace es devolver
+	# `true`: una llamada a funcion por vecino -ocho por nodo- para no decir
+	# nada. El caso sin cauce se resuelve aqui con dos lecturas, y a la rejilla
+	# solo se le pregunta cuando alguna de las dos celdas lleva agua. El
+	# resultado es el mismo celda a celda, asi que el camino tambien. Medido: el
+	# A* era el 99 % buscar -rehacer y recortar el camino, el 0,9 %-.
+	var vados := grid.vado
+	var con_vados := vados.size() == costs.size()
+
 	while not heap.is_empty() and visited < MAX_NODES:
 		var current := heap.pop()
 		if closed[current] == 1:
@@ -179,8 +204,13 @@ static func find(grid: Navgrid, from_point: Vector3,
 		closed[current] = 1
 		if current == goal:
 			last_nodes = visited
+			# Aparte lo de rehacer y recortar el camino, para saber si el A* se
+			# va en buscar o en quitar la escalera. Ver [_pull_string].
+			Cronometro.tramo("A*: rehacer y recortar")
+			var camino := _rebuild(came, current, start, grid, to_point)
+			Cronometro.cierra("A*: rehacer y recortar")
 			Cronometro.cierra("A* (Wayfinder.find)")
-			return _rebuild(came, current, start, grid, to_point)
+			return camino
 		visited += 1
 
 		var cx := current % wide
@@ -224,18 +254,24 @@ static func find(grid: Navgrid, from_point: Vector3,
 						continue
 					if costs[nz * wide + cx] <= Navgrid.BLOCKED:
 						continue
-					# Y EL AGUA NO SE CRUZA EN DIAGONAL.
-					#
-					# Una celda de agua se abre porque tiene una linea vadeable
-					# de lado a lado -la fila o la columna de en medio, ver
-					# [Navgrid._vado_de_verdad]-. Una diagonal la atraviesa de
-					# esquina a esquina, o sea POR FUERA de esa linea, y eso es
-					# el cauce. El camino prometia un paso que sobre el terreno
-					# es agua honda, y quien lo seguia se plantaba en la orilla
-					# a barrerla -y varios en el mismo punto, porque el vado
-					# falso era siempre la misma celda.
-					if grid.vado.size() == costs.size() 							and (grid.vado[current] != 0 or grid.vado[neighbour] != 0):
-						continue
+
+				# Y EL AGUA SE CRUZA POR SU VADO Y NO POR OTRO SITIO.
+				#
+				# Una celda con cauce se abre porque tiene una línea vadeable
+				# de lado a lado -la fila o la columna de en medio, ver
+				# [Navgrid._vado_de_verdad]-. Cruzarla por cualquier otra parte
+				# es meterse en el agua: la diagonal la atraviesa de esquina a
+				# esquina, y entrar de norte a sur por una celda que sólo se
+				# vadea de este a oeste es exactamente lo mismo.
+				#
+				# Aquí sólo se miraba la diagonal, así que el segundo caso se
+				# trazaba tan tranquilo. El camino prometía un paso que sobre el
+				# terreno es agua honda, y quien lo seguía se plantaba en la
+				# orilla a barrerla -y varios en el mismo punto, porque el vado
+				# falso era siempre la misma celda-.
+				if con_vados and (vados[current] != 0 or vados[neighbour] != 0) \
+						and not grid.paso_entre(current, neighbour, dx, dz):
+					continue
 
 				var step := Navgrid.CELL * (1.414 if dx != 0 and dz != 0 else 1.0)
 				var total := here + cost * step
@@ -249,16 +285,34 @@ static func find(grid: Navgrid, from_point: Vector3,
 						* Navgrid.CELL * floor_cost)
 
 	# Se ha agotado la búsqueda sin llegar: NO hay camino.
+	#
+	# Y hay que distinguirlo del OTRO motivo de salir del bucle, que es
+	# tocar el tope de nodos. Los dos devuelven vacío y quien llama sólo ve
+	# el vacío, así que «no me ha dado tiempo» se leería como «no se puede».
+	#
+	# Hoy no pasa: con la lista de cerradas una celda se expande una sola
+	# vez, así que `visited` no puede pasar del número de celdas del mapa
+	# —10.609 en el sitio 56— y el tope está en 40.000. Pero eso depende de
+	# un mapa que puede crecer, así que si algún día se toca, que se OIGA:
+	# un vacío que miente es de los fallos más caros de encontrar.
+	if visited >= MAX_NODES:
+		push_warning("Wayfinder: tope de %d nodos agotado. El camino puede existir y esto dira que no." % MAX_NODES)
 	last_nodes = visited
 	Cronometro.cierra("A* (Wayfinder.find)")
 	return PackedVector3Array()
 
 
-## Si de aquí a allí se puede ir en línea recta sin pisar celda cerrada.
+## Si de aquí a allí se puede ir en línea recta sin pisar celda cerrada
+## ni meterse en el agua.
+##
+## Publica porque la necesitan dos: el atajo de la recta corta de aquí
+## abajo, y quien reutiliza un camino guardado —ver [Marcha._send_to]—,
+## que tiene que comprobar que de DONDE ESTÁ se llega al primer hito de
+## ese camino, porque el camino se trazó desde otro sitio.
 ##
 ## Se mira cada media celda: es el paso más largo con el que no se puede saltar
 ## por encima de una celda de cuarenta metros sin verla.
-static func _clear_line(grid: Navgrid, from_point: Vector3,
+static func linea_limpia(grid: Navgrid, from_point: Vector3,
 		to_point: Vector3) -> bool:
 	var span := Vector2(to_point.x - from_point.x,
 		to_point.z - from_point.z).length()
@@ -266,6 +320,13 @@ static func _clear_line(grid: Navgrid, from_point: Vector3,
 	for i in range(steps + 1):
 		var at := from_point.lerp(to_point, float(i) / float(steps))
 		if not grid.passable(at):
+			return false
+		# Y NI DE CERCA SE TIRA DERECHO POR EL AGUA. Este atajo se salta el A*
+		# entero para cualquier destino a menos de sesenta metros, así que un
+		# tajo en la otra orilla de un arroyo se resolvía con una recta que
+		# cruzaba el cauce por donde cayera. Una celda con cauce se cruza por
+		# su vado, y quién es su vado lo sabe el trazado, no una recta.
+		if grid.moja(at):
 			return false
 	return true
 
@@ -355,7 +416,20 @@ static func _clear_between(from_cell: int, to_cell: int, grid: Navgrid) -> bool:
 		for corner: Vector2i in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)]:
 			var x := clampi(int(floor(fx)) + corner.x, 0, grid.wide - 1)
 			var z := clampi(int(floor(fz)) + corner.y, 0, grid.tall - 1)
-			if grid.cost[z * grid.wide + x] <= Navgrid.BLOCKED:
+			var cell := z * grid.wide + x
+			if grid.cost[cell] <= Navgrid.BLOCKED:
+				return false
+			# EL VADO NO SE RECORTA.
+			#
+			# El A* cruza una celda con cauce por su línea de vado, de centro a
+			# centro de celda, porque es la única línea que se ha comprobado
+			# que se pasa. Este recorte quitaba justo esos hitos y dejaba en su
+			# lugar una recta que atraviesa la celda de sesgo: deshacía a
+			# posteriori la regla que el trazado acababa de respetar.
+			#
+			# Ahí estaba el ovillo de la orilla. La ruta era buena al salir del
+			# A* y llegaba mala a quien la andaba.
+			if grid.vado.size() == grid.cost.size() and grid.vado[cell] != 0:
 				return false
 	return true
 
@@ -414,3 +488,197 @@ class _Heap extends RefCounted:
 		var cost := _costs[a]
 		_costs[a] = _costs[b]
 		_costs[b] = cost
+
+
+## Lo que mide el camino mas barato desde un punto a TODAS las celdas, en metros.
+##
+## Una sola busqueda en vez de miles. La pregunta «¿se llega de verdad desde
+## casa?» -que no es «¿hay camino?» sino «¿sin dar la vuelta al valle?»- se hace
+## por cada paraje candidato, cada vez que alguien decide su salida, y por cada
+## celda de un barrido. Contestarla con un A* por pregunta salia a decenas de
+## busquedas en un fotograma: medido en el panel de F3, SETENTA Y NUEVE, y 2.541
+## milisegundos de cuadro.
+##
+## Y no hacia falta ninguna. El origen es SIEMPRE EL MISMO -el abrigo-, y para
+## un origen fijo un solo Dijkstra da la respuesta exacta para el mapa entero,
+## por lo que cuesta una busqueda de las de antes. Se rehace cuando cambia la
+## rejilla, o sea una vez por estacion.
+##
+## Se minimiza el COSTE -para que el camino elegido sea el mismo que elegiria el
+## trazado- y se arrastra al lado los METROS de ese camino, que es lo que hay
+## que comparar con la linea recta. Ver [Marcha.alcanzable_desde_casa].
+##
+## `por_distancia` cambia lo que se minimiza: por defecto el COSTE -y entonces
+## el arbol es el de los caminos que de verdad se andan, que rodean el canchal
+## y la marisma-, y con `true` los METROS, que es lo que hay que medir para
+## decir si a un sitio se llega sin dar la vuelta al valle.
+##
+## Son dos preguntas distintas y mezclarlas costaba caro: midiendo el rodeo
+## sobre el camino MAS BARATO, un cambio de estacion que abarata otro camino
+## mas largo convierte el sitio en «no alcanzable» sin que el terreno haya
+## cambiado. Medido en el sitio 56, al pasar de primavera a verano: 44 parajes
+## de 182 se volvian inalcanzables el dia que BAJA el rio.
+##
+## Devuelve `{metros, arbol}`: los metros por celda -`INF` en lo que no se
+## alcanza- y el ARBOL, o sea de que celda se viene al llegar a cada una.
+##
+## El arbol es la otra mitad y la que de verdad quita trabajo: con el, el
+## camino del abrigo a cualquier celda -y de cualquier celda al abrigo- sale
+## tirando del hilo, sin buscar nada. Ver [camino_por_el_arbol].
+static func metros_desde(grid: Navgrid, origen: Vector3,
+		por_distancia: bool = false) -> Dictionary:
+	var metros := PackedFloat64Array()
+	var arbol := PackedInt32Array()
+	if grid == null or not grid.is_ready():
+		return {"metros": metros, "arbol": arbol}
+
+	var wide := grid.wide
+	var cells := wide * grid.tall
+	metros.resize(cells)
+	metros.fill(INF)
+
+	var coste := PackedFloat64Array()
+	coste.resize(cells)
+	coste.fill(INF)
+
+	arbol.resize(cells)
+	arbol.fill(-1)
+
+	var start := grid.nearest_open(origen)
+	if start < 0:
+		return {"metros": metros, "arbol": arbol}
+	coste[start] = 0.0
+	metros[start] = 0.0
+
+	var cerradas := PackedByteArray()
+	cerradas.resize(cells)
+
+	var heap := _Heap.new()
+	heap.push(start, 0.0)
+	var costs := grid.cost
+	# El vado, mirado aqui antes de preguntar a la rejilla: lo mismo que en
+	# [find], y por lo mismo. Las dos busquedas tienen que seguir las mismas
+	# reglas o esto mediria caminos que el trazado no anda.
+	var vados := grid.vado
+	var con_vados := vados.size() == costs.size()
+
+	while not heap.is_empty():
+		var current := heap.pop()
+		if cerradas[current] == 1:
+			continue
+		cerradas[current] = 1
+
+		var cx := current % wide
+		var cz := current / wide
+		var aqui := coste[current]
+
+		for dz in range(-1, 2):
+			var nz := cz + dz
+			if nz < 0 or nz >= grid.tall:
+				continue
+			for dx in range(-1, 2):
+				if dx == 0 and dz == 0:
+					continue
+				var nx := cx + dx
+				if nx < 0 or nx >= wide:
+					continue
+
+				var neighbour := nz * wide + nx
+				var cost := costs[neighbour]
+				if cost <= Navgrid.BLOCKED:
+					continue
+				# LAS MISMAS REGLAS QUE EL TRAZADO, o esto mediria caminos que
+				# nadie puede andar. Ver [Navgrid.paso_entre].
+				if dx != 0 and dz != 0:
+					if costs[cz * wide + nx] <= Navgrid.BLOCKED:
+						continue
+					if costs[nz * wide + cx] <= Navgrid.BLOCKED:
+						continue
+				if con_vados and (vados[current] != 0 or vados[neighbour] != 0) \
+						and not grid.paso_entre(current, neighbour, dx, dz):
+					continue
+
+				var step := Navgrid.CELL * (1.414 if dx != 0 and dz != 0 else 1.0)
+				# Por COSTE para el arbol de caminos -que es el que se anda, y
+				# esquiva el canchal y la marisma- y por METROS para la regla
+				# del rodeo, que pregunta cuanto hay que andar y no cuanto
+				# cuesta. Ver [Marcha.alcanzable_desde_casa].
+				var total := aqui + (step if por_distancia else cost * step)
+				if total >= coste[neighbour]:
+					continue
+				coste[neighbour] = total
+				metros[neighbour] = metros[current] + step
+				arbol[neighbour] = current
+				heap.push(neighbour, total)
+
+	return {"metros": metros, "arbol": arbol}
+
+
+## El camino que sale del arbol de [metros_desde], ya recortado y en puntos.
+##
+## El arbol esta enraizado en el abrigo: `arbol[c]` dice de que celda se viene
+## al llegar a `c`. Asi que tirando del hilo desde una celda se tiene el camino
+## ENTERO hasta la raiz, sin buscar nada.
+##
+## Y esos son la mayoria de los viajes de la banda: por la manana los quince
+## salen del abrigo a sus tajos, y por la tarde vuelven. Sacarlos del arbol
+## quita de en medio el reparto de caminos guardados —que era lo que prestaba a
+## uno el rodeo de otro— sin pagar una busqueda por viaje.
+##
+## `hacia_la_raiz` dice en que sentido se anda: `true` para volver al abrigo
+## -el hilo ya sale en ese orden- y `false` para salir de el, que es el mismo
+## hilo del reves.
+## `recortes` guarda lo ya recortado, por celda. Es UNA CACHE Y NADA MAS: el
+## recorte no depende del destino exacto -que solo sustituye el ultimo punto-
+## sino del arbol, la rejilla y la celda de la que se tira del hilo, asi que
+## dos llamadas con la misma celda dan el mismo recorte. Y cuesta: `_pull_string`
+## es cuadratico y mira si se ve una celda desde otra.
+##
+## Quien la pasa tiene que VACIARLA al rehacer el arbol -una vez por rejilla,
+## o sea por estacion-. Ver [Marcha._rehacer_el_mapa_de_casa]. Sin pasarla, se
+## recorta cada vez, como siempre.
+static func camino_por_el_arbol(grid: Navgrid, arbol: PackedInt32Array,
+		celda: int, hasta: Vector3, hacia_la_raiz: bool,
+		recortes: Dictionary = {}) -> PackedVector3Array:
+	if grid == null or not grid.is_ready() or arbol.size() != grid.cost.size():
+		return PackedVector3Array()
+	if celda < 0 or celda >= arbol.size():
+		return PackedVector3Array()
+
+	var clave := celda if hacia_la_raiz else -celda - 1
+	var pulled: Array[int] = []
+	if recortes.has(clave):
+		pulled = recortes[clave]
+	else:
+		# El hilo, de la celda a la raiz. La raiz tiene -1 y ahi se para.
+		var hilo: Array[int] = [celda]
+		var nodo := celda
+		var tope := arbol.size()
+		while arbol[nodo] >= 0 and hilo.size() < tope:
+			nodo = arbol[nodo]
+			hilo.append(nodo)
+		# Si no se llego a la raiz, esta celda no cuelga del arbol: no hay
+		# camino, y eso tambien se recuerda.
+		if arbol[nodo] >= 0:
+			recortes[clave] = pulled
+			return PackedVector3Array()
+
+		if not hacia_la_raiz:
+			hilo.reverse()
+
+		# El mismo recorte que usa el A*, para que un camino del arbol y uno
+		# buscado se anden igual. Ver [_pull_string].
+		pulled = _pull_string(hilo, grid)
+		recortes[clave] = pulled
+	if pulled.is_empty():
+		return PackedVector3Array()
+
+	var out := PackedVector3Array()
+	# El primero es la celda de donde se sale: se salta, ya se esta ahi.
+	for i in range(1, pulled.size()):
+		out.append(grid.point_of(pulled[i]))
+	if out.size() > 0:
+		out[out.size() - 1] = hasta
+	else:
+		out.append(hasta)
+	return out

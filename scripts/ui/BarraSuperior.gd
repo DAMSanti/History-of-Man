@@ -77,6 +77,7 @@ func _build_clock() -> void:
 	ui._clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.add_child(ui._clock)
 
+	_build_temp_gauge(strip)
 	_build_band_gauge(strip)
 	_build_winter_gauge(strip)
 
@@ -107,10 +108,40 @@ func _on_moment(moment: Moment) -> void:
 		_show_next_moment()
 
 
+## El momento que se está enseñando, si hay alguno.
+var _en_pantalla: Moment = null
+
+
+func momento_en_pantalla() -> Moment:
+	return _en_pantalla
+
+
+## Lo que elige el jugador en la tarjeta que tiene delante: su `on_pick`, y
+## después la tarjeta siguiente, que es la que devuelve la velocidad cuando ya
+## no queda ninguna.
+##
+## Es LA vía para contestar una decisión, y por eso es pública: el botón la usa
+## y las sondas también. Una sonda que contestara llamando a `on_pick` a pelo
+## jugaría otra partida: la tarjeta se queda abierta, la velocidad no vuelve, y
+## lo que llega después se apila detrás sin enseñarse. Medido en
+## docs/specs/LO_MISMO_MAS_DEPRISA.md, tarea 1.
+func elegir(indice: int) -> void:
+	if _en_pantalla != null and indice >= 0 and indice < _en_pantalla.options.size():
+		(_en_pantalla.options[indice]["on_pick"] as Callable).call()
+	_show_next_moment()
+
+
+## «Seguir»: cerrar la tarjeta sin decidir nada, que es lo que se hace con un
+## hallazgo.
+func seguir() -> void:
+	_show_next_moment()
+
+
 func _show_next_moment() -> void:
 	if ui._moment_card != null:
 		ui._moment_card.queue_free()
 		ui._moment_card = null
+	_en_pantalla = null
 	if ui._moments.is_empty():
 		# Se devuelve la velocidad que había, no una fija: si el jugador estaba
 		# en pausa mirando algo, reanudarle la partida sería peor que no parar.
@@ -126,6 +157,7 @@ func _show_next_moment() -> void:
 	if moment.is_decision() and ui.sim != null and ui._speed_before_moment < 0.0:
 		ui._speed_before_moment = ui.sim.time_scale
 		ui.sim.time_scale = 0.0
+	_en_pantalla = moment
 	ui._moment_card = _build_moment_card(moment)
 
 
@@ -183,22 +215,21 @@ func _build_moment_card(moment: Moment) -> Control:
 		look.pressed.connect(func() -> void: ui.censo._look_at_world(moment.where))
 		buttons.add_child(look)
 
-	for option: Dictionary in moment.options:
+	for i in range(moment.options.size()):
+		var option: Dictionary = moment.options[i]
+		var indice := i
 		var pick := Button.new()
 		pick.text = String(option["label"])
 		pick.tooltip_text = String(option.get("hint", ""))
 		pick.custom_minimum_size = Vector2(0, 26)
-		pick.pressed.connect(func() -> void:
-			var act: Callable = option["on_pick"]
-			act.call()
-			_show_next_moment())
+		pick.pressed.connect(func() -> void: elegir(indice))
 		buttons.add_child(pick)
 
 	if moment.options.is_empty():
 		var seen := Button.new()
 		seen.text = "Seguir"
 		seen.custom_minimum_size = Vector2(80, 26)
-		seen.pressed.connect(func() -> void: _show_next_moment())
+		seen.pressed.connect(func() -> void: seguir())
 		buttons.add_child(seen)
 
 	return margin
@@ -239,6 +270,13 @@ func _moment_tint(moment: Moment) -> Color:
 		# El relato va en ocre, que es el color del pigmento con el que se
 		# pinta: es la tarjeta que ofrece dejarlo en la pared.
 		Moment.Kind.RELATO: return UISkin.OCHRE
+		# El inicio, en ocre: es la marca hecha con el dedo, el mismo acento
+		# de siempre. La victoria, en verde de liquen -"bien", como pide
+		# docs/INTERFAZ.md §4-. La derrota, en hematites: la misma alarma
+		# que un percance, pero es la última que se va a ver.
+		Moment.Kind.INICIO: return UISkin.OCHRE
+		Moment.Kind.VICTORIA: return UISkin.GREEN
+		Moment.Kind.DERROTA: return UISkin.ALARM
 		_: return UISkin.GREEN
 
 
@@ -270,6 +308,13 @@ func _build_band_gauge(strip: HBoxContainer) -> void:
 	# rato mientras se mira otra cosa.
 	ui._hunger_bar = _strip_gauge(strip, "Hambre")
 	ui._tired_bar = _strip_gauge(strip, "Cansancio")
+
+	# Y el riesgo de verdad: cuánta gente está ENFERMANDO -[Relevo], de frío o
+	# de hambre sostenidos-, no cuánta hambre hay hoy. El medidor de invierno
+	# (`_build_winter_gauge`) ya está siempre visible, pero mide la despensa;
+	# esto mide a la banda, y es lo que de verdad avisa de que se va perdiendo
+	# gente, todo el año y no sólo en la ventana de otoño.
+	ui._risk_bar = _strip_gauge(strip, "Riesgo")
 
 
 ## Una barra con su rotulo, para la tira de arriba.
@@ -325,6 +370,24 @@ func _update_band_gauge() -> void:
 	if ui._tired_bar != null:
 		ui._tired_bar.valor = tired / 100.0
 		_paint_gauge(ui._tired_bar, tired)
+	if ui._risk_bar != null:
+		var riesgo := _risk_share(ui.sim.people)
+		ui._risk_bar.valor = riesgo
+		_paint_gauge(ui._risk_bar, riesgo * 100.0)
+
+
+## Qué proporción de la banda está enfermando DE VERDAD -de frío o de hambre
+## sostenidos, ver [Relevo]-, no sólo con hambre o frío altos hoy: eso ya lo
+## dicen las barras de hambre y cansancio. Aparte de pintar, para poder
+## probarlo sin montar ninguna interfaz.
+static func _risk_share(people: Array[Inhabitant]) -> float:
+	if people.is_empty():
+		return 0.0
+	var enfermos := 0
+	for person: Inhabitant in people:
+		if person.cold_sick_days > 0 or person.hunger_sick_days > 0:
+			enfermos += 1
+	return float(enfermos) / float(people.size())
 
 
 ## El color de una barra segun lo alta que este: la barra dice CUANTO y el
@@ -386,6 +449,77 @@ func _update_winter_gauge() -> void:
 	elif share < 0.9:
 		tint = UISkin.OCHRE
 	ui._winter_label.add_theme_color_override("font_color", tint)
+
+
+## Los grados que hace, y cómo va de abrigo la banda.
+##
+## Van juntos a propósito: el frío sin el abrigo es un número que no se puede
+## hacer nada con él, y el abrigo sin el frío es un inventario. Juntos son una
+## decisión. Ver INTERFAZ.md §4 y SISTEMAS.md §19.
+func _build_temp_gauge(strip: HBoxContainer) -> void:
+	ui._temp_label = Label.new()
+	ui._temp_label.add_theme_font_size_override("font_size", 11)
+	ui._temp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ui._temp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# CON ANCHO RESERVADO, y no es un capricho de maquetacion: la tira de
+	# arriba va sobrada de sitio y el `ProgressBar` del invierno no encoge
+	# -tiene minimo propio-, asi que lo que se come el hueco son las etiquetas.
+	# Sin esto, el rotulo de los grados salia DEBAJO de la barra del invierno y
+	# no se leia. Se vio en la captura, no en el texto: es justo para lo que
+	# INTERFAZ.md §4 manda mirar la pantalla.
+	ui._temp_label.custom_minimum_size = Vector2(250, 0)
+	ui._temp_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	strip.add_child(ui._temp_label)
+	_update_temp_gauge()
+
+
+func _update_temp_gauge() -> void:
+	if ui._temp_label == null or ui.sim == null:
+		return
+
+	# LOS GRADOS DEL ABRIGO, que es donde está la banda cuando importa. La cota
+	# se pregunta al terreno: el gradiente vertical es la mitad de lo que hace
+	# que el roquedo sea otro sitio. Ver [Termometro].
+	var cota := 0.0
+	var suelo := ui.sim.terrain()
+	if suelo != null:
+		cota = suelo.get_height_at(ui.sim.home_position)
+	var grados := Termometro.grados(GameState.season as Subsistence.Season,
+		ui.sim.hour, cota)
+
+	var gente: int = ui.sim.people.size()
+	var vestidos: int = ui.sim.toolkit.count(Tool.Kind.VESTIDO)
+	var peor: float = ui.sim.toolkit.peor_condicion(Tool.Kind.VESTIDO)
+
+	# La peor pieza y no la media: la media no se mueve cuando una sola se está
+	# acabando, y es ésa la que se va a romper. Se enseña para que dé tiempo a
+	# mandar coser. Ver INTERFAZ.md §4.
+	var abrigo := "sin abrigo"
+	if vestidos > 0:
+		abrigo = "abrigo %d de %d" % [vestidos, gente]
+		if peor >= 0.0:
+			abrigo += ", la peor al %d %%" % int(peor * 100.0)
+	ui._temp_label.text = "%.0f °C   %s" % [grados, abrigo]
+
+	# Hematites cuando el frío muerde y no hay para todos; ocre cuando falta
+	# abrigo pero no aprieta; ceniza el resto del tiempo.
+	var falta := vestidos < gente
+	var tint := UISkin.INK_SOFT
+	if falta and grados < GRADOS_QUE_MUERDEN:
+		tint = UISkin.ALARM
+	elif falta:
+		tint = UISkin.OCHRE
+	ui._temp_label.add_theme_color_override("font_color", tint)
+
+
+## Por debajo de cuántos grados el aviso se pone en hematites.
+##
+## Es una cifra de INTERFAZ y se dice: no decide nada del juego —quien enferma
+## de frío lo decide `Relevo.revisar_frio` con `Inhabitant.cold`— sino cuándo
+## se avisa. Cinco grados es la media de una noche de invierno al nivel del mar
+## en esta época (`Termometro`), o sea el punto en que dormir sin abrigo deja
+## de ser incómodo.
+const GRADOS_QUE_MUERDEN := 5.0
 
 
 ## Pausa y velocidades, debajo de la fecha.
@@ -467,6 +601,7 @@ func _update_clock() -> void:
 
 		_update_winter_gauge()
 		_update_band_gauge()
+		_update_temp_gauge()
 
 	# De noche el color baja: se ve de un vistazo si la banda está trabajando
 	# o durmiendo sin tener que leer la hora

@@ -118,11 +118,15 @@ func test_hay_tantos_odres_como_ha_hecho_el_taller() -> void:
 	sim.store = Storehouse.new()
 	sim.toolkit = Toolkit.new()
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	# Hecho no es lo mismo que lleno: hace falta llenarlo con trabajo de
+	# hogar (ver [Hogar._fill_waterskins]). Aquí se da por ya lleno para
+	# aislar lo que esta prueba mide: el reparto, no el llenado.
+	sim.store.add(Materia.Kind.AGUA, 1.0)
 	var uno := _person(sim)
 	var otro := _person(sim)
 	sim.despensa._hand_out_containers(uno)
 	sim.despensa._hand_out_containers(otro)
-	assert_true(uno.has_waterskin, "el primero coge el unico odre")
+	assert_true(uno.has_waterskin, "el primero coge el unico odre lleno")
 	assert_false(otro.has_waterskin, "y el segundo se queda sin el")
 
 
@@ -133,6 +137,7 @@ func test_con_odre_lleno_se_pasa_la_jornada_fuera() -> void:
 	sim.store = Storehouse.new()
 	sim.toolkit = Toolkit.new()
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	sim.store.add(Materia.Kind.AGUA, 1.0)
 	var person := _person(sim)
 	sim.despensa._hand_out_containers(person)
 	assert_true(person.water_left >= SettlementSim.HORAS_UTILES,
@@ -201,6 +206,54 @@ func test_dormir_no_da_sed() -> void:
 	person.water_left = 3.0
 	sim.despensa._drink_and_thirst(person, 8.0)
 	assert_eq(person.water_left, 3.0, "la noche no gasta agua")
+
+
+# --- beber en casa depende de si la cueva esta junto al agua ------------
+#
+# «Tanto beber del río como llenar los odres debe ser una salida y marcarse
+# como tal, quizá haya cuevas que no estén pegadas al agua». Antes, estar
+# en el abrigo bastaba siempre; ahora depende de `Hogar._home_by_water`.
+
+func test_beber_en_casa_sin_agua_guardada_no_quita_la_sed_lejos_del_rio() -> void:
+	var sim := _sim()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	var person := _person(sim)
+	person.water_left = 0.0
+	person.state = Inhabitant.State.OCIOSO
+
+	sim.despensa._drink_and_thirst(person, 1.0)
+	assert_eq(person.water_left, 0.0,
+		"sin agua guardada y sin río a la puerta, estar en casa no quita la sed")
+
+
+func test_beber_en_casa_con_agua_guardada_quita_la_sed_y_la_gasta() -> void:
+	var sim := _sim()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3.ZERO
+	sim.store.add(Materia.Kind.AGUA, 5.0)
+	var person := _person(sim)
+	person.water_left = 0.0
+	person.state = Inhabitant.State.OCIOSO
+
+	sim.despensa._drink_and_thirst(person, 1.0)
+	assert_gt(person.water_left, 0.0, "con agua guardada, sí quita la sed en casa")
+	assert_lt(sim.store.amount(Materia.Kind.AGUA), 5.0, "y la gasta")
+
+
+func test_beber_en_casa_sigue_gratis_junto_al_rio() -> void:
+	var sim := _sim()
+	sim._terrain = FakeTerrain.new()
+	sim.home_position = Vector3(0.0, 0.0, FakeTerrain.RIVER_Z)
+	var person := _person(sim, sim.home_position)
+	person.water_left = 0.0
+	person.state = Inhabitant.State.OCIOSO
+
+	sim.despensa._drink_and_thirst(person, 1.0)
+	assert_gt(person.water_left, 0.0, "junto al río, sigue siendo gratis")
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"y no hace falta gastar nada del almacén")
+
 
 # --- el trampero no sale de vacio ----------------------------------------
 
@@ -297,7 +350,11 @@ func test_el_registro_de_produccion_no_crece_sin_fin() -> void:
 
 # --- el almacen guarda odres llenos, no agua a granel --------------------
 
-func test_los_odres_llenos_del_abrigo_son_los_que_hay_menos_los_que_salen() -> void:
+func test_un_odre_hecho_no_esta_lleno_hasta_que_se_llena() -> void:
+	# Antes esto se llamaba justo al reves -"los odres llenos son los que hay
+	# menos los que salen"- y esa era la premisa que habia que quitar: un odre
+	# hecho es un recipiente vacio hasta que alguien lo llena con trabajo de
+	# hogar. Ver [Hogar._fill_waterskins].
 	var sim := _sim()
 	sim.store = Storehouse.new()
 	sim.toolkit = Toolkit.new()
@@ -305,14 +362,18 @@ func test_los_odres_llenos_del_abrigo_son_los_que_hay_menos_los_que_salen() -> v
 	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
 	var person := _person(sim)
 	sim.despensa._sync_waterskins()
-	assert_eq(sim.store.amount(Materia.Kind.AGUA), 2.0,
-		"dos odres hechos y nadie fuera: dos colgados en la boca")
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
+		"dos odres hechos y ninguno lleno: nadie los ha llenado todavia")
+
+	# Se dan por ya llenos -eso es cosa de Hogar, no de esta prueba- para
+	# aislar lo que aqui se mide: que salir gasta el agua y volver no la repone.
+	sim.store.add(Materia.Kind.AGUA, 2.0)
 	sim.despensa._hand_out_containers(person)
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
-		"el que sale se lleva el suyo")
+		"el que sale se lleva un odre lleno, y deja de contar en casa")
 	sim.despensa._deliver(person)
-	assert_eq(sim.store.amount(Materia.Kind.AGUA), 2.0,
-		"y al volver lo cuelga otra vez, lleno del rio de la puerta")
+	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
+		"y vuelve VACIO: no se rellena solo por entrar por la boca de la cueva")
 
 
 func test_sin_odres_hechos_no_hay_agua_guardada() -> void:
@@ -570,3 +631,36 @@ func test_sin_sitio_conocido_se_investiga_el_entorno() -> void:
 	person.investigando = true
 	assert_true(person.investigando,
 		"y con ella puesta, la salida es de reconocimiento")
+
+
+# ------------------------------------------------ la semilla de una medida --
+
+func test_una_sonda_arranca_siempre_con_la_misma_semilla() -> void:
+	# CONTRATO DE MEDIDA, no de juego: lo que se lanza con `--script` es una
+	# sonda o esta misma suite, y una medida tiene que poder repetirse. Sin
+	# esto, dos corridas de la misma sonda son dos partidas distintas y
+	# comparar variantes es comparar ruido: medido, `AtascoProbe` sin semilla
+	# dio 2 200, 1 747, 303 y 219 pasos cortados con el código sin tocar.
+	# Ver ARQUITECTURA.md §5.1.
+	var sim := SettlementSim.new()
+	OS.set_environment("SEMILLA", "")
+	assert_eq(sim._semilla_de_esta_corrida(), SettlementSim.SEMILLA_DE_SONDA,
+		"esta suite corre con --script, así que la semilla está fijada")
+
+
+func test_la_semilla_del_entorno_manda_sobre_todo() -> void:
+	var sim := SettlementSim.new()
+	OS.set_environment("SEMILLA", "123")
+	assert_eq(sim._semilla_de_esta_corrida(), 123,
+		"se puede repetir una partida concreta")
+	OS.set_environment("SEMILLA", "")
+
+
+func test_se_puede_pedir_azar_de_verdad() -> void:
+	# La puerta de salida: una sonda que quiera varias tiradas la necesita.
+	var sim := SettlementSim.new()
+	OS.set_environment("SEMILLA", "azar")
+	var una := sim._semilla_de_esta_corrida()
+	assert_true(una != SettlementSim.SEMILLA_DE_SONDA,
+		"«azar» devuelve el reloj, no la semilla de sonda")
+	OS.set_environment("SEMILLA", "")
