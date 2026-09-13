@@ -67,10 +67,9 @@ func _init() -> void:
 	# Sin jugador delante, la primera decision deja el reloj a cero para
 	# siempre. Mismo apaño que en `AnoProbe`, y por el mismo motivo.
 	var resolver := func() -> void:
-		var actual := ui.barra.momento_en_pantalla()
-		while actual != null and actual.is_decision():
-			ui.barra.elegir(1 if actual.kind == Moment.Kind.BERREA else 0)
-			actual = ui.barra.momento_en_pantalla()
+		# La opción 0 es siempre la que no compromete (SPECS §4.6), y los avisos
+		# se cierran: ver [BarraSuperior.contestar_todo].
+		ui.barra.contestar_todo(func(_m: Moment) -> int: return 0)
 
 	var dias := 60
 	if not OS.get_environment("DIAS").is_empty():

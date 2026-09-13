@@ -638,6 +638,10 @@ func apply_priorities() -> void:
 	# Cuanta gente lleva ya asignada cada especialidad en este reparto.
 	var taken: Dictionary = {}
 	for person: Inhabitant in sim.people:
+		# Quien esta fuera del mapa no entra en el reparto: sus jornadas son de
+		# la expedicion, y eso es justo lo que el frente pide que cueste.
+		if person.esta_de_expedicion(sim.day):
+			continue
 		var best_level := 99
 		# TODAS las tareas empatadas al mejor nivel, no solo la primera que
 		# se encuentre. Con "level >= best_level: continue" de antes, un

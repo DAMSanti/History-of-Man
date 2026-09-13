@@ -247,6 +247,26 @@ y escriben una tabla. Son la herramienta de trabajo del balanceo, y el
 proyecto se ajusta midiendo, no a ojo. `JornadaCazadorProbe` fue quien dijo que
 un cazador estaba el 0,8 % de su vida en estado de trabajo.
 
+> **Una trampa de GDScript que hace pasar pruebas en vacío** (2026-09-12):
+> **las lambdas capturan las variables locales POR VALOR.**
+>
+> ```gdscript
+> var propuestos := 0
+> sim.moment_raised.connect(func(_m): propuestos += 1)   # suma a una COPIA
+> sim.intercambio.proponer()
+> assert_eq(propuestos, 0, "no se propone nada")        # vale 0 SIEMPRE
+> ```
+>
+> La señal se emite, la lambda suma, y el `propuestos` de fuera no se entera.
+> Una prueba que espera cero pasa **aunque el código haga justo lo contrario**.
+> Pasó en `TestIntercambio`, y sólo se vio porque otra prueba —la que esperaba
+> cuatro— salía a cero.
+>
+> Lo que sí se captura por referencia son los contenedores: `var n := [0]` con
+> `n[0] += 1`, o un diccionario. Y **una prueba que espera cero lleva control
+> positivo**: el mismo montaje con la condición contraria, esperando que no
+> sea cero. Sin él, el cero no dice nada.
+
 ### 5.1. Lo que cuesta medir, y cómo no pagarlo
 
 > **Antes que nada: TODA MEDIDA COMPARATIVA LLEVA `SEMILLA=`.**

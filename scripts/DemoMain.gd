@@ -345,6 +345,23 @@ func _levantar_simulacion(home: Vector3) -> void:
 	sim.setup(terrain, home, GameState.population, GameState.food)
 	sim.day_passed.connect(_on_day_passed)
 
+	# LA COMARCA DE AHI FUERA: adonde puede ir una expedicion y quien vive en
+	# cada sitio. Va aqui y no en `setup` porque la comarca es un dato regional
+	# horneado que la simulacion local no carga por su cuenta, y SPECS §2.3 dice
+	# que este es el unico sitio donde se cablean subsistemas. Sin esto la
+	# expedicion salia, gastaba y volvia sin descubrir nada, y nadie vivia en
+	# ninguna parte: compilaba, y no funcionaba.
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	if comarca != null:
+		sim.expedicion.sitios = comarca
+		var ids := PackedInt32Array()
+		for sitio: Site in comarca.available_in(GameState.sea_level_m, GameState.era):
+			# La cueva de la banda no esta «ocupada por otro grupo»: es la suya.
+			if GameState.home != null and sitio.id == GameState.home.id:
+				continue
+			ids.append(sitio.id)
+		sim.contacto.repartir_la_gente(ids)
+
 	# Lo que el valle tiene, repartido en manchas y con su estacion
 	field = ResourceMapper.build(terrain, home)
 

@@ -441,6 +441,13 @@ func _sim_on_peaks() -> SettlementSim:
 	sim.home_position.y = sim._terrain.get_height_at(sim.home_position)
 	sim._rng.seed = 8
 	sim.parajes = Parajes.new()
+	# CON ABRIGO PARA LA CORDADA. Desde el 2026-09-12 no se sube sin ropa adonde
+	# hiela de noche —`Cumbres.motivo_del_frio`—, y estas cumbres de mentira (300
+	# a 640 m) hielan en primavera. Las pruebas de este fichero van de subir, no
+	# de pasar frío: la puerta del frío se prueba en `TestFrio`. Sin esto,
+	# `peak_for` no daba cumbre y los intentos se quedaban en nada.
+	for i in range(Cumbres.MIN_CLIMBING_PARTY):
+		sim.toolkit.craft(Tool.Kind.VESTIDO, Tool.Stuff.PIEL, 0.6)
 	return sim
 
 

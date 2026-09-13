@@ -117,7 +117,8 @@ func _on_moment(moment: Moment) -> void:
 			linea += " · tras elegir por la vía del jugador: velocidad %.1f" % sim.time_scale
 		else:
 			# Como contestaban antes `TironAnualProbe` y `AnoProbe`: a pelo.
-			var index := 1 if moment.kind == Moment.Kind.BERREA else 0
+			# La opción 0 es siempre la que no compromete (SPECS §4.6).
+			var index := 0
 			(moment.options[index]["on_pick"] as Callable).call()
 			linea += " · tras contestar a pelo: velocidad %.1f" % sim.time_scale
 	print(linea)

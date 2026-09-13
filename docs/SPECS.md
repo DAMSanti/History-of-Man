@@ -241,10 +241,17 @@ el grano que sabes cortar no es un presupuesto: corta a mitad de fila.
 viven en su propia clase, construida con `Clase.new(self)`, y el simulador deja
 pasamanos para no reescribir las llamadas de fuera.
 
-Subsistemas hoy: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`, `Cronista`,
-`Cumbres`, `Desechos`, `Despensa`, `ElLobo`, `Hogar`, `Marcha`, `Nasas`,
-`Partida`, `Percances`, `Pinturas`, `Reconocimiento`, `Relevo`, `Reparto`,
-`Tajo`, `Taller`, `Tanteo`, `Trampas`.
+Subsistemas hoy: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`, `Contacto`,
+`Cronista`, `Cumbres`, `Desechos`, `Despensa`, `ElLobo`, `Expedicion`, `Hogar`,
+`Intercambio`, `Marcha`, `Nasas`, `Partida`, `Percances`, `Pinturas`,
+`Reconocimiento`, `Relevo`, `Reparto`, `Tajo`, `Taller`, `Tanteo`, `Trampas`.
+
+> **`Expedicion` y `Contacto` necesitan la comarca regional**, que es un dato
+> horneado que la simulación local no carga por su cuenta. Se la pasa
+> `DemoMain` justo después de `setup`, que es donde §2.3 dice que se cablea.
+> **Y repartir quién vive dónde consume tiradas del `_rng`**, así que desde el
+> 2026-09-12 todas las partidas se desplazan respecto de las anteriores: una
+> firma o una cifra medida antes de esa fecha no se compara con una de después.
 
 Y alrededor: `Exploration`, `Fauna`, `Fishing`, `Huella`, `Hunt`, `Hunting`,
 `Paraje`, `Parajes`, `Poblaciones`, `Querencia`, `ResourceField`,
@@ -297,6 +304,20 @@ no un fallo por arreglar a ciegas.
 - `Moment` es el contrato de «la partida deja de ser gestión y te mira»: se
   levanta desde dentro de un paso y la interfaz pone `time_scale` a cero ahí
   mismo. El bucle del §3.1 corta ahí por eso.
+- **Y cada opción declara lo que cuesta** (desde el 2026-09-12): `"cuesta"`, en
+  despensa, jornadas y riesgo, construida con `Moment.opcion`.
+  `Moment.la_eleccion_importa()` dice si elegir cambia alguna cifra. Un momento
+  con dos botones que cuestan lo mismo **no cuenta como decisión**, aunque pare
+  el reloj. Quien levante un momento con opciones nuevo tiene que rellenarlo, o
+  la sonda del año no lo contará.
+- **Las sondas contestan por `BarraSuperior.contestar_todo(elige)`**, que
+  contesta las decisiones y **cierra los avisos**. Un aviso sin cerrar tapa la
+  cola entera: hasta el 2026-09-13 cinco sondas sólo contestaban decisiones, se
+  quedaban paradas ante el aviso inicial de la partida y jugaban el año sin
+  contestar ninguna.
+- **La primera opción es la que no compromete a nada**, cuando la hay. Las
+  sondas contestan los momentos eligiendo la opción 0 —`TironAnualProbe`—, y
+  si ésa fuera la que gasta, medir «un año sin decidir nada» haría gastos solo.
 
 ### 4.7. `scripts/vista/` y `scripts/ui/`
 

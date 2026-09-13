@@ -137,6 +137,38 @@ func seguir() -> void:
 	_show_next_moment()
 
 
+## Contesta lo que haya en pantalla y todo lo que venga detrás, como un jugador
+## que no se para a leer: las decisiones con `elige` —recibe el [Moment] y
+## devuelve el índice de la opción—, y los avisos, cerrados con [seguir].
+##
+## Es la vía de las sondas, y vive aquí y no en cada una porque hasta el
+## 2026-09-13 **cinco de seis sólo contestaban decisiones**. La primera tarjeta
+## de la partida es un aviso sin opciones, así que se quedaban paradas delante
+## y todas las decisiones del año se apilaban detrás sin enseñarse: la pasada
+## larga de EPOCA_01 §10.1 tanda 2 llevaba 46 jornadas sin haber contestado
+## ninguna. `TironAnualProbe` era la única que cerraba los avisos.
+##
+## Si un `on_pick` levanta otra tarjeta, se pone en cola y la coge la vuelta
+## siguiente; y quien llame a esto desde `moment_raised` no entra dos veces. El
+## tope de vueltas es por si un `on_pick` levantara tarjetas sin fin: una sonda
+## colgada no avisa, se queda quieta.
+func contestar_todo(elige: Callable) -> void:
+	if _contestando:
+		return
+	_contestando = true
+	var vueltas := 0
+	while _en_pantalla != null and vueltas < 50:
+		if _en_pantalla.is_decision():
+			elegir(int(elige.call(_en_pantalla)))
+		else:
+			seguir()
+		vueltas += 1
+	_contestando = false
+
+
+var _contestando := false
+
+
 func _show_next_moment() -> void:
 	if ui._moment_card != null:
 		ui._moment_card.queue_free()
@@ -505,21 +537,11 @@ func _update_temp_gauge() -> void:
 	# abrigo pero no aprieta; ceniza el resto del tiempo.
 	var falta := vestidos < gente
 	var tint := UISkin.INK_SOFT
-	if falta and grados < GRADOS_QUE_MUERDEN:
+	if falta and grados < Termometro.GRADOS_DE_ABRIGO:
 		tint = UISkin.ALARM
 	elif falta:
 		tint = UISkin.OCHRE
 	ui._temp_label.add_theme_color_override("font_color", tint)
-
-
-## Por debajo de cuántos grados el aviso se pone en hematites.
-##
-## Es una cifra de INTERFAZ y se dice: no decide nada del juego —quien enferma
-## de frío lo decide `Relevo.revisar_frio` con `Inhabitant.cold`— sino cuándo
-## se avisa. Cinco grados es la media de una noche de invierno al nivel del mar
-## en esta época (`Termometro`), o sea el punto en que dormir sin abrigo deja
-## de ser incómodo.
-const GRADOS_QUE_MUERDEN := 5.0
 
 
 ## Pausa y velocidades, debajo de la fecha.

@@ -20,6 +20,7 @@ a la vez.
 | **Qué se está haciendo AHORA, y sus tareas** | **«En curso»** — es donde `/plan-tarea` cuelga la lista |
 | Los dos 🔴 que bloqueaban la tanda 2, y cómo se cerraron | «En curso» → La puerta de entrada |
 | Las tareas de la tanda 1 del Paleolítico | «En curso» → Tanda 1 |
+| Las tareas de la tanda 2 del Paleolítico (cerrada el 2026-09-13) | «En curso» → Tanda 2 |
 | Qué está terminado | «Estado actual» → Completado |
 | Qué está roto o a medias y molesta | «Estado actual» → Deuda pendiente, y FASE F |
 | Por qué hay dos escalas y no hay chunking | «La decisión que ordena todo lo demás» |
@@ -406,6 +407,549 @@ la corrida literal con el vigía para localizarlo, y eso son otros ~45 min.
 
 **Al cerrar:** las cifras nuevas van a [ESTADO.md](ESTADO.md) §2 y el total de
 la suite a §3, que son las únicas copias.
+
+---
+
+
+---
+
+### ~~Tanda 2: expedición, trueque, el vestido y las decisiones del año~~ — cerrada
+
+**CERRADA el 2026-09-13.** Todo lo estructural hecho y medido con dos años de
+partida. Suite **1 076 pruebas y 7 161 comprobaciones**, desde 979/6 994. Lo
+aprendido está en EPOCA_01 §10.1 («Cierre de la tanda 2»), SISTEMAS §4, §5, §18
+y §19, SPECS §4.4 y §4.6, INTERFAZ §4 y ESTADO §2 y §5.
+
+| | |
+|---|---|
+| La expedición | Sale, descubre **4 sitios** por vuelta y deja contacto; **la primera siempre encuentra gente** |
+| El trueque | Con contraparte que recuerda y seis maneras de tratar; **tasa sin medir**, 0 intentos en la pasada |
+| El vestido | Cierra las cumbres con frío; **en el invierno en casa no cambia nada**, aceptado como hallazgo |
+| Las decisiones | **4 al año que cuestan**, una por estación |
+| **Lo que queda abierto** | 🔴 **La banda muere de hambre en el segundo invierno** (ESTADO §5, punto 13), por `/depurar`. Hasta entonces ninguna cifra de año vale |
+
+**Spec y plan técnico en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md)
+§10.1**, tanda 2 y «Plan técnico de la tanda 2». Lista colgada por
+`/plan-tarea` el 2026-09-12 por `history-of-man-11`.
+
+**Suelo de la suite al abrir: 979 pruebas, 6 994 comprobaciones, TODO OK.**
+
+**Tres premisas de la spec que el código no sostiene**, en el plan con detalle:
+la **niebla regional ya está construida** (`GameState.discovered` +
+`RegionMap`), `PanelSitios` **no lista emplazamientos regionales** —es el panel
+local—, y `Site` es **un recurso horneado**, así que el contacto no puede vivir
+ahí.
+
+**La expedición** (frente 5) — nadie depende de nada, y todo depende de ella:
+
+- [x] **E1. Medir la niebla que ya hay, antes de tocarla.** *(Decidido el
+      2026-09-12: se mide y se corrige la documentación que dice lo contrario
+      —SISTEMAS §4 y FASE A1—, en vez de reconstruir algo que funciona.)* Cuántos `Site`
+      lista `RegionMap` al empezar la partida. Si ya son un puñado, el primer
+      criterio del frente está cumplido y se escribe; si son 862, está roto y
+      es otra tarea.
+      **Toca:** `scripts/tests/TestNiebla.gd` (nuevo), ESTADO.md §2.
+      **Verificable:** la prueba deja la cifra escrita. Segundos.
+
+      > **HECHO (2026-09-12), y la premisa se confirma: estaba construida.**
+      > `scripts/tests/TestNiebla.gd`, 4 pruebas. Al empezar la partida se
+      > conoce **un** emplazamiento, la cueva. El criterio «no ver los 862 de
+      > golpe» estaba cumplido de sobra.
+      >
+      > **Y lo que falta queda localizado:** nadie llama a
+      > `GameState.discover` desde la partida, así que **la niebla no se
+      > levanta nunca**. El mapa regional se queda en la cueva para siempre.
+      > Eso es E3, y ahora se sabe que es lo único que falta de esta mitad.
+      >
+      > **Dos cifras de la documentación estaban mal**, y se corrigen en
+      > SISTEMAS §4 y ESTADO §2: el conjunto horneado tiene **869**
+      > emplazamientos y no 862 —los siete de más son los de prueba— y de ésos
+      > sólo **72** son usables en el Paleolítico con el mar a −120 m. Los
+      > «puntos regionales nuevos» que cierran la fase se miden contra 72.
+- [x] **E2. `Contacto`: quién hay ahí fuera.** Subsistema nuevo: qué `Site`
+      están ocupados —sorteado con el `_rng` al empezar— y con cuáles se ha
+      tratado. **No va en `Site`**, que es dato horneado, ni en `GameState`,
+      que es lo que cruza escenas: es estado de simulación y la instantánea
+      tiene que recorrerlo.
+      **Toca:** `scripts/sim/Contacto.gd` (nuevo), `scripts/sim/SettlementSim.gd`,
+      `scripts/tests/TestContacto.gd` (nuevo).
+      **Verificable:** pruebas —el sorteo sale del `_rng`; el contacto
+      sobrevive a una estación; `LlamadasHuerfanas` en 0—. Segundos.
+
+      > **HECHO (2026-09-12).** `scripts/sim/Contacto.gd` (nueva) y
+      > `scripts/tests/TestContacto.gd`, 10 pruebas. Suite **993 pruebas,
+      > 7 022 comprobaciones**. Guarda quién está ocupado —sorteado con el
+      > `_rng`— y el `trato` con cada contraparte, con la forma del de
+      > `ElLobo`, que es lo que la spec pedía para que el peldaño escale.
+      >
+      > **Y una guarda que salió de escribir la prueba, no del plan:** repartir
+      > la comarca dos veces la cambiaba, porque el segundo sorteo usaba el
+      > `_rng` ya avanzado —19 ocupados la primera vez, 12 la segunda—. O sea
+      > que la gente que habías conocido dejaba de estar donde estaba. Ahora se
+      > reparte **una sola vez** y la segunda llamada no hace nada.
+      >
+      > `OCUPADOS` (uno de cada cinco) y los topes del trato **son decisiones y
+      > está dicho en el código**: no hay dato arqueológico de cuántos de los 72
+      > emplazamientos del Magdaleniense estaban habitados a la vez.
+- [x] **E3. `Expedicion`: la salida larga, y lo que cuesta.** Se manda gente,
+      tarda jornadas, come de su propia cuenta de `Despensa`, y al volver
+      descubre `Site` —es el único sitio que llama a `GameState.discover`—.
+      Vuelva con algo o vuelva de vacío, las jornadas se han ido.
+      **Toca:** `scripts/sim/Expedicion.gd` (nuevo), `scripts/sim/SettlementSim.gd`,
+      `scripts/sim/Despensa.gd`, `scripts/tests/TestExpedicion.gd` (nuevo).
+      **Verificable:** pruebas —descubre y sube la cuenta; consume raciones y
+      jornadas; **la que vuelve sin llegar cuesta igual**—. Segundos.
+
+      > **HECHO (2026-09-12).** `scripts/sim/Expedicion.gd` (nueva), 13 pruebas
+      > en `TestExpedicion`. Se sale con 3 adultos como mínimo, 12 jornadas
+      > fuera, y se llevan **las raciones de todo el viaje** antes de salir —en
+      > la cuenta de siempre, `Materia.KCAL_RACION`: 3 × 12 × 2 = 72—. Al
+      > volver se descubren el destino y sus vecinos más cercanos.
+      >
+      > **Tres cosas que no estaban en el plan:**
+      >
+      > - **Quien sale deja de existir en el mapa local.** No basta con que no
+      >   trabaje: `SettlementSim._advance` no le da tick y `Reparto` no le
+      >   asigna nada. Si no, «salir del valle» era seguir paseando por él.
+      >   `Inhabitant.expedicion_hasta` es la marca.
+      > - **La regla de qué comida aguanta un viaje estaba escrita dentro de
+      >   `Despensa._provision`**, y la expedición la habría copiado. Ahora es
+      >   `Despensa.LO_QUE_AGUANTA_EL_VIAJE` y la usan las dos.
+      > - **Y compilaba sin funcionar.** Con las pruebas en verde, en el juego
+      >   real nadie le pasaba la comarca a la expedición ni repartía quién
+      >   vive dónde: salía, gastaba y volvía sin descubrir nada. El cableado
+      >   va en `DemoMain`, que es donde SPECS §2.3 dice que se cablea, y lo
+      >   comprueba `scripts/tests/ExpedicionProbe.gd` **en la escena de
+      >   verdad**: comarca cargada, 16 emplazamientos con gente, salida con
+      >   72 raciones, vuelta con 4 descubiertos y 36 jornadas-persona.
+      >
+      > Una prueba pasaba **sin comprobar nada**: «la que vuelve sin nada cuesta
+      > igual» comparaba jornadas de dos expediciones, y cero contra cero
+      > también son iguales. Ahora exige que las dos hayan salido.
+      >
+      > **Y lo que falta, dicho:** no hay botón. `Expedicion.mandar` es el
+      > mecanismo; que el jugador pueda mandarla es una decisión y va con el
+      > frente 8.
+- [x] **E4. Alcanzar un sitio ocupado deja contacto.** Y el contacto sigue ahí
+      una estación después, que es lo que el trueque va a usar.
+      **Toca:** `scripts/sim/Expedicion.gd`, `scripts/sim/Contacto.gd`,
+      `scripts/tests/TestContacto.gd`. **Verificable:** prueba. Segundos.
+
+      > **HECHO (2026-09-12), y ya lo hacía E3:** `Expedicion._volver` llama a
+      > `Contacto.conocerse` si el destino tiene gente. Lo que añade esta tarea
+      > son las tres pruebas que lo cierran —dejar contacto donde hay gente,
+      > **no** dejarlo donde no la hay, y que siga ahí **cuarenta y cinco
+      > jornadas después**, literal—. La del sitio vacío se comprobó rompiendo
+      > `Contacto.hay_gente_en` a propósito: se pone roja.
+      >
+      > Suite al cerrar el frente 5: **1 009 pruebas, 7 057 comprobaciones**,
+      > desde 979/6 994. `LlamadasHuerfanas` sigue en las 2 de siempre.
+
+**El trueque** (frente 6) — **depende entero de E2 y E4**:
+
+- [x] **T1. El trueque deja de ocurrir solo.** Fuera la llamada automática por
+      estación; pasa a ser un `Moment` con opciones. En un año sin que el
+      jugador decida nada, intercambios consumados = 0.
+      **Toca:** `scripts/sim/Intercambio.gd`, `scripts/sim/SettlementSim.gd`
+      (~3350), `scripts/tests/TestIntercambio.gd`.
+      **Verificable:** prueba de que sin decisión no hay trato. Segundos.
+- [x] **T2. La contraparte recuerda, y el 55 % fijo deja de ser fijo.** El
+      `trato` por contraparte, con la forma del de `ElLobo`, sustituyendo a
+      `PROBABILIDAD_EXITO`.
+      **Toca:** `scripts/sim/Intercambio.gd`, `scripts/sim/Contacto.gd`,
+      `scripts/tests/TestIntercambio.gd`.
+      **Verificable:** prueba —ser generoso sube la tasa, regatear la baja— .
+      Segundos. **La confirmación en partida va en la pasada larga.**
+- [x] **T3. Qué se ofrece, y que duela.** El fruto seco deja de estar clavado:
+      la opción dice qué sale de la despensa, y sacarlo en invierno se nota.
+      **Toca:** `scripts/sim/Intercambio.gd`, `scripts/ui/`.
+      **Verificable:** prueba sobre la despensa de las jornadas siguientes.
+      Segundos.
+- [x] **T4. Sílex, concha y gente, y las tres llegan.** Una prueba por cada
+      una. **Antes de prometer nada hay que comprobar que `Materia.Kind.CONCHA`
+      existe y que llegar gente tiene por dónde**; si no, se dice y se recorta.
+      **Toca:** `scripts/sim/Intercambio.gd`, `scripts/economia/Materia.gd`,
+      `scripts/tests/TestIntercambio.gd`. **Verificable:** tres pruebas. Segundos.
+
+      > **T1–T4 HECHAS (2026-09-12), juntas porque viven en el mismo fichero.**
+      > `Intercambio.gd` reescrito y `TestIntercambio.gd` también, 18 pruebas.
+      > Suite **1 023 pruebas, 7 041 comprobaciones**.
+      >
+      > **Lo que hace ahora:** una vez por estación, si se conoce a alguien, se
+      > **propone** con un `Moment` de kind `TRUEQUE` —nuevo—. La primera
+      > opción es **no ir**: no decidir no puede costar nada, y las sondas
+      > contestan con la primera opción, así que si fuera tratar, «sin decidir
+      > nada, cero intercambios» haría tratos solo. Cada opción lleva **escrito
+      > lo que cuesta**, que es media petición del frente 8. Ir saca a alguien
+      > del mapa 4 jornadas —la misma marca que la expedición—, salga como
+      > salga. La probabilidad sale del `trato` con esa gente y **se lee antes
+      > de moverlo**, porque lo que recuerdan es lo de las veces anteriores.
+      > Concha y gente llegan: la concha existía y la gente entra como en
+      > `Relevo`, cuya regla del id libre sale a `Relevo.id_libre` porque ya la
+      > preguntan dos.
+      >
+      > **Medido: 0,950 siendo generosos contra 0,080 regateando**, trescientos
+      > intentos cada uno y misma semilla. **Y esa cifra exagera, dicho para
+      > que no se lea mal**: en trescientos intentos seguidos el trato llega a
+      > sus topes. En una partida se trata unas cuatro veces al año. La prueba
+      > demuestra **la dirección**; la magnitud jugada la mide M1.
+      >
+      > **Una simplificación, dicha:** las cuatro decisiones de la spec darían
+      > veintisiete combinaciones. Se ofrecen seis con sentido, siempre con la
+      > contraparte de mejor trato. Si el juego pide elegir contraparte a mano,
+      > se añade entonces.
+      >
+      > **El total bajó en 16 comprobaciones** respecto de la vuelta anterior
+      > (7 057 → 7 041), y se dice: es exactamente `TestIntercambio`, de 652 a
+      > 636, por reescribir una prueba cuyo comportamiento **se invierte a
+      > propósito**. Dos de las pruebas viejas afirmaban «un intento por cada
+      > estación» y «llega sílex al pasar estaciones», que es lo que la tanda
+      > quita. Sigue por encima del suelo de la tanda (6 994).
+      >
+      > **Y dos pruebas pasaban en vacío, cazadas antes de cerrar:** en GDScript
+      > **las lambdas capturan las variables locales por valor**, así que
+      > `var propuestos := 0` con `propuestos += 1` dentro de la lambda contaba
+      > sobre una copia. «Sin conocer a nadie no se propone nada» esperaba cero
+      > y valía cero siempre, se propusiera o no. Ahora cuentan con un array y
+      > llevan control positivo. Ver ARQUITECTURA §5.
+      >
+      > Las dos pruebas clave se comprobaron rompiendo el código: sin memoria de
+      > la contraparte, generosos y regateando salen idénticos (0,573 y 0,573);
+      > y si vuelve a tratar solo, en ocho estaciones trae 6 de sílex.
+
+**El vestido** (frente 7) — no depende de nada, se puede hacer en paralelo:
+
+- [x] **V1. El frío lo dicen los grados, no la estación.** Hoy `cold` sube sólo
+      si es invierno **y** el hogar está apagado. Pasa a subir en función de
+      `Termometro`, que es lo que hace que dormir al raso en enero no sea lo
+      mismo que en julio —tercer criterio del frente— y de paso quita una regla
+      del clima escrita fuera del termómetro.
+      **Toca:** `scripts/sim/SettlementSim.gd` (~1786-1815),
+      `scripts/tests/TestFrio.gd` (nuevo).
+      **Verificable:** pruebas de estado construido —misma noche, dos
+      estaciones, dos resultados—. Segundos. **Es el cambio con más riesgo de
+      balance de la tanda.**
+- [x] **V2. El frío cierra el roquedo.** Sin ropa buena, la salida al roquedo
+      en invierno se rechaza, con motivo que el panel dice. Patrón:
+      `TechTree.freno` / `TechTree.causa`.
+      **Toca:** `scripts/sim/SettlementSim.gd`, `scripts/ui/`,
+      `scripts/tests/TestFrio.gd`. **Verificable:** prueba de que se rechaza y
+      de que el motivo llega. Segundos.
+
+      > **V1 y V2 HECHAS (2026-09-12).** `SettlementSim.frio_por_hora` es la
+      > única pregunta «¿cuánto enfría esta noche?» del juego, y la usan las
+      > tres ramas de sueño —la cueva, el vivac y el que duerme donde le coge—.
+      > `TestFrio`, 19 pruebas. Suite **1 042 pruebas, 7 087 comprobaciones**.
+      >
+      > **Premisa caída en V1: al raso no se cogía frío en NINGUNA estación.**
+      > Dormir fuera sólo tocaba la fatiga. El tercer criterio del frente no
+      > fallaba: no había nada que medir. Ahora sin hoguera se enfría por los
+      > grados que haga, con hoguera se entra en calor.
+      >
+      > **La pendiente no se eligió:** está calibrada para que una madrugada de
+      > invierno al nivel del mar dé exactamente el `HEARTH_COLD_RISE` de antes
+      > (4,0/h), así que en ese punto el balance es el de siempre. Lo nuevo es
+      > la altitud. **Comprobado en la escena real** con `FrioProbe`: una noche
+      > sin fuego deja frío medio **0,00 en verano (13,0 °C en el abrigo) y
+      > 30,52 en invierno (0,6 °C)**. Ese abrigo está a 135 m y enfría ~23 %
+      > más que el «si es invierno» de antes: es el gradiente contando.
+      >
+      > **El umbral, 5 °C, es uno solo:** nació en la barra como
+      > `GRADOS_QUE_MUERDEN`, una cifra de interfaz que sólo elegía un color, y
+      > se mudó a `Termometro.GRADOS_DE_ABRIGO` en cuanto empezó a decidir la
+      > partida.
+      >
+      > **Premisa caída en V2: el roquedo no existe como sitio en el código.**
+      > Sólo aparece en dos comentarios. La salida a lo alto modelada es la
+      > ascensión, y ahí va la puerta: `Cumbres.motivo_del_frio`, en los cuatro
+      > caminos por los que se elige cumbre, junto a la de la cuerda. Sin
+      > **un vestido por cada uno de la cordada** no se sube adonde de madrugada
+      > se coge frío, y el motivo llega por `order_ascent`, que es lo que enseña
+      > el panel. Una prueba recorre cinco cotas y cuatro estaciones y comprueba
+      > que **la puerta se cierra exactamente donde la noche empieza a enfriar**.
+      >
+      > **Y es más fuerte de lo que pedía la spec, decidido así el 2026-09-12
+      > con los números delante.** La spec decía «en invierno»; con la
+      > madrugada como medida, sin abrigo se cierra: **en invierno, todo; en
+      > primavera, por encima de 164 m; en otoño, de 580 m; en verano, de
+      > 1 364 m**. Como la banda empieza en primavera sin ropa, **la primera
+      > ascensión espera al verano o a que se cosan dos vestidos**, y las
+      > ascensiones son las que revelan media comarca. Se ofreció mirar la media
+      > del día —que abría la primavera hasta ~750 m— y se prefirió la versión
+      > estricta, que hace la peletería urgente desde el primer día. **M1 dirá
+      > si retrasa la fase de más.**
+      >
+      > Rompió una prueba de `TestExploration` que subía una cumbre sintética
+      > de 300 m en primavera sin ropa. No se aflojó la puerta: se equipó a la
+      > cordada en el montaje, porque esas pruebas van de subir y no de frío.
+
+- [x] **V3. La cota de nieve sale del termómetro.** *(Añadida el 2026-09-12 a
+      petición del usuario.)* Hoy `Temporada.COTA_DE_NIEVE` es **una fracción
+      de la altura máxima del mapa local**, así que no depende del clima sino
+      del mapa en que se esté: en un valle bajo pone la nieve bajísima y en los
+      Picos altísima. Y es un segundo sistema describiendo el mismo frío que
+      `Termometro`, sin hablarse. Pasa a ser la cota donde la media llega a
+      0 °C: ~805 m en invierno, ~1 520 en primavera, ~1 930 en otoño, y por
+      encima de los Picos en verano.
+      **Toca:** `scripts/mundo/Temporada.gd`, `scripts/mundo/Termometro.gd`,
+      `scripts/DemoMain.gd`, y lo que lea la cota —`TerrainGenerator.set_snow_line`,
+      `Marcha` por `freno_por_nieve`—, `scripts/tests/`.
+      **Verificable:** pruebas de la cota por estación y de que es absoluta,
+      no fracción del mapa. Toca la vista y lo que cuesta andar, así que **va
+      antes de M1** para que la pasada larga lo mida. Segundos.
+
+      > **HECHO (2026-09-12), con la madrugada y no con la media.** La tarea
+      > se planteó con la media a 0 °C y, al implementarla, salió que **en el
+      > valle de partida no nevaría nunca**: el relieve va de 96 a 718 m y la
+      > media de invierno hiela a ~805 m. Se preguntó con esa tabla delante y
+      > se eligió la madrugada, que además es la misma hora que usa el frío de
+      > la gente. `Termometro.cota_de_hielo` y `Temporada.fraccion_de`;
+      > `COTA_DE_NIEVE` se borra. Suite **1 047 pruebas, 7 098 comprobaciones**.
+      >
+      > **Comprobado en la escena real** con `NieveProbe`: relieve 96–718 m;
+      > **invierno 221 m, dentro del mapa**; primavera 933, otoño 1 349 y
+      > verano 2 133, todas por encima de la cumbre. Antes la nieve de invierno
+      > empezaba a 357 m.
+      >
+      > **Por qué la de antes era tan baja:** salía del Dryas reciente, que es
+      > más frío que el 12 000 a.C. en que se fijó la época.
+      >
+      > **Dos pruebas de `TestSubsistence` montaban `Temporada` sin relieve** y
+      > se pusieron rojas: sin relieve no se sabe dónde cae la nieve y no nieva.
+      > Se les dio el del valle, y eso mismo destapó por qué había que
+      > comprobarlo en la escena: el caso borra la nieve en silencio.
+      >
+      > **Y un efecto de balance que M1 va a notar:** el abrigo está a 135 m y
+      > la nieve de invierno empieza a 221, así que **en invierno casi cualquier
+      > salida cuesta arriba anda por nieve**, y `freno_por_nieve` frena la
+      > marcha más que antes.
+
+**Las decisiones** (frente 8) — depende de T1 para contar el trueque:
+
+- [x] **D1. Un `Moment` declara lo que cuesta cada opción.** Hoy `options` es
+      libre y **el criterio no se puede medir**: «cuenta sólo si la opción no
+      elegida cambia una cifra» necesita que la cifra esté escrita.
+      **Toca:** `scripts/banda/Moment.gd`, quien levante momentos,
+      `scripts/tests/TestMoment.gd`. **Verificable:** prueba. Segundos.
+- [x] **D2. Una decisión fija por estación.** Cuatro al año que no se pueden
+      evitar. Las que dispare el estado van encima, **sin inflar el
+      calendario** para llegar a un número.
+      **Toca:** `scripts/sim/`, `scripts/tests/`. **Verificable:** prueba de
+      que cada estación levanta la suya. Segundos.
+
+      > **HECHO (2026-09-12). Las tres que no eran la berrea las eligió el
+      > usuario** entre las que se le propusieron, y las tres salen de sistemas
+      > que ya existían:
+      >
+      > | Estación | Decisión | Cuesta |
+      > |---|---|---|
+      > | Primavera | ¿se sale del valle? — `Expedicion.proponer_la_salida` | 36 jornadas y 72 raciones |
+      > | Verano | ¿se sube ahora que no hiela? — `Cumbres.proponer_la_subida` | riesgo de la ascensión |
+      > | Otoño | la berrea | 15 jornadas por cazador |
+      > | Invierno | ¿cuánto fuego? — `Hogar.proponer_el_fuego` | la mitad de las noches sin fuego |
+      >
+      > Una prueba cuenta **las cuatro en un año**, y otra que la opción 0 de
+      > todas no compromete a nada. Suite **1 071 pruebas, 7 148
+      > comprobaciones**.
+      >
+      > **Tres cosas de las que conviene enterarse:**
+      >
+      > - **La de primavera es el botón que la expedición no tenía.** Hasta hoy
+      >   `Expedicion.mandar` sólo se llamaba desde código.
+      > - **La del fuego está hecha para costar en las dos direcciones.** El
+      >   fuego de este juego es binario, así que si racionar sólo gastara
+      >   menos, siempre convendría. Racionado es **una noche con fuego y otra
+      >   sin él**: la mitad de leña, y la noche sin fuego se pasa el frío de V1
+      >   entero. Ninguna cifra de calor inventada. La cueva pregunta ahora
+      >   `Hogar.calienta_esta_noche()`, no `hearth_lit`.
+      > - **La berrea estaba al revés** —«volcarse» era la opción 0— y por eso
+      >   **seis sondas** la contestaban con la opción 1 como caso aparte:
+      >   `TironAnualProbe`, `AnoProbe`, `ArbolPasoProbe`, `CuelgueProbe`,
+      >   `DecisionProbe` y `RitmoProbe`. Se puso en orden y se quitó la
+      >   excepción de todas, **porque si se hubiera dejado en una sola, esa
+      >   sonda habría pasado a volcarse en la berrea sin avisar** —y `AnoProbe`
+      >   es la de M1—.
+      >
+      > **Y un tropiezo con la herramienta:** llamar `proponer()` a los cuatro
+      > métodos subió `LlamadasHuerfanas` de 2 a 10 —cruza nombres sin mirar el
+      > receptor—. Se les dio nombre propio a cada uno y volvió a 2.
+      >
+      > **Y un hueco que destapó la prueba de humo de M1, antes de lanzarla:**
+      > la partida empieza **ya dentro de la primavera**, y las decisiones de
+      > estación saltan al *cambiar* de estación. Así que **la de primavera del
+      > primer año no salía nunca**: la primera expedición esperaba al año 2 y el
+      > primer año tenía tres decisiones, no cuatro. Ahora la de la estación en
+      > curso sale también en `SettlementSim.iniciar_partida()`, desde un solo
+      > sitio —`_decision_de_la_estacion`—, con prueba. Se arregló **antes** de
+      > lanzar la pasada larga, que es la lección de ayer: con una medida en
+      > vuelo no se toca el código.
+- [x] **D3. La berrea deja de ser gratis.** Volcarse significa que ese mes no
+      se recolecta ni se hace leña.
+      **Toca:** donde viva la berrea, `scripts/tests/`. **Verificable:** prueba
+      sobre las raciones de ese mes. Segundos.
+
+      > **D1 y D3 HECHAS (2026-09-12)**, en `scripts/tests/TestDecisiones.gd`
+      > —13 pruebas— y no en un `TestMoment` como decía el plan: son el mismo
+      > frente. Suite **1 060 pruebas, 7 122 comprobaciones**.
+      >
+      > **D1.** Cada opción declara `"cuesta"` en las tres cifras de la spec
+      > —despensa, jornadas, riesgo— con `Moment.opcion`, y
+      > `Moment.la_eleccion_importa()` dice si al menos dos cuestan distinto.
+      > Dos botones con el mismo coste **no cuentan como decisión**, con prueba.
+      > El trueque y la berrea ya declaran lo suyo; la piel ofrecida no cuenta
+      > en la despensa porque no se come.
+      >
+      > **D3, y con un fallo de verdad debajo.** Volcarse ponía la caza mayor a
+      > **prioridad 3, que en este reparto es la menos urgente** —van de 1 a
+      > 3—, así que quien tuviera recolección a 1 o 2 seguía recolectando y
+      > volcarse casi no hacía nada. La opción prometía «se dejan de hacer otras
+      > cosas: es la apuesta» y el código no lo cumplía. Ahora, durante
+      > **un mes del juego** (`Subsistence.DAYS_PER_MONTH`, 15 jornadas, porque
+      > la spec dice «ese mes»), la caza mayor a 1 y **la recolección entera
+      > apagada** para quien va; al acabar, **cada uno recupera exactamente sus
+      > prioridades de antes**. La tarjeta dice cuántas jornadas no se recogen.
+      > Comprobado rompiéndolo: si no se apaga la recolección, caen tres pruebas.
+      >
+      > **Lo que falta del criterio, dicho:** «se ve en las raciones
+      > recolectadas de ese mes» es cifra jugada, y la mide M1.
+
+**El cierre de la fase:**
+
+- [x] **C1. Las tres condiciones, no una.** `Partida.evaluar_victoria` pasa a
+      pedir cueva pintada **más** expedición mandada **más** puntos regionales
+      nuevos. Depende de E3.
+      **Toca:** `scripts/sim/Partida.gd`, `scripts/tests/TestPartida.gd`.
+      **Verificable:** prueba de que **con dos no se cierra**. Segundos.
+
+      > **HECHO (2026-09-12).** `Partida.evaluar_victoria` pide cueva pintada
+      > **y** `expedicion_mandada()` **y** `puntos_nuevos()`, y
+      > `lo_que_falta_para_cerrar()` dice cuáles faltan. Suite **1 074 pruebas,
+      > 7 154 comprobaciones**.
+      >
+      > La prueba vieja se llamaba «banda viva y cueva pintada gana», que es
+      > literalmente la regla que esto sustituye, y **se reescribió en vez de
+      > borrarse**. La nueva recorre las tres maneras de tener dos de tres y
+      > comprueba que ninguna cierra, que es el criterio explícito. Y una más:
+      > **mandar la expedición y que vuelva de vacío no basta** —cuenta para la
+      > segunda condición y no para la tercera—.
+      >
+      > De paso se quitó un `capturados[0]` que reventaba si no salía la
+      > tarjeta: una prueba que revienta antes de su assert no falla, pasa.
+
+**Lo que se mide, y es donde está el dinero:**
+
+- [x] **M1. La pasada larga, una sola, con seis contadores.** Dos años
+      simulados con la noche acelerada, instrumentados para contestar de una
+      vez: que el desenlace llega y **tarda entre año y medio y tres años**;
+      que en el primer año sin decidir nada hay **0 intercambios**; **cuántas
+      decisiones** de las que cuestan caen al año; **cuánto sube** la cuenta de
+      `Site` descubiertos por expedición y qué cuesta; la tasa de éxito del
+      trueque siendo generoso; y **la caza vuelta a medir**, que es el 0,27 de
+      ESTADO.md §2 que nadie ha tocado desde que se abrieron las puertas del
+      asta y la punta lítica.
+      **Toca:** `scripts/tests/BandaProbe.gd` o sonda nueva, ESTADO.md §2.
+      **Corrida larga: ~1 h 55.**
+
+      > **PRIMERA PASADA PARADA a la jornada 46 (2026-09-13), y era la sonda.**
+      > El vigía decía «expediciones 0» entrado el verano con un jugador que
+      > manda la expedición en primavera. **No se había contestado ninguna
+      > decisión.** La primera tarjeta de la partida —«Un abrigo, una banda»— es
+      > un aviso sin opciones, y `AnoProbe` sólo contestaba tarjetas *con*
+      > opciones: se quedaba parada delante, y todas las decisiones del año se
+      > apilaban detrás sin enseñarse. **Cinco sondas de seis tenían el mismo
+      > agujero** (Año, ArbolPaso, Cuelgue, Ritmo y FrioInvierno); sólo
+      > `TironAnualProbe` cerraba los avisos. Así que toda cifra de esas sondas
+      > que dependa de una decisión, **desde que existe el aviso inicial**, se
+      > midió con las decisiones sin contestar. Arreglado **en un sitio y no en
+      > seis**: `BarraSuperior.contestar_todo(elige)` contesta las decisiones y
+      > cierra los avisos, y las seis sondas lo llaman.
+      >
+      > **Y un fallo de verdad que salió al mirar:** `Expedicion.mandar` sacaba
+      > de la despensa lo que hubiera y *después* veía que no llegaba; la
+      > expedición no salía y la comida desaparecía igual. Ahora mira antes de
+      > sacar, con su comprobación en `TestExpedicion`.
+      >
+      > **Prueba de humo antes de relanzar**, 14 jornadas y 4 min 30: con el
+      > jugador razonable la expedición sale la primera jornada (36
+      > jornadas-persona) y vuelve con **4 sitios descubiertos**; a la fase ya
+      > sólo le falta la cueva pintada. Suite: 1 075 pruebas, 7 156
+      > comprobaciones. Relanzada con M2 delante.
+
+      > **MEDIDA (2026-09-13), y los criterios NO se cumplen.** 1 h 52,
+      > `SEMILLA=42 JUGADOR=razonable DIAS=360`. **La banda muere de hambre en la
+      > jornada 359**, sin cerrar la fase (falta la cueva pintada). **4 decisiones
+      > que cuestan cada año**, lo único que sale como pedía. **1 expedición** (4
+      > sitios, 36 jornadas-persona): la del año 2 se decidió y no salió porque
+      > la primavera empieza con la despensa a cero. **0 tratos** en dos años:
+      > sólo el destino de la expedición deja contacto y 4 de cada 5 sitios están
+      > vacíos. **Caza 1,88** por persona y día, no comparable a pelo con el 0,98.
+      > La causa de fondo no es de esta tanda: la despensa sin cestos no pasa de
+      > ~600 raciones y el invierno pide ~1 140. Cifras y lectura en ESTADO §2,
+      > «Dos años con un jugador que decide». **Qué hacer con ello lo decide el
+      > usuario.**
+- [x] **M2. El frío, la pareja.** Dos corridas con la misma semilla, una
+      haciendo ropa y otra no: en la que no, alguien enferma o muere de frío.
+      **Toca:** sonda, ESTADO.md §2. **Corrida larga: ~56 min con un invierno,
+      ~2 h 22 con los dos que pide la spec.**
+
+      > **PRIMERA PASADA INVÁLIDA (2026-09-13), y se dice por qué.** Se construyó
+      > «el último día de otoño» con `scripts/tests/FrioInviernoProbe.gd`, como
+      > se decidió para no simular tres estaciones. Resultado: **la banda entera
+      > muerta en 22 jornadas sin ropa y en 18 con ropa, y nadie enfermó de
+      > frío.** Murieron de hambre.
+      >
+      > **Se construyó sólo el calendario.** La despensa era la del primer día de
+      > primavera, y una banda llega al invierno con lo que ha recogido en tres
+      > estaciones, no con lo que traía. Los muertos no enferman de frío, así que
+      > el hambre tapó la pregunta entera. La regla de ARQUITECTURA §5.1 —«un
+      > estado lejano se construye»— sigue en pie; lo que falló es construir
+      > **la mitad** del estado.
+      >
+      > **Decidido por el usuario: llenar la despensa para aislar el frío.** Se
+      > rellena cada día —tiene tope por cestos y odres, y parte se pudre—, y el
+      > agua también, y la sonda dice de qué muere cada uno. Aplicado el
+      > 2026-09-13, al parar M1 (ver arriba), y relanzada. Aviso de lectura: con el fuego encendido en la cueva puede salir
+      > que nadie enferma ni con ropa ni sin ella, y eso sería un hallazgo, no un
+      > fallo de la prueba.
+
+      > **MEDIDA (2026-09-13): fue el hallazgo, no el fallo.** 15 min por brazo.
+      > Con ropa y sin ella, **16 vivos, 0 enfermos, 0 muertos de frío y frío
+      > medio 0,0**. En la cueva con el fuego encendido cada noche quita frío, y
+      > el vestido sólo cuenta durmiendo sin fuego. **El criterio «sin ropa
+      > alguien enferma» no se cumple en el invierno en casa**; el vestido manda
+      > fuera del fuego (cumbres, vivac, fuego racionado). ESTADO §2, «El
+      > invierno en la cueva». **Qué hacer con ello lo decide el usuario.**
+- [x] **M3. Cerrar.** Suite verde y **≥ 6 994 comprobaciones**,
+      `LlamadasHuerfanas` sin huérfanas nuevas, y lo aprendido a SISTEMAS §4,
+      §5 y §19, INTERFAZ §4, SPECS §4.4 y ESTADO §2 y §3.
+
+      > **HECHO (2026-09-13).** Tres decisiones del usuario con M1 y M2 delante:
+      > el hambre del invierno va por `/depurar` y no se parchea aquí; la ropa se
+      > acepta como hallazgo y se reescribe el criterio; y **la primera
+      > expedición siempre encuentra gente** (`Contacto.poblar` desde
+      > `Expedicion._volver`, con `test_la_primera_expedicion_siempre_encuentra_gente`
+      > y la de «un sitio vacío» pasada a la segunda expedición). Suite **1 076
+      > pruebas, 7 161 comprobaciones**; `LlamadasHuerfanas` en las 2 de siempre.
+      > El trueque **no se ha vuelto a medir** con el cambio: una pasada de año
+      > no vale mientras la banda no pase el segundo invierno.
+
+**Presupuesto de máquina: ~2 h 51, decidido el 2026-09-12** — M1 entero, que
+es el que cierra la fase y no se puede recortar, y M2 con **un solo invierno**:
+si con uno ya enferma alguien, el segundo no añade nada. En
+serie, Godot es de uno en uno. **Todo lo demás son pruebas de segundos**, y eso
+es deliberado: catorce de las diecisiete tareas se comprueban sin simular nada.
+
+**La medida se ha juntado a propósito**: M1 es **una sola corrida** que
+contesta seis preguntas de cuatro frentes distintos. Por separado serían cinco
+corridas y más de cinco horas.
+
+**Orden acordado el 2026-09-12: el frente 5 primero (E1–E4) y se enseña antes
+de seguir.** Es la mitad de la tanda y todo lo demás cuelga de ella; verla
+funcionando antes de montar el trueque encima evita rehacer trabajo.
+
+**Qué se puede repartir:** V1–V2 (el frío) no dependen de nada y tocan ficheros
+distintos de E1–E4 y T1–T4; pueden ir en paralelo con otro agente. **T1–T4
+dependen de E2 y E4**, y **dos medidas nunca a la vez.**
 
 ---
 
@@ -1044,9 +1588,14 @@ Lo que falta para que esto deje de ser dos visores y pase a ser un juego.
 - Se empieza con **un solo emplazamiento conocido** (`GameState.HOME_LAT/LON`,
   Cueva los Pendios) y el territorio se descubre saliendo: `Exploration`,
   `Reconocimiento`, `BandKnowledge` y los `Parajes` que se ganan un nombre.
-- **Lo que falta es la capa regional**: revelar `Site` del mapa de Cantabria por
-  proximidad y por expedición. Hoy el mapa regional se ve entero.
-- Criterio pendiente: el jugador no ve los 862 de golpe; los descubre.
+- **La niebla regional está puesta** (corregido el 2026-09-12, midiendo):
+  `GameState.discovered` arranca con sólo la cueva y `RegionMap` filtra por él.
+  Este documento decía «hoy el mapa regional se ve entero» y no era cierto.
+- **Lo que falta es QUIÉN la levanta**: nadie llama a `GameState.discover`
+  desde la partida, así que la niebla no se abre nunca. Eso lo construye la
+  expedición regional — ver «En curso» → Tanda 2, tarea E3.
+- Criterio cumplido: al empezar se ve **uno**, no 862. Y de paso, los usables
+  en el Paleolítico son **72**, no 862. Ver ESTADO.md §2.
 
 ### A2. El asentamiento existe — **hecho**
 - `SettlementSim` es el asentamiento, con población concreta, oficios y rutina.

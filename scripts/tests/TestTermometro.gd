@@ -120,3 +120,55 @@ func test_la_misma_pregunta_da_siempre_la_misma_respuesta() -> void:
 	var una := Termometro.grados(Subsistence.Season.OTONO, 9.5, 240.0)
 	var otra := Termometro.grados(Subsistence.Season.OTONO, 9.5, 240.0)
 	assert_eq(una, otra, "misma entrada, misma salida")
+
+
+# --------------------------------------------- la cota de nieve (V3) --
+
+func test_la_cota_de_hielo_de_invierno_es_la_de_la_madrugada() -> void:
+	# Donde la madrugada de invierno llega a 0 °C: 1,43 °C al nivel del mar
+	# entre 0,65 por cada 100 m, ~220 m. Con la media saldría ~805 m, y en el
+	# valle de partida no nevaría nunca: se decidió la madrugada por eso.
+	assert_near(Termometro.cota_de_hielo(Subsistence.Season.INVIERNO), 220.5, 1.0,
+		"en invierno hiela de madrugada a partir de ~220 m")
+
+
+func test_la_nieve_sube_del_invierno_al_verano() -> void:
+	var invierno := Termometro.cota_de_hielo(Subsistence.Season.INVIERNO)
+	var primavera := Termometro.cota_de_hielo(Subsistence.Season.PRIMAVERA)
+	var verano := Termometro.cota_de_hielo(Subsistence.Season.VERANO)
+	assert_lt(invierno, primavera, "en primavera la nieve está más arriba")
+	assert_lt(primavera, verano, "y en verano, más todavía")
+	assert_gt(verano, 2000.0, "por encima de casi toda Cantabria")
+
+
+func test_la_cota_es_de_la_montana_no_del_mapa() -> void:
+	# EL PROBLEMA QUE ARREGLA: la cota era una fracción del relieve local, así
+	# que dependía del mapa. Ahora la montaña manda: los mismos metros caen en
+	# fracciones distintas según el mapa, y no al revés.
+	var bajo := Temporada.new()
+	bajo.relieve = Vector2(96.0, 718.0)
+	var alto := Temporada.new()
+	alto.relieve = Vector2(400.0, 2600.0)
+	var metros := Termometro.cota_de_hielo(Subsistence.Season.INVIERNO)
+	assert_near(bajo.fraccion_de(Subsistence.Season.INVIERNO),
+		(metros - 96.0) / 622.0, 0.001, "en el valle, su fracción")
+	assert_lt(alto.fraccion_de(Subsistence.Season.INVIERNO), 0.0,
+		"en un mapa que empieza a 400 m, nieva hasta abajo en invierno")
+
+
+func test_en_el_valle_de_partida_solo_nieva_en_invierno() -> void:
+	var t := Temporada.new()
+	t.relieve = Vector2(96.0, 718.0)
+	assert_lt(t.fraccion_de(Subsistence.Season.INVIERNO), 1.0,
+		"en invierno la nieve cae dentro del mapa")
+	for estacion in [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO,
+			Subsistence.Season.OTONO]:
+		assert_gt(t.fraccion_de(estacion), 1.0,
+			"el resto del año, por encima del mapa entero")
+
+
+func test_sin_relieve_conocido_no_nieva() -> void:
+	# No se sabe contra qué medir, y se dice «por encima de todo» en vez de
+	# inventar una nevada.
+	assert_gt(Temporada.new().fraccion_de(Subsistence.Season.INVIERNO), 1.0,
+		"sin relieve no hay nieve")

@@ -86,12 +86,41 @@ func _init() -> void:
 	# era lentitud de fotogramas, era el reloj parado sin que nadie lo
 	# reanudara-. Revisar cada fotograma y no sólo al raise: puede haber más
 	# de una decisión en cola.
+	# JUGADOR=razonable: en vez de no comprometerse nunca, juega. Hace falta
+	# para medir el cierre de la fase (EPOCA_01 §10.1, tanda 2): con la opción 0
+	# siempre, NUNCA se manda una expedición, nunca hay puntos nuevos y la fase
+	# no se puede cerrar. La política es fija y está escrita aquí, para que la
+	# cifra que salga se pueda leer: manda la expedición, sube en verano, se
+	# vuelca en la berrea, trata siendo justo, y raciona el fuego sólo si la
+	# leña no llega a todo el invierno.
+	var razonable := OS.get_environment("JUGADOR") == "razonable"
+	# Las decisiones que de verdad cuestan, por año y por tipo. Un diccionario y
+	# no enteros sueltos: la lambda captura las variables locales POR VALOR.
+	var decisiones: Dictionary = {}   # año -> {tipo: n}
+	var _indice_razonable := func(m: Moment) -> int:
+		var elegido := 0
+		match m.kind:
+			Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA, \
+			Moment.Kind.TRUEQUE:
+				elegido = 1
+			Moment.Kind.INVIERNO:
+				var hace_falta := SettlementSim.HEARTH_WOOD_PER_DAY \
+					* SettlementSim.HEARTH_WINTER_FACTOR * float(Subsistence.DAYS_PER_SEASON)
+				elegido = 1 if sim.store.amount(Materia.Kind.LENA) < hace_falta else 0
+		return mini(elegido, m.options.size() - 1)
+	var _elige := func(actual: Moment) -> int:
+		if actual.la_eleccion_importa():
+			var del_anyo: Dictionary = decisiones.get(GameState.year, {})
+			var tipo: String = Moment.Kind.keys()[actual.kind]
+			del_anyo[tipo] = int(del_anyo.get(tipo, 0)) + 1
+			decisiones[GameState.year] = del_anyo
+		# Sin JUGADOR, la opción 0: la que no compromete (SPECS §4.6).
+		return (_indice_razonable.call(actual) as int) if razonable else 0
+	# Y los avisos se cierran, que hasta el 2026-09-13 no: el primero de la
+	# partida tapaba la cola y no se contestaba ninguna decisión en todo el año.
+	# Ver [BarraSuperior.contestar_todo].
 	var _resolver_decisiones := func() -> void:
-		var actual := ui.barra.momento_en_pantalla()
-		while actual != null and actual.is_decision():
-			var index := 1 if actual.kind == Moment.Kind.BERREA else 0
-			ui.barra.elegir(index)
-			actual = ui.barra.momento_en_pantalla()
+		ui.barra.contestar_todo(_elige)
 
 	var dias := 180
 	if not OS.get_environment("DIAS").is_empty():
@@ -176,7 +205,21 @@ func _init() -> void:
 	# misma corrida en vez de una escena nueva.
 	var total_estacion: Dictionary = {}       # estacion -> {Materia.Kind: float}
 	var jornadas_estacion: Dictionary = {}    # estacion -> {oficio: int}
+	# EL VIGÍA: Godot no suelta la salida hasta que termina, y esto son horas.
+	# Con VIGIA=fichero, una línea por estación con `flush`, para poder mirar
+	# cómo va sin matarlo.
+	var vigia: FileAccess = null
+	if not OS.get_environment("VIGIA").is_empty():
+		vigia = FileAccess.open(OS.get_environment("VIGIA"), FileAccess.WRITE)
+	var ultima_estacion := {"v": -1}
 	while sim.day < primero + dias:
+		if vigia != null and int(GameState.season) != int(ultima_estacion["v"]):
+			ultima_estacion["v"] = int(GameState.season)
+			vigia.store_line("dia %d · %s año %d · vivos %d · expediciones %d · descubiertos %d · tratos %d/%d · desenlace %d" % [
+				sim.day, Subsistence.season_name(GameState.season), GameState.year,
+				sim.people.size(), sim.expedicion.vueltas, sim.expedicion.descubiertos,
+				sim.intercambio.consumados, sim.intercambio.intentados, sim.desenlace])
+			vigia.flush()
 		# SI LA PARTIDA SE ACABO, AQUI SE ACABA LA SONDA.
 		#
 		# `_process` no avanza nada sin banda, asi que `sim.day` se queda
@@ -401,6 +444,37 @@ LA PARTIDA TERMINO EN LA JORNADA %d (desenlace %d, vivos %d)."
 		print("desenlace: %s" % desenlace_nombre)
 	else:
 		print("desenlace: %s, en la jornada %d" % [desenlace_nombre, sim.desenlace_dia])
+
+	print("")
+	print("--- EL CIERRE DE LA FASE Y LAS DECISIONES (EPOCA_01 §10.1, tanda 2) ---")
+	print("jugador: %s" % ("razonable" if razonable else "sin decidir (opcion 0)"))
+	if sim.desenlace == SettlementSim.Desenlace.VICTORIA:
+		print("SE CIERRA LA FASE en la jornada %d, año %d (%.2f años)" % [
+			sim.desenlace_dia, GameState.year,
+			float(sim.desenlace_dia) / float(4 * Subsistence.DAYS_PER_SEASON)])
+	else:
+		print("la fase NO se cierra. Falta: %s" % str(sim.partida.lo_que_falta_para_cerrar()))
+	for anyo in decisiones.keys():
+		var cuantas := 0
+		for t in decisiones[anyo]:
+			cuantas += int(decisiones[anyo][t])
+		print("   decisiones que cuestan, año %d: %d · %s" % [anyo, cuantas, str(decisiones[anyo])])
+	var e: Expedicion = sim.expedicion
+	print("expediciones: mandada %s · vueltas %d · sitios descubiertos %d · jornadas-persona %d" % [
+		str(e.mandada_alguna_vez), e.vueltas, e.descubiertos, e.jornadas_persona])
+	if e.vueltas > 0:
+		print("   por expedicion: %.1f sitios y %d jornadas-persona" % [
+			float(e.descubiertos) / float(e.vueltas),
+			e.jornadas_persona / maxi(e.vueltas, 1)])
+	var ic: Intercambio = sim.intercambio
+	print("trueque: intentados %d · consumados %d · tasa %.2f · gente conocida %d" % [
+		ic.intentados, ic.consumados,
+		float(ic.consumados) / maxf(float(ic.intentados), 1.0), sim.contacto.conocidos()])
+	var de_frio := 0
+	for entrada: Dictionary in sim.chronicle.entries:
+		if String(entrada.get("text", "")).contains("murió de frío"):
+			de_frio += 1
+	print("muertes de frio en la cronica: %d" % de_frio)
 	quit()
 
 

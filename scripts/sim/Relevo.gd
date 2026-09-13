@@ -235,6 +235,20 @@ func _hay_madre() -> bool:
 ##
 ## Resetea `hambre_severa_peor_racha_del_anyo` SIEMPRE, haya habido parto o
 ## no: la racha es del año que se cierra, y el que empieza arranca limpio.
+## Un id que no tenga nadie vivo.
+##
+## No se lleva la cuenta aparte porque no hace falta y porque casi ningún sitio
+## que crea `sim.people` a mano para una prueba se acordaría de mantenerla:
+## basta con no repetir ninguno de los vivos. Estaba escrito dentro de
+## [evaluar_nacimiento]; ahora lo pregunta también el trueque que trae gente, y
+## una regla que se pregunta desde dos sitios va en uno.
+func id_libre() -> int:
+	var nuevo_id := 0
+	for person: Inhabitant in sim.people:
+		nuevo_id = maxi(nuevo_id, person.id + 1)
+	return nuevo_id
+
+
 func evaluar_nacimiento() -> void:
 	var buen_anyo := _fue_buen_anyo()
 	sim.hambre_severa_peor_racha_del_anyo = 0
@@ -242,14 +256,7 @@ func evaluar_nacimiento() -> void:
 	if not buen_anyo or not _hay_madre():
 		return
 
-	# Id nuevo y libre: no se lleva la cuenta aparte porque no hace falta y
-	# porque casi ningún sitio que crea `sim.people` a mano para una prueba
-	# se acordaría de mantenerla. Basta con no repetir ninguno de los vivos.
-	var nuevo_id := 0
-	for person: Inhabitant in sim.people:
-		nuevo_id = maxi(nuevo_id, person.id + 1)
-
-	var nuevo := Inhabitant.create(nuevo_id, sim.home_position, sim._rng)
+	var nuevo := Inhabitant.create(id_libre(), sim.home_position, sim._rng)
 	nuevo.age_group = Inhabitant.Age.NINO
 	nuevo.age_years = 0
 	# `create` sembró destreza y físico suponiendo un adulto. Se vuelve a

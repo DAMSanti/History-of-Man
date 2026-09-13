@@ -80,6 +80,25 @@ const MEDIO_DIA := 3.8
 const HORA_MAS_CALIDA := 15.0
 
 
+## Por debajo de cuántos grados se coge frío durmiendo sin fuego.
+##
+## Cinco grados. **Decide la partida**: por encima no se enfría nadie, por debajo
+## el frío sube tanto más cuanto más se baja. Ver `SettlementSim.frio_por_hora`.
+##
+## Nació en la barra superior como `GRADOS_QUE_MUERDEN`, una cifra de interfaz
+## que sólo elegía el color del aviso, y se mudó aquí el 2026-09-12 en cuanto el
+## frío empezó a depender de los grados: una misma frontera —«aquí dormir sin
+## abrigo deja de ser incómodo»— no puede estar escrita en dos sitios, o el
+## aviso se pondría rojo a una temperatura y la gente se enfriaría a otra.
+##
+## Por qué cinco, y es una decisión apoyada en las cifras de esta misma clase:
+## cae **entre la madrugada de invierno y la de primavera** al nivel del mar
+## —1,4 y 6,1 °C—, así que con él el frío sube en invierno y no el resto del
+## año, **que es exactamente lo que el juego hacía antes** con su «si es
+## invierno». Lo nuevo no es cuándo enfría, es que ahora cuenta la altitud.
+const GRADOS_DE_ABRIGO := 5.0
+
+
 ## Cuanto enfria subir, en grados por cada cien metros.
 ##
 ## 0,65 es el gradiente termico vertical de la atmosfera. **NO ES UNA CIFRA DE
@@ -98,6 +117,25 @@ static func grados(estacion: Subsistence.Season, hora: float,
 	var base := media_de_la_estacion(estacion)
 	var enfria_la_altura := GRADIENTE_POR_100M * altitud_m / 100.0
 	return base + _vuelta_del_dia(hora) - enfria_la_altura
+
+
+## A qué cota hiela de madrugada en esa estación, en metros sobre el mar.
+##
+## Es la cota de nieve, y sale de aquí y no de una tabla aparte. Hasta el
+## 2026-09-12 la nieve era `Temporada.COTA_DE_NIEVE`, **una fracción del relieve
+## del mapa local**, y eso tenía dos problemas: no dependía del clima sino del
+## mapa en que se estuviera —en un valle bajo, nieve bajísima; en los Picos,
+## altísima—, y era un segundo sistema describiendo el mismo frío que éste sin
+## hablarse con él.
+##
+## **De madrugada y no con la media**, decidido con los números delante. Con la
+## media, la cota de invierno sale a ~805 m, y en el valle de partida —de 96 a
+## 718 m— no nevaría nunca. Con la madrugada sale a ~220 m: nieva en invierno
+## más abajo que antes, y el resto del año el valle queda limpio. Y es la misma
+## hora que usa el frío de la gente —`SettlementSim.frio_por_hora`—, así que la
+## nieve y el frío no pueden contradecirse.
+static func cota_de_hielo(estacion: Subsistence.Season) -> float:
+	return grados(estacion, 3.0, 0.0) / GRADIENTE_POR_100M * 100.0
 
 
 ## La media del dia entero en esa estacion, al nivel del mar y en esta epoca.

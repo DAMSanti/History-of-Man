@@ -368,26 +368,16 @@ func _crecimiento(sim: Node) -> String:
 
 
 var _barra: Object = null
-var _contestando := false
 
 
 ## Contesta o cierra lo que haya en pantalla, y lo que salga detrás, como lo
-## haría el jugador. Si un `on_pick` levanta otro momento, la señal vuelve a
-## entrar aquí con la tarjeta de fuera todavía abierta: se deja pasar y el
-## bucle de fuera lo coge en la vuelta siguiente, sin contestar dos veces.
+## haría el jugador. La opción 0 es siempre la que no compromete: contrato de
+## SPECS §4.6. El bucle vive en [BarraSuperior.contestar_todo], que es también
+## quien impide contestar dos veces si un `on_pick` levanta otra tarjeta.
 func _contesta_los_momentos() -> void:
-	if _contestando or _barra == null:
+	if _barra == null:
 		return
-	_contestando = true
-	var vueltas := 0
-	while _barra.momento_en_pantalla() != null and vueltas < 50:
-		var m: Moment = _barra.momento_en_pantalla()
-		if m.is_decision():
-			_barra.elegir(1 if m.kind == Moment.Kind.BERREA else 0)
-		else:
-			_barra.seguir()
-		vueltas += 1
-	_contestando = false
+	_barra.contestar_todo(func(_m: Moment) -> int: return 0)
 
 
 var _firmas: FileAccess = null

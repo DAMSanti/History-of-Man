@@ -65,6 +65,43 @@ func _expedition_days_for(person: Inhabitant, distance_m: float = -1.0) -> float
 ## -un pico cercano, un frente a un paso del abrigo- no hace falta cargar
 ## nada: se come en casa como cualquier otro y se vuelve esa misma tarde.
 ## Cargar racion aqui era pedirle un peaje a quien ni siquiera duerme fuera.
+## Lo que se prefiere llevar de viaje, en este orden.
+##
+## Lo que menos pesa por ración y más aguanta. Está aquí, con nombre, porque lo
+## preguntan dos: el avituallamiento de una salida del mapa local
+## -[_provision]- y el de una expedición regional -[sacar_raciones]-. Estaba
+## escrito dentro de la primera y la segunda lo habría copiado: una regla
+## escrita en dos sitios acaba diciendo dos cosas.
+const LO_QUE_AGUANTA_EL_VIAJE := [Materia.Kind.CARNE_SECA,
+	Materia.Kind.PESCADO_SECO, Materia.Kind.FRUTO_SECO, Materia.Kind.GRASA]
+
+
+## Saca raciones de la despensa para un viaje largo. Devuelve cuántas consiguió.
+##
+## Las mismas preferencias que [_provision] —primero lo que aguanta, y si no
+## hay, lo que haya— pero sin cargarlo a nadie: una expedición regional sale
+## del mapa, así que no se simula persona a persona lo que lleva en la mochila.
+## Lo que importa es que **sale de la despensa y no vuelve**.
+func sacar_raciones(raciones: float) -> float:
+	var falta := raciones
+	for kind: int in LO_QUE_AGUANTA_EL_VIAJE:
+		if falta <= 0.0:
+			break
+		var k := kind as Materia.Kind
+		var unidades := sim.store.take(k, falta / maxf(Materia.nutrition(k), 0.001))
+		falta -= unidades * Materia.nutrition(k)
+	if falta > 0.0:
+		for kind: int in Materia.Kind.values():
+			if falta <= 0.0:
+				break
+			var k := kind as Materia.Kind
+			if not Materia.is_food(k):
+				continue
+			var unidades := sim.store.take(k, falta / maxf(Materia.nutrition(k), 0.001))
+			falta -= unidades * Materia.nutrition(k)
+	return raciones - maxf(falta, 0.0)
+
+
 func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
 	if distance_m >= 0.0 and distance_m <= SettlementSim.SALIDA_DE_CASA:
 		return true
@@ -83,8 +120,7 @@ func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
 
 	# Se prefiere lo que menos pesa por racion y mas aguanta: para llevar
 	# encima varios dias, la carne seca y el fruto son lo unico razonable
-	for kind: int in [Materia.Kind.CARNE_SECA, Materia.Kind.PESCADO_SECO,
-			Materia.Kind.FRUTO_SECO, Materia.Kind.GRASA]:
+	for kind: int in LO_QUE_AGUANTA_EL_VIAJE:
 		if needed <= 0.0:
 			break
 		var k := kind as Materia.Kind

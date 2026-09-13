@@ -877,6 +877,16 @@ Criterios:
   **alguien enferma o muere de frío**; en la que sí, menos o ninguno. Si en dos
   inviernos nadie enferma de frío, la necesidad no existe y el frente no está
   hecho. `Relevo.revisar_frio` ya sabe aplicarlo.
+
+  > **Medido el 2026-09-13 y NO se cumple en casa; el criterio se reescribe,
+  > decidido por el usuario.** Un invierno construido con la despensa llena:
+  > con ropa y sin ella, **0 enfermos y frío medio 0,0** (ESTADO §2, «El
+  > invierno en la cueva»). Con el fuego encendido la noche en la cueva quita
+  > frío, y el vestido sólo cuenta durmiendo sin fuego. **Se acepta como
+  > hallazgo**: el vestido es necesidad **lejos del fuego** —la puerta del frío
+  > de las cumbres, el vivac, la noche del fuego racionado—, no en el invierno
+  > en casa. Donde la necesidad se juega de verdad es en lo que la expedición
+  > se lleva, y eso es la Tanda 3.
 - **El frío cierra el roquedo.** Sin ropa buena, una salida al roquedo en
   invierno se **rechaza**, con un motivo que el panel dice. La peletería es una
   puerta —como la azagaya lo es para la caza mayor—, no un porcentaje.
@@ -907,6 +917,167 @@ Criterios:
   consecuencia, es que **esté escrita en la opción** antes de elegir.
 
 ---
+---
+
+**Plan técnico de la tanda 2.** (2026-09-12, `/plan-tarea`,
+`history-of-man-11`.) Las tareas cuelgan de [ROADMAP.md](ROADMAP.md) «En
+curso», bloque «Tanda 2».
+
+**El suelo de la suite al abrir la tanda: 979 pruebas, 6 994 comprobaciones,
+TODO OK.** La copia viva está en [ESTADO.md](ESTADO.md) §3.
+
+### Tres premisas de la spec que el código no sostiene
+
+Se dicen antes del plan porque una de ellas borra media tarea.
+
+1. **La niebla regional YA ESTÁ CONSTRUIDA.** [SISTEMAS.md](SISTEMAS.md) §4 la
+   da por «No construida» y el frente 5 pide que se ponga. Comprobado en el
+   código: `GameState.discovered` es un diccionario de ids, `GameState.begin`
+   lo arranca con **sólo la cueva** (`discovered = {home.id: true}`), y
+   `RegionMap` filtra sus `_visible_sites` con `GameState.is_discovered`
+   saltándose únicamente los emplazamientos de prueba. O sea que el criterio
+   «el jugador no ve los 862 de golpe» **puede que ya se cumpla hoy**: es algo
+   que hay que **medir**, no construir. Lo que falta de verdad es **quién
+   descubre** —hoy sólo `GameState.discover()`, y no lo llama nadie de la
+   partida— y **qué cuesta**.
+2. **`PanelSitios` no lista emplazamientos regionales.** El criterio lo nombra,
+   pero esa clase es el panel **local**: enseña parajes, cumbres, recursos y
+   bocas de cueva del mapa de 4 km. La lista de `Site` regionales vive en
+   `RegionMap`. El criterio se comprueba ahí, no ahí.
+3. **`Site` es un recurso horneado**, con `@export` y guardado en
+   `data/sites/cantabria_sites.res`. **La marca de «ocupado por otro grupo» y
+   el contacto no pueden vivir ahí**: son estado de partida y el `.res` es dato
+   compartido que se rehornea. Van donde ya vive la niebla —estáticas de
+   `GameState`— o en un subsistema de `sim/`. El plan elige lo segundo para el
+   contacto, y se dice por qué abajo.
+
+### Frente 5 — expedición fuera del mapa
+
+**Lo que hay:** la niebla (premisa 1). `Expedition` (`region/`) es el traspaso
+regional→local al fundar, **no** una expedición de exploración. En `sim/` no
+hay nada regional: `Reconocimiento` bate el mapa local y `Cumbres` sube
+cumbres, las dos dentro de los 4 km.
+
+**Lo que falta, y es el orden de dependencias:**
+
+- **`Expedicion` (`sim/`, nueva), la salida larga.** Se manda gente, tarda
+  jornadas, come raciones de su propia cuenta —`Despensa` ya separa la cuenta
+  de la expedición de la de la ascensión— y **vuelve descubriendo `Site`**. Es
+  el único sitio desde el que se llama a `GameState.discover`.
+- **Quién hay al final: `Contacto`.** Qué `Site` están ocupados y con quién se
+  ha tratado. Va en `sim/` y no en `GameState` **porque el trueque necesita
+  memoria por contraparte** —el `trato` del frente 6— y eso es estado de
+  simulación que la instantánea tiene que recorrer; `GameState` es lo que
+  cruza escenas, no lo que se firma. La niebla se queda donde está.
+- **Qué `Site` están ocupados** se decide con el `_rng` de la simulación al
+  empezar la partida y se guarda en `Contacto`, no en el `.res`.
+
+**Contrato que aplica:** SPECS.md §2.2 (nada de autoloads nuevos; `GameState`
+ya es la estática que hay), §3.3 (quién ocupa qué sale del `_rng`), §4.4
+(`Expedicion` y `Contacto` son subsistemas de la fachada, `Clase.new(self)`).
+
+### Frente 6 — trueque de verdad
+
+**Lo que hay:** `Intercambio` son 68 líneas. `intentar()` mira si hay 6,0 de
+`FRUTO_SECO`, tira `_rng.randf()` contra un 0,55 fijo, y cambia por 3,0 de
+`SILEX`. Lo llama `SettlementSim` una vez por estación **sin preguntar a
+nadie**.
+
+**Las cuatro decisiones de la spec, y lo que cada una obliga:**
+
+- **Con quién** → necesita `Contacto` (frente 5). Es la dependencia dura de la
+  tanda: **sin el frente 5 no hay frente 6**.
+- **Qué se ofrece y cuánto** → el trueque deja de tener `SE_OFRECE` constante;
+  el `Moment` lleva las opciones y la despensa las paga.
+- **Qué se pide** → sílex, concha o gente. `Materia.Kind.CONCHA` y la llegada
+  de gente hay que comprobar que existen antes de prometerlas.
+- **Si se va** → jornadas de alguien, que no se recolectan.
+
+**La decisión de arquitectura que la spec obliga:** el `trato` por contraparte
+se modela **como el de `ElLobo`** —la spec lo dice—: un número que sube y baja
+con lo que haces, que sustituye al 0,55 fijo. No se inventa la curva: se
+copia la forma que ya funciona.
+
+### Frente 7 — el vestido como necesidad
+
+**Lo que hay:** `Relevo.revisar_frio` ya enferma y mata por `Inhabitant.cold`,
+y el vestido ya mitiga. Lo que **no** hay es que el frío suba de verdad: hoy
+`cold` sólo sube **si es invierno Y el hogar está apagado**, y baja en todo lo
+demás.
+
+**Y aquí la tanda 1 hace el trabajo:** ahora existe `Termometro`. La forma
+natural —y la que contesta el tercer criterio, «dormir al raso en invierno
+tiene consecuencia distinta de dormir al raso en verano»— es que **`cold` suba
+en función de los grados que haga**, no de una bandera de estación. Eso
+convierte el frente en una sola pregunta con una sola fuente, y de paso quita
+el `if season == INVIERNO`, que es una regla del clima escrita en el sitio
+equivocado.
+
+**El frío como puerta:** sin ropa, una salida al roquedo en invierno se
+rechaza con motivo. El sitio es donde ya se filtra adónde se puede ir, y el
+motivo tiene que llegar al panel: el patrón está hecho en `TechTree.freno` /
+`TechTree.causa`, de la tanda anterior.
+
+### Frente 8 — decisiones repartidas por el año
+
+**Lo que hay:** `Moment` con `is_decision()`, y momentos que ya existen. Lo que
+pide la spec no es más momentos: es que **cuesten**. Un `Moment` cuenta sólo si
+la opción no elegida cambia una cifra —despensa, jornadas o riesgo—.
+
+**La decisión de arquitectura:** eso hay que poder **contarlo**, así que el
+`Moment` necesita declarar qué cambia cada opción. Hoy `options` es
+`Array[Dictionary]` libre. Se le pone un campo de consecuencia, y la sonda lo
+lee. Sin eso el criterio no es medible y se convierte en una opinión.
+
+### Riesgos técnicos, nombrados
+
+- **El frente 5 es la mitad de la tanda y nadie lo ha empezado.** Los frentes 6
+  y 8 dependen de él (contacto, y decisiones que van del trueque). Si algo se
+  cae, se cae por aquí.
+- **Tocar cómo sube `cold` cambia el balance de la partida entera**, y el
+  invierno es donde la banda se muere. Es el cambio con más riesgo de la tanda,
+  y su medida es de las caras.
+- **Deuda que se hereda:** `LlamadasHuerfanas` sigue en 2 por un falso positivo
+  con miembros `static`; el vestido sigue sin ser por persona (lo pide el
+  frente 7 y `Toolkit` no tiene dueños); y `Site.describe_for_player` se usa
+  como medida de «ficha revelada» sin que nadie lleve la cuenta de cuáles se
+  han revelado.
+
+### Ficheros que se tocan
+
+`scripts/sim/Expedicion.gd` y `scripts/sim/Contacto.gd` (nuevos),
+`scripts/sim/Intercambio.gd`, `scripts/sim/SettlementSim.gd`,
+`scripts/sim/Relevo.gd`, `scripts/sim/Partida.gd`, `scripts/banda/Moment.gd`,
+`scripts/region/GameState.gd`, `scripts/ui/` (el panel del trueque y el motivo
+del roquedo), y pruebas y sondas nuevas en `scripts/tests/`.
+Documentación: SISTEMAS.md §4, §5 y §19, INTERFAZ.md §4, SPECS.md §4.4,
+ESTADO.md §2 y §3, ROADMAP.md.
+
+
+### Las cuatro decisiones del año, tal como quedaron
+
+**Construidas el 2026-09-12** (frente 8). Una por estación, que no se pueden
+evitar, cada una con su coste **escrito en la opción antes de elegir**:
+
+| Estación | Qué se decide | Qué cuesta decir que sí |
+|---|---|---|
+| **Primavera** | ¿Se manda una expedición fuera del valle? | 3 adultos, 12 jornadas y 72 raciones, vuelvan con algo o no |
+| **Verano** | ¿Se sube a las cumbres ahora que no hiela? | El riesgo de la ascensión; y si no se sube, la ventana sin ropa se cierra con el verano |
+| **Otoño** | ¿Volcarse en la berrea? | Un mes sin recolectar ni hacer leña quien caza |
+| **Invierno** | ¿El fuego a manos llenas o racionado? | Racionado: la leña dura el doble y una noche de cada dos se duerme sin fuego |
+
+**Por qué éstas y no otras.** Las tres que no eran la berrea se eligieron entre
+las que se propusieron, y salen de sistemas que ya existían: la expedición
+(frente 5), la puerta del frío (frente 7) y el fuego que ahora enfría por grados.
+**Encadenan el año**: la primavera decide si se descubre, el verano si se sube
+antes de que hiele, el otoño si se llena la despensa, y el invierno cómo se
+aguanta.
+
+Encima de estas cuatro van las que salen del estado —el trueque cuando se conoce
+a alguien, el lobo—, sin suelo ni tope: el calendario no se infla para llegar a
+un número.
+
+---
 
 ### El cierre de la fase: tres condiciones, no una
 
@@ -920,6 +1091,14 @@ pedir las tres:
 
 Las dos nuevas son exactamente las que obligan a construir la capa regional, y
 por eso están aquí y no en §8 como hitos internos.
+
+> **Construido el 2026-09-12.** `Partida.evaluar_victoria` pide las tres, y
+> `Partida.lo_que_falta_para_cerrar()` dice cuáles faltan. «Puntos nuevos» son
+> los que ha **traído una expedición** —`Expedicion.descubiertos`—, no los que se
+> conocían: la cueva de partida no cuenta, y mandar dos veces al mismo sitio no
+> infla la cuenta. Una expedición que vuelve de vacío cuenta como mandada y no
+> como descubrimiento, así que no cierra la fase. Y los puntos se cuentan contra
+> los **72** emplazamientos usables del Paleolítico, no contra 862.
 
 Criterios:
 
@@ -964,6 +1143,28 @@ Criterios:
 - **La causa en el panel de técnicas.** Ya está hecha (INTERFAZ.md §4). Se nombra
   para que no se rehaga.
 - **Ficheros nuevos en `docs/`.** Esta spec vive en los permanentes que le tocan.
+
+**CIERRE DE LA TANDA 2 (2026-09-13).** Construido todo lo estructural —la
+expedición que descubre y deja contacto, el trueque con contraparte que recuerda,
+el frío por grados con la cota de nieve saliendo del termómetro, y una decisión
+fija por estación—, y medido con dos años de partida y un jugador que decide.
+Cómo quedó cada criterio:
+
+| frente | criterio | quedó |
+|---|---|---|
+| 5 | la niebla y la expedición que descubre | **sí**: se ve 1 sitio de 72 al empezar, y una expedición revela 4 |
+| 5 | contacto que dura | **sí**, con prueba; y **la primera expedición siempre encuentra gente**, decidido por el usuario al ver cero tratos en dos años |
+| 6 | el trueque, con su tasa | **sin medir**: 0 intentos en dos años, porque no se conoció a nadie. El arreglo de arriba lo abre y no se ha vuelto a medir |
+| 7 | sin ropa alguien enferma | **no en casa**; reescrito arriba como hallazgo |
+| 7 | el frío cierra el roquedo | **sí**, con prueba (`TestFrio`) |
+| 8 | cuatro decisiones al año que cuestan | **sí**: 4 cada año, una de cada tipo |
+| cierre | la fase se cierra entre año y medio y tres | **no**: la banda muere de hambre en la jornada 359 |
+
+**Lo que tumbó el año no es de esta tanda.** La despensa sin cestos no pasa de
+~600 raciones y el invierno pide ~1 140: el primero se pasa a cero y el segundo
+no. Va por `/depurar`, decidido por el usuario, y está en ESTADO §2, «Dos años
+con un jugador que decide», y §5, punto 13. Hasta que se arregle, **ninguna cifra
+de año de esta ficha se puede dar por buena**: la partida no llega a vivirlo.
 
 ---
 

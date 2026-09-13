@@ -463,6 +463,12 @@ var pinturas: Pinturas = Pinturas.new(self)
 ## Lo que se fabrica y lo que se gasta. Ver [Taller].
 var taller: Taller = Taller.new(self)
 
+## Quien hay ahi fuera y que tal os llevais. Ver [Contacto].
+var contacto: Contacto = Contacto.new(self)
+
+## La salida larga, fuera del mapa. Ver [Expedicion].
+var expedicion: Expedicion = Expedicion.new(self)
+
 ## Trueque con la banda vecina: sílex a cambio de lo que sobra. Ver
 ## [Intercambio].
 var intercambio: Intercambio = Intercambio.new(self)
@@ -793,6 +799,51 @@ const HEARTH_COLD_FATIGUE := 3.0
 const HEARTH_COLD_RISE := 4.0
 const HEARTH_COLD_RECOVERY := 8.0
 
+
+## Cuánto frío se coge por hora durmiendo SIN FUEGO a esa temperatura.
+##
+## Cero por encima de [Termometro.GRADOS_DE_ABRIGO]; por debajo, proporcional a
+## cuánto se baja. Es la única pregunta «¿cuánto enfría esta noche?» del juego:
+## la hacen la cueva y el raso, y antes ninguno de los dos miraba los grados —la
+## cueva miraba si era invierno, y el raso **no tocaba el frío en absoluto**—.
+##
+## ## Calibrada para no mover lo que ya había
+##
+## La pendiente no se elige: se saca de que **una madrugada de invierno al nivel
+## del mar dé exactamente [HEARTH_COLD_RISE]**, que es lo que el juego aplicaba
+## antes a cualquier noche de invierno en la cueva. O sea que en ese punto el
+## balance es el de siempre, y lo único que cambia es lo que antes no se veía:
+## más arriba enfría más —el gradiente es físico, ver [Termometro]— y un abrigo
+## alto puede coger frío también en otoño.
+static func frio_por_hora(grados: float) -> float:
+	var por_debajo := Termometro.GRADOS_DE_ABRIGO - grados
+	if por_debajo <= 0.0:
+		return 0.0
+	var referencia := Termometro.grados(Subsistence.Season.INVIERNO, 3.0, 0.0)
+	var pendiente := HEARTH_COLD_RISE / maxf(Termometro.GRADOS_DE_ABRIGO - referencia, 0.1)
+	return por_debajo * pendiente
+
+
+## Los grados que hace donde está esta persona, ahora.
+func _grados_donde(person: Inhabitant) -> float:
+	var cota := _terrain.get_height_at(person.position) if _terrain != null else 0.0
+	return Termometro.grados(GameState.season as Subsistence.Season, hour, cota)
+
+
+## Una hora de sueño, en cuanto al frío. `con_fuego` es el hogar en la cueva o
+## la hoguera del vivac: con él se entra en calor, sin él se enfría por grados.
+##
+## El vestido se SUMA al fuego, no lo sustituye: con cobertura completa se pasa
+## menos frío, pero sin fuego y sin vestido sigue siendo lo peor.
+func _frio_de_una_noche(person: Inhabitant, hours: float, grados: float,
+		con_fuego: bool) -> void:
+	var frio := frio_por_hora(grados)
+	if con_fuego or frio <= 0.0:
+		person.cold = maxf(person.cold - hours * HEARTH_COLD_RECOVERY, 0.0)
+		return
+	var abrigo := 1.0 - vestido_coverage() * VESTIDO_COLD_MITIGATION
+	person.cold = clampf(person.cold + hours * frio * abrigo, 0.0, 100.0)
+
 ## Cuánto se gasta cada `VESTIDO` por JORNADA DE CALENDARIO, se trabaje o no
 ## con él. A diferencia del resto del utillaje -que sólo se desgasta cuando
 ## alguien lo usa en una tarea, ver `Tool.WEAR_PER_DAY`-, una prenda se lleva
@@ -1076,6 +1127,10 @@ func _semilla_de_esta_corrida() -> int:
 
 func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: float) -> void:
 	_terrain = terrain
+	# La nieve sale del termómetro en metros, y se pinta y se anda en fracción
+	# del relieve: sin esto no se sabe dónde cae. Ver [Temporada.relieve].
+	if terrain != null:
+		temporada.relieve = terrain.get_height_range()
 	home_position = home
 
 	# Capacidad del abrigo. Una cueva no es un almacen infinito: doce metros
@@ -1420,6 +1475,12 @@ func _advance(delta: float) -> void:
 	Cronometro.tramo("gente (todos los ticks)")
 	for _s in range(steps):
 		for i in range(people.size()):
+			# QUIEN ESTA DE EXPEDICION NO ESTA EN EL MAPA. No anda, no come de la
+			# despensa -comio al salir, ver [Expedicion.mandar]- ni trabaja: ha
+			# salido de los cuatro kilometros. Simularlo aqui seria tenerlo
+			# paseando por un valle del que se ha ido.
+			if people[i].esta_de_expedicion(day):
+				continue
 			_tick_person(people[i], i, slice_hours, slice)
 	Cronometro.cierra("gente (todos los ticks)")
 
@@ -1773,6 +1834,12 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 				var raso := 6.0 - (float(person.bivouac_lack) + suelto) * VIVAC_REST_LOSS
 				person.fatigue = maxf(
 					person.fatigue - hours * maxf(raso, 0.0), 0.0)
+				# Y AL RASO SE COGE FRÍO, que hasta el 2026-09-12 no se cogía:
+				# dormir fuera sólo tocaba la fatiga, en cualquier estación. Con
+				# hoguera se entra en calor; sin ella, por los grados que haga
+				# ahí arriba, que suelen ser menos que en la cueva.
+				_frio_de_una_noche(person, hours, _grados_donde(person),
+					person.bivouac_fire)
 				despensa._eat_from_pack(person, hours)
 				return
 			if _home_reached(person):
@@ -1784,25 +1851,18 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 				despensa._deliver(person)
 				person.state = Inhabitant.State.DURMIENDO
 				person.fatigue = maxf(person.fatigue - hours * 9.0, 0.0)
-				# El invierno en una cueva sin fuego no se descansa: se
-				# aguanta. El resto del año la cueva sola ya abriga bastante,
-				# que es justamente por lo que se ocupa una cueva.
-				if not hearth_lit \
-						and GameState.season == Subsistence.Season.INVIERNO:
+				# Una noche fría en una cueva sin fuego no se descansa: se aguanta.
+				# ANTES decía «en invierno»; ahora dice «a los grados que haga»,
+				# que en la cueva de siempre viene a ser lo mismo y en una cueva
+				# alta no. Ver [frio_por_hora].
+				var grados_en_casa := _grados_donde(person)
+				# El fuego que calienta ESTA noche, que no es lo mismo que el
+				# hogar prendido: racionado, una noche de cada dos no hay.
+				var con_fuego := hogar.calienta_esta_noche()
+				if not con_fuego and frio_por_hora(grados_en_casa) > 0.0:
 					person.fatigue = clampf(
 						person.fatigue + hours * HEARTH_COLD_FATIGUE, 0.0, 100.0)
-					# El vestido se SUMA al hogar, no lo sustituye: con cobertura
-					# completa se pasa menos frio, pero sin fuego y sin vestido
-					# sigue siendo lo peor de las cuatro combinaciones.
-					var abrigo := 1.0 - vestido_coverage() * VESTIDO_COLD_MITIGATION
-					person.cold = clampf(
-						person.cold + hours * HEARTH_COLD_RISE * abrigo, 0.0, 100.0)
-				else:
-					# Con el fuego encendido, o fuera de invierno, se entra en
-					# calor: `cold` no se queda clavado en lo peor de la
-					# última mala noche para el resto de la partida.
-					person.cold = maxf(
-						person.cold - hours * HEARTH_COLD_RECOVERY, 0.0)
+				_frio_de_una_noche(person, hours, grados_en_casa, con_fuego)
 				# Superar el aforo del abrigo no es un muro -no impide nacer
 				# ni expulsa a nadie-: alimenta los mismos contadores que ya
 				# castigan dormir mal, no un cuarto camino de muerte aparte.
@@ -1830,6 +1890,9 @@ func _tick_routine(person: Inhabitant, hours: float, delta: float,
 				# fuego- pero se repone.
 				person.state = Inhabitant.State.DURMIENDO
 				person.fatigue = maxf(person.fatigue - hours * 4.5, 0.0)
+				# Y SIN FUEGO NINGUNO, que es lo que dice el comentario de
+				# arriba: el frío de la noche entero, por los grados que haga.
+				_frio_de_una_noche(person, hours, _grados_donde(person), false)
 	else:
 		_tick_daylight(person, hours)
 
@@ -2319,6 +2382,32 @@ func raise_moment(moment: Moment) -> void:
 ## [Partida.momento_inicial] y docs/specs/QUE_FALTA_PARA_JUGARLO.md.
 func iniciar_partida() -> void:
 	raise_moment(partida.momento_inicial())
+	# Y LA DECISIÓN DE LA ESTACIÓN EN QUE SE EMPIEZA. Las decisiones de
+	# estación saltan al CAMBIAR de estación, y la partida empieza ya dentro de
+	# la primavera: sin esto, la de primavera del primer año —mandar la
+	# expedición— no salía nunca, la primera expedición esperaba al año 2 y el
+	# primer año tenía tres decisiones y no cuatro. Lo destapó la prueba de humo
+	# de la pasada larga, antes de lanzarla.
+	_decision_de_la_estacion()
+
+
+## La decisión fija de la estación en curso. UNA decisión por estación, que es
+## el criterio del frente 8 de EPOCA_01 §10.1: cuatro al año que no se pueden
+## evitar. Las tres que no eran la berrea las eligió el usuario el 2026-09-12, y
+## las tres salen de sistemas que ya existían.
+##
+## Está en un solo sitio porque la preguntan dos: el cambio de estación y el
+## arranque de la partida.
+func _decision_de_la_estacion() -> void:
+	match GameState.season:
+		Subsistence.Season.PRIMAVERA:
+			expedicion.proponer_la_salida()
+		Subsistence.Season.VERANO:
+			cumbres.proponer_la_subida()
+		Subsistence.Season.OTONO:
+			_offer_rut_choice()
+		Subsistence.Season.INVIERNO:
+			hogar.proponer_el_fuego()
 
 
 ## Dónde se pone esta persona cuando está en el abrigo, según lo que hace.
@@ -3096,6 +3185,8 @@ func _end_of_day() -> void:
 	# Ver [Despensa.pasar_cuenta_de_proteina].
 	despensa.pasar_cuenta_de_proteina()
 	lobo.nuevo_dia()
+	expedicion.nuevo_dia()
+	_acabar_la_berrea()
 	# Y revista a los parajes: lo que baja del veinte por ciento se deja
 	# descansar solo, sin que el jugador tenga que estar mirandolo.
 	barbecho.revisar()
@@ -3345,9 +3436,10 @@ func _advance_local_season() -> void:
 		relevo.revisar_vejez()
 		relevo.evaluar_nacimiento()
 		partida.evaluar_victoria()
-	# Un intento de trueque por estación, las cuatro, no solo en el giro de
-	# año -a diferencia de nacimientos y vejez, que son un suceso ANUAL.
-	intercambio.intentar()
+	# El trueque YA NO OCURRE SOLO: se propone, una vez por estación, y decide
+	# el jugador. Hasta el 2026-09-12 aquí se llamaba a `intentar()` y la banda
+	# cambiaba fruto seco por sílex sin preguntar ni avisar. Ver [Intercambio].
+	intercambio.proponer_el_trato()
 	GameState.last_report = "Empieza %s, año %d." % [
 		Subsistence.season_name(GameState.season), GameState.year]
 	_note(Chronicle.Kind.TIERRA, _season_line(), 2)
@@ -3363,8 +3455,9 @@ func _advance_local_season() -> void:
 
 	season_changed.emit(GameState.season, GameState.year)
 
-	if GameState.season == Subsistence.Season.OTONO:
-		_offer_rut_choice()
+	if GameState.season == Subsistence.Season.PRIMAVERA:
+		hogar.fin_del_invierno()
+	_decision_de_la_estacion()
 
 
 ## Cuánto sube de precio la lesión de quien decide aguantar y seguir fuera.
@@ -3389,35 +3482,93 @@ func _offer_rut_choice() -> void:
 		+ "del año, y las únicas que llenan la despensa de cara al invierno. "
 		+ "Ahora mismo hay %d raciones de las %d que se comerán en invierno."
 		) % [int(stock["have"]), int(stock["needed"])]
+	var cazadores := _pueden_cazar()
+	# «SEGUIR» VA PRIMERO, que es el contrato de SPECS §4.6: la opción 0 es la
+	# que no compromete a nada. Estaba al revés, y por eso `TironAnualProbe`
+	# tenía que contestar la berrea con la opción 1 como caso aparte.
 	moment.options = [
-		{
-			"label": "Volcarse en la berrea",
-			"hint": "Todo el que pueda cazar pasa a caza mayor. Se dejan de "
-				+ "hacer otras cosas: es la apuesta.",
-			"on_pick": func() -> void: focus_on_rut(),
-		},
-		{
-			"label": "Seguir como hasta ahora",
-			"hint": "El reparto de oficios no se toca.",
-			"on_pick": func() -> void: pass,
-		},
+		Moment.opcion("Seguir como hasta ahora",
+			"El reparto de oficios no se toca.",
+			func() -> void: pass),
+		Moment.opcion("Volcarse en la berrea",
+			("Los %d que pueden cazar pasan a caza mayor %d jornadas y dejan de "
+				+ "recolectar y de hacer leña: son %d jornadas que no se recogen. "
+				+ "Es la apuesta.") % [cazadores, DIAS_DE_BERREA,
+					cazadores * DIAS_DE_BERREA],
+			func() -> void: focus_on_rut(),
+			{"jornadas": cazadores * DIAS_DE_BERREA}),
 	]
 	raise_moment(moment)
 
 
+## Cuánto dura volcarse en la berrea: un mes del calendario del juego.
+##
+## Es `Subsistence.DAYS_PER_MONTH` y no una cifra aparte: la spec dice «ese mes».
+const DIAS_DE_BERREA := Subsistence.DAYS_PER_MONTH
+
+## Hasta qué jornada dura la berrea en curso. -1 si no hay.
+var berrea_hasta_el_dia := -1
+
+## Las prioridades que cada uno tenía antes de volcarse, por id, para
+## devolvérselas al acabar. Es lo que hace que la apuesta tenga fin.
+var _prioridades_antes_de_la_berrea: Dictionary = {}
+
+
+## Cuántos pueden salir a la caza mayor.
+func _pueden_cazar() -> int:
+	var n := 0
+	for person: Inhabitant in people:
+		if Profession.can_do(Profession.Job.CAZA, person):
+			n += 1
+	return n
+
+
 ## Vuelca la banda en la caza mayor. Es la mitad activa de la berrea.
+##
+## **Y AHORA CUESTA, que es lo que la spec pedía: «la berrea deja de ser
+## gratis».** Antes ponía la caza mayor a prioridad 3, que en este reparto es
+## la MENOS urgente —ver `Inhabitant.set_priority`, de 1 a 3—, así que quien
+## tuviera recolección a 1 o a 2 seguía recolectando y volcarse no hacía casi
+## nada. La pista de la opción ya prometía «se dejan de hacer otras cosas: es la
+## apuesta», y el código no lo cumplía.
+##
+## Ahora, durante [DIAS_DE_BERREA]: la caza mayor a 1, y **la recolección
+## entera apagada** para quien va —comida, leña y piedra, que son el oficio de
+## recolección—. Al acabar se devuelven las prioridades de antes. Ver
+## [_acabar_la_berrea].
 func focus_on_rut() -> void:
 	var task := Profession.task_id(Profession.Job.CAZA,
 		Profession.Speciality.CAZA_MAYOR)
 	var sent := 0
+	berrea_hasta_el_dia = day + DIAS_DE_BERREA
 	for person: Inhabitant in people:
 		if not Profession.can_do(Profession.Job.CAZA, person):
 			continue
-		person.set_priority(task, 3)
+		if not _prioridades_antes_de_la_berrea.has(person.id):
+			_prioridades_antes_de_la_berrea[person.id] = person.priorities.duplicate()
+		for otra: int in person.priorities.keys():
+			if Profession.task_job(otra) == Profession.Job.RECOLECCION:
+				person.set_priority(otra, 0)
+		person.set_priority(task, 1)
 		sent += 1
 	apply_priorities()
 	_note(Chronicle.Kind.TIERRA,
-		"La banda se vuelca en la berrea: %d salen a la caza mayor." % sent, 2)
+		("La banda se vuelca en la berrea: %d salen a la caza mayor y dejan la "
+			+ "recolección %d jornadas.") % [sent, DIAS_DE_BERREA], 2)
+
+
+## Se acaba la berrea y cada uno vuelve a lo suyo. Lo mira el cierre de jornada.
+func _acabar_la_berrea() -> void:
+	if berrea_hasta_el_dia < 0 or day < berrea_hasta_el_dia:
+		return
+	for person: Inhabitant in people:
+		if _prioridades_antes_de_la_berrea.has(person.id):
+			person.priorities = (_prioridades_antes_de_la_berrea[person.id] as Dictionary).duplicate()
+	_prioridades_antes_de_la_berrea.clear()
+	berrea_hasta_el_dia = -1
+	apply_priorities()
+	_note(Chronicle.Kind.TIERRA,
+		"Acaba la berrea: cada uno vuelve a lo suyo.", 1)
 
 
 ## Lo que significa que entre cada estacion, dicho como se diria.

@@ -50,19 +50,53 @@ func cueva_pintada() -> bool:
 	return sim.paintings.size() >= SettlementSim.CUEVA_PINTADA_MINIMO
 
 
+## Si ya se ha mandado una expedición fuera del mapa. Segunda condición.
+func expedicion_mandada() -> bool:
+	return sim.expedicion != null and sim.expedicion.mandada_alguna_vez
+
+
+## Si alguna expedición ha traído puntos nuevos del mapa regional. Tercera.
+##
+## Los que ha descubierto una expedición, no los que se conocían: la cueva de
+## partida no cuenta, y mandar dos veces al mismo sitio tampoco infla la cuenta
+## —`Expedicion._descubrir_alrededor` sólo suma los que eran nuevos de verdad—.
+func puntos_nuevos() -> bool:
+	return sim.expedicion != null and sim.expedicion.descubiertos > 0
+
+
+## Cuáles de las tres condiciones faltan, para poder decirlo. Vacío si están.
+func lo_que_falta_para_cerrar() -> Array[String]:
+	var falta: Array[String] = []
+	if not cueva_pintada():
+		falta.append("la cueva pintada")
+	if not expedicion_mandada():
+		falta.append("una expedición fuera del valle")
+	if not puntos_nuevos():
+		falta.append("sitios nuevos traídos de fuera")
+	return falta
+
+
+## La primera fase se cierra con TRES condiciones, no una.
+##
+## Hasta el 2026-09-12 bastaba con un año vivo y la cueva pintada. La spec
+## —EPOCA_01 §10.1, «El cierre de la fase»— pide además una expedición mandada
+## fuera y puntos nuevos en el mapa regional, porque son exactamente las dos que
+## obligan a construir la capa regional: sin ellas la fase se cerraba sin haber
+## salido nunca del valle.
 func evaluar_victoria() -> void:
 	if sim.desenlace != SettlementSim.Desenlace.NINGUNO:
 		return
-	if sim.population() <= 0 or not cueva_pintada():
+	if sim.population() <= 0 or not lo_que_falta_para_cerrar().is_empty():
 		return
 
 	sim.desenlace = SettlementSim.Desenlace.VICTORIA
 	sim.desenlace_dia = sim.day
 	var moment := Moment.new()
 	moment.kind = Moment.Kind.VICTORIA
-	moment.title = "Un año vivido, y contado en la pared"
-	moment.text = ("La banda ha cerrado el año viva, y la cueva guarda lo que "
-		+ "ha pasado: %d relatos pintados.") % sim.paintings.size()
+	moment.title = "La banda ya no es sólo de este valle"
+	moment.text = ("La banda ha cerrado el año viva, la cueva guarda %d relatos "
+		+ "pintados, y ha salido a ver qué había más allá: %d sitios nuevos.") % [
+			sim.paintings.size(), sim.expedicion.descubiertos]
 	sim.raise_moment(moment)
 
 

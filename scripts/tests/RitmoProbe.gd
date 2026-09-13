@@ -64,11 +64,9 @@ func _init() -> void:
 	# cero para siempre en cuanto tocaba la primera decisión del año. Ver el
 	# mismo arreglo en `AnoProbe.gd`.
 	var _resolver_decisiones := func() -> void:
-		var actual := ui.barra.momento_en_pantalla()
-		while actual != null and actual.is_decision():
-			var index := 1 if actual.kind == Moment.Kind.BERREA else 0
-			ui.barra.elegir(index)
-			actual = ui.barra.momento_en_pantalla()
+		# La opción 0 es siempre la que no compromete (SPECS §4.6), y los avisos
+		# se cierran: ver [BarraSuperior.contestar_todo].
+		ui.barra.contestar_todo(func(_m: Moment) -> int: return 0)
 
 	var dias := 180
 	if not OS.get_environment("DIAS").is_empty():

@@ -169,7 +169,7 @@ func _init() -> void:
 		sim.home_position.y,
 		sim._terrain.altura_relativa(sim.home_position)])
 	print("   cota de nieve de la estacion: %.2f · frena aqui: %.2f" % [
-		Temporada.COTA_DE_NIEVE.get(GameState.season, 0.95),
+		sim.temporada.fraccion_de(GameState.season as Subsistence.Season),
 		sim.temporada.freno_por_nieve(
 			sim._terrain.altura_relativa(sim.home_position))])
 

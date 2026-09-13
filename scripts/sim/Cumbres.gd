@@ -383,6 +383,35 @@ func climber_for(peak: Dictionary) -> Inhabitant:
 ## que «nadie tiene el nivel», ni que «hace falta más de uno».
 ## `who` deja elegir a mano quién sube. Sin él sube el de más pericia, que es
 ## lo que hacía siempre.
+## Por qué el frío no deja subir a esa cumbre, o "" si sí deja.
+##
+## **La peletería es una puerta**, como la cuerda lo es para una pared: sin ropa
+## no se sube adonde de noche hiela. Lo pide el frente 7 de EPOCA_01 §10.1 —«el
+## frío cierra el roquedo»—, y el roquedo no existía como sitio en el código:
+## la salida a lo alto que sí está modelada es la ascensión.
+##
+## **No hay cota inventada.** Se mira la madrugada en la cima, porque subir
+## supone dormir arriba, y se le pregunta a la misma regla que enfría a la gente
+## al raso: si ahí se coge frío —`SettlementSim.frio_por_hora`—, hace falta
+## abrigo. Así la puerta y el frío que castiga no pueden decir cosas distintas.
+##
+## «Ropa buena» es que haya **un vestido por cada uno de los que suben**: el
+## vestido es de la banda y no de nadie en concreto —`Toolkit` no tiene
+## dueños—, así que lo que se puede preguntar es si da para la cordada.
+func motivo_del_frio(peak: Dictionary) -> String:
+	if peak.is_empty():
+		return ""
+	var cima: Vector3 = peak["pos"]
+	var cota := sim._terrain.get_height_at(cima) if sim._terrain != null else cima.y
+	var grados := Termometro.grados(GameState.season as Subsistence.Season, 3.0, cota)
+	if SettlementSim.frio_por_hora(grados) <= 0.0:
+		return ""
+	if sim.toolkit.count(Tool.Kind.VESTIDO) >= MIN_CLIMBING_PARTY:
+		return ""
+	return ("Arriba hiela de noche (%.0f °C) y no hay abrigo para los que suben. "
+		+ "Hace falta un vestido por cada uno.") % grados
+
+
 func order_ascent(peak: Dictionary, who: Inhabitant = null) -> String:
 	if peak.is_empty():
 		return "No hay tal cumbre."
@@ -395,6 +424,10 @@ func order_ascent(peak: Dictionary, who: Inhabitant = null) -> String:
 	if not _climbing_party_enough(hardness):
 		return "Una cumbre así no se ataca en solitario: hacen falta al menos " \
 			+ "%d en ascensión antes de intentarla." % MIN_CLIMBING_PARTY
+
+	var frio := motivo_del_frio(peak)
+	if not frio.is_empty():
+		return frio
 
 	var climber := who if who != null else climber_for(peak)
 	if climber == null:
@@ -430,6 +463,8 @@ func peak_for(person: Inhabitant) -> Dictionary:
 		for peak: Dictionary in peaks:
 			if (peak["pos"] as Vector3).distance_to(peak_order) > 1.0:
 				continue
+			if not motivo_del_frio(peak).is_empty():
+				continue
 			if float(peak["hard"]) <= dares and sim.marcha._reachable(person, peak["pos"]):
 				return peak
 
@@ -445,6 +480,10 @@ func peak_for(person: Inhabitant) -> Dictionary:
 		if Ascent.needs_gear(float(peak["hard"])):
 			continue
 		if not _climbing_party_enough(float(peak["hard"])):
+			continue
+		# Y las que hielan de noche sin abrigo tampoco: la misma puerta que
+		# la del equipo, con otra llave. Ver [motivo_del_frio].
+		if not motivo_del_frio(peak).is_empty():
 			continue
 		if not sim.marcha._reachable(person, peak["pos"]):
 			continue
@@ -466,6 +505,8 @@ func peak_for(person: Inhabitant) -> Dictionary:
 		if Ascent.needs_gear(float(peaks[i]["hard"])):
 			continue
 		if not _climbing_party_enough(float(peaks[i]["hard"])):
+			continue
+		if not motivo_del_frio(peaks[i]).is_empty():
 			continue
 		if sim.marcha._reachable(person, peaks[i]["pos"]):
 			return peaks[i]
@@ -664,3 +705,57 @@ func _peak_rise(peak: Dictionary) -> float:
 		return float(peak.get("rise", 0.0))
 	return float(peak.get("rise", 0.0)) * sim._terrain.meters_per_unit \
 		/ maxf(sim._terrain.vertical_exaggeration, 0.001)
+
+
+
+## La cumbre que se propondría subir este verano: la más suave de las que
+## todavía no se han coronado y se pueden intentar. Vacía si no hay.
+func cumbre_de_este_verano() -> Dictionary:
+	var mejor: Dictionary = {}
+	for peak: Dictionary in peaks():
+		if _already_climbed(peak["pos"]):
+			continue
+		if Ascent.needs_gear(float(peak["hard"])):
+			continue
+		if not motivo_del_frio(peak).is_empty():
+			continue
+		if mejor.is_empty() or float(peak["hard"]) < float(mejor["hard"]):
+			mejor = peak
+	return mejor
+
+
+## Propone la decisión del verano. Lo llama [SettlementSim] al entrar el
+## verano.
+##
+## Es la estación que la puerta del frío deja abierta: sin ropa, en primavera se
+## cierra casi todo lo que pasa de 164 m, y en verano no hasta los 1 364. Si
+## este verano no se sube, **la ventana se cierra hasta el año que viene** o
+## hasta que se cosan vestidos, y eso se dice en la tarjeta.
+func proponer_la_subida() -> void:
+	var peak := cumbre_de_este_verano()
+	if peak.is_empty():
+		return
+	var quien := climber_for(peak)
+	if quien == null:
+		return
+	var skill := quien.skill_in(Profession.task_id(Profession.Job.EXPLORACION,
+		Profession.Speciality.ASCENSION))
+	var riesgo := clampf(1.0 - Ascent.chance(skill, float(peak["hard"]),
+		sim.weather.risk_factor(), quien.fatigue), 0.0, 1.0)
+	var moment := Moment.new()
+	moment.kind = Moment.Kind.ASCENSO
+	moment.title = "Verano: ahora no hiela arriba"
+	moment.text = ("Hay una cumbre por subir que se ve desde el abrigo. Ahora se "
+		+ "puede sin abrigo; en cuanto refresque, ya no.")
+	moment.options = [
+		Moment.opcion("No subir",
+			"Nadie sube. La ventana sin ropa se cierra con el verano.",
+			func() -> void: pass),
+		Moment.opcion("Mandar a subir",
+			("%s lo intentaría. Sale bien %d de cada diez veces, y quien "
+				+ "sube se revela media comarca.") % [quien.given_name,
+					int(round((1.0 - riesgo) * 10.0))],
+			func() -> void: order_ascent(peak, quien),
+			{"riesgo": riesgo, "jornadas": 1}),
+	]
+	sim.raise_moment(moment)

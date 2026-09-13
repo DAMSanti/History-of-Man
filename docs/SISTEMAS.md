@@ -251,8 +251,25 @@ todavía introducir la exploración fuera del mapa").
 | Capa | Qué es | Estado |
 |---|---|---|
 | **Local** | Batida (`Reconocimiento._batida_target`, `Exploration.best_frontier`) y expedición dentro de los 4 km del mapa local | Construida. Resuelve incógnitas de `Paraje`, abre monte sin nombre dentro del recuadro |
-| **Regional** | Descubrir otros `Site` del mapa de Cantabria por proximidad o por expedición larga desde el emplazamiento fundado | **No construida.** Es la FASE A1 del ROADMAP.md, sin hacer: hoy se ven los 862 emplazamientos de golpe |
+| **Regional** | Descubrir otros `Site` del mapa de Cantabria por proximidad o por expedición larga desde el emplazamiento fundado | **La niebla, construida; quien la levanta, no.** Ver el aviso de abajo |
 | **Exterior** | Contacto con otra banda, otro poblado, otra villa: gente que no es la tuya y con la que se puede tratar, temer o pelear | No existe ni como diseño de sistema fuera de este documento |
+
+> **Corregido el 2026-09-12, midiendo antes de construir.** Este apartado decía
+> que la capa regional estaba «no construida» y que «hoy se ven los 862
+> emplazamientos de golpe». **No es cierto, y no lo era desde hacía tiempo:**
+> `GameState.discovered` arranca con sólo la cueva y `RegionMap` filtra por él.
+> Al empezar la partida se ve **uno**.
+>
+> **Lo que de verdad falta es quién descubre.** Nadie llama a
+> `GameState.discover` desde la partida, así que la niebla no se levanta nunca
+> y el mapa regional se queda en la cueva para siempre. Eso es lo que construye
+> el frente 5 de EPOCA_01 §10.1.
+>
+> Y de paso, dos cifras que este documento repetía mal: el conjunto horneado
+> tiene **869** emplazamientos, no 862 —los siete de más son los de prueba—, y
+> de ellos sólo **72** son usables en el Paleolítico con el mar a −120 m. Los
+> «puntos regionales nuevos» que cierran la fase se miden contra 72, no contra
+> 862. Ver [ESTADO.md](ESTADO.md) §2.
 
 **Capa regional**, el hueco inmediato. El patrón ya está resuelto en local
 —`Exploration.best_frontier` puntúa candidatos por cuánto abren entre lo que
@@ -266,6 +283,33 @@ y revela un radio de `Site` alrededor del punto de llegada. Con la niebla de
 guerra puesta de este modo, `PanelSitios` deja de mostrar los 862 desde el
 minuto uno, que es justo lo que dice el criterio de A1: *"el jugador no ve
 los 862 de golpe; los descubre"*.
+
+> **Construido el 2026-09-12: quien levanta la niebla, y quien hay detrás.**
+>
+> **`Expedicion` (`sim/`)** es la salida larga. Tres adultos como mínimo, 12
+> jornadas fuera y **las raciones de todo el viaje sacadas antes de salir**
+> —`Despensa.sacar_raciones`, en la cuenta de siempre—. Quien sale **deja de
+> existir en el mapa local**: no recibe tick ni entra en el reparto, porque si
+> no «salir del valle» era seguir paseando por él. Al volver descubre el
+> destino y sus vecinos más cercanos, y es **el único sitio de la partida que
+> llama a `GameState.discover`**. Y cuesta igual si vuelve sin nada: el coste
+> es haber salido.
+>
+> **`Contacto` (`sim/`)** es la capa exterior. Qué emplazamientos tienen gente
+> —uno de cada cinco, sorteado con el `_rng` **una sola vez**— y el trato con
+> cada contraparte. **No vive en `Site`**, que es un recurso horneado de sólo
+> lectura, ni en `GameState`, que es lo que cruza escenas: el trato es estado
+> de simulación y la instantánea tiene que recorrerlo.
+>
+> Las cifras que no salen de una medida —12 jornadas, 4 descubiertos por
+> vuelta, 3 adultos, uno de cada cinco ocupado— **son decisiones y lo dicen en
+> el código**. Se ajustan con la partida delante.
+>
+> **Y la primera expedición siempre encuentra gente** (2026-09-13, decisión del
+> usuario): su destino se puebla al volver (`Contacto.poblar`), lo hubiera
+> sorteado o no. Sólo el destino deja contacto, y con uno de cada cinco
+> ocupados dos años de partida acabaron **sin conocer a nadie y sin un trato**
+> —ESTADO §2—. De la segunda en adelante, el sorteo.
 
 **Capa exterior**, la base para lo que aún no tiene fecha. "Otra banda" no
 es un `Settlement` jugable propio todavía —eso es una banda de IA rival o
@@ -298,6 +342,7 @@ Paleolítico ya exige que exista.
 > **La capa regional va antes**: sin niebla no hay nada que descubrir, y la
 > expedición no tendría adonde llegar.
 
+
 ---
 
 ## 5. El comercio, de la concha de lejos al mercado nacional
@@ -324,6 +369,30 @@ fachada que el resto: `sim.intercambio = Intercambio.new(self)`. El
 `Materia.Kind.SILEX` ya existe con su nota "no existe aquí, es importado" —
 literalmente sólo falta el objeto que lo hace llegar en vez de aparecer en
 el almacén por magia de diseño de nivel.
+
+> **Construido el 2026-09-12: el trueque se decide, se paga y se recuerda.**
+>
+> Ya no ocurre solo. Una vez por estación, **si se conoce a alguien** —y a
+> alguien se le conoce con una expedición, §4—, se propone con un `Moment` de
+> tipo `TRUEQUE`. La primera opción es **no ir**, y cada opción dice lo que
+> cuesta antes de elegir.
+>
+> Las cuatro decisiones de la spec quedan así: **con quién** lo decide la
+> memoria —se trata con la gente de mejor trato—; **qué se ofrece y cuánto**
+> es fruto seco, carne seca o piel, regateando, lo justo o siendo generosos;
+> **qué se pide** es sílex, concha o que venga alguien a vivir; y **si se va**
+> es la opción de no ir, más las cuatro jornadas que alguien pasa fuera del
+> mapa salga como salga.
+>
+> **La memoria** es `Contacto.trato`, con la forma del `trato` de `ElLobo`:
+> regatear lo baja, ser generosos lo sube, y la probabilidad de que salga bien
+> parte del 0,55 heredado y se mueve con él. **Se lee antes de moverlo**, porque
+> lo que la otra gente recuerda es lo de las veces anteriores.
+>
+> Medido en la prueba: 0,950 siendo generosos contra 0,080 regateando, **en
+> trescientos intentos seguidos, que llevan el trato a sus topes** — en una
+> partida se trata unas cuatro veces al año y la diferencia será menor. La
+> magnitud jugada se mide con el año corriendo (M1).
 
 **El campaniforme del Calcolítico** (EPOCAS.md, "un recipiente que se
 enseña, no que se usa") y **el ajuar desigual del Bronce** son la misma
@@ -1032,6 +1101,39 @@ probar: no se puede jugar con lo que no se puede leer.
 > **Lo que NO es una cifra de balanceo y no se toca:** el gradiente vertical,
 > 0,65 °C por cada 100 m, que es física. Si el roquedo sale inhabitable, lo que
 > se cambia es el roquedo.
+
+> **Piezas 2 y 3, construidas el 2026-09-12: el frío se coge por grados, y
+> cierra lo alto.**
+>
+> **El frío por grados.** `SettlementSim.frio_por_hora` convierte la
+> temperatura en frío por hora durmiendo sin fuego: cero por encima de
+> `Termometro.GRADOS_DE_ABRIGO` (5 °C), proporcional a cuánto se baja por
+> debajo. La usan **las tres ramas de sueño**, y dos no miraban antes el frío:
+> **al raso no se cogía frío en ninguna estación**, sólo cansancio. La
+> pendiente está calibrada para que una madrugada de invierno al nivel del mar
+> dé el `HEARTH_COLD_RISE` de siempre, así que el invierno de la cueva
+> habitual no se ha movido; lo que sí se mueve es que **la altitud enfría** y
+> que un abrigo alto coge frío también en otoño.
+>
+> **El frío cierra lo alto.** `Cumbres.motivo_del_frio`: sin un vestido por
+> cada uno de la cordada no se sube adonde de madrugada se coge frío. Es la
+> peletería como puerta, igual que la cuerda para una pared, y el roquedo de la
+> spec resultó ser la ascensión, que es la única salida a lo alto modelada.
+> **La puerta y el frío que castiga son la misma regla**, así que no pueden
+> decir cosas distintas.
+>
+> **Es estricta a propósito, y tiene un precio que hay que conocer:** sin ropa
+> se cierra todo en invierno y, en primavera, cualquier cosa por encima de
+> 164 m. La banda empieza en primavera sin vestidos, así que **la primera
+> ascensión espera al verano o a la peletería**. Se decidió así con esos
+> números delante; la pasada larga dirá si retrasa la fase de más.
+
+> **Y la nieve también sale de aquí** (2026-09-12). Era `Temporada.COTA_DE_NIEVE`,
+> una fracción del relieve del mapa local, así que dependía del mapa y no del
+> clima, y describía el mismo frío que el termómetro sin hablarse con él. Ahora
+> es `Termometro.cota_de_hielo`: **la cota donde hiela de madrugada**, la misma
+> hora que usa el frío de la gente. En el valle de partida nieva en invierno
+> desde ~221 m —antes desde 357— y el resto del año no nieva.
 
 **Por qué cruza las once épocas.** La temperatura ambiente no cambia de
 naturaleza con la época: cambia con qué se responde a ella. Paravientos y piel

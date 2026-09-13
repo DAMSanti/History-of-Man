@@ -215,12 +215,15 @@ func test_el_otono_tira_a_pardo() -> void:
 func test_el_paisaje_no_cambia_de_golpe_a_medianoche() -> void:
 	# La primera nevada no deja el puerto cerrado. Doce jornadas de transicion.
 	var t := Temporada.new()
+	# El relieve del valle de partida, que es contra lo que se mide la nieve
+	# desde que sale del termómetro. Ver [Temporada.relieve].
+	t.relieve = Vector2(96.0, 718.0)
 	t.asentar(Subsistence.Season.VERANO)
 	var antes := t.cota_de_nieve()
 	t.nuevo_dia(Subsistence.Season.INVIERNO)
 	var despues := t.cota_de_nieve()
 	assert_lt(despues, antes, "la cota de nieve empieza a bajar")
-	assert_gt(despues, Temporada.COTA_DE_NIEVE[Subsistence.Season.INVIERNO],
+	assert_gt(despues, t.fraccion_de(Subsistence.Season.INVIERNO),
 		"pero no llega a la del invierno en una sola jornada")
 
 
@@ -228,9 +231,10 @@ func test_asentar_deja_la_estacion_puesta_del_todo() -> void:
 	# Para arrancar partida y para las sondas: sin esto medirian doce jornadas
 	# de la estacion anterior.
 	var t := Temporada.new()
+	t.relieve = Vector2(96.0, 718.0)
 	t.asentar(Subsistence.Season.INVIERNO)
 	assert_near(t.cota_de_nieve(),
-		Temporada.COTA_DE_NIEVE[Subsistence.Season.INVIERNO], 0.001,
+		t.fraccion_de(Subsistence.Season.INVIERNO), 0.001,
 		"asentar pone la cota del invierno ya")
 	assert_near(t.caudal(), Temporada.CAUDAL[Subsistence.Season.INVIERNO],
 		0.001, "y el caudal del invierno")
@@ -248,6 +252,10 @@ func test_el_rio_crecido_cierra_vados() -> void:
 
 func test_la_nieve_frena_solo_por_encima_de_la_cota() -> void:
 	var t := Temporada.new()
+	# El relieve del valle de partida. Sin él, desde que la nieve sale del
+	# termómetro, no se sabe dónde cae y no nieva en ninguna parte: es lo que
+	# esta prueba destapó al pasarla. Ver [Temporada.relieve].
+	t.relieve = Vector2(96.0, 718.0)
 	t.asentar(Subsistence.Season.INVIERNO)
 	assert_near(t.freno_por_nieve(0.10), 1.0, 0.001,
 		"en el fondo del valle no hay nieve y no frena")

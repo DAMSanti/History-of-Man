@@ -118,19 +118,62 @@ func _pinturas(cuantas: int) -> Array[Tale]:
 	return out
 
 
-func test_banda_viva_y_cueva_pintada_gana() -> void:
+## Las tres condiciones del cierre, cumplidas o no según se pida.
+func _cierre(sim: SettlementSim, cueva: bool, expedicion: bool, puntos: bool) -> void:
+	var minimo := SettlementSim.CUEVA_PINTADA_MINIMO
+	sim.paintings = _pinturas(minimo if cueva else minimo - 1)
+	sim.expedicion.mandada_alguna_vez = expedicion
+	sim.expedicion.descubiertos = 3 if puntos else 0
+
+
+func test_con_las_tres_condiciones_se_gana() -> void:
+	# Reescrita el 2026-09-12. Antes se llamaba «banda viva y cueva pintada
+	# gana», que es justo la regla que la tanda 2 sustituye: la fase se cerraba
+	# sin haber salido nunca del valle. Ver EPOCA_01 §10.1, «El cierre».
 	var sim := _sim(_banda())
-	sim.paintings = _pinturas(SettlementSim.CUEVA_PINTADA_MINIMO)
+	_cierre(sim, true, true, true)
 	var capturados: Array[Moment] = []
 	sim.moment_raised.connect(func(m: Moment) -> void: capturados.append(m))
 
 	sim.partida.evaluar_victoria()
 
 	assert_eq(sim.desenlace, SettlementSim.Desenlace.VICTORIA,
-		"vivos y con la cueva pintada: se gana")
+		"cueva pintada, expedición mandada y sitios nuevos: se gana")
 	assert_eq(sim.desenlace_dia, sim.day, "con la jornada en que ocurrió")
 	assert_eq(capturados.size(), 1, "con su momento de cierre")
-	assert_eq(capturados[0].kind, Moment.Kind.VICTORIA, "del tipo que corresponde")
+	if capturados.size() > 0:
+		assert_eq(capturados[0].kind, Moment.Kind.VICTORIA, "del tipo que corresponde")
+
+
+func test_con_dos_de_tres_no_se_cierra() -> void:
+	# EL CRITERIO EXPLÍCITO DE LA SPEC: «el desenlace se levanta sólo cuando
+	# están las tres: prueba de que con dos no se cierra». Una por cada una que
+	# puede faltar.
+	for caso in [[false, true, true], [true, false, true], [true, true, false]]:
+		var sim := _sim(_banda())
+		_cierre(sim, caso[0], caso[1], caso[2])
+		sim.partida.evaluar_victoria()
+		assert_eq(sim.desenlace, SettlementSim.Desenlace.NINGUNO,
+			"falta %s: no se cierra" % sim.partida.lo_que_falta_para_cerrar())
+
+
+func test_dice_lo_que_falta_para_cerrar() -> void:
+	var sim := _sim(_banda())
+	_cierre(sim, true, false, false)
+	var falta := sim.partida.lo_que_falta_para_cerrar()
+	assert_eq(falta.size(), 2, "faltan la expedición y los sitios nuevos")
+	_cierre(sim, true, true, true)
+	assert_true(sim.partida.lo_que_falta_para_cerrar().is_empty(), "y luego nada")
+
+
+func test_mandar_la_expedicion_sin_traer_nada_no_basta() -> void:
+	# Salir no es descubrir: una expedición que vuelve de vacío cuenta para la
+	# segunda condición y no para la tercera.
+	var sim := _sim(_banda())
+	_cierre(sim, true, true, false)
+	sim.partida.evaluar_victoria()
+	assert_eq(sim.desenlace, SettlementSim.Desenlace.NINGUNO,
+		"con la expedición de vacío no se cierra la fase")
 
 
 func test_banda_viva_sin_pintar_lo_suficiente_no_gana() -> void:

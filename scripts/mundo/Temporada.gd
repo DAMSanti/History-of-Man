@@ -34,18 +34,19 @@ extends RefCounted
 ## y deshielo—, estiaje marcado de agosto. No es el régimen nival de un río de
 ## montaña continental, y por eso el pico es en enero y no en mayo.
 
-## Cota de nieve, en tanto por uno de la altura máxima del mapa.
+## El relieve del mapa local, en metros: (la cota más baja, la más alta).
 ##
-## Cero sería «nieva hasta la playa» y uno «no nieva en ninguna parte». Los
-## números salen de la cota de nieve real de la cordillera Cantábrica en el
-## Dryas reciente —bastante más baja que hoy: el Magdaleniense final es frío—
-## pero el que importa es el CONTRASTE entre estaciones, y ése es de playtest.
-const COTA_DE_NIEVE := {
-	Subsistence.Season.PRIMAVERA: 0.72,
-	Subsistence.Season.VERANO: 0.95,
-	Subsistence.Season.OTONO: 0.78,
-	Subsistence.Season.INVIERNO: 0.42,
-}
+## Hace falta para pasar la cota de nieve —que [Termometro] da en metros sobre el
+## mar— a la fracción del relieve con la que trabajan el shader del terreno y el
+## freno de la marcha. Lo pone [SettlementSim.setup], que es quien tiene el
+## terreno. Sin él no se sabe dónde cae la nieve, y no nieva.
+##
+## Aquí vivía `COTA_DE_NIEVE`, una fracción del relieve por estación sacada del
+## Dryas reciente. Se quitó el 2026-09-12: la nieve sale ahora del termómetro.
+## Ver [Termometro.cota_de_hielo]. Y el Dryas reciente es más frío que el
+## 12 000 a.C. en que se fijó la época, que es por qué aquella nieve caía tan
+## baja.
+var relieve := Vector2.ZERO
 
 ## Cuánto encharca cada estación, de 0 a 1.
 const ENCHARCA := {
@@ -91,7 +92,7 @@ var _tinte := Color.WHITE
 ## Lleva el paisaje hacia lo que toca en esta estación. Una jornada de camino.
 func nuevo_dia(season: Subsistence.Season) -> void:
 	var paso := 1.0 / TRANSICION
-	_cota = move_toward(_cota, float(COTA_DE_NIEVE.get(season, 0.95)), paso)
+	_cota = move_toward(_cota, fraccion_de(season), paso)
 	_charca = move_toward(_charca, float(ENCHARCA.get(season, 0.0)), paso)
 	_caudal = move_toward(_caudal, float(CAUDAL.get(season, 1.0)), paso * 1.5)
 	# El color va MAS DESPACIO que el resto: la hierba no amarillea en doce
@@ -102,10 +103,23 @@ func nuevo_dia(season: Subsistence.Season) -> void:
 ## Deja el paisaje YA en lo que toca, sin transición. Para arrancar partida y
 ## para las sondas, que si no medirían doce jornadas de otra estación.
 func asentar(season: Subsistence.Season) -> void:
-	_cota = float(COTA_DE_NIEVE.get(season, 0.95))
+	_cota = fraccion_de(season)
 	_charca = float(ENCHARCA.get(season, 0.0))
 	_caudal = float(CAUDAL.get(season, 1.0))
 	_tinte = TerrainLayers.tint_of_season(season)
+
+
+## La cota de nieve de esa estación, en tanto por uno del relieve del mapa.
+##
+## Puede pasar de uno —«por encima de todo el mapa: no nieva»— o bajar de cero
+## —«nieva hasta abajo»—, y las dos cosas son ciertas en algún mapa: el shader
+## las admite (`TerrainGenerator.set_snow_line` recorta entre 0 y 2).
+func fraccion_de(season: Subsistence.Season) -> float:
+	var alto := relieve.y - relieve.x
+	if alto <= 0.0:
+		# Sin relieve conocido no hay contra qué medir. Por encima de todo.
+		return 2.0
+	return (Termometro.cota_de_hielo(season) - relieve.x) / alto
 
 
 ## La cota de nieve de hoy, para el shader del terreno.

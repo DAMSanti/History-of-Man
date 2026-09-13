@@ -705,6 +705,18 @@ var search_hours: float = 0.0
 ## cada tick.
 var bivouac_day: int = -1
 
+## La jornada en que vuelve de una expedición regional. -1 si está en casa.
+##
+## No es el vivac —eso es dormir fuera dentro del mapa—: es haber salido del
+## mapa. Mientras dure, **no trabaja**, y por eso lo mira el reparto. Ver
+## [Expedicion].
+var expedicion_hasta: int = -1
+
+
+## Si está fuera, en una expedición regional, esa jornada.
+func esta_de_expedicion(dia: int) -> bool:
+	return expedicion_hasta >= 0 and dia < expedicion_hasta
+
 ## De cuántas de las dos cosas se durmió sin, anoche.
 var bivouac_lack: int = 0
 

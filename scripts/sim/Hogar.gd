@@ -43,6 +43,10 @@ func _burn_hearth() -> void:
 	var wanted := SettlementSim.HEARTH_WOOD_PER_DAY
 	if GameState.season == Subsistence.Season.INVIERNO:
 		wanted *= SettlementSim.HEARTH_WINTER_FACTOR
+	# Racionado se quema la mitad, que es lo que cuesta un fuego una noche sí y
+	# otra no. Ver [racionado].
+	if racionado:
+		wanted *= 0.5
 	if _hearth_keeper():
 		wanted *= SettlementSim.YESQUERO_SAVING
 
@@ -54,6 +58,61 @@ func _burn_hearth() -> void:
 	sim.hearth_relight = 0.0
 	sim._note(Chronicle.Kind.PENURIA,
 		"Se acabó la leña y el sim.hogar se quedó frío.", 2)
+
+
+## Si el fuego del invierno va racionado: una noche sí y otra no.
+##
+## Es la decisión fija del invierno —EPOCA_01 §10.1, frente 8—, y está hecha para
+## que **cueste en las dos direcciones**, que es lo que la vuelve una decisión.
+## El fuego de este juego es binario —encendido calienta, apagado deja el frío
+## por grados de `SettlementSim.frio_por_hora`—, así que si racionar sólo
+## gastara menos leña, siempre convendría. Racionado quiere decir **una noche
+## con fuego y otra sin él**: se quema la mitad y la noche sin fuego se pasa el
+## frío entero. No hay cifra de calor inventada: la mitad sale de «una sí y
+## otra no».
+var racionado := false
+
+
+## Si el fuego calienta esta noche. Es lo que la cueva pregunta al dormir.
+##
+## Racionado, las noches impares no hay fuego aunque el hogar esté prendido.
+func calienta_esta_noche() -> bool:
+	if not sim.hearth_lit:
+		return false
+	return not (racionado and sim.day % 2 == 1)
+
+
+## Propone la decisión del invierno. Lo llama [SettlementSim] al entrar el
+## invierno. La primera opción es la que no compromete: SPECS §4.6.
+func proponer_el_fuego() -> void:
+	var moment := Moment.new()
+	moment.kind = Moment.Kind.INVIERNO
+	moment.title = "Llega el invierno: ¿cuánto fuego?"
+	moment.text = ("Hay %.0f de leña en el abrigo. Con el fuego a manos llenas "
+		+ "se quema toda la noche; racionado, dura el doble pero una noche de "
+		+ "cada dos se duerme sin él.") % sim.store.amount(Materia.Kind.LENA)
+	moment.options = [
+		Moment.opcion("A manos llenas, como siempre",
+			"Fuego cada noche. Gasta la leña de siempre.",
+			func() -> void: racionado = false),
+		Moment.opcion("Racionarlo",
+			"Fuego una noche sí y otra no: la leña dura el doble y la otra "
+				+ "noche se pasa frío.",
+			func() -> void: _racionar(),
+			{"riesgo": 0.5}),
+	]
+	sim.raise_moment(moment)
+
+
+func _racionar() -> void:
+	racionado = true
+	sim._note(Chronicle.Kind.PENURIA,
+		"Se raciona la leña: una noche con fuego y otra sin él.", 1)
+
+
+## Se acaba el racionamiento con el invierno. Lo llama [SettlementSim].
+func fin_del_invierno() -> void:
+	racionado = false
 
 
 ## Si hoy hay alguien en el hogar, que es quien estira la leña.

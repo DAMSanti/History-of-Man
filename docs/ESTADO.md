@@ -18,6 +18,8 @@ con cuál.
 | **El estado de la partida en una página**, con el año medido | **§1** |
 | Por qué un recolector alimenta a siete y un cazador no se alimenta ni a sí mismo | §2 |
 | Por qué la caza mayor no llega en un año (la cadena de prerrequisitos) | §2, «Por qué la caza da 0,27» |
+| **Dos años con un jugador que decide**: la banda muere en el segundo invierno por el tope de la despensa | §2, «Dos años con un jugador que decide» |
+| Por qué la ropa no cambia nada en el invierno en casa | §2, «El invierno en la cueva» |
 | **Qué sistemas están sólidos, y con qué sonda se comprobó** | **§3** |
 | Qué pide el diseño y no existe | §4 |
 | **Qué haría por orden**, con lo ya hecho tachado | **§5** |
@@ -500,6 +502,106 @@ y sin acelerar.
 > queda en 1, igual que la línea base. Quien quiera comparar peores fotogramas
 > necesita varias corridas y una mediana, no una cifra.
 
+### La niebla regional ya estaba puesta, y los 862 no son los de esta época
+
+**Medido el 2026-09-12** con `TestNiebla`, contra los datos horneados de verdad
+(`data/sites/cantabria_sites.res`). Salió de ir a construir la capa regional y
+encontrarla hecha.
+
+| | |
+|---|---|
+| Emplazamientos conocidos al empezar la partida | **1** — sólo la cueva |
+| Usables en el Paleolítico, con el mar a −120 m | **72** |
+| En el conjunto horneado entero | **869** |
+
+**Tres cosas que corrigen lo que decían los documentos:**
+
+1. **La niebla regional no está por construir: funciona.**
+   `GameState.discovered` arranca en `begin()` con `{home.id: true}` y
+   `RegionMap` filtra sus emplazamientos visibles con `GameState.is_discovered`.
+   El criterio «el jugador no ve los 862 de golpe» está cumplido de sobra: ve
+   **uno**. [SISTEMAS.md](SISTEMAS.md) §4 y la FASE A1 del ROADMAP decían lo
+   contrario y están corregidos.
+2. **Lo que de verdad falta es quién descubre.** Nadie llama a
+   `GameState.discover` desde la partida, así que **la niebla no se levanta
+   nunca**: hoy el mapa regional se queda en la cueva para siempre. Ése es el
+   hueco real del frente 5, y es la tarea E3.
+3. **«862» no son los de esta época, y ni siquiera son 862.** El conjunto
+   horneado tiene **869** —la diferencia son los emplazamientos de prueba, con
+   id por encima de `RegionMap.DEV_SITE_BASE`, que se saltan la niebla a
+   propósito—, y de ésos sólo **72** son usables en el Paleolítico con el mar a
+   −120 m. **Es el número contra el que se mide «puntos regionales nuevos»**,
+   que es una de las tres condiciones que cierran la fase.
+
+### Dos años con un jugador que decide: la banda se muere en el segundo invierno
+
+**Medido el 2026-09-13** con `AnoProbe`, `SEMILLA=42 JUGADOR=razonable
+DIAS=360`, 1 h 52 de reloj. El «jugador razonable» es una política fija escrita
+en la sonda: manda la expedición, sube en verano, se vuelca en la berrea, trata
+siendo justo y raciona el fuego si la leña no llega. **El reparto de oficios es
+el de por defecto**: no teje cestos por su cuenta.
+
+**La banda entera muere de hambre en la jornada 359**, a una del final. Nadie de
+frío. La despensa, en los dos inviernos:
+
+| | día 136, entra el invierno | día 181, sale | día 316, entra | día 346 |
+|---|---|---|---|---|
+| raciones | **659** | **0** · hambre 100, vivos 15 | **440** | **1** · vivos 15, y 0 trece días después |
+
+**No es falta de comida: es falta de dónde guardarla.** Entraron **45 987
+raciones** de recolección en los dos años y se pudrieron 179, pero la despensa
+**no pasa de ~600 en ningún momento**: es el tope de
+`Storehouse.capacidad_de_comida` sin cestos —«unos 30 días de capacidad», §5
+«Cuarto», punto 11—. **El invierno dura 45 jornadas** y quince bocas a 1,69
+raciones comen **~1 140**. El primer invierno se pasa raspando, con la despensa a
+cero y hambre 100 al salir; el segundo empieza con 440 y no se pasa.
+
+**Y eso arrastra lo demás**, que es lo que la tanda 2 quería medir:
+
+| contador | salió | lo que pedía la spec |
+|---|---|---|
+| desenlace | **DERROTA** en la jornada 359; la fase no se cierra, falta la cueva pintada | llega entre año y medio y tres años |
+| decisiones que cuestan | **4 cada año**, una por tipo | cuatro al año |
+| expediciones | **1**, la del año 1: 4 sitios, 36 jornadas-persona y 72 raciones. **La del año 2 se decidió y no salió**: la primavera empieza con la despensa a cero y no hay con qué avituallarla | que suba la cuenta de sitios |
+| trueque | **0 intentados** en dos años, gente conocida 0 | 0 el primer año sin decidir; la tasa siendo generoso |
+| caza | **1,88 raciones por persona y día** (678 jornadas-persona) | re-medir el 0,27 / 0,98 |
+
+**El trueque a cero es cómo está montado, no un fallo**: sólo 1 de cada 5
+emplazamientos tiene gente (`Contacto.OCUPADOS`), sólo se conoce a la del
+**destino** de la expedición y no a la de los otros tres que descubre, y sin
+nadie conocido no hay tarjeta. Con una expedición al año, lo normal es no
+conocer a nadie en dos. La tasa «siendo generoso» **no se pudo medir**.
+**Cambiado después de medir**, decidido por el usuario: la primera expedición
+siempre encuentra gente (SISTEMAS §4). Esta tabla es de antes y **no se ha vuelto
+a medir**.
+
+**La caza, 1,88, no se compara a pelo con el 0,98**: aquél era 95 jornadas con
+`BANDA=4,3,2`, y éste dos años con el reparto por defecto y volcándose en la
+berrea. Lo que sí dice es que un cazador ya llega a lo que come (1,69). Ribera
+sale a cero porque el reparto por defecto no pone a nadie: es el aviso de la
+cabecera de `AnoProbe`, no un cambio.
+
+### El invierno en la cueva no enferma a nadie, con ropa o sin ella
+
+**Medido el 2026-09-13** con `FrioInviernoProbe`, `SEMILLA=42`, un invierno
+construido —el último día de otoño y 46 jornadas— con **la despensa y el agua
+rellenadas cada día** para que el hambre no tape el frío (la primera pasada, sin
+eso, murió entera de hambre). 15 min por brazo.
+
+| | vivos al acabar | enfermaron de frío | murieron de frío | frío medio final |
+|---|---|---|---|---|
+| `ROPA=no` | 16 | **0** | **0** | **0,0** |
+| `ROPA=si` | 16 | **0** | **0** | **0,0** |
+
+**La ropa no cambia nada en casa, y se ve por qué en el código**: con el fuego
+encendido, cada noche en la cueva **quita** frío
+(`SettlementSim._frio_de_una_noche`), y el vestido sólo reduce el que se coge
+durmiendo **sin** fuego. La sonda contesta la opción que no compromete —fuego a
+manos llenas— y con la despensa llena nadie duerme fuera. **El criterio de la
+spec, «sin ropa alguien enferma o muere de frío», no se cumple en el invierno en
+casa.** Donde el vestido sí manda es fuera del fuego: la puerta del frío de las
+cumbres (comprobada con `TestFrio`), el vivac y la noche racionada.
+
 ## 3. Lo que está construido y funciona
 
 Para no perderlo de vista mientras se habla de lo que falta.
@@ -519,7 +621,7 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**979 pruebas y 6 994 comprobaciones en verde (2026-09-12).**
+**1 076 pruebas y 7 161 comprobaciones en verde (2026-09-13).**
 
 > **Ésta es la única copia de esa cifra en el repositorio, y es a propósito.**
 > Llegó a estar escrita en ocho sitios —CLAUDE.md, README.md, ARQUITECTURA.md,
@@ -776,6 +878,15 @@ duplicada.
     el paso 0 cerrado —la misma semilla da la misma partida, año entero— y
     tres optimizaciones dentro: los tirones graves del año pasan de **819 a
     329** sin que cambie una sola cifra de la partida.
+13. **🔴 La banda se muere de hambre en el segundo invierno.** Medido el
+    2026-09-13 con dos años de `AnoProbe` y el reparto por defecto: la despensa
+    no pasa de ~600 raciones —el tope de `Storehouse.capacidad_de_comida` sin
+    cestos— y el invierno pide ~1 140. Entran 45 987 raciones en dos años y
+    sobra comida; lo que falta es dónde guardarla. **Sin arreglar, y va por
+    `/depurar`**, decidido por el usuario: si el fallo es el tope, el reparto
+    que no teje cestos o el aviso que no le llega al jugador es justo la
+    pregunta que ese comando hace. Cifras en §2, «Dos años con un jugador que
+    decide».
 
 
 ---
