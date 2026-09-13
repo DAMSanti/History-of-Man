@@ -30,6 +30,7 @@ con el código delante. Lo que hace hoy el juego, medido, está en
 | Los hitos y su condición de disparo | §8 |
 | Qué falta por construir de esta época | §10 |
 | **Los dos primeros años: la spec, en dos tandas, con criterios** | **§10.1** |
+| Tanda 3: quién va a la expedición, pasarela, herido, guardado, cielo y ventanas | §10.1 → Tanda 3 |
 | La trampa: alargarla porque es la que está hecha | §11 |
 
 Es la única época construida: lo que hace hoy, medido, está en
@@ -1165,6 +1166,287 @@ Cómo quedó cada criterio:
 no. Va por `/depurar`, decidido por el usuario, y está en ESTADO §2, «Dos años
 con un jugador que decide», y §5, punto 13. Hasta que se arregle, **ninguna cifra
 de año de esta ficha se puede dar por buena**: la partida no llega a vivirlo.
+
+---
+
+### Tanda 3 — lo que el jugador vio al jugar la tanda 2
+
+> **Spec (2026-09-13)**, escrita con `/spec` a partir de una lista del usuario
+> tras jugar, y con sus respuestas a las preguntas de ese mismo día. Lo que aquí
+> está decidido no se vuelve a preguntar. Siguiente paso: `/plan-tarea`.
+
+**Por qué hace falta.** La tanda 2 dejó las piezas: expedición, decisiones del
+año y técnicas por oficio. Al jugarla salen tres tipos de hueco. **El jugador
+no gobierna lo que decide**: dice «sí» a la expedición, pero no elige a quién
+manda ni ve quién se ha ido. **Hay reglas que existen y no se notan**: la
+pasarela abre de golpe todos los cruces del mapa, el herido sigue saliendo a
+trabajar y la partida se pierde al volver al mapa regional. **Y hay mundo que
+falta**: no hay cielo, y ninguna obra se ve sobre el terreno.
+
+**Anula una línea de la tanda 2.** Su «Fuera de alcance» dejaba fuera el
+guardado y la carga. **Desde el 2026-09-13 entran**, por decisión del usuario:
+frente 15.
+
+**Cómo se mide.** Nada de esta tanda pide correr un año. Cada criterio se
+comprueba con una prueba de segundos sobre un estado construido; lo visual,
+con capturas **con ventana**, y el taller con la corrida que A4 ya tenía
+prevista. El coste de máquina se dice en cada frente que lo tenga.
+
+#### Depende de: siete fallos que van por `/depurar`, no por esta tanda
+
+Salieron en la misma lista, pero son reglas **que ya existen y no se
+cumplen**. Por eso no se diseñan aquí: se arreglan donde esté el fallo y
+**antes** de construir encima. Las pistas son del 2026-09-13; son pistas, no
+diagnósticos.
+
+| Qué vio el jugador | Pista | Bloquea |
+|---|---|---|
+| El % de las técnicas de ribera, manufactura y hogar no sube aunque se trabaje | La práctica sólo cuenta a quien «ha salido» con tajo. El trabajo que se hace en el abrigo o en la línea de nasas puede no marcarse | Frente 14 |
+| La pasarela lleva 82 de 70 jornadas y no se aprende | El progreso es lo menor entre jornadas y material pagado, y la pasarela cuesta 20 de leña, la misma que quema el hogar. Además, la ventana enseña «82/70» y no la causa, que INTERFAZ §4 da por resuelto | Frente 13 |
+| La crónica dice «Nadie se quedó al cuidado del sim.hogar» | Un buscar-y-reemplazar que dejó `sim.hogar` en seis frases: en el hogar, la despensa y las pinturas | — |
+| Marcadores azules antiguos en el minimapa | Probablemente los puntos de `work_sites`, pintados en cian | — |
+| En verano, «el raizal del paso» sale inalcanzable a 226 m | Sin investigar | — |
+| En 51 jornadas: 41 veces «se quedó sin camino a donde iba» y 2 «llegó y el estado no se enteró» | Son dos contadores de la marcha. Con 41 en 51 días, no es ruido | — |
+| Los trabajadores esquilman los parajes | **La regla ya existe**: por debajo del 20 % se deja descansar el paraje y se busca otro, y si no hay otro se sale a buscarlo. En la partida no se cumple | — |
+
+**Y una dependencia de calendario:** nada de esta tanda toca código mientras
+M1 de la tanda 2 esté midiendo. Los frentes 9 y 10 cambian cuándo salen las
+decisiones y qué cuesta la expedición, y **rompen** las pruebas de decisiones y
+la política con la que la sonda del año contesta las tarjetas. Hay que
+actualizarlas en la misma tarea, no después.
+
+#### 9. Las decisiones salen a lo largo del segundo mes
+
+Hoy cada decisión de estación aparece **el primer día** de la estación. Así se
+decide antes de haber vivido la estación: la de primavera llega sin saber cómo
+ha salido del invierno.
+
+- **Cuándo.** Cada una de las cuatro sale en una jornada de su estación
+  **entre la 16 y la 30**, es decir, en el segundo mes. Es la decisión del
+  usuario: «a lo largo del 2º mes, ± 7 días».
+- **Sorteada con la semilla de la partida.** No cae siempre el mismo día y se
+  puede repetir.
+
+Criterios:
+
+- En todas las estaciones de dos años, la jornada de la decisión cae en
+  [16, 30]. Prueba.
+- **Misma semilla, mismos días; semillas distintas, días distintos.** Con 10
+  semillas salen al menos 2 jornadas distintas para la misma estación. Prueba.
+- **El primer año sigue teniendo las cuatro**, aunque la partida empiece dentro
+  de la primavera. Es el hueco que la tanda 2 ya tapó una vez. Prueba.
+
+#### 10. La expedición: quién va, qué se lleva, y que se vea
+
+**Qué se lleva.** Además de las raciones, **la piel y la leña del vivac**, con
+**la misma regla que ya usa la acampada de la cumbre** y sin cifras nuevas:
+una piel de tienda por persona, que no se gasta y vuelve al abrigo, y una de
+leña por persona y noche, que sí arde, más una noche de margen. Con tres
+personas y 12 jornadas: 72 raciones, 3 pieles y 39 de leña. Decidido por el
+usuario el 2026-09-13.
+
+**Quién va.** Lo elige el jugador **en la propia tarjeta**: **3 adultos como
+mínimo**, sin niños y sin nadie que esté herido (frente 12). El coste de la
+tarjeta se recalcula con el número de personas elegidas. Hasta que vuelven, la
+banda **no cuenta con ellos para nada**: ni trabajan ni se les reparte tajo.
+
+**Que se vea.** Salen **andando desde la cueva hacia el borde del mapa**, por el
+lado del destino regional, y desaparecen al llegar. A la vuelta **aparecen en
+ese mismo borde y regresan andando**. Mientras caminan, en la ida y en la
+vuelta, siguen fuera: no trabajan. Las jornadas de la expedición cuentan desde
+que salen de la cueva hasta que vuelven a ella; el paseo va dentro de esas
+jornadas, no se suma.
+
+Criterios:
+
+- **Sin equipo no se sale.** Si falta cualquiera de las tres cosas, el «sí» no
+  se puede elegir y la tarjeta dice qué falta. Una prueba por cada una:
+  raciones, piel y leña.
+- **Lo que se gasta es lo que da la regla.** Tras una expedición de n personas,
+  la leña baja exactamente lo que dice la regla del vivac, las raciones lo
+  suyo, y **las pieles vuelven todas**. Prueba.
+- **Con dos no se sale.** Elegir a menos de 3 no deja confirmar. Prueba.
+- **Salen los elegidos y nadie más.** Sólo ellos se van, con el mismo número y
+  los mismos nombres. Prueba.
+- **Se les ve partir.** En la escena real, cada expedicionario pasa de la cueva
+  a menos de un paso del borde del mapa antes de desaparecer, y reaparece en
+  ese borde a la vuelta. Se comprueba con la sonda de expedición que ya corre
+  en la escena, y con una captura con ventana.
+- **Y se sabe quién falta**: frente 17, «Trabajos».
+
+#### 11. La cumbre: quién sube
+
+Lo mismo en la decisión de verano: **el jugador elige quién sube**. El mínimo
+es el que la ascensión ya tiene, sin cifra nueva. Tampoco pueden ir niños ni
+heridos. El vivac ya se cobra con su regla.
+
+Criterios:
+
+- Suben los elegidos y nadie más; con menos del mínimo no se confirma. Prueba.
+- Quien sube aparece como fuera en «Trabajos» hasta que baja. Frente 17.
+
+#### 12. El herido se queda en la cueva
+
+Hoy un percance baja lo que rinde la persona, pero **no le impide salir**:
+para poder trabajar sólo se mira la edad. Quien está tocado debe **quedarse
+descansando en la cueva**.
+
+- **Tocado** significa con un percance que todavía dura.
+- Mientras dure, **no sale del abrigo**. Sí puede hacer trabajos de «Hogar».
+- Al curarse **vuelve a su oficio y a sus prioridades de antes**, igual que el
+  cazador al acabar la berrea.
+
+Criterios, todos con prueba sobre un estado construido:
+
+- Un cazador con percance, en 3 jornadas, sale del abrigo **0 veces**.
+- Si hay trabajo de hogar, se le da.
+- Curado, recupera exactamente su oficio y sus prioridades.
+- No se le puede elegir para la expedición ni para la cumbre.
+
+#### 13. La pasarela abre un cruce, no el mapa
+
+Hoy, aprender la pasarela abre **todos los cruces del mapa a la vez**, con un
+interruptor global, y sobre el terreno no aparece nada. Así, una técnica que va
+de troncos sobre un cauce funciona como un permiso.
+
+- **Aprender la técnica permite construir; no abre nada por sí sola.**
+- **La construye la banda, sola**, en el cruce de sus caminos aprendidos
+  (SISTEMAS.md §18) que **más rodeo le ahorra**. El jugador no la coloca:
+  decisión del usuario del 2026-09-13.
+- **Con limitaciones.** Sólo sirve para cauces de hasta cierto ancho, y cuesta
+  leña y jornadas. **Ninguna de esas cifras se inventa**: `/plan-tarea` las fija
+  con su fuente, o dice que son una decisión. No hay tope de número: lo limita
+  lo que cuesta.
+- **Abre ese cruce todo el año**, con crecida incluida, que es lo que un vado no
+  da.
+- **Una riada puede llevársela.** Sólo cuando la rejilla estacional marca
+  crecida en ese tramo; la frecuencia sale de esa rejilla y no de un sorteo
+  nuevo. Se cuenta en la crónica, el cruce vuelve a cerrarse y la banda puede
+  levantarla otra vez.
+- **Tiene modelo 3D sobre el terreno**, visible a la distancia de gestión, y
+  deja de verse cuando la riada se la lleva.
+- **La piragua monóxila sale de esta época.** Es del Mesolítico, y
+  [EPOCA_02](EPOCA_02_MESOLITICO.md) ya la lista. La rama de exploración del
+  Paleolítico se queda en la pasarela.
+
+Criterios:
+
+- Técnica aprendida y ninguna pasarela construida: un cruce cerrado **sigue
+  cerrado**. Prueba.
+- Con pasarela en un tramo, ese cruce está abierto en **las cuatro estaciones**
+  de la rejilla y **los demás no cambian**. Prueba.
+- La banda elige el cruce que más rodeo ahorra entre sus caminos, y **no**
+  construye en un cauce más ancho que el límite. Prueba.
+- Una crecida en ese tramo puede destruirla, y **sin crecida no se destruye
+  nunca**. Prueba.
+- Captura con ventana: la pasarela se ve en su tramo.
+- El árbol del Paleolítico no tiene piragua. Prueba.
+
+#### 14. El taller practica aunque nadie pida piezas
+
+Cierra lo que A4 dejó para una spec (ROADMAP, «La puerta de entrada»): el
+taller **no se para, termina**, y con lo que se repone no llega a las 110
+jornadas de la talla laminar. De las cuatro opciones, **el usuario eligió el
+2026-09-13 que el artesano practique sin demanda**. Siguen descartadas bajar
+las jornadas de la laminar, subir la demanda natural y dejarlo como está.
+
+- Si no hay pieza pedida, **queda por aprender una técnica de manufactura** y
+  hay material, el artesano **sigue tallando para aprender**: gasta piedra y
+  suma jornadas de manufactura.
+- **Lo que se pide va primero.** En cuanto hay una pieza pedida, se hace ésa.
+- **Si no queda nada que aprender, no practica.** No se gasta piedra sin
+  motivo.
+
+Criterios:
+
+- Pruebas de las tres reglas de arriba, sobre un taller construido.
+- **Medido:** la sonda del árbol, con el taller ocupado a mano durante 90
+  jornadas, no baja de 2,00 jornadas de manufactura al día con dos artesanos.
+  Queda escrita la jornada en que se aprende la talla laminar, o, si no se
+  aprende, la causa que da el panel. **Corrida larga, unos 45 minutos**: es la
+  de A4.
+- **Depende del primer fallo** de la tabla de dependencias: si la práctica no
+  se cuenta, esta medida no mide nada.
+
+#### 15. La partida se guarda al volver al mapa regional
+
+Hoy, al volver al mapa regional sólo viajan la población y la comida, y el
+asentamiento no se puede retomar. El usuario pide dos cosas: que **el mapa
+regional muestre lo que las expediciones descubrieron** y que **la partida
+quede guardada, también en disco**. Decidido el 2026-09-13. Es la FASE A3 del
+ROADMAP.
+
+- **Al volver al mapa regional la partida se guarda sola.** Al entrar otra vez
+  en el asentamiento, sigue exactamente donde se dejó.
+- **Y sobrevive a cerrar el juego.** Al abrirlo de nuevo, el asentamiento se
+  puede retomar.
+- El guardado **no es la instantánea de las sondas** (SPECS.md §6.4): se puede
+  reutilizar su recorrido, pero no darla por guardado.
+
+Criterios:
+
+- **El mapa regional se entera.** Tras una expedición que descubre 4
+  emplazamientos, al volver a la región el mapa enseña la cueva **más esos 4**.
+  Se comprueba en la escena.
+- **Ida y vuelta sin pérdida.** La firma del estado al guardar es igual a la
+  firma tras cargar. Prueba.
+- **Y sigue igual.** Con la misma semilla, la partida cargada y la que no se
+  guardó dan la misma firma diaria durante 5 jornadas. Esto comprueba que
+  también se guarda el estado del sorteo, no sólo los objetos. Prueba.
+- **Cerrar y abrir.** Guardar, salir del proceso, arrancar otro y cargar da la
+  misma firma. Prueba en dos procesos.
+- **Una expedición a medias** se guarda con quién va y cuándo vuelve, y vuelve
+  ese día. Prueba.
+
+#### 16. El cielo
+
+No hay cielo. Hace falta uno **con nubes**, que **cambie a lo largo del día y de
+la noche**, siguiendo la hora y la luz que el juego ya tiene. El detalle visual
+va en [GRAFICOS.md](GRAFICOS.md).
+
+Criterios:
+
+- Cuatro capturas con ventana, al alba, a mediodía, al ocaso y de noche: el
+  cielo es distinto en las cuatro y va de acuerdo con la luz del terreno.
+- Las nubes se mueven: dos capturas separadas por unos segundos no son
+  iguales.
+- **Cabe en el presupuesto de fotograma** del nivel Alto (GRAFICOS.md §1),
+  medido con la herramienta de fotograma de siempre, antes y después.
+
+#### 17. Las ventanas: Trabajos, Almacén y Oficios
+
+El detalle de cada una va en [INTERFAZ.md](INTERFAZ.md) §4.
+
+- **«Trabajos» dice quién está y quién no.** Quien está de expedición, en la
+  cumbre o herido aparece **separado de los presentes**, con dónde está y la
+  jornada en que vuelve o se cura. Prueba sobre lo que el panel pinta, y
+  captura con ventana.
+- **Almacén: Shift+Click sube y baja los máximos de 10 en 10.** El click normal
+  sigue yendo de 1 en 1. Prueba.
+- **Oficios, al día.** Ningún texto describe algo que el juego ya no hace. La
+  lista de textos revisados, con lo que se cambió, queda en la tarea. Y cada
+  oficio **enseña sus jornadas acumuladas** hacia las técnicas, **la misma
+  cifra** que usa el árbol: prueba de que las dos coinciden.
+
+#### Fuera de alcance de la tanda 3
+
+- **Los siete fallos de la tabla de dependencias.** Van por `/depurar`.
+- **Tocar código con M1 en vuelo.** La tanda 3 empieza cuando la tanda 2
+  suelte el turno.
+- **Que el jugador coloque la pasarela.** Se decidió que la banda la construye
+  sola.
+- **La piragua en el Mesolítico.** Aquí sólo se quita del Paleolítico.
+- **Guardado manual, varias ranuras y compatibilidad entre versiones.** Hay un
+  guardado por partida y es automático. Un fichero de una versión anterior del
+  juego no promete cargar: se rechaza avisando, no se carga roto.
+- **Tiempo que afecte a la simulación**: lluvia, niebla o nubes que cambien lo
+  que se hace. El cielo es sólo visual.
+- **Exigir vestido a quien sale de expedición.** No se pidió; la piel de esta
+  tanda es la de la tienda. Si se quiere que el vestido sea necesario fuera,
+  va en otra spec: la tanda 2 midió que dentro de la cueva, con fuego, no se
+  nota.
+- **Las otras tres opciones del taller**: bajar las jornadas de la laminar,
+  subir la demanda natural o dejarlo como está.
 
 ---
 

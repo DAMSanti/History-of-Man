@@ -31,6 +31,17 @@ encima y Bajo por debajo.
 
 Lo que falta por hacer está en [ROADMAP.md](ROADMAP.md) «En curso» → Los gráficos.
 
+> **Spec abierta (2026-09-13)**, en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 →
+> Tanda 3, con tres piezas que se ven:
+>
+> - **El cielo**, con nubes que se mueven y que cambia con la hora y la luz que
+>   el juego ya lleva. Tiene que caber en el presupuesto de §1.
+> - **La pasarela sobre el terreno**, visible a distancia de gestión y quitada
+>   cuando la riada se la lleva.
+> - **La expedición que se va andando** hasta el borde del mapa y vuelve por él.
+>
+> Ninguna cambia una mecánica. Las capturas necesitan ventana.
+
 ---
 
 ## 1. La cifra que manda

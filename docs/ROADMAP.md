@@ -21,6 +21,7 @@ a la vez.
 | Los dos 🔴 que bloqueaban la tanda 2, y cómo se cerraron | «En curso» → La puerta de entrada |
 | Las tareas de la tanda 1 del Paleolítico | «En curso» → Tanda 1 |
 | Las tareas de la tanda 2 del Paleolítico (cerrada el 2026-09-13) | «En curso» → Tanda 2 |
+| La tanda 3: quién va, pasarela, herido, guardado, cielo | «En curso» → Tanda 3 |
 | Qué está terminado | «Estado actual» → Completado |
 | Qué está roto o a medias y molesta | «Estado actual» → Deuda pendiente, y FASE F |
 | Por qué hay dos escalas y no hay chunking | «La decisión que ordena todo lo demás» |
@@ -950,6 +951,32 @@ funcionando antes de montar el trueque encima evita rehacer trabajo.
 **Qué se puede repartir:** V1–V2 (el frío) no dependen de nada y tocan ficheros
 distintos de E1–E4 y T1–T4; pueden ir en paralelo con otro agente. **T1–T4
 dependen de E2 y E4**, y **dos medidas nunca a la vez.**
+### Tanda 3: quién va, la pasarela que se ve, el herido, el guardado y el cielo
+
+**Spec escrita (2026-09-13) en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md)
+§10.1 → Tanda 3**, frentes 9 a 17, cada uno con sus criterios. Sale de la lista
+del usuario tras jugar la tanda 2. Siguiente paso: `/plan-tarea`, que cuelga aquí
+la lista de tareas.
+
+En corto: las decisiones salen en el segundo mes de la estación; la
+expedición lleva piel y leña de vivac, el jugador elige a quién manda y se les
+ve salir por el borde del mapa; lo mismo, elegir quién sube, en la cumbre; el
+herido se queda en la cueva; la pasarela es una obra con modelo en un cruce,
+no un interruptor global, y la piragua sale de esta época; el taller practica
+sin demanda, que cierra lo que A4 dejó abierto; la partida se guarda en disco
+al volver al mapa regional, que es la FASE A3; hay cielo con nubes; y
+«Trabajos», Almacén y Oficios se ponen al día.
+
+**Depende de siete fallos que van por `/depurar`**, listados con su pista en la
+spec: el % de técnicas que no sube en ribera, manufactura y hogar; la pasarela
+en 82/70; «sim.hogar» en la crónica; los marcadores viejos del minimapa; el
+raizal inalcanzable a 226 m; los 41 «sin camino» en 51 jornadas; y el barbecho
+del 20 %, que existe y no se cumple. **Y no se toca código mientras M1 de la
+tanda 2 esté midiendo.**
+
+**Coste de máquina:** casi todo son pruebas de segundos y capturas con
+ventana. La única corrida larga es la del taller, unos 45 minutos, la que A4 ya
+tenía prevista.
 
 ---
 
@@ -1612,6 +1639,8 @@ Lo que falta para que esto deje de ser dos visores y pase a ser un juego.
   hoy sirva mañana. Ver SPECS.md §6.4. Reutilizar su recorrido por reflexión es
   razonable; darla por guardado, no.
 - Criterio: cerrar el juego y recuperar la partida.
+- **Tiene spec desde el 2026-09-13**: EPOCA_01 §10.1 → Tanda 3, frente 15. Se
+  guarda solo al volver al mapa regional, y los criterios están allí.
 
 ---
 

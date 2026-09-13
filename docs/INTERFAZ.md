@@ -183,6 +183,25 @@ causa, no sólo el porcentaje— se anota aquí.
 >   marcarlas todas sería no marcar ninguna. Son dos decisiones distintas: traer
 >   asta, o poner gente en el taller.
 
+### Lo que pide la tanda 3 (spec, 2026-09-13)
+
+Criterios en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 → Tanda 3, frentes 10,
+11 y 17.
+
+- **«Trabajos» separa a los que están de los que no.** Hoy quien sale de
+  expedición desaparece del mapa y la ventana no dice nada: el jugador no sabe
+  quién se ha ido. Los que están fuera —expedición, cumbre— y los heridos van
+  aparte, con dónde están y la jornada en que vuelven o se curan.
+- **Elegir quién va, en la propia tarjeta.** La decisión de primavera y la de
+  verano dejan marcar a las personas. El coste se recalcula con los elegidos, y
+  con menos del mínimo no se puede confirmar.
+- **Almacén: Shift+Click, de 10 en 10.** El click normal sigue yendo de 1 en 1.
+- **Oficios, al día.** Sin textos que describan lo que el juego ya no hace, y
+  con las jornadas acumuladas de cada oficio: la misma cifra que usa el árbol
+  de técnicas, no una copia.
+- **Los marcadores viejos del minimapa** se quitan. Van por `/depurar`, en la
+  tabla de dependencias de la spec.
+
 ---
 
 ## 5. Cómo se implementa sin rehacer nada

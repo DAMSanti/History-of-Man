@@ -342,6 +342,15 @@ Paleolítico ya exige que exista.
 > **La capa regional va antes**: sin niebla no hay nada que descubrir, y la
 > expedición no tendría adonde llegar.
 
+> **Spec (2026-09-13): la expedición se equipa, se elige y se ve.** Lleva la
+> piel y la leña del vivac con **la misma regla que la cumbre**, no con una
+> copia: una piel de tienda por persona, que vuelve, y leña por persona y
+> noche. **La gente la elige el jugador**, 3 adultos como mínimo. **Sale y
+> vuelve andando por el borde del mapa.** Y lo que descubre **tiene que llegar
+> al mapa regional, y quedar guardado**. La regla que cruza épocas es que salir
+> del mapa local cuesta equipo, no sólo comida: en la Edad Media será una
+> recua. Criterios en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 → Tanda 3,
+> frentes 10 y 15.
 
 ---
 
@@ -1034,6 +1043,24 @@ debe costar: el valle ha cambiado.
 > vara del trazado— y se retiró: fabricar tramos rectos nuevos es exactamente
 > lo que este mismo apartado acaba de aprender que es caro de comprobar. Ver
 > ROADMAP «En curso» → Tanda 1, tarea C3.
+
+### La obra que abre un cruce
+
+> **Spec (2026-09-13).** Criterios en
+> [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 → Tanda 3, frente 13.
+
+**Qué se quiere.** Que cruzar un cauce todo el año sea **una obra en un sitio**,
+no una técnica que abre el mapa entero. Hoy aprender la pasarela abre todos los
+cruces a la vez. Pasa a esto: la técnica permite construir, **la banda elige
+sola** el cruce de sus caminos aprendidos que más rodeo le ahorra, y **sólo ese
+cruce** queda abierto, en las cuatro estaciones. La obra tiene límite de ancho y
+coste, se ve sobre el terreno, y **una crecida de la rejilla estacional** puede
+llevársela.
+
+**Por qué es de las once épocas y va aquí.** Los caminos aprendidos dicen por
+dónde pasa la banda, y la obra se pone donde esos caminos más la necesitan. Es
+la misma pieza que después serán el puente de piedra y el viaducto: cambian el
+ancho que salvan, lo que cuestan y lo que aguantan, pero no el mecanismo.
 
 ---
 
