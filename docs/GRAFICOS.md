@@ -32,6 +32,92 @@ encima y Bajo por debajo.
 Lo que falta por hacer está en [ROADMAP.md](ROADMAP.md) «En curso» → Los gráficos.
 
 > **Spec abierta (2026-09-13)**, en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 →
+> Tanda 4, con tres cosas que se ven:
+>
+> - **La cueva, como una cueva en la pared** y no un agujero negro con dos
+>   piedras, visible a la distancia de gestión. Y ninguna boca de ningún mapa en
+>   el agua o donde no se llega.
+> - **Humo** en toda hoguera, hogar o fuego, que se va cuando el fuego se apaga.
+> - **La sepultura sobre el terreno.**
+>
+> Ninguna puede empeorar el fotograma de forma medible.
+
+> **La cueva, hecha (2026-09-13). Es un AGUJERO DEL TERRENO, no una pieza
+> encima.** Lo dijo el usuario después de tumbar, una a una, una visera de
+> caliza, una cámara abovedada y un túnel con marco de bloques: «el agujero será
+> real, en el propio terreno, abierto, a una cueva; el terreno se abre y hace un
+> agujero, y alrededor de ese agujero se pone el elemento de las piedras».
+>
+> Cómo está hecho, de dentro afuera:
+>
+> - **La sima.** El relieve tiene un punto cada ~5 m, así que un agujero de dos
+>   metros no le cabe: sale cuadrado y del tamaño de la rejilla. Por eso
+>   `MallaDelTerreno._construir_simas` **quita el ruedo de rejilla** alrededor de
+>   cada boca y cose ahí un embudo circular fino con su pozo, con el material del
+>   propio terreno. La boca mide **2 m** o algo más en las cuevas grandes
+>   (`CaveMouth.hueco_de`), no es redonda —el radio se mueve con el ángulo, con
+>   ruido fijo por posición— y el pozo **cae con perfil logarítmico**, como un
+>   embudo de gravedad, hasta 50 m. La roca de dentro es la del mapa; la
+>   oscuridad la cierra una capa negra que se vuelve opaca a los 6 m, para que la
+>   boca no pase de suelo a negro de golpe.
+> - **El techo de roca.** `CaveMouth` pone **una sola pieza en herradura**
+>   —`_techo`— que cubre el agujero por el lado de la pendiente y por los
+>   costados y deja **libre un vano de 110°** ladera abajo: la entrada. Vuela
+>   sobre el hueco, cruza por encima en el fondo, sube en crestones, tiene
+>   grueso —se ve el canto desde el vano— y se hunde en la tierra por fuera.
+>   Lleva la capa de roquedo calizo del terreno (`Rock030`) por triplanar.
+> - **Nada más.** Ni cantos sueltos, ni visera, ni cámara: el usuario tumbó las
+>   tres cosas.
+>
+> **Tres trampas que costaron una captura cada una** y conviene no repetir: el
+> parche del terreno necesita **la normal y la tangente del campo de alturas**,
+> no las suyas geométricas —con las de la geometría el shader lo pintaba con otra
+> luz y dejaba un cerco oscuro de veinte metros—; la malla de la roca **no lleva
+> tangentes**, así que no puede llevar mapa de normales —lo pintaba negro—; y la
+> caché del terreno guarda la malla ya recortada, así que **las reglas de la sima
+> van en su clave** (`TerrainGenerator.SIMA_REGLAS`) o se carga la de antes.
+> **Fotograma sin medir.**
+
+> **El humo (2026-09-13)**: `Bonfire._build_humo`, partículas en la GPU que
+> sólo salen mientras el fuego arde. Medido en `HumoCaptura`: el fotograma no
+> cambia (56,11 ms con y sin humo, siete fuegos, en la misma corrida).
+
+> **La sepultura sobre el terreno (2026-09-13)**: `SepulturasView`, un túmulo
+> de piedras con la roca del mapa, y una losa de ocre encima si hubo ajuar.
+> Captura en `SepulturaCaptura.gd`.
+
+> **Y un claro de 25 m alrededor de cada boca de cueva** (2026-09-13,
+> `/depurar`). El bosque se sembraba por ruido y sólo esquivaba el agua, así que
+> plantaba pinos encima de la boca y de las obras de la campa. Ahora
+> `Forest.en_un_claro` descarta todo punto a menos de `RADIO_DEL_CLARO` en
+> planta de **cualquier** boca del mapa —la de la banda y las demás—, decidido
+> por el usuario.
+
+> **El cielo, hecho el 2026-09-13** (tanda 3, frente 16, ampliado por el
+> usuario): `shaders/cielo.gdshader`. Un shader de cielo, sin geometría nueva ni
+> texturas que cargar:
+>
+> - **Nubes** de ruido de valor en tres octavas, proyectadas sobre un plano alto
+>   —se abren hacia el cenit y se apelotonan en el horizonte— y movidas por el
+>   **reloj de pared**: son vista, no partida, y acelerar la noche no las pone a
+>   correr como en una película.
+> - **Estrellas** que giran alrededor del **polo celeste**, que está a la altura
+>   de la latitud y mirando al norte. Giran con el **ángulo horario del juego**,
+>   no con el reloj de pared: que el cielo haya girado es parte de la hora que el
+>   jugador lee.
+> - **Sol y luna** en la dirección que da `SolarPosition` —la misma que orienta
+>   las luces—, con la fase de la luna decidiendo cuánto luce.
+> - **Cuánto tapan las nubes sale del tiempo que hace** (`NUBOSIDAD`), y con
+>   ellas el color: la paleta de la escena es la de un día encapotado y se
+>   mezcla con un azul limpio según lo despejado que esté.
+>
+> **Lo que se aprendió mirando las capturas**: el cielo ya existía —un
+> `ProceduralSkyMaterial`— y el jugador decía que no había. Las dos razones:
+> la cámara de gestión no lo mira (clampada a -10º) y el gris de la paleta no se
+> lee como cielo. Lo primero se arregla subiendo el tope a -3º, decidido por el
+> usuario.
+
+> **Spec abierta (2026-09-13)**, en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 →
 > Tanda 3, con tres piezas que se ven:
 >
 > - **El cielo**, con nubes que se mueven y que cambia con la hora y la luz que

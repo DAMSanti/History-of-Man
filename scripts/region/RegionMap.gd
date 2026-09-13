@@ -90,14 +90,6 @@ const LOCAL_PIPELINE_VERSION := 9
 @export var marker_size_m: float = 900.0
 @export var show_sites: bool = true
 
-## Emplazamientos de prueba, para mirar el terreno en sitios conocidos.
-##
-## NO son parte del juego: no salen de la derivación del relieve ni tienen
-## respaldo arqueológico. Existen para poder abrir el mapa de detalle sobre un
-## paisaje que uno reconoce y juzgar si el terreno se ve bien, que a ojo en un
-## valle anónimo es imposible.
-@export var dev_sites: bool = true
-
 @export_group("Bandas de material")
 ## Cotas reales en metros donde cambia el material del terreno
 @export var shore_band_m: float = 30.0
@@ -353,9 +345,6 @@ func _build_sites() -> void:
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_markers.material_override = material
 
-	if dev_sites:
-		_add_dev_sites()
-
 	for site: Site in _site_set.playable():
 		if site.fidelity == Site.Fidelity.ATESTIGUADO:
 			_attested += 1
@@ -401,11 +390,7 @@ func _refresh_sites() -> void:
 	# gana explorando, no se regala.
 	_visible_sites = []
 	for site: Site in _site_set.available_in(_sea_level_m, _era):
-		# Los de prueba se saltan la niebla: no son parte de la partida, son
-		# un mirador. Con el filtro puesto desaparecian en cuanto se fundaba
-		# el primer asentamiento, que es justo cuando hacen falta.
-		var is_dev := site.id >= DEV_SITE_BASE
-		if not is_dev and GameState.started and not GameState.is_discovered(site):
+		if GameState.started and not GameState.is_discovered(site):
 			continue
 		_visible_sites.append(site)
 	var visible_sites := _visible_sites
@@ -426,16 +411,11 @@ func _refresh_sites() -> void:
 	for i in range(marked.size()):
 		var site: Site = marked[i]
 		var world := terrain.geo_to_world(site.lon, site.lat)
-		var is_dev := site.id >= DEV_SITE_BASE
 		var xform := Transform3D()
-		# Los de prueba, mas grandes y en un color que no usa ningun otro: son
-		# un mirador para mirar terreno, y tienen que encontrarse a la primera
-		# entre los ochocientos y pico marcadores del mapa.
-		xform = xform.scaled(Vector3.ONE * (3.2 if is_dev else 1.6))
+		xform = xform.scaled(Vector3.ONE * 1.6)
 		xform.origin = world
 		mm.set_instance_transform(i, xform)
-		mm.set_instance_color(i, DEV_SITE_COLOR if is_dev
-			else KIND_COLORS.get(site.kind_at(_era_index), Color.WHITE))
+		mm.set_instance_color(i, KIND_COLORS.get(site.kind_at(_era_index), Color.WHITE))
 
 	_update_legend()
 
@@ -590,7 +570,16 @@ emplazamiento mas cercano"
 		return
 
 	var era := _eras.index_for(_sea_level_m) if _eras else 0
-	var lines := [
+	# LO QUE SE SABE PRIMERO, y de un sitio no descubierto, nada más: ver
+	# [ficha_del_sitio].
+	var descubierto := not GameState.started or GameState.is_discovered(_selected)
+	var sabido := ficha_del_sitio(_selected, descubierto, Guardado.cabeceras())
+	if not descubierto:
+		_detail.text = "\n".join(sabido)
+		return
+	var lines := Array(sabido)
+	lines.append("")
+	lines.append_array([
 		("★ " if _selected.notable else "") + _selected.display_name().to_upper(),
 		"%s   ·   %s" % [
 			Site.name_of(_selected.kind_at(era)),
@@ -604,7 +593,7 @@ emplazamiento mas cercano"
 		"a una cueva   %6.2f km%s" % [_selected.shelter_km, "   CON ABRIGO" if _selected.has_shelter else ""],
 		"",
 		"%.4f N  %.4f E" % [_selected.lat, _selected.lon],
-	]
+	])
 	lines.append("")
 	lines.append(_selected.describe_for_player(era))
 
@@ -636,9 +625,99 @@ emplazamiento mas cercano"
 			lines.append("  · %s — %s" % [cname, a["name"]])
 
 	lines.append("")
-	lines.append("[F] fundar aqui")
+	lines.append("[F] entrar al mapa")
 	_detail.text = "
 ".join(lines)
+
+
+## Lo que se sabe de un sitio, para la ficha del mapa regional.
+##
+## Frente 18 de EPOCA_01 §10.1, tanda 4: «al pinchar un sitio descubierto se ve
+## lo que se sabe de él: si tiene gente y el trato con ella, qué recursos se
+## conocen, y si su cueva está explorada o pintada». **Y de uno no descubierto,
+## nada**: ni nombre, que el nombre también es saber.
+##
+## Estático y sin estado propio: lee el sitio y las cabeceras de los mapas
+## guardados, que es todo lo que el mapa regional tiene (SPECS §4.7).
+static func ficha_del_sitio(site: Site, descubierto: bool,
+		cabeceras: Array[Dictionary]) -> PackedStringArray:
+	var lineas := PackedStringArray()
+	if not descubierto:
+		lineas.append("SIN DESCUBRIR")
+		lineas.append("Hay que llegar hasta aquí para saber qué hay.")
+		return lineas
+
+	lineas.append(site.display_name().to_upper())
+
+	# La gente: el trato de cualquier mapa donde se les conozca. Si varios mapas
+	# los conocen, manda el más reciente, que es lo último que se supo.
+	var trato_visto := false
+	var trato := 0.0
+	var mas_reciente := -1
+	for cabecera: Dictionary in cabeceras:
+		var tratos: Dictionary = cabecera.get("trato", {})
+		if tratos.has(site.id) and int(cabecera.get("jornada", 0)) > mas_reciente:
+			trato_visto = true
+			trato = float(tratos[site.id])
+			mas_reciente = int(cabecera.get("jornada", 0))
+	if trato_visto:
+		lineas.append("Vive gente. Trato %s." % PanelRelaciones.como_va(trato))
+	else:
+		lineas.append("No se sabe si vive gente.")
+
+	# Los recursos que se conocen: los del catálogo que se ven sin quedarse.
+	var recursos := PackedStringArray()
+	if site.water_km < 1.0:
+		recursos.append("agua cerca")
+	if site.has_shelter:
+		recursos.append("abrigo")
+	if site.cave_count() > 0:
+		recursos.append("%d %s" % [site.cave_count(),
+			"cueva" if site.cave_count() == 1 else "cuevas"])
+	lineas.append("Recursos: %s." % (", ".join(recursos) if not recursos.is_empty()
+		else "nada que se sepa"))
+
+	# Su cueva: sólo si se ha vivido en ese mapa y está guardado.
+	var propia: Dictionary = {}
+	for cabecera: Dictionary in cabeceras:
+		if int(cabecera.get("sitio", -1)) == site.id:
+			propia = cabecera
+	if propia.is_empty():
+		lineas.append("Nadie de la banda ha estado dentro de sus cuevas.")
+	elif bool(propia.get("pintada", false)):
+		lineas.append("La cueva está pintada.")
+	elif int(propia.get("cuevas_exploradas", 0)) > 0:
+		lineas.append("%d %s explorada%s, %d con pared para pintar." % [
+			int(propia["cuevas_exploradas"]),
+			"cueva" if int(propia["cuevas_exploradas"]) == 1 else "cuevas",
+			"" if int(propia["cuevas_exploradas"]) == 1 else "s",
+			int(propia.get("cuevas_pintables", 0))])
+	else:
+		lineas.append("Sus cuevas están sin explorar.")
+	return lineas
+
+
+## El panel de la banda y de los mapas guardados, para el mapa regional.
+##
+## Frente 18: «dónde vive la banda, en qué jornada está cada mapa visitado, y
+## cómo volver». Estático: lee las cabeceras y el último mapa jugado.
+static func panel_de_la_banda(cabeceras: Array[Dictionary], ultimo: int,
+		nombres: Dictionary) -> PackedStringArray:
+	var lineas := PackedStringArray()
+	if cabeceras.is_empty():
+		lineas.append("La banda todavía no se ha asentado en ningún mapa.")
+		return lineas
+	var ordenadas := cabeceras.duplicate()
+	ordenadas.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("sitio", 0)) < int(b.get("sitio", 0)))
+	for cabecera: Dictionary in ordenadas:
+		var sitio := int(cabecera.get("sitio", -1))
+		var nombre := String(nombres.get(sitio, "Sitio %d" % sitio))
+		var marca := "  ← la banda está aquí" if sitio == ultimo else ""
+		lineas.append("%s · jornada %d · %d personas%s" % [nombre,
+			int(cabecera.get("jornada", 0)), int(cabecera.get("poblacion", 0)), marca])
+	lineas.append("Pulsa el sitio y F para volver a él.")
+	return lineas
 
 
 ## Funda en el emplazamiento seleccionado: descarga su relieve fino, guarda el
@@ -648,6 +727,14 @@ emplazamiento mas cercano"
 ## Cantabria serian unas 960 teselas; del sitio elegido son cuatro.
 func _found_settlement() -> void:
 	if _selected == null or _founding:
+		return
+
+	# SI ESE MAPA YA TIENE ESTADO, SE ENTRA EN ÉL, no se funda encima. Es lo que
+	# le hizo perder la partida al usuario el 2026-09-13: salió al mapa
+	# regional, eligió su sitio, pulsó F y se le empezó una nueva. Ver
+	# [Guardado.CARPETA].
+	if Guardado.hay_partida(_selected.id):
+		_retomar_en(_selected.id)
 		return
 
 	_founding = true
@@ -855,7 +942,7 @@ func _enter_local(local: HeightmapData) -> void:
 		clampf(u * size_m.x - half, 0.0, maxf(size_m.x - half * 2.0, 0.0)),
 		clampf(v * size_m.y - half, 0.0, maxf(size_m.y - half * 2.0, 0.0)))
 
-	print("Fundando en %s (%.4f, %.4f)" % [_selected.display_name(), _selected.lat, _selected.lon])
+	print("Entrando en %s (%.4f, %.4f)" % [_selected.display_name(), _selected.lat, _selected.lon])
 	get_tree().change_scene_to_file(Expedition.LOCAL_SCENE)
 
 
@@ -961,6 +1048,17 @@ func _setup_camera() -> void:
 	camera.current = true
 
 
+## El ancho de la ficha del sitio, y lo que se deja libre abajo para el panel de
+## la banda. Decisión de las capturas a 1280×720, que es la pantalla pequeña.
+const ANCHO_DE_LA_FICHA := 360
+const ALTO_DEL_PANEL_DE_ABAJO := 270
+
+## La letra de los paneles del mapa regional. A la de serie, a 1280×720 la
+## cabecera se comía la leyenda y la ficha se montaba sobre el panel de la
+## banda: capturado el 2026-09-13.
+const LETRA := 12
+
+
 func _setup_ui() -> void:
 	var canvas := CanvasLayer.new()
 	canvas.name = "UI"
@@ -972,20 +1070,35 @@ func _setup_ui() -> void:
 
 	_info = Label.new()
 	_info.text = "Cantabria"
+	_info.add_theme_font_size_override("font_size", LETRA)
 	panel.add_child(_info)
 
+	# LA FICHA CABE EN LA PANTALLA. Medía 1 505 px de alto con un sitio de
+	# muchas cuevas —medido con `RegionCaptura` el 2026-09-13— y se salía a
+	# 1920×1080 y a 1280×720. Ahora va anclada a todo el alto del lado derecho,
+	# con margen arriba para la cabecera y abajo para el panel de la banda, y lo
+	# que no quepa se desplaza. El ancho, fijo y estrecho: es una ficha, no una
+	# página.
 	var detail_margin := MarginContainer.new()
-	detail_margin.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	detail_margin.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
 	detail_margin.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	detail_margin.add_theme_constant_override("margin_top", 96)
 	detail_margin.add_theme_constant_override("margin_right", 12)
+	detail_margin.add_theme_constant_override("margin_bottom", ALTO_DEL_PANEL_DE_ABAJO)
 	canvas.add_child(detail_margin)
 
 	var detail_panel := PanelContainer.new()
 	detail_margin.add_child(detail_panel)
+	var desplaza := ScrollContainer.new()
+	desplaza.custom_minimum_size = Vector2(ANCHO_DE_LA_FICHA, 0)
+	desplaza.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	detail_panel.add_child(desplaza)
 	_detail = Label.new()
 	_detail.text = "Click en un emplazamiento para verlo"
-	detail_panel.add_child(_detail)
+	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_detail.custom_minimum_size = Vector2(ANCHO_DE_LA_FICHA - 16, 0)
+	_detail.add_theme_font_size_override("font_size", LETRA)
+	desplaza.add_child(_detail)
 
 	# El detalle de la banda vive en el mapa LOCAL, que es donde esta la gente.
 	# Aqui solo se resume: esta capa es de estrategia.
@@ -1000,13 +1113,73 @@ func _setup_ui() -> void:
 	var band_panel := PanelContainer.new()
 	band_margin.add_child(band_panel)
 	_band_label = Label.new()
+	_band_label.add_theme_font_size_override("font_size", LETRA)
 	band_panel.add_child(_band_label)
 
+	_boton_de_retomar(canvas)
 	_build_legend(canvas)
 
 	var overlay := PerformanceOverlay.new()
 	overlay.name = "PerformanceOverlay"
 	add_child(overlay)
+
+
+## El botón de retomar la partida guardada, si la hay.
+##
+## No sale si no hay nada que retomar, y no sale nunca como «cargar partida» de
+## menú: hay UN guardado, es automático, y lo que se ofrece es volver al
+## asentamiento donde se dejó la banda. Ver [Guardado] y EPOCA_01 §10.1,
+## tanda 3, frente 15.
+func _boton_de_retomar(canvas: CanvasLayer) -> void:
+	var guardado := Guardado.leer()
+	if guardado.is_empty():
+		return
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 64)
+	canvas.add_child(margin)
+
+	var caja := VBoxContainer.new()
+	margin.add_child(caja)
+	var boton := Button.new()
+	boton.text = "Volver con la banda (jornada %d)" % int(guardado.get("jornada", 0))
+	boton.pressed.connect(_retomar)
+	caja.add_child(boton)
+
+	# Y el estado de la banda y de cada mapa guardado. Ver [panel_de_la_banda].
+	var nombres := {}
+	if _site_set != null:
+		for cabecera: Dictionary in Guardado.cabeceras():
+			for site: Site in _site_set.sites:
+				if site.id == int(cabecera.get("sitio", -1)):
+					nombres[site.id] = site.display_name()
+	var estado := Label.new()
+	estado.text = "\n".join(panel_de_la_banda(Guardado.cabeceras(),
+		Guardado.ultimo_sitio(), nombres))
+	estado.add_theme_font_size_override("font_size", LETRA)
+	caja.add_child(estado)
+
+
+## Retoma el último mapa jugado. Es lo que hace el botón.
+func _retomar() -> void:
+	_retomar_en(Guardado.ultimo_sitio())
+
+
+## Entra en un mapa con estado guardado: deja el traspaso como estaba y entra.
+func _retomar_en(sitio: int) -> void:
+	if _founding or sitio < 0:
+		return
+	var guardado := Guardado.leer(sitio)
+	if guardado.is_empty() or _site_set == null:
+		return
+	if not Guardado.preparar_la_escena(guardado, _site_set):
+		print("RegionMap: la partida guardada apunta a un emplazamiento que no está")
+		return
+	_founding = true
+	Expedition.retomando = true
+	print("RegionMap: se retoma la partida en %s" % Expedition.site.display_name())
+	get_tree().change_scene_to_file(Expedition.LOCAL_SCENE)
 
 
 ## Leyenda de tipos de emplazamiento, con el recuento de la epoca en curso
@@ -1027,6 +1200,7 @@ func _build_legend(canvas: CanvasLayer) -> void:
 
 	var title := Label.new()
 	title.text = "EMPLAZAMIENTOS"
+	title.add_theme_font_size_override("font_size", LETRA)
 	vbox.add_child(title)
 
 	for kind: int in KIND_ORDER:
@@ -1041,6 +1215,7 @@ func _build_legend(canvas: CanvasLayer) -> void:
 
 		var label := Label.new()
 		label.text = Site.name_of(kind)
+		label.add_theme_font_size_override("font_size", LETRA)
 		row.add_child(label)
 		_legend_labels[kind] = label
 
@@ -1112,7 +1287,7 @@ func _update_info() -> void:
 			_site_set.available(_sea_level_m).size() if _site_set else 0],
 		"",
 		"click       seleccionar emplazamiento",
-		"F           fundar en el seleccionado",
+		"F           entrar al mapa seleccionado",
 		"WASD mover · click derecho rotar · rueda zoom · F3 rendimiento",
 	])
 
@@ -1197,66 +1372,6 @@ func _apply_surround_water(surround: HeightmapData) -> void:
 	Hydrography.apply(surround, canales, laminas)
 	print("RegionMap: %d cauces y %d laminas en el contorno"
 		% [canales.size(), laminas.size()])
-
-
-## Ids de los emplazamientos de prueba. Muy altos para no chocar nunca con los
-## que salen de la derivación, que van desde cero.
-const DEV_SITE_BASE := 9000
-
-## Magenta: no lo usa ninguna clase de emplazamiento, asi que un marcador de
-## este color sólo puede ser un sitio de prueba.
-const DEV_SITE_COLOR := Color(1.0, 0.25, 0.85)
-
-## Sitios conocidos donde poder mirar el terreno.
-##
-## Torrelavega es el caso util: valle ancho del Besaya, llano, con el mar a
-## unos ocho kilometros. Es un paisaje que se reconoce, y sobre un paisaje que
-## se reconoce se ve enseguida si el relieve, los rios y las texturas estan
-## bien o no.
-const DEV_PLACES := [
-	{"name": "Torrelavega (prueba)", "lat": 43.34894, "lon": -4.04601},
-]
-
-
-func _add_dev_sites() -> void:
-	if _site_set == null:
-		return
-
-	var index := 0
-	for place: Dictionary in DEV_PLACES:
-		var site := Site.new()
-		site.id = DEV_SITE_BASE + index
-		index += 1
-		site.lat = float(place["lat"])
-		site.lon = float(place["lon"])
-		site.historical_name = String(place["name"])
-		site.inside_region = true
-		site.notable = true
-		# ATESTIGUADO no por honestidad historica -no lo es- sino porque el
-		# mapa SOLO dibuja marcador para los atestiguados: los inferidos son
-		# sitios potenciales y llenar el mapa de ellos lo volveria ilegible.
-		# Sin esto el sitio existia y no habia forma de verlo ni pincharlo.
-		site.fidelity = Site.Fidelity.ATESTIGUADO
-
-		# La cota sale del relieve regional: `is_available` la compara con el
-		# nivel del mar de la epoca, y sin ella el sitio desaparece del mapa
-		var data: HeightmapData = terrain.heightmap if terrain else null
-		if data:
-			site.elevation = data.sample_bilinear(
-				data.u_for_lon(site.lon), data.v_for_lat(site.lat))
-
-		# Se declara habitable en cualquier epoca: es un mirador, no una
-		# propuesta arqueologica. Sin esto el filtro del Paleolitico -que pide
-		# abrigo- lo dejaria fuera.
-		site.has_shelter = true
-		site.kind = Site.Kind.VALLE
-		site.water_km = 0.4
-		site.coast_km = 8.0
-		site.slope_deg = 3.0
-
-		_site_set.sites.append(site)
-		print("Emplazamiento de prueba: %s (%.4f, %.4f) a %.0f m" % [
-			site.display_name(), site.lat, site.lon, site.elevation])
 
 
 ## Pone la mascara del territorio de la epoca en curso.

@@ -12,7 +12,7 @@ func _initialize() -> void:
 	for roughness in [0.15, 0.35, 0.6]:
 		var terrain := RuggedTerrain.new()
 		terrain.roughness = roughness
-		var grid := Navgrid.from_terrain(terrain, false, false)
+		var grid := Navgrid.from_terrain(terrain, false, [])
 
 		# Desde el centro, a cuantos sitios del mapa se llega
 		var home := Vector3(1024.0, 0.0, 1024.0)

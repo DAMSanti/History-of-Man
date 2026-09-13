@@ -39,8 +39,6 @@ enum Tech {
 	ANZUELO,        ## Anzuelo recto de hueso: sedal y cebo
 	RED,            ## Red de fibra: mucha mano y mucha cordelería
 	ARPON,          ## Arpón de asta: el remonte del salmón, y la cumbre
-	ARCO,           ## Arco: caza de precisión
-	PIRAGUA,        ## Piragua monóxila: cruzar ríos y costear
 	PASARELA,       ## Pasarela de troncos: cruzar un cauce a pie seco
 	ARTE,           ## Arte parietal: la marca del territorio
 	AGUJA,          ## Aguja de hueso: ropa cosida, ocupar el invierno
@@ -162,20 +160,6 @@ const CATALOGUE := {
 			+ "sobra cordel y hay manos para calarla, y pide las dos cosas.",
 		"needs": [Tech.ANZUELO], "days": 560,
 	},
-	Tech.ARCO: {
-		"name": "Arco",
-		"desc": "Precisión a distancia y tiro repetido. Cambia la caza de "
-			+ "batida a acecho individual.",
-		"needs": [Tech.PROPULSOR], "days": 700,
-	},
-	Tech.PIRAGUA: {
-		"name": "Piragua monóxila",
-		"desc": "Un tronco vaciado a fuego y azuela. Abre la otra orilla del río "
-			+ "y la pesca en aguas profundas: media comarca que hasta ahora "
-			+ "estaba a la vista y fuera de alcance.",
-		"needs": [Tech.NUCLEO], "camp": CampProjects.Kind.HOGAR,
-		"days": 150,
-	},
 	Tech.PASARELA: {
 		"name": "Pasarela de troncos",
 		"desc": "Dos troncos y un tejido de ramas sobre el paso más estrecho. "
@@ -249,7 +233,6 @@ const LEARNING_COST := {
 	Tech.HOJA: {Materia.Kind.PIEDRA: 18.0},
 	Tech.AGUJA: {Materia.Kind.HUESO: 6.0},
 	Tech.PASARELA: {Materia.Kind.LENA: 20.0},
-	Tech.PIRAGUA: {Materia.Kind.LENA: 30.0, Materia.Kind.RESINA: 6.0},
 	Tech.ARTE: {Materia.Kind.OCRE: 8.0, Materia.Kind.GRASA: 4.0},
 	Tech.LAZO: {Materia.Kind.FIBRA: 6.0},
 	Tech.CEPO: {Materia.Kind.PIEDRA: 8.0, Materia.Kind.LENA: 4.0},
@@ -258,7 +241,6 @@ const LEARNING_COST := {
 	Tech.AZAGAYA: {Materia.Kind.ASTA: 8.0, Materia.Kind.TENDON: 4.0},
 	Tech.OJEO: {},
 	Tech.PROPULSOR: {Materia.Kind.ASTA: 10.0},
-	Tech.ARCO: {Materia.Kind.LENA: 10.0, Materia.Kind.TENDON: 8.0},
 	Tech.PESQUERA: {Materia.Kind.PIEDRA: 24.0},
 	Tech.NASA: {Materia.Kind.FIBRA: 10.0},
 	Tech.ANZUELO: {Materia.Kind.HUESO: 5.0},
@@ -285,11 +267,18 @@ static func learning_cost(tech: Tech) -> Dictionary:
 const BRANCHES := {
 	Profession.Job.MANUFACTURA: [Tech.LASCA, Tech.NUCLEO, Tech.HOJA,
 		Tech.AGUJA],
+	# El ARCO salió de esta rama el 2026-09-13, decidido por el usuario: es del
+	# Mesolítico —Aziliense, EPOCA_02— y la caza del Paleolítico termina en el
+	# propulsor. Igual que la piragua de la rama de exploración.
 	Profession.Job.CAZA: [Tech.LAZO, Tech.CEPO, Tech.RED_AVES, Tech.FOSO,
-		Tech.AZAGAYA, Tech.OJEO, Tech.PROPULSOR, Tech.ARCO],
+		Tech.AZAGAYA, Tech.OJEO, Tech.PROPULSOR],
 	Profession.Job.RIBERA: [Tech.PESQUERA, Tech.NASA, Tech.ANZUELO, Tech.RED,
 		Tech.ARPON],
-	Profession.Job.EXPLORACION: [Tech.PASARELA, Tech.PIRAGUA],
+	# La rama de exploración del Paleolítico se queda en la pasarela: la piragua
+	# monóxila es del Mesolítico y la trae EPOCA_02. Se quitó el 2026-09-13
+	# (tanda 3, frente 13); estaba aquí desde antes de que las épocas se
+	# repartieran las técnicas.
+	Profession.Job.EXPLORACION: [Tech.PASARELA],
 	Profession.Job.HOGAR: [Tech.ARTE],
 }
 
@@ -312,14 +301,12 @@ const TECH_FACE := {
 	Tech.AZAGAYA: -1 - int(Tool.Kind.AZAGAYA),
 	Tech.OJEO: int(Materia.Kind.CARNE),
 	Tech.PROPULSOR: int(Materia.Kind.ASTA),
-	Tech.ARCO: int(Materia.Kind.TENDON),
 	Tech.PESQUERA: int(Materia.Kind.PESCADO),
 	Tech.NASA: -1 - int(Tool.Kind.NASA),
 	Tech.ANZUELO: -1 - int(Tool.Kind.ANZUELO),
 	Tech.RED: -1 - int(Tool.Kind.RED),
 	Tech.ARPON: -1 - int(Tool.Kind.ARPON),
 	Tech.PASARELA: int(Materia.Kind.LENA),
-	Tech.PIRAGUA: int(Materia.Kind.RESINA),
 	Tech.ARTE: int(Materia.Kind.OCRE),
 }
 

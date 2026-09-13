@@ -47,6 +47,7 @@ func show_professions() -> void:
 			"persona" if here == 1 else "personas"])
 		ui._text(body, Profession.job_desc(job as Profession.Job), true)
 		ui._text(body, "   pueden: %s" % _who_can(job as Profession.Job), true)
+		ui._text(body, "   %s" % jornadas_de(ui.sim, job as Profession.Job), true)
 
 		var specialities := Profession.specialities_of(job as Profession.Job)
 		if specialities.is_empty():
@@ -55,6 +56,32 @@ func show_professions() -> void:
 		for speciality: int in specialities:
 			_speciality_line(body, job as Profession.Job,
 				speciality as Profession.Speciality)
+
+
+## Las jornadas que este oficio lleva practicadas, y qué abren.
+##
+## **La misma cifra que el árbol de técnicas**, no una copia: sale de
+## `TechTree.days_in`, que es lo que hace subir las técnicas de esa rama —ver
+## `SettlementSim._practica_del_dia`—. Frente 17 de EPOCA_01 §10.1, tanda 3: el
+## jugador veía subir un porcentaje en la ventana de técnicas sin saber de dónde
+## salía, y aquí no salía nada.
+static func jornadas_de(sim: SettlementSim, job: Profession.Job) -> String:
+	if sim == null or sim.techs == null:
+		return "jornadas trabajadas: no se llevan todavía"
+	var hechas := sim.techs.days_in(job)
+	var rama: Array = TechTree.BRANCHES.get(job, [])
+	if rama.is_empty():
+		return "%.0f jornadas trabajadas · este oficio no abre técnicas" % hechas
+	# La siguiente de la rama que todavía no se sabe, que es la que el jugador
+	# está pagando con estas jornadas.
+	for t: int in rama:
+		var tech := t as TechTree.Tech
+		if sim.techs.has(tech):
+			continue
+		var pide := float((TechTree.CATALOGUE[tech] as Dictionary)["days"])
+		return "%.0f jornadas trabajadas · la siguiente, %s, pide %.0f" % [
+			hechas, TechTree.tech_name(tech).to_lower(), pide]
+	return "%.0f jornadas trabajadas · esta rama ya está dominada" % hechas
 
 
 ## Cuánta gente hay hoy en cada oficio.

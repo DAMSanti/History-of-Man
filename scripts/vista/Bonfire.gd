@@ -57,6 +57,12 @@ var size := 1.0
 var lit := false
 
 var _light: OmniLight3D
+
+## El humo. Frente 24 de EPOCA_01 §10.1, tanda 4: «las hogueras, hogares... fuegos
+## en general deben producir humo que se vea en el terreno». Va aquí y no en cada
+## fuego porque el hogar, las hogueras y los vivacs son todos esta misma clase:
+## una vez sirve para los tres. Sale mientras arde y se apaga con el fuego.
+var _humo: GPUParticles3D
 var _flames: Node3D
 var _wood: Node3D
 var _rng := RandomNumberGenerator.new()
@@ -70,6 +76,7 @@ func build(seed_value: int = 20260907, factor: float = 1.0) -> void:
 	_build_wood()
 	_build_flames()
 	_build_light()
+	_build_humo()
 	scale = Vector3.ONE * size
 
 
@@ -215,6 +222,91 @@ func _build_light() -> void:
 	add_child(_light)
 
 
+## Cuántas bocanadas hay en el aire a la vez por fuego, y cuánto dura cada una.
+## Decisión de la captura: una columna que se lee desde la distancia de gestión
+## sin taparla. Pocas a propósito: hay tantos fuegos como vivacs, y cada uno las
+## suyas.
+const BOCANADAS := 18
+const VIDA_DEL_HUMO := 7.0
+
+
+## Bocanadas grises que suben, se ensanchan y se deshacen. Una textura redonda
+## difuminada hecha aquí mismo, sin fichero.
+func _build_humo() -> void:
+	_humo = GPUParticles3D.new()
+	_humo.amount = BOCANADAS
+	_humo.lifetime = VIDA_DEL_HUMO
+	_humo.preprocess = VIDA_DEL_HUMO
+	_humo.emitting = false
+	_humo.local_coords = false
+	_humo.position = Vector3(0.0, 1.2, 0.0)
+	# Un cajón generoso: el humo sube varios metros y se lo lleva el aire, y
+	# con el de serie el motor lo recortaba cuando la hoguera salía de cuadro.
+	_humo.visibility_aabb = AABB(Vector3(-8.0, -1.0, -8.0), Vector3(16.0, 22.0, 16.0))
+
+	var proceso := ParticleProcessMaterial.new()
+	proceso.direction = Vector3(0.15, 1.0, 0.05)
+	proceso.spread = 12.0
+	proceso.initial_velocity_min = 0.6
+	proceso.initial_velocity_max = 1.1
+	proceso.gravity = Vector3(0.12, 0.25, 0.0)
+	proceso.damping_min = 0.05
+	proceso.damping_max = 0.15
+	proceso.scale_min = 0.8
+	proceso.scale_max = 1.3
+	var crece := Curve.new()
+	crece.add_point(Vector2(0.0, 0.35))
+	crece.add_point(Vector2(1.0, 2.6))
+	var curva := CurveTexture.new()
+	curva.curve = crece
+	proceso.scale_curve = curva
+	# Nace oscuro y denso, y se aclara y se deshace al subir.
+	var tono := Gradient.new()
+	tono.set_color(0, Color(0.30, 0.29, 0.28, 0.0))
+	tono.set_color(1, Color(0.70, 0.70, 0.70, 0.0))
+	tono.add_point(0.12, Color(0.34, 0.33, 0.32, 0.55))
+	tono.add_point(0.55, Color(0.58, 0.58, 0.58, 0.28))
+	var rampa := GradientTexture1D.new()
+	rampa.gradient = tono
+	proceso.color_ramp = rampa
+	_humo.process_material = proceso
+
+	var bocanada := QuadMesh.new()
+	bocanada.size = Vector2(1.6, 1.6)
+	var aspecto := StandardMaterial3D.new()
+	aspecto.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	aspecto.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	aspecto.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	aspecto.vertex_color_use_as_albedo = true
+	aspecto.no_depth_test = false
+	aspecto.albedo_texture = _textura_de_humo()
+	bocanada.material = aspecto
+	_humo.draw_pass_1 = bocanada
+	_humo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_humo)
+
+
+## Una mancha redonda que se difumina hacia el borde. Compartida por todos los
+## fuegos: es la misma para todos y no tiene por qué hacerse dos veces.
+static var _mancha: GradientTexture2D = null
+
+
+static func _textura_de_humo() -> GradientTexture2D:
+	if _mancha != null:
+		return _mancha
+	var borde := Gradient.new()
+	borde.set_color(0, Color(1, 1, 1, 1))
+	borde.set_color(1, Color(1, 1, 1, 0))
+	_mancha = GradientTexture2D.new()
+	_mancha.gradient = borde
+	_mancha.fill = GradientTexture2D.FILL_RADIAL
+	_mancha.fill_from = Vector2(0.5, 0.5)
+	_mancha.fill_to = Vector2(0.5, 0.0)
+	_mancha.width = 64
+	_mancha.height = 64
+	return _mancha
+
+
 func _process(delta: float) -> void:
 	Cronometro.tramo_raiz("vista: hoguera")
 	if _flames == null:
@@ -222,6 +314,10 @@ func _process(delta: float) -> void:
 		return
 	_flames.visible = lit
 	_light.visible = lit
+	# El humo sale mientras arde. Al apagarse deja de salir, y lo que ya estaba
+	# en el aire se acaba de ir solo, que es como se apaga un fuego.
+	if _humo != null and _humo.emitting != lit:
+		_humo.emitting = lit
 	if not lit:
 		Cronometro.cierra("vista: hoguera")
 		return

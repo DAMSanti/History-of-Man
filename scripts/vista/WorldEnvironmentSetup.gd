@@ -187,7 +187,31 @@ var _sim: Node = null
 var _moon_light: DirectionalLight3D
 var _environment: Environment
 var _sky: Sky
-var _sky_material: ProceduralSkyMaterial
+## El cielo, con nubes que se mueven. Era un `ProceduralSkyMaterial` —un
+## degradado y nada más— hasta el 2026-09-13: ver `shaders/cielo.gdshader` y el
+## frente 16 de EPOCA_01 §10.1.
+var _sky_material: ShaderMaterial
+
+## Cuánto tapan las nubes según el tiempo que hace. **No son cifras de balance**
+## —el cielo es sólo vista, no cambia una jornada— sino cuánto se ve tapado en
+## cada uno de los siete tiempos que el juego ya tiene. Ver [Weather.Kind].
+## El cielo LIMPIO, que la paleta de la escena no tiene: la suya —gris azulado
+## en el cenit y gris en el horizonte— es la de un día encapotado, y por eso el
+## jugador decía «no hay cielo». Se mezcla con la de la escena según lo que tapen
+## las nubes: despejado tira a esto, temporal a lo otro. Son colores, no cifras
+## de partida.
+const CIELO_LIMPIO_CENIT := Color(0.24, 0.45, 0.82)
+const CIELO_LIMPIO_HORIZONTE := Color(0.68, 0.80, 0.93)
+
+const NUBOSIDAD := {
+	Weather.Kind.DESPEJADO: 0.12,
+	Weather.Kind.NUBLADO: 0.70,
+	Weather.Kind.ORBAYU: 0.80,
+	Weather.Kind.LLUVIA: 0.88,
+	Weather.Kind.TEMPORAL: 0.97,
+	Weather.Kind.NIEBLA: 0.85,
+	Weather.Kind.NIEVE: 0.90,
+}
 
 
 func _ready() -> void:
@@ -270,13 +294,27 @@ func _setup_environment() -> void:
 
 func _setup_sky() -> void:
 	# Crear cielo procedural
-	_sky_material = ProceduralSkyMaterial.new()
-	_sky_material.sky_top_color = sky_top_color
-	_sky_material.sky_horizon_color = sky_horizon_color
-	_sky_material.ground_bottom_color = sky_bottom_color
-	_sky_material.ground_horizon_color = sky_horizon_color
-	_sky_material.sun_angle_max = 30.0
-	_sky_material.sun_curve = 0.15
+	# CIELO=viejo deja el degradado de antes, SIN nubes ni estrellas. Es un
+	# interruptor DE MEDIDA, como `NOCHE=0` o `SEMILLA=`: sirve para poder
+	# comparar el fotograma con el cielo nuevo y sin él, que es lo que pide el
+	# criterio del frente 16. No se juega con esto puesto.
+	if OS.get_environment("CIELO") == "viejo":
+		var viejo := ProceduralSkyMaterial.new()
+		viejo.sky_top_color = sky_top_color
+		viejo.sky_horizon_color = sky_horizon_color
+		viejo.ground_bottom_color = sky_bottom_color
+		viejo.ground_horizon_color = sky_horizon_color
+		_sky = Sky.new()
+		_sky.sky_material = viejo
+		_environment.sky = _sky
+		_sky_material = null
+		return
+
+	_sky_material = ShaderMaterial.new()
+	_sky_material.shader = load("res://shaders/cielo.gdshader")
+	_sky_material.set_shader_parameter("color_cenit", sky_top_color)
+	_sky_material.set_shader_parameter("color_horizonte", sky_horizon_color)
+	_sky_material.set_shader_parameter("color_suelo", sky_bottom_color)
 	
 	_sky = Sky.new()
 	_sky.sky_material = _sky_material
@@ -425,12 +463,22 @@ func _place_sun(hour: float, season: int, season_day: int) -> void:
 		var warm_top := smoothstep(-2.0, 12.0, above)
 		var warm_low := smoothstep(0.0, 25.0, above)
 		var risen := smoothstep(-8.0, 1.0, above)
-		_sky_material.sky_top_color = night.lerp(
-			low_sky.lerp(sky_top_color, warm_top), risen)
-		_sky_material.sky_horizon_color = night.lerp(
-			low_horizon.lerp(sky_horizon_color, warm_low), risen)
-		_sky_material.ground_horizon_color = _sky_material.sky_horizon_color
+		# El azul del día se mezcla con el gris de la escena según lo que tapen
+		# las nubes. Ver [CIELO_LIMPIO_CENIT].
+		var limpio := clampf(1.0 - _nubosidad, 0.0, 1.0)
+		var dia_cenit := sky_top_color.lerp(CIELO_LIMPIO_CENIT, limpio)
+		var dia_horizonte := sky_horizon_color.lerp(CIELO_LIMPIO_HORIZONTE, limpio)
+		var cenit := night.lerp(low_sky.lerp(dia_cenit, warm_top), risen)
+		var horizonte := night.lerp(
+			low_horizon.lerp(dia_horizonte, warm_low), risen)
+		_sky_material.set_shader_parameter("color_cenit", cenit)
+		_sky_material.set_shader_parameter("color_horizonte", horizonte)
+		_sky_material.set_shader_parameter("color_suelo", horizonte.darkened(0.55))
+		# Las nubes no son blancas de noche: llevan la luz que haya.
+		_sky_material.set_shader_parameter("luz_de_la_nube",
+			clampf(0.22 + 0.78 * risen, 0.0, 1.0))
 
+	_pintar_el_cielo(latitude, day, hour, to_sun, above)
 	_place_moon(latitude, day, hour, above)
 
 	# UNA LINEA POR JORNADA, no por hora de juego.
@@ -467,6 +515,55 @@ func _place_sun(hour: float, season: int, season_day: int) -> void:
 ## La fase sale de los días transcurridos de partida convertidos a días reales,
 ## porque una lunación es un periodo físico y el calendario del juego es una
 ## convención. Ver [SolarPosition].
+## Cuánto tapan las nubes hoy. Lo llama la escena cuando cambia el tiempo.
+##
+## El cielo no pregunta el tiempo por su cuenta: se lo dan, como el sol y la
+## luna. Ver [NUBOSIDAD].
+func nubes_por_el_tiempo(kind: int) -> void:
+	_nubosidad = float(NUBOSIDAD.get(kind, 0.45))
+	if _sky_material != null:
+		_sky_material.set_shader_parameter("nubes", _nubosidad)
+
+
+## Cuánto tapan hoy. Se guarda porque el color del cielo depende de ello: un
+## cielo despejado es azul y uno de temporal es gris.
+var _nubosidad: float = 0.45
+
+
+## Le pasa al cielo lo que ya sabe la simulación: dónde está el sol, dónde la
+## luna, cuánto gira el cielo y cuánto tapan las nubes.
+##
+## **El cielo no calcula nada de esto**: si lo hiciera, el sol de la sombra y el
+## sol pintado se separarían al primer cambio. Ver `shaders/cielo.gdshader`.
+func _pintar_el_cielo(latitude: float, day: float, hour: float,
+		to_sun: Vector3, sun_above: float) -> void:
+	if _sky_material == null:
+		return
+	var noche := 1.0 - smoothstep(-8.0, 2.0, sun_above)
+	_sky_material.set_shader_parameter("noche", noche)
+	_sky_material.set_shader_parameter("hacia_el_sol", to_sun)
+
+	# EL EJE SOBRE EL QUE GIRA EL CIELO: el polo celeste está a la altura de la
+	# latitud y mirando al norte, que en este mundo es -Z -ver
+	# `SolarPosition._to_horizon`-. En Cantabria son 43 grados: las estrellas no
+	# giran alrededor de la vertical, giran alrededor de eso.
+	var phi := deg_to_rad(latitude)
+	_sky_material.set_shader_parameter("polo_celeste",
+		Vector3(0.0, sin(phi), -cos(phi)).normalized())
+	# Y cuánto lleva girado: el mismo ángulo horario del sol, quince grados por
+	# hora y cero al mediodía solar.
+	_sky_material.set_shader_parameter("angulo_horario",
+		deg_to_rad((hour - 12.0) * 15.0))
+
+	var fase := SolarPosition.moon_phase(_elapsed_real_days())
+	var luna := SolarPosition.moon_at(latitude, day, hour, fase)
+	var hacia_la_luna: Vector3 = luna["to_moon"] if luna.has("to_moon") 		else luna["to_sun"]
+	_sky_material.set_shader_parameter("hacia_la_luna", hacia_la_luna)
+	# La luna se ve de día también, pero apagada: lo que la borra es la fase.
+	_sky_material.set_shader_parameter("luna_iluminada",
+		SolarPosition.moon_lit(fase) * clampf(0.25 + 0.75 * noche, 0.0, 1.0))
+
+
 func _place_moon(latitude: float, day: float, hour: float,
 		sun_above: float) -> void:
 	if not _moon_light:

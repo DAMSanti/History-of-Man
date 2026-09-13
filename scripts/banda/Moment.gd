@@ -30,10 +30,10 @@ enum Kind {
 	INICIO,     ## Se funda el asentamiento: el objetivo, y que se puede perder
 	VICTORIA,   ## Se cierra un año vivo y con la cueva pintada
 	DERROTA,    ## La banda entera se ha extinguido
-	TRUEQUE,    ## Se puede ir a tratar con la gente de ahí fuera
 	EXPEDICION, ## Primavera: si se manda gente fuera del valle este año
 	ASCENSO,    ## Verano: si se sube a las cumbres ahora que no hiela
 	INVIERNO,   ## Invierno: el fuego a manos llenas o racionado
+	CUEVA,      ## Algo pasa dentro de una cueva que se está explorando
 }
 
 var kind: Kind = Kind.HALLAZGO
@@ -85,9 +85,48 @@ static func summit(title_text: String, body: String, place: Vector3,
 
 
 ## Una opción, con lo que cuesta. Ver [options].
+## A QUIÉN se manda, cuando la decisión lo pregunta.
+##
+## Hasta la tanda 3 el jugador decía «sí» y la banda elegía sola: se enteraba de
+## quién se había ido cuando lo echaba en falta. `candidatos` son los ids que
+## pueden ir —ya filtrados: ni niños ni tocados—, `nombres` cómo se llaman para
+## pintarlos, `minimo_elegidos` cuántos hacen falta para poder confirmar, y
+## `elegidos` los que están marcados ahora mismo. Vacío en las decisiones que no
+## preguntan por gente. Ver [BarraSuperior] y EPOCA_01 §10.1, tanda 3.
+var candidatos: Array[int] = []
+var nombres: Dictionary = {}
+var minimo_elegidos: int = 0
+var elegidos: Array[int] = []
+
+## Lo que hay que rehacer cuando cambia la elección: el coste de las opciones
+## depende de cuántos van. Lo pone quien levanta el momento.
+var al_cambiar_la_eleccion: Callable = Callable()
+
+
+## Marca o desmarca a uno, y rehace las opciones si hacía falta.
+func marcar(id: int, puesto: bool) -> void:
+	if puesto:
+		if not candidatos.has(id) or elegidos.has(id):
+			return
+		elegidos.append(id)
+	else:
+		elegidos.erase(id)
+	if al_cambiar_la_eleccion.is_valid():
+		al_cambiar_la_eleccion.call()
+
+
+## Si hay bastantes marcados para poder decir que sí.
+func hay_bastantes() -> bool:
+	return elegidos.size() >= minimo_elegidos
+
+
+## `bloqueo` dice POR QUÉ no se puede elegir esta opción, y vacío es que sí se
+## puede. No se esconde la opción: se enseña apagada con lo que falta, que es
+## lo que deja al jugador ir a por ello. Ver [BarraSuperior].
 static func opcion(label: String, hint: String, on_pick: Callable,
-		cuesta: Dictionary = {}) -> Dictionary:
-	return {"label": label, "hint": hint, "on_pick": on_pick, "cuesta": cuesta}
+		cuesta: Dictionary = {}, bloqueo: String = "") -> Dictionary:
+	return {"label": label, "hint": hint, "on_pick": on_pick, "cuesta": cuesta,
+		"bloqueo": bloqueo}
 
 
 ## Si elegir una u otra cambia alguna cifra de la partida.

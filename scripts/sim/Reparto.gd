@@ -656,8 +656,16 @@ func apply_priorities() -> void:
 
 		var larder_full := sim.despensa.food_is_capped()
 
+		# QUIEN ESTÁ TOCADO NO SALE DEL ABRIGO. Sólo trabajo de hogar, que se
+		# hace en la campa de la boca. No se le tocan las prioridades: son del
+		# jugador, y así al curarse vuelve solo a lo suyo sin que nadie tenga
+		# que acordarse de devolvérselas. Ver [Inhabitant.esta_tocado].
+		var tocado := person.esta_tocado()
+
 		for job_key: int in Profession.CATALOGUE:
 			if job_key == Profession.Job.OCIOSO:
+				continue
+			if tocado and job_key != Profession.Job.HOGAR:
 				continue
 			if not Profession.can_do(job_key as Profession.Job, person):
 				continue
@@ -695,6 +703,13 @@ func apply_priorities() -> void:
 					best_level = level
 					candidates.clear()
 				candidates.append(task)
+
+		# Y al tocado que no tenga el hogar entre lo suyo se le pone igual: es
+		# lo que puede hacer sin salir, y es mejor que mirar el techo.
+		if tocado and candidates.is_empty():
+			Profession.assign(Profession.Job.HOGAR, person)
+			person.current_speciality = Profession.Speciality.NINGUNA
+			continue
 
 		# Sin nada que pueda o quiera hacer, se queda esperando destino
 		if candidates.is_empty():

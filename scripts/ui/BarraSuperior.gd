@@ -127,7 +127,13 @@ func momento_en_pantalla() -> Moment:
 ## docs/specs/LO_MISMO_MAS_DEPRISA.md, tarea 1.
 func elegir(indice: int) -> void:
 	if _en_pantalla != null and indice >= 0 and indice < _en_pantalla.options.size():
-		(_en_pantalla.options[indice]["on_pick"] as Callable).call()
+		var option: Dictionary = _en_pantalla.options[indice]
+		# Una opción bloqueada no se elige: se cae a la 0, que es la que no
+		# compromete (SPECS §4.6). El botón ya sale apagado, pero esto es lo que
+		# lo hace cierto también para las sondas, que eligen por índice.
+		if not String(option.get("bloqueo", "")).is_empty():
+			option = _en_pantalla.options[0]
+		(option["on_pick"] as Callable).call()
 	_show_next_moment()
 
 
@@ -159,6 +165,14 @@ func contestar_todo(elige: Callable) -> void:
 	var vueltas := 0
 	while _en_pantalla != null and vueltas < 50:
 		if _en_pantalla.is_decision():
+			# Si la tarjeta pregunta a quién se manda, se marcan los primeros
+			# que puedan ir: una sonda que no marcara a nadie no podría decir
+			# que sí nunca, y mediría una partida que no se juega.
+			if not _en_pantalla.candidatos.is_empty():
+				for id: int in _en_pantalla.candidatos:
+					if _en_pantalla.hay_bastantes():
+						break
+					_en_pantalla.marcar(id, true)
 			elegir(int(elige.call(_en_pantalla)))
 		else:
 			seguir()
@@ -167,6 +181,18 @@ func contestar_todo(elige: Callable) -> void:
 
 
 var _contestando := false
+
+
+## Rehace la tarjeta que está en pantalla sin pasar a la siguiente. Hace falta
+## cuando cambia lo que la tarjeta dice de sí misma —a quién se manda, y lo que
+## por tanto cuesta—, y no se puede hacer redibujando a mano: los botones son
+## nodos con su texto dentro.
+func _repintar_la_tarjeta() -> void:
+	if _en_pantalla == null:
+		return
+	if ui._moment_card != null:
+		ui._moment_card.queue_free()
+	ui._moment_card = _build_moment_card(_en_pantalla)
 
 
 func _show_next_moment() -> void:
@@ -236,6 +262,26 @@ func _build_moment_card(moment: Moment) -> Control:
 		who.add_theme_color_override("font_color", UISkin.INK_SOFT)
 		column.add_child(who)
 
+	# A QUIÉN SE MANDA, cuando la decisión lo pregunta. Casillas, y no una lista
+	# fija, porque el jugador tiene que poder cambiarla: ver [Moment.candidatos].
+	# Al marcar se rehace la tarjeta entera —el coste y el bloqueo dependen de
+	# cuántos van— y se hace DIFERIDO: reconstruir la tarjeta desde dentro de la
+	# señal de su propia casilla es borrar el nodo que la está emitiendo.
+	if not moment.candidatos.is_empty():
+		var quienes := VBoxContainer.new()
+		quienes.add_theme_constant_override("separation", 2)
+		column.add_child(quienes)
+		for id: int in moment.candidatos:
+			var casilla := CheckBox.new()
+			casilla.text = String(moment.nombres.get(id, "#%d" % id))
+			casilla.button_pressed = moment.elegidos.has(id)
+			casilla.add_theme_font_size_override("font_size", 12)
+			var quien := id
+			casilla.toggled.connect(func(puesto: bool) -> void:
+				moment.marcar(quien, puesto)
+				_repintar_la_tarjeta.call_deferred())
+			quienes.add_child(casilla)
+
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 6)
 	column.add_child(buttons)
@@ -254,6 +300,14 @@ func _build_moment_card(moment: Moment) -> Control:
 		pick.text = String(option["label"])
 		pick.tooltip_text = String(option.get("hint", ""))
 		pick.custom_minimum_size = Vector2(0, 26)
+		# LO QUE NO SE PUEDE ELEGIR SE ENSEÑA APAGADO, con lo que falta: así el
+		# jugador sabe a por qué ir. Esconderlo sería no contarle la mitad de la
+		# decisión. Ver [Moment.opcion].
+		var bloqueo := String(option.get("bloqueo", ""))
+		if not bloqueo.is_empty():
+			pick.disabled = true
+			pick.text = "%s — %s" % [pick.text, bloqueo]
+			pick.tooltip_text = bloqueo
 		pick.pressed.connect(func() -> void: elegir(indice))
 		buttons.add_child(pick)
 

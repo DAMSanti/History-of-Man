@@ -58,6 +58,7 @@ func _create_terrain_mesh() -> void:
 	print("[TIMING]   material/texturas de terreno: %d ms" % (Time.get_ticks_msec() - tmat0))
 
 	terreno.add_child(terreno._terrain_mesh)
+	_construir_simas()
 
 	var chunk_meshes: Array[ArrayMesh] = []
 	if terreno.terrain_chunks > 1:
@@ -169,12 +170,21 @@ func _construir_arrays() -> Array:
 		count, Time.get_ticks_msec() - tvert0])
 
 	# Índices (triángulos) - CCW winding order visto desde arriba
+	#
+	# SALVO EL RUEDO DE UNA SIMA. La rejilla del relieve tiene un punto cada
+	# cinco metros, así que un agujero de dos no le cabe: sale cuadrado y del
+	# tamaño de la rejilla. Ahí se quita la rejilla y se cose un embudo fino en su
+	# sitio, ver [_construir_simas].
 	var tidx0 := Time.get_ticks_msec()
+	var simas := terreno.simas()
 	var indices := PackedInt32Array()
 	indices.resize((terreno.resolution - 1) * (terreno.resolution - 1) * 6)
 	var i := 0
 	for z in range(terreno.resolution - 1):
 		for x in range(terreno.resolution - 1):
+			if _en_el_ruedo_de_una_sima(simas,
+					Vector2((float(x) + 0.5) * step_x, (float(z) + 0.5) * step_z)):
+				continue
 			var top_left := z * terreno.resolution + x
 			var top_right := top_left + 1
 			var bottom_left := (z + 1) * terreno.resolution + x
@@ -187,6 +197,7 @@ func _construir_arrays() -> Array:
 			indices[i + 4] = bottom_right
 			indices[i + 5] = bottom_left
 			i += 6
+	indices.resize(i)
 	print("[TIMING]   bucle de indices: %d ms" % (Time.get_ticks_msec() - tidx0))
 
 	var arrays := []
@@ -240,6 +251,289 @@ func _malla_para_dibujar(arrays: Array, step_x: float, step_z: float) -> ArrayMe
 	return single_mesh
 
 
+## Cuánto se sale del círculo la boca de la sima, en proporción a su radio. Un
+## agujero perfectamente redondo canta a geometría puesta.
+const MORDIDA_DE_LA_BOCA := 0.30
+
+## Cuánto se estrecha el pozo de la boca al fondo: a una doceava parte. Es lo
+## que hace que la curva se note —el embudo de gravedad cae a plomo cerca del
+## eje— sin que el fondo llegue a cerrarse del todo.
+const ESTRECHO_DEL_POZO := 0.08
+
+## A cuántos metros de hondura ya no se ve nada. Seis: lo justo para que se lea
+## la roca de la boca y el ojo entienda que aquello sigue hacia abajo.
+const OSCURO_A_LOS := 6.0
+
+
+## Un triángulo de la pared de roca del pozo, con los datos por vértice que pide
+## el shader del terreno. Orientado como [_muro].
+func _roca_del_pozo(st: SurfaceTool, p0: Vector3, p1: Vector3, p2: Vector3,
+		hacia: Vector3) -> void:
+	var giro := (p1 - p0).cross(p2 - p0)
+	if giro.length_squared() < 0.000001:
+		return
+	var orden: Array[Vector3] = [p0, p1, p2]
+	if giro.dot(hacia) < 0.0:
+		orden = [p0, p2, p1]
+	var normal := giro.normalized()
+	if giro.dot(hacia) < 0.0:
+		normal = -normal
+	for v: Vector3 in orden:
+		st.set_uv(Vector2(v.x / 4.0, v.z / 4.0))
+		st.set_uv2(_uv2_del_punto(v))
+		st.set_color(_color_del_punto(v))
+		st.set_normal(normal)
+		st.set_tangent(Plane(normal.cross(Vector3.UP).normalized(), -1.0))
+		st.add_vertex(v)
+
+
+## Un triángulo de la pared del pozo, con su color por vértice y mirando hacia
+## `hacia`. El orden se elige y no se da por supuesto: la cara delantera es la
+## que deja `(v1−v0)×(v2−v0)` hacia ese lado.
+static func _muro(st: SurfaceTool, p0: Vector3, p1: Vector3, p2: Vector3,
+		hacia: Vector3, c0: Color, c1: Color, c2: Color) -> void:
+	var giro := (p1 - p0).cross(p2 - p0)
+	if giro.length_squared() < 0.000001:
+		return
+	var orden: Array = [[p0, c0], [p1, c1], [p2, c2]]
+	if giro.dot(hacia) < 0.0:
+		orden = [[p0, c0], [p2, c2], [p1, c1]]
+	for v: Array in orden:
+		st.set_color(v[1])
+		st.add_vertex(v[0])
+
+
+## La tangente del relieve en un punto, como la calcula la rejilla: a lo largo
+## de +X, con la bitangente hacia +Z. Ver [_construir_arrays].
+func _tangente_del_punto(p: Vector3) -> Plane:
+	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
+	var dhdx := (terreno.get_height_at(p + Vector3(step_x, 0.0, 0.0))
+		- terreno.get_height_at(p - Vector3(step_x, 0.0, 0.0))) / (2.0 * step_x)
+	return Plane(Vector3(1.0, dhdx, 0.0).normalized(), -1.0)
+
+
+## La normal del relieve en un punto, como la calcula la rejilla: del campo de
+## alturas, no de las caras. Ver [_construir_arrays].
+func _normal_del_punto(p: Vector3) -> Vector3:
+	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
+	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
+	var dhdx := (terreno.get_height_at(p + Vector3(step_x, 0.0, 0.0))
+		- terreno.get_height_at(p - Vector3(step_x, 0.0, 0.0))) / (2.0 * step_x)
+	var dhdz := (terreno.get_height_at(p + Vector3(0.0, 0.0, step_z))
+		- terreno.get_height_at(p - Vector3(0.0, 0.0, step_z))) / (2.0 * step_z)
+	return Vector3(-dhdx, 1.0, -dhdz).normalized()
+
+
+## La curvatura y la mancha de un punto, como las calcula la rejilla para el
+## shader —ver [_construir_arrays]—. Sin esto el parche de una sima se pintaba
+## con otra capa y se veía un cerco más oscuro alrededor del agujero.
+func _uv2_del_punto(p: Vector3) -> Vector2:
+	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
+	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
+	var x := clampi(int(round(p.x / step_x)), 0, terreno.resolution - 1)
+	var z := clampi(int(round(p.z / step_z)), 0, terreno.resolution - 1)
+	var row := z * terreno.resolution
+	var zu := maxi(z - 1, 0) * terreno.resolution
+	var zd := mini(z + 1, terreno.resolution - 1) * terreno.resolution
+	var left := maxi(x - 1, 0)
+	var right := mini(x + 1, terreno.resolution - 1)
+	var height := terreno._height_map[row + x]
+	var laplacian := (terreno._height_map[row + left] + terreno._height_map[row + right]
+		+ terreno._height_map[zu + x] + terreno._height_map[zd + x]) * 0.25 - height
+	var curvature := clampf(laplacian / maxf(terreno.curvature_scale, 0.001), -1.0, 1.0)
+	var macro := terreno._macro_noise.get_noise_2d(
+		float(x) * step_x, float(z) * step_z) * 0.5 + 0.5
+	return Vector2(curvature * 0.5 + 0.5, macro)
+
+
+## Y el color de vértice, que es como viaja la hidrografía al shader.
+func _color_del_punto(p: Vector3) -> Color:
+	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
+	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
+	var x := clampi(int(round(p.x / step_x)), 0, terreno.resolution - 1)
+	var z := clampi(int(round(p.z / step_z)), 0, terreno.resolution - 1)
+	var idx := z * terreno.resolution + x
+	var flow: Vector2 = terreno._flow_map[idx] if idx < terreno._flow_map.size() else Vector2.ZERO
+	var wetness: float = terreno._river_map[idx] if idx < terreno._river_map.size() else 0.0
+	return Color(flow.x * 0.5 + 0.5, flow.y * 0.5 + 0.5,
+		1.0 if (wetness > 0.01 and flow.length_squared() < 0.01) else 0.0, wetness)
+
+
+## Las simas: donde la rejilla se ha quitado —ver [_en_el_ruedo_de_una_sima]— se
+## cose un embudo circular con su pozo.
+##
+## Va aparte de la rejilla porque el relieve tiene un punto cada cinco metros y
+## un agujero de dos no le cabe: sale cuadrado y del tamaño de la rejilla, que es
+## lo que se vio en captura el 2026-09-13. Esto es terreno, no un objeto: el
+## embudo lleva el mismo material que el resto del mapa y llega al borde con la
+## cota que tiene el relieve allí, así que no se ve dónde acaba uno y empieza el
+## otro.
+func _construir_simas() -> void:
+	var simas := terreno.simas()
+	if simas.is_empty():
+		return
+	var paso := float(terreno.terrain_size.x) / float(maxi(terreno.resolution - 1, 1))
+	var madre := Node3D.new()
+	madre.name = "Simas"
+	terreno._terrain_mesh.add_child(madre)
+
+	for sima: Dictionary in simas:
+		var centro: Vector3 = sima["position"]
+		var boca := float(sima["boca"])
+		var ruedo := float(sima["ruedo"])
+		var hondo := float(sima["hondo"])
+		var borde := terreno.get_height_at(centro)
+		# El labio: lo poco que cae el embudo antes del pozo. Medio metro, no más:
+		# cuanto más hunde, más se aparta de la cota que tiene el relieve
+		# alrededor y más se le nota al shader —salía un cerco más oscuro de
+		# veinte metros alrededor del agujero—.
+		var labio := 0.5
+
+		var anillos := 7
+		var lados := 28
+		# LA BOCA NO ES UN CÍRCULO. Un agujero perfecto canta a geometría —el
+		# usuario, el 2026-09-13—, así que el radio se mueve con el ángulo. El
+		# ruido va por semilla de la posición: la misma cueva sale igual siempre.
+		var mordido := FastNoiseLite.new()
+		mordido.seed = hash([int(centro.x), int(centro.z)])
+		mordido.frequency = 0.5
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var puntos: Array[Vector3] = []
+		for j in range(anillos + 1):
+			var t := float(j) / float(anillos)
+			var radio := lerpf(boca, ruedo + paso, t)
+			for i in range(lados + 1):
+				var angulo := TAU * float(i) / float(lados)
+				# Mordido sólo cerca de la boca: en el borde de fuera el parche
+				# tiene que cerrar contra la rejilla, y ahí no se toca.
+				var mordida := 1.0 + MORDIDA_DE_LA_BOCA * (1.0 - t) \
+					* mordido.get_noise_2d(cos(angulo) * 4.0, sin(angulo) * 4.0)
+				var p := Vector3(centro.x + cos(angulo) * radio * mordida, 0.0,
+					centro.z + sin(angulo) * radio * mordida)
+				# Del labio del pozo a la cota del relieve, y LA CAÍDA VA PEGADA
+				# AL AGUJERO: repartida por todo el parche, el terreno quedaba
+				# hundido en varios metros a la redonda y el shader lo pintaba de
+				# otra capa —se veía un cerco distinto alrededor de la boca—.
+				p.y = lerpf(borde - labio, terreno.get_height_at(p),
+					smoothstep(0.0, 0.25, t))
+				if j == anillos:
+					# El último anillo monta sobre la rejilla que queda: un dedo
+					# por debajo, para que no peleen las dos superficies.
+					p.y -= 0.05
+				puntos.append(p)
+		var fila := lados + 1
+		for j in range(anillos):
+			for i in range(lados):
+				var a := j * fila + i
+				var b := a + 1
+				var d := a + fila
+				var e := d + 1
+				for tri: Array in [[a, d, b], [b, d, e]]:
+					for k: int in tri:
+						st.set_uv(Vector2(puntos[k].x / 4.0, puntos[k].z / 4.0))
+						st.set_uv2(_uv2_del_punto(puntos[k]))
+						st.set_color(_color_del_punto(puntos[k]))
+						# LA MISMA NORMAL QUE LA REJILLA, sacada del mapa de
+						# alturas y no de la geometría del parche: el shader
+						# mezcla sus capas por la normal, y con la geométrica el
+						# parche salía de otro color y se veía un cerco
+						# alrededor del agujero.
+						st.set_normal(_normal_del_punto(puntos[k]))
+						# Y LA TANGENTE, también como la rejilla: a lo largo de
+						# +X y con la bitangente hacia +Z. Calculada por UV salía
+						# girada, y con ella el mapa de normales pintaba el
+						# parche con otra luz que el terreno de al lado.
+						st.set_tangent(_tangente_del_punto(puntos[k]))
+						st.add_vertex(puntos[k])
+
+		var embudo := MeshInstance3D.new()
+		embudo.name = "Embudo"
+		embudo.mesh = st.commit()
+		# El mismo material que el resto del terreno: esto ES el terreno.
+		embudo.material_override = terreno._terrain_mesh.material_override
+		# SIN PROYECTAR SOMBRA. El parche está casi a la misma cota que la
+		# rejilla que sustituye, así que se sombreaba a sí mismo y dejaba un
+		# cerco más oscuro de veinte metros alrededor del agujero.
+		embudo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		madre.add_child(embudo)
+
+		# EL POZO, con forma de embudo de gravedad: la pared cae cada vez más
+		# rápido según se acerca al eje —`hondo = K · ln(boca / radio)`—, que es
+		# la curva que pidió el usuario el 2026-09-13, «como la representación de
+		# la gravedad sobre un plano», y no un tubo recto.
+		#
+		# Y con la ROCA DEL PROPIO TERRENO: el mismo material que el resto del
+		# mapa, que en pared vertical ya pinta roca. La oscuridad la pone encima
+		# una capa aparte que se va cerrando con la hondura —ver abajo—, para que
+		# la cueva no pase de suelo a negro en el mismo borde.
+		var arriba := borde - labio
+		var garganta := boca * ESTRECHO_DEL_POZO
+		var constante := hondo / log(1.0 / ESTRECHO_DEL_POZO)
+		var caladas: Array[float] = []
+		var radios: Array[float] = []
+		var anillos_pozo := 12
+		for j in range(anillos_pozo + 1):
+			var r := boca * pow(ESTRECHO_DEL_POZO, float(j) / float(anillos_pozo))
+			radios.append(r)
+			caladas.append(constante * log(boca / r))
+
+		var pared := SurfaceTool.new()
+		pared.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var sombra := SurfaceTool.new()
+		sombra.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for j in range(anillos_pozo):
+			var y0 := arriba - caladas[j]
+			var y1 := arriba - caladas[j + 1]
+			var r0: float = radios[j]
+			var r1: float = radios[j + 1]
+			# La oscuridad se cierra en los primeros metros: a seis ya no se ve
+			# nada, que es lo que insinúa la hondura sin tapar la roca de arriba.
+			var n0 := Color(0.0, 0.0, 0.0, clampf(caladas[j] / OSCURO_A_LOS, 0.0, 1.0))
+			var n1 := Color(0.0, 0.0, 0.0, clampf(caladas[j + 1] / OSCURO_A_LOS, 0.0, 1.0))
+			for i in range(lados):
+				var a0 := TAU * float(i) / float(lados)
+				var a1 := TAU * float(i + 1) / float(lados)
+				# El mismo mordisco que la boca, y desdibujado al bajar: una
+				# garganta no conserva la forma del brocal.
+				var m0 := 1.0 + MORDIDA_DE_LA_BOCA * (1.0 - float(j) / float(anillos_pozo)) \
+					* mordido.get_noise_2d(cos(a0) * 4.0, sin(a0) * 4.0)
+				var m1 := 1.0 + MORDIDA_DE_LA_BOCA * (1.0 - float(j) / float(anillos_pozo)) \
+					* mordido.get_noise_2d(cos(a1) * 4.0, sin(a1) * 4.0)
+				var p0 := Vector3(centro.x + cos(a0) * r0 * m0, y0, centro.z + sin(a0) * r0 * m0)
+				var p1 := Vector3(centro.x + cos(a1) * r0 * m1, y0, centro.z + sin(a1) * r0 * m1)
+				var q0 := Vector3(centro.x + cos(a0) * r1 * m0, y1, centro.z + sin(a0) * r1 * m0)
+				var q1 := Vector3(centro.x + cos(a1) * r1 * m1, y1, centro.z + sin(a1) * r1 * m1)
+				# HACIA FUERA, para que el motor recorte la pared de acá y se vea
+				# la del fondo: dibujando las dos, la de delante tapaba el
+				# agujero y parecía una bola metida en el suelo.
+				var eje := Vector3(centro.x, (y0 + y1) * 0.5, centro.z)
+				var afuera := (p0 + q1) * 0.5 - eje
+				for tri: Array in [[p0, q0, p1], [p1, q0, q1]]:
+					_roca_del_pozo(pared, tri[0], tri[1], tri[2], afuera)
+				_muro(sombra, p0, q0, p1, afuera, n0, n1, n0)
+				_muro(sombra, p1, q0, q1, afuera, n0, n1, n1)
+		var pozo := MeshInstance3D.new()
+		pozo.name = "Pozo"
+		pozo.mesh = pared.commit()
+		# La roca del terreno: esto sigue siendo el mapa, no un objeto.
+		pozo.material_override = terreno._terrain_mesh.material_override
+		pozo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		madre.add_child(pozo)
+
+		var negro := MeshInstance3D.new()
+		negro.name = "Oscuridad"
+		negro.mesh = sombra.commit()
+		var tiniebla := StandardMaterial3D.new()
+		tiniebla.vertex_color_use_as_albedo = true
+		tiniebla.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		tiniebla.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		tiniebla.cull_mode = BaseMaterial3D.CULL_BACK
+		negro.material_override = tiniebla
+		negro.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		madre.add_child(negro)
+
+
 ## Reconstruye lo que deja `_create_terrain_mesh()`, pero desde una cache ya
 ## valida en vez de recalcularlo: sin bucle de vertices, sin generate_lods.
 func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache) -> void:
@@ -265,6 +559,10 @@ func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache) -> void:
 		print("[TIMING]   trozos desde cache (%d): %d ms" % [
 			cache.chunk_meshes.size(), Time.get_ticks_msec() - tchunk0])
 
+	# El embudo de cada sima se rehace siempre: es geometría de un puñado de
+	# triángulos y no merece guardarse.
+	_construir_simas()
+
 	var tcol0 := Time.get_ticks_msec()
 	_create_collision(cache.single_mesh)
 	print("[TIMING]   _create_collision: %d ms" % (Time.get_ticks_msec() - tcol0))
@@ -289,7 +587,10 @@ func _cache_base_path() -> String:
 ## -por ejemplo al fundar el mismo sitio en otra epoca, con otras cuevas
 ## excavadas en la malla.
 func _carvings_hash() -> int:
-	return hash(str(terreno.carvings))
+	# Con la versión de las reglas que las colocan y la de las simas: lo pedido
+	# no cambia si cambia dónde se considera buena una boca ni cuánta rejilla se
+	# quita. Ver [Bocas.REGLAS] y [TerrainGenerator.SIMA_REGLAS].
+	return hash([str(terreno.carvings), Bocas.REGLAS, TerrainGenerator.SIMA_REGLAS])
 
 
 ## Huella del relieve inventado: lo que se anade por debajo de lo que mide el
@@ -353,6 +654,7 @@ func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMes
 	cache.sea_level = terreno.sea_level
 	cache.terrain_chunks = terreno.terrain_chunks
 	cache.carvings_hash = _carvings_hash()
+	cache.carvings_colocadas = terreno.carvings_colocadas.duplicate(true)
 	cache.detail_hash = _detail_hash()
 	cache.height_map = terreno._height_map
 	cache.humidity_map = terreno._humidity_map
@@ -459,6 +761,15 @@ func _mesh_with_lods(arrays: Array) -> ArrayMesh:
 	return importer.get_mesh()
 
 
+## Si un punto cae en el ruedo de una sima, o sea que ahí la rejilla se quita.
+static func _en_el_ruedo_de_una_sima(simas: Array[Dictionary], donde: Vector2) -> bool:
+	for sima: Dictionary in simas:
+		var centro: Vector3 = sima["position"]
+		if donde.distance_to(Vector2(centro.x, centro.z)) < float(sima["ruedo"]):
+			return true
+	return false
+
+
 ## Parte la malla del terreno en una rejilla de trozos.
 ##
 ## Cada trozo se construye rebanando los MISMOS arrays de vertices que ya se
@@ -470,6 +781,10 @@ func _mesh_with_lods(arrays: Array) -> ArrayMesh:
 ## vertices del limite son literalmente los mismos, con la misma cota y la
 ## misma normal.
 func _split_into_chunks(arrays: Array) -> Array[ArrayMesh]:
+	# El ruedo de las simas, también aquí: cada trozo rehace sus propios índices.
+	var simas := terreno.simas()
+	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
+	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
@@ -526,6 +841,10 @@ func _split_into_chunks(arrays: Array) -> Array[ArrayMesh]:
 			var i := 0
 			for z in range(tall - 1):
 				for x in range(wide - 1):
+					if _en_el_ruedo_de_una_sima(simas, Vector2(
+							(float(x0 + x) + 0.5) * step_x,
+							(float(z0 + z) + 0.5) * step_z)):
+						continue
 					var top_left := z * wide + x
 					var top_right := top_left + 1
 					var bottom_left := top_left + wide
@@ -537,6 +856,7 @@ func _split_into_chunks(arrays: Array) -> Array[ArrayMesh]:
 					ci[i + 4] = bottom_right
 					ci[i + 5] = bottom_left
 					i += 6
+			ci.resize(i)
 
 			var chunk_arrays := []
 			chunk_arrays.resize(Mesh.ARRAY_MAX)

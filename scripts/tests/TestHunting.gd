@@ -224,7 +224,7 @@ func test_sin_arbol_de_tecnicas_se_caza_igual_pero_a_secas() -> void:
 func test_las_tecnicas_de_caza_salen_de_cazar() -> void:
 	for tech_key: int in [TechTree.Tech.LAZO, TechTree.Tech.CEPO,
 			TechTree.Tech.RED_AVES, TechTree.Tech.FOSO, TechTree.Tech.OJEO,
-			TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR, TechTree.Tech.ARCO]:
+			TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR]:
 		# Se pregunta a `job_of`, que lee [TechTree.BRANCHES]. Esta prueba
 		# miraba una clave "practice" del catalogo que dejo de existir cuando
 		# el oficio paso a salir de la rama, asi que reventaba antes de su

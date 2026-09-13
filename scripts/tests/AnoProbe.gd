@@ -100,8 +100,7 @@ func _init() -> void:
 	var _indice_razonable := func(m: Moment) -> int:
 		var elegido := 0
 		match m.kind:
-			Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA, \
-			Moment.Kind.TRUEQUE:
+			Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA:
 				elegido = 1
 			Moment.Kind.INVIERNO:
 				var hace_falta := SettlementSim.HEARTH_WOOD_PER_DAY \
@@ -215,10 +214,10 @@ func _init() -> void:
 	while sim.day < primero + dias:
 		if vigia != null and int(GameState.season) != int(ultima_estacion["v"]):
 			ultima_estacion["v"] = int(GameState.season)
-			vigia.store_line("dia %d · %s año %d · vivos %d · expediciones %d · descubiertos %d · tratos %d/%d · desenlace %d" % [
+			vigia.store_line("dia %d · %s año %d · vivos %d · expediciones %d · descubiertos %d · tratos %d · desenlace %d" % [
 				sim.day, Subsistence.season_name(GameState.season), GameState.year,
 				sim.people.size(), sim.expedicion.vueltas, sim.expedicion.descubiertos,
-				sim.intercambio.consumados, sim.intercambio.intentados, sim.desenlace])
+				sim.intercambio.consumados, sim.desenlace])
 			vigia.flush()
 		# SI LA PARTIDA SE ACABO, AQUI SE ACABA LA SONDA.
 		#
@@ -467,9 +466,8 @@ LA PARTIDA TERMINO EN LA JORNADA %d (desenlace %d, vivos %d)."
 			float(e.descubiertos) / float(e.vueltas),
 			e.jornadas_persona / maxi(e.vueltas, 1)])
 	var ic: Intercambio = sim.intercambio
-	print("trueque: intentados %d · consumados %d · tasa %.2f · gente conocida %d" % [
-		ic.intentados, ic.consumados,
-		float(ic.consumados) / maxf(float(ic.intentados), 1.0), sim.contacto.conocidos()])
+	print("trueque: tratos cerrados %d · gente conocida %d" % [
+		ic.consumados, sim.contacto.conocidos()])
 	var de_frio := 0
 	for entrada: Dictionary in sim.chronicle.entries:
 		if String(entrada.get("text", "")).contains("murió de frío"):

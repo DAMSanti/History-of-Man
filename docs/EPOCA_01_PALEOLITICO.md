@@ -31,6 +31,7 @@ con el código delante. Lo que hace hoy el juego, medido, está en
 | Qué falta por construir de esta época | §10 |
 | **Los dos primeros años: la spec, en dos tandas, con criterios** | **§10.1** |
 | Tanda 3: quién va a la expedición, pasarela, herido, guardado, cielo y ventanas | §10.1 → Tanda 3 |
+| Tanda 4 (cerrada el 2026-09-13): explorar cuevas, pintar sólo lo explorado, sepultura, trueque y relaciones, humo, mapa regional | §10.1 → Tanda 4 |
 | La trampa: alargarla porque es la que está hecha | §11 |
 
 Es la única época construida: lo que hace hoy, medido, está en
@@ -207,7 +208,20 @@ calibración, es una cadena de prerrequisitos. Ver [ESTADO.md](ESTADO.md) §2.
 **Lo que falta de instalación, no de técnica:** `CampProjects.Kind` tiene
 `HOGAR`, `SECADERO`, `LAVADERO` y `PARAVIENTO`. Es la lista correcta para esta
 época —el hogar abierto es el techo térmico de todo el Paleolítico— y **no debe
-crecer hasta el Neolítico**. La única que falta es la lámpara de grasa (§8).
+crecer hasta el Neolítico**. **La lámpara de grasa no es una obra: es un útil**
+(`Tool.Kind.LAMPARA`), y ya existía —la pedía la pintura—. Lo que decía aquí
+de que faltaba como obra de `CampProjects` era falso: el 2026-09-13 se creó
+una por error y se quitó el mismo día. Sin lámpara no se entra en una cueva
+—ver [SISTEMAS.md](SISTEMAS.md) §13— y sin entrar no se pinta.
+
+**El hogar cuesta cuatro horas de trabajo** con los materiales puestos (6 de
+piedra y 3 de leña), decisión del usuario del 2026-09-13; antes era una jornada
+multiplicada por el rendimiento de quien lo hiciera, y un recién llegado tardaba
+dos o tres días de partida en delimitar una fogata. **Es la única obra que se
+mide en horas y no la acelera la pericia** (`CampProjects.por_horas`): si la
+estirara, «a las cuatro horas está levantado y a las tres no» dejaría de ser
+cierto. Las ventanas lo dicen en horas (`CampProjects.trabajo_texto`), que
+escrito en jornadas salía «0 jornadas». Prueba en `TestCampProjects`.
 
 ---
 
@@ -1067,6 +1081,15 @@ evitar, cada una con su coste **escrito en la opción antes de elegir**:
 | **Otoño** | ¿Volcarse en la berrea? | Un mes sin recolectar ni hacer leña quien caza |
 | **Invierno** | ¿El fuego a manos llenas o racionado? | Racionado: la leña dura el doble y una noche de cada dos se duerme sin fuego |
 
+**Y salen en el segundo mes de su estación, no el primer día** (2026-09-13,
+tanda 3, frente 9). Cada una cae en una jornada sorteada entre la **16 y la 30**
+de su estación: así se decide **habiendo vivido** la estación —cómo se ha salido
+del invierno, qué ha dado la primavera— y no a ciegas. El día sale de la
+**semilla de la partida**, el año y la estación
+(`SettlementSim.dia_de_decidir`), **sin tocar el `_rng`**: la misma partida da
+siempre los mismos días y las cifras medidas antes del cambio se siguen pudiendo
+comparar. Lo pregunta el cierre de la jornada.
+
 **Por qué éstas y no otras.** Las tres que no eran la berrea se eligieron entre
 las que se propusieron, y salen de sistemas que ya existían: la expedición
 (frente 5), la puerta del frío (frente 7) y el fuego que ahora enfría por grados.
@@ -1135,7 +1158,7 @@ Criterios:
   explicar.
 - **Banda vecina jugable o rival con IA.** El contacto sí; el otro asentamiento
   simulado, no (SISTEMAS.md §4).
-- **La agregación estacional y la sepultura** (§10, punto 7). La primera pide más
+- **La agregación estacional y la sepultura** (§10, punto 7). *(La sepultura entra en la tanda 4, decidido el 2026-09-13; la agregación sigue fuera.)* La primera pide más
   de una banda simulada, que está fuera de alcance a propósito.
 - **Las plazas de abrigo** (§10, punto 4). Siguen sin decidirse, y no se deciden
   aquí.
@@ -1171,6 +1194,11 @@ de año de esta ficha se puede dar por buena**: la partida no llega a vivirlo.
 
 ### Tanda 3 — lo que el jugador vio al jugar la tanda 2
 
+> **CERRADA el 2026-09-13.** Los nueve frentes hechos y medidos, más los dos
+> `/depurar` que la bloqueaban. El relato de qué se midió y qué salió distinto
+> está en ROADMAP «En curso» → Tanda 3, tarea por tarea. Lo que quedó abierto no
+> es de esta tanda: el hambre del segundo invierno (ESTADO §5, punto 13).
+
 > **Spec (2026-09-13)**, escrita con `/spec` a partir de una lista del usuario
 > tras jugar, y con sus respuestas a las preguntas de ese mismo día. Lo que aquí
 > está decidido no se vuelve a preguntar. Siguiente paso: `/plan-tarea`.
@@ -1201,13 +1229,13 @@ diagnósticos.
 
 | Qué vio el jugador | Pista | Bloquea |
 |---|---|---|
-| El % de las técnicas de ribera, manufactura y hogar no sube aunque se trabaje | La práctica sólo cuenta a quien «ha salido» con tajo. El trabajo que se hace en el abrigo o en la línea de nasas puede no marcarse | Frente 14 |
-| La pasarela lleva 82 de 70 jornadas y no se aprende | El progreso es lo menor entre jornadas y material pagado, y la pasarela cuesta 20 de leña, la misma que quema el hogar. Además, la ventana enseña «82/70» y no la causa, que INTERFAZ §4 da por resuelto | Frente 13 |
-| La crónica dice «Nadie se quedó al cuidado del sim.hogar» | Un buscar-y-reemplazar que dejó `sim.hogar` en seis frases: en el hogar, la despensa y las pinturas | — |
-| Marcadores azules antiguos en el minimapa | Probablemente los puntos de `work_sites`, pintados en cian | — |
-| En verano, «el raizal del paso» sale inalcanzable a 226 m | Sin investigar | — |
-| En 51 jornadas: 41 veces «se quedó sin camino a donde iba» y 2 «llegó y el estado no se enteró» | Son dos contadores de la marcha. Con 41 en 51 días, no es ruido | — |
-| Los trabajadores esquilman los parajes | **La regla ya existe**: por debajo del 20 % se deja descansar el paraje y se busca otro, y si no hay otro se sale a buscarlo. En la partida no se cumple | — |
+| ~~El % de las técnicas de ribera, manufactura y hogar no sube aunque se trabaje~~ **ARREGLADO 2026-09-13** | Era peor que la pista: la práctica se contaba en `DemoMain` **a medianoche**, mirando `has_task` —«tiene tajo en el mapa ahora mismo»— y después de que el reparto del día siguiente hubiera corrido. El hogar trabaja en la cueva y nunca tiene tajo; la ribera tampoco lo tiene a esa hora. Ahora cuenta la simulación, por el trabajo hecho. ESTADO §2 | Frente 14 |
+| ~~La pasarela lleva 82 de 70 jornadas y no se aprende~~ **ARREGLADO 2026-09-13** | No era el material: **la pasarela cuelga del núcleo preparado**, que es de manufactura, y manufactura era justo lo que no subía (fallo 1). El contador de jornadas es del OFICIO y sigue creciendo mientras la técnica espera, así que el cartel decía una cifra imposible. Ahora las jornadas no pasan de las que la técnica pide y esa misma línea dice qué falta. INTERFAZ §4 | Frente 13 |
+| ~~La crónica dice «Nadie se quedó al cuidado del sim.hogar»~~ **ARREGLADO 2026-09-13** | Eran **siete**, no seis: la séptima decía «la orden de sim.reconocimiento». Y para que no vuelva, `TestTextos` recorre todos los textos entre comillas del juego y falla si alguno lleva `sim.` dentro | — |
+| ~~Marcadores azules antiguos en el minimapa~~ **QUITADOS 2026-09-13** | Eran los `work_sites`, un punto cian por actividad, de antes de que los parajes tuvieran chapa propia | — |
+| ~~En verano, «el raizal del paso» sale inalcanzable a 226 m~~ **ARREGLADO 2026-09-13** | Medido con `AlcanceProbe`: «sólo se llega dando la vuelta (786 m para 226 en recta)». La regla del rodeo era sólo una proporción —2,5 veces la recta— y castigaba justo lo cercano. Decidido por el usuario: **lo que se anda en menos de 1 km vale siempre** (`Marcha.SIEMPRE_SE_ANDA`), y por encima sigue la proporción. Ahora llega, y 0 de 4 parajes cercanos quedan fuera | — |
+| En 51 jornadas: 41 veces «se quedó sin camino a donde iba» y 2 «llegó y el estado no se enteró» | **MEDIDO 2026-09-13, NO REPRODUCIDO**: `AtascoProbe`, sitio 56, semilla 42, 51 jornadas cruzando al verano y ya con el arreglo del rodeo puesto, da **6 y 1**. No se puede decir cuánto de la diferencia es el rodeo —que era justo un desacuerdo entre quien elige el destino y quien anda, que es lo que este contador delata— y cuánto son condiciones distintas de la partida del usuario —reparto, decisiones, semilla—, porque no hay corrida «de antes» con la misma semilla. **Queda abierto**: si al jugar sigue saliendo alto, la sonda tiene que guardar cada caso con su destino para ver de dónde sale | — |
+| ~~Los trabajadores esquilman los parajes~~ **ARREGLADO 2026-09-13** | Dos sitios contestaban «¿está esquilmado?» distinto: el barbecho miraba un redondel de 90 m —en un río se come tramos intactos y la media no bajaba del 20 %— y `prune_exhausted` miraba la celda del paraje y lo **secaba y borraba** al 4 %. Ahora el barbecho mira lo peor de las dos, así que el descanso llega siempre antes que el secado. Con cuatro pruebas en `TestParajes` que fallaban antes | — |
 
 **Y una dependencia de calendario:** nada de esta tanda toca código mientras
 M1 de la tanda 2 esté midiendo. Los frentes 9 y 10 cambian cuándo salen las
@@ -1356,10 +1384,19 @@ las jornadas de la laminar, subir la demanda natural y dejarlo como está.
 - **Lo que se pide va primero.** En cuanto hay una pieza pedida, se hace ésa.
 - **Si no queda nada que aprender, no practica.** No se gasta piedra sin
   motivo.
+- **Y se curte la piel cruda que haya esperando** (añadido por el usuario el
+  2026-09-13). Hoy sólo se curte **dentro** del trabajo de peletería, y a
+  peletería sólo se manda a alguien si hay una **pieza pedida** que lleve piel
+  —`Taller._next_piece`—: sin demanda de prenda u odre, las pieles crudas se
+  amontonan y no se curte ninguna. Es el mismo agujero que el resto del frente:
+  el taller sólo hace lo que alguien pide. Si hay piel cruda y con qué curtirla
+  —ocre y grasa—, se curte.
 
 Criterios:
 
 - Pruebas de las tres reglas de arriba, sobre un taller construido.
+- **Con piel cruda en el abrigo y nadie pidiendo prendas, se curte.** Y sin
+  ocre o sin grasa, no: se dice por qué. Prueba.
 - **Medido:** la sonda del árbol, con el taller ocupado a mano durante 90
   jornadas, no baja de 2,00 jornadas de manufactura al día con dos artesanos.
   Queda escrita la jornada en que se aprende la talla laminar, o, si no se
@@ -1447,6 +1484,462 @@ El detalle de cada una va en [INTERFAZ.md](INTERFAZ.md) §4.
   nota.
 - **Las otras tres opciones del taller**: bajar las jornadas de la laminar,
   subir la demanda natural o dejarlo como está.
+
+
+**Plan técnico de la tanda 3.** (2026-09-13, `/plan-tarea`,
+`history-of-man-11`.) Escrito contra el código, no contra lo que dicen los
+documentos. Las tareas, con lo que toca cada una, están en ROADMAP «En curso» →
+Tanda 3.
+
+*Tres premisas de la spec que el código no sostiene tal cual:*
+
+1. **Cielo sí hay** (frente 16). `WorldEnvironmentSetup._setup_sky` monta un
+   `ProceduralSkyMaterial` y le cambia los colores de noche. Lo que falta son
+   las **nubes**, y **saber por qué el jugador no lo ve**: la cámara de gestión
+   mira hacia abajo, y la niebla volumétrica y el horizonte del relieve pueden
+   taparlo. Por eso el frente empieza con una captura del cielo de hoy, antes
+   de escribir ningún shader.
+2. **El Shift del almacén ya existe** (frente 17). `PanelAlmacen._goal_step`
+   devuelve 10 con Shift y 1 sin él, y lo usan los tres controles de máximos.
+   Pero **no es «de 10 en 10» en los tres**: el tope de comida ya va de 10 en
+   10 sin Shift y de 100 en 100 con él. Queda una prueba de lo que hay y
+   comprobarlo jugando; si lo que el usuario vio es que no funciona, eso es un
+   fallo y va por `/depurar`.
+3. **El guardado no parte de cero** (frente 15). `Instantanea.volcar` ya sabe
+   meter la partida en una escena recién montada con el mismo emplazamiento y la
+   misma semilla, azar incluido, y `TestInstantanea` lo comprueba. Lo que no
+   guarda es lo que cruza escenas: de `GameState` sólo guarda la estación y el
+   año, no lo descubierto, la cueva ni la semilla.
+
+*Módulos afectados, por frente, y el contrato que les aplica:*
+
+- **9, las decisiones.** `SettlementSim`: al entrar la estación, y en
+  `iniciar_partida`, se sortea la jornada de la decisión (16 a 30 de
+  `season_day`), y `_decision_de_la_estacion()` salta cuando se llega a ella, al
+  **cerrar la jornada** (SPECS §3.2, `day_passed`), nunca por fotogramas.
+  **Decidido por el usuario el 2026-09-13: el azar sale de la semilla**, con
+  un generador aparte sembrado con la semilla de la partida, el año y la
+  estación. Mismo día con la misma semilla, y **no consume tiradas del
+  `_rng`**, así que el resto de la partida no se desplaza y lo medido hasta hoy
+  sigue comparándose. No rompe el invariante 2: sigue siendo la semilla de la
+  partida, y no un reloj ni un `randf()` global.
+- **10, la expedición.** `Expedicion` pide también piel y leña con **las mismas
+  constantes del vivac** (`SettlementSim.VIVAC_PIEL`, `VIVAC_LENA`,
+  `VIVAC_MARGEN_NOCHES`), sin copias: 3 personas y 12 noches dan 3 pieles y
+  3 × (12 + 1) = 39 de leña, la cifra de la spec. `Moment` añade dos cosas que
+  el frente 11 también usa: **una opción bloqueada con su motivo**, y **una
+  elección de personas** con candidatos, mínimo y marcados. `BarraSuperior` las
+  pinta, `contestar_todo` las respeta —las sondas marcan a los primeros aptos—
+  y `mandar` recibe los elegidos, no un número. **Andar hasta el borde**: la
+  salida es la celda del borde **alcanzable** según `Wayfinder.metros_desde`
+  —la única respuesta a «¿cuánto hay de casa a esa celda?», SPECS §4.3— más
+  cercana al rumbo del destino regional. Nadie da un paso sin camino debajo: si
+  por ese lado no se llega al borde, se sale por la celda alcanzable más
+  cercana a ese rumbo. Mientras andan siguen de expedición: no se les reparte.
+- **11, la cumbre.** `Cumbres.proponer_la_subida` usa la misma elección, con
+  `Cumbres.MIN_CLIMBING_PARTY` (2) como mínimo; `order_ascent` recibe a los
+  elegidos.
+- **12, el herido.** «Tocado» es `Inhabitant.hurt_days > 0`, que ya existe, en
+  **un solo sitio**: `Inhabitant.esta_tocado()`. `Reparto` sólo le da tareas de
+  hogar, y al curarse vuelve a su oficio y sus prioridades. **La berrea ya hace
+  eso mismo** (`_prioridades_antes_de_la_berrea`): la receta se saca a un sitio
+  y la usan las dos, en vez de escribirla dos veces. `Inhabitant.can_work()` no
+  se toca: responde a «edad para salir», y la usan tres sitios.
+- **13, la pasarela.** Es el frente más caro y el que toca el contrato de
+  tránsito (SPECS §4.3). Hoy `sim.has_bridge` es un interruptor que llega a
+  `Hydrography.tope_de_vado` y abre **todo** vado por debajo de mar abierta.
+  Pasa a ser un **conjunto de celdas con pasarela**, que `Navgrid.paso_entre`
+  abre en todas las estaciones —sigue siendo la única pregunta de «¿se puede
+  pasar?»— y que viaja con las rejillas del `HornoDeRejillas`. El interruptor se
+  borra, no se deja muerto. La obra la decide y la levanta un subsistema nuevo,
+  `Pasarelas` (`sim/`), con `CampProjects` como modelo de obra con jornadas y
+  material; la vista la pone un `PasarelaView` (`vista/`) que sólo lee. La
+  **piragua** sale de la rama de exploración de `TechTree`.
+  **La riada, leída así:** al entrar una estación, si la rejilla de esa
+  estación cierra ese vado **sin contar la pasarela**, la pasarela se pierde.
+  Sin sorteo, como pide la spec; así que una pasarela en un cauce que crece
+  todos los inviernos se pierde todos los inviernos, y eso es lo que hay que
+  ver al jugar.
+  **Decidido por el usuario el 2026-09-13, y son decisiones, no medidas:**
+  sirve para cauces de **hasta dos celdas de agua, unos 16 m** (dos tramos de
+  tronco con apoyo en medio), y cuesta **40 de leña y 6 jornadas-persona**. El
+  doble de los 20 de leña que pide la técnica en el árbol: una obra que se
+  piensa, y que duele perder en una riada.
+- **14, el taller.** `Taller` y `Reparto`: si no hay pieza pedida, queda técnica
+  de manufactura por aprender y hay piedra, el artesano talla para aprender.
+  Lo pedido va primero.
+- **15, el guardado.** Una clase nueva, `Guardado` (`region/`, porque es lo que
+  cruza escenas), con **cabecera y versión propias**: dentro lleva la
+  instantánea y el `GameState` que ella no guarda. Fichero único en `user://`.
+  Una versión distinta se **rechaza avisando**. `DemoMain._return_to_region`
+  guarda; `RegionMap` ofrece retomar en el emplazamiento guardado, y `DemoMain`,
+  si arranca retomando, monta la escena con esa semilla y vuelca. **Cambia
+  SPECS §6.4 y §8**, que dicen que no hay persistencia: se corrigen en la misma
+  tarea.
+- **16, el cielo.** Un shader de cielo con nubes que se mueven, en
+  `WorldEnvironmentSetup`, con los colores que ya calcula para la hora. **El
+  movimiento de las nubes es vista**: va con el reloj de pared, no con la
+  partida (SPECS §4.7), y no entra en la instantánea.
+- **17, las ventanas.** `PanelTrabajos` separa a los que están fuera o heridos,
+  leyendo `Expedicion`, `Cumbres` y `esta_tocado()`, sin contador propio.
+  `PanelOficios`: revisar textos y enseñar las jornadas de `TechTree`, la misma
+  cifra que el árbol.
+
+*Orden de dependencias:*
+
+- **Los fallos 1 y 2 de la tabla de dependencias van antes que los frentes 14 y
+  13.** Si la práctica no cuenta, la medida del taller no mide nada; y si la
+  pasarela no se llega a aprender, no hay técnica que permita construir.
+- **El frente 12 va antes que el 10 y el 11**: «sin heridos» es su criterio.
+- **La elección de personas (10) va antes que la cumbre (11)**, que la
+  reutiliza.
+- **El frente 9 y el 10 rompen `TestDecisiones` y la política de `AnoProbe`**:
+  se arreglan en la misma tarea.
+- **El guardado (15) va después de 10 y 13**, porque guarda su estado: una
+  expedición a medias y las pasarelas levantadas. Si fuera antes, habría que
+  volver a probarlo.
+- **Las ventanas (17) van al final**: pintan lo que dejan 10, 11 y 12.
+
+*Riesgos que se heredan o se introducen:*
+
+- **Cualquier azar nuevo desplaza todas las partidas medidas.** Si el día de la
+  decisión sale del `_rng`, las firmas y cifras anteriores dejan de compararse,
+  como ya pasó con `Contacto` (SPECS §4.4).
+- **La pasarela toca el tránsito**, que costó seis capas y 41 atascos dejar en
+  una sola pregunta. La obra se mete **dentro** de `Navgrid.paso_entre`; si
+  apareciera una segunda forma de preguntar «¿se puede pasar?», se habría
+  roto el invariante 3.
+- **Retomar depende de que la escena nueva salga igual**: mismo relieve, misma
+  semilla, mismos módulos. `Instantanea` no promete sobrevivir a un cambio de
+  esquema, así que el guardado **tampoco sobrevive a un cambio de código**: se
+  rechaza, que es lo que la spec acepta.
+- **Hambre en el segundo invierno** (ESTADO §5, punto 13): nada de esta tanda la
+  arregla, y ninguna comprobación de esta tanda pide un año, así que no la
+  bloquea. Pero una partida jugada para ver el frente 10 puede morirse antes
+  de la segunda expedición.
+
+
+---
+
+### Tanda 4 — las cuevas, el mapa regional, la sepultura y los otros
+
+> **Spec (2026-09-13)**, escrita con `/spec` a partir de una lista del usuario
+> tras jugar la tanda 3, y con sus respuestas a las preguntas de ese mismo día.
+> Lo que aquí está decidido no se vuelve a preguntar. Siguiente paso:
+> `/plan-tarea`.
+
+**Por qué hace falta.** La tanda 3 dejó la banda gobernable y el mundo guardado,
+pero al jugarla salen tres huecos. **La cueva, que es el centro de la época, no
+es nada**: un agujero negro con un par de piedras, que se pinta sin haberla
+pisado y que a veces cae en el agua. **Hay decisiones que son un trámite**: el
+trueque es una tarjeta, y de las otras bandas no se sabe nada. **Y hay cosas de
+la época que no existen**: nadie entierra a sus muertos, los fuegos no echan
+humo. El mapa regional, además, sigue siendo una herramienta de desarrollo.
+
+**Cambia una línea de la tanda 2.** Su «Fuera de alcance» dejaba fuera «la
+agregación estacional y la sepultura». **La sepultura entra**, decidida por el
+usuario el 2026-09-13; la agregación estacional sigue fuera.
+
+**Cómo se mide.** Nada pide correr un año. Las reglas, con pruebas sobre estados
+construidos; lo que se ve, con capturas con ventana; y la variedad de la
+exploración de cuevas, con una sonda que explore muchas cuevas sin jugar
+jornadas.
+
+#### Ya arreglado antes de empezar, el mismo día, por `/depurar`
+
+- **«F» en el mapa regional empezaba otra partida** encima de la guardada, y así
+  se perdió una del usuario. Ahora **no se funda: se entra al mapa**, y **cada
+  mapa guarda su estado**: entrar en uno visitado lo retoma y entrar en uno nuevo
+  no toca los demás. SPECS §6.4.
+- **La suite de pruebas borraba el guardado real del jugador.** Ahora las pruebas
+  y las sondas guardan en su propia carpeta.
+- **La batida no practicaba exploración** desde el arreglo de la práctica de la
+  tanda 3. Ahora cuenta como trabajo, con prueba y medido en la escena.
+
+#### Depende de: fallos que van por `/depurar`
+
+| Qué vio el jugador | Pista | Bloquea |
+|---|---|---|
+| En la ventana de técnicas, algunas no rellenan su casilla aunque sumen jornadas | La casilla sólo se llena si la técnica está «al alcance»; las que esperan a otra se quedan vacías aunque su oficio acumule | — |
+| 41 veces «se quedó sin camino» en 51 jornadas | Medido: 6 con la semilla 42. Queda abierto; si sigue alto al jugar, la sonda tiene que guardar cada caso | — |
+
+#### 18. El mapa regional se juega, no se depura
+
+- **Sin sitio de prueba.** «Torrelavega (prueba)» desaparece del mapa.
+- **La frontera llega a la costa de la época.** La línea amarilla que marca el
+  borde de la comunidad se detiene hoy en la costa actual; con el mar a −120 m
+  tiene que llegar hasta el agua del Paleolítico.
+- **Al pinchar un sitio descubierto se ve lo que se sabe de él**: si tiene gente
+  y el trato con ella, qué recursos se conocen, y si su cueva está explorada o
+  pintada.
+- **El estado de la banda y de los mapas guardados**, en un panel: dónde vive la
+  banda, en qué jornada está cada mapa visitado, y cómo volver.
+- **Ventanas más pequeñas que caben en la pantalla.**
+
+Criterios:
+
+- Ningún emplazamiento de prueba en el mapa. Prueba.
+- Con el mar a −120 m, ningún tramo de costa emergida queda fuera de la línea
+  de frontera. Captura con ventana y prueba sobre la geometría de la línea.
+- La ficha de un sitio descubierto enseña gente, trato, recursos y estado de su
+  cueva, y la de uno no descubierto no enseña nada. Prueba sobre lo que pinta.
+- A 1920×1080 y a 1280×720, **ninguna ventana del mapa regional sale de la
+  pantalla**. Captura a las dos resoluciones.
+
+#### 19. El hogar en cuatro horas
+
+Hoy levantar el hogar son varias horas de más. Con los materiales en el abrigo,
+**cuatro horas de trabajo de hogar**. Decisión del usuario.
+
+- Prueba: con los materiales puestos, a las cuatro horas de trabajo el hogar está
+  levantado, y a las tres no.
+
+#### 20. El abrigo es el taller
+
+- **Se quita el botón «usar como taller de talla»** de la ventana del abrigo. Los
+  artesanos trabajan en el abrigo en que la banda esté asentada, sin elegirlo.
+- **«Trasladar el campamento aquí» sólo sale en cuevas no habitadas.** En la que
+  ya ocupa la banda, no.
+
+Criterios:
+
+- La ventana del abrigo no tiene ese botón. Prueba sobre lo que pinta.
+- El botón de trasladar sale en una cueva libre y no en la de la banda. Prueba.
+- Un artesano de la banda trabaja en su abrigo sin que nadie lo haya marcado como
+  taller. Prueba.
+
+#### 21. La cueva se ve, y nunca cae donde no se puede estar
+
+- **Un modelo que parezca una cueva en la pared**: una boca abierta en la roca,
+  visible sobre el terreno a la distancia de gestión, y no un agujero negro
+  plano con dos piedras.
+- **Todas las cuevas de todos los mapas** se comprueban: ni en el agua ni en un
+  sitio al que no se pueda llegar. **Si caen mal, se mueven al sitio bueno más
+  cercano.**
+
+Criterios:
+
+- En los mapas horneados, **ninguna boca** queda en agua ni fuera de la zona a
+  la que se llega andando desde la cueva de la banda. Prueba o sonda que recorra
+  todos los mapas, con el número de bocas movidas y cuánto se movió cada una.
+- Capturas con ventana de tres bocas: se ven como cuevas a la distancia de
+  gestión.
+
+#### 22. Explorar una cueva es una aventura, no un trámite
+
+**Qué hace falta.** **Una lámpara y grasa**, y **alguien del hogar**, que pasa
+**una jornada entera** dentro. Sin lámpara o sin grasa no se puede empezar, y la
+orden dice qué falta.
+
+**Qué pasa dentro.** Cada exploración encadena **dos o tres situaciones** con
+decisión, sacadas de un **repertorio de al menos treinta**: ruidos en lo oscuro,
+animales, simas, pasos estrechos, agua, rastros de otra gente… **Algunas se
+ramifican**: se oye algo; se puede seguir, tirar piedras a lo oscuro o hacer
+fuego; si se sigue, puede haber un oso; si se tiran piedras, el oso viene hacia
+la entrada y hay que decidir si plantarle cara, esconderse o huir; si se hace
+fuego, el humo lo espanta. **Hay riesgo de verdad**: herida y muerte son
+posibles. El ejemplo es del usuario, y marca el tono.
+
+**Que no sea «siempre me preguntan lo mismo».** Dentro de una misma cueva no se
+repite ninguna situación, dos cuevas seguidas no empiezan igual, y cada cueva
+sortea las suyas con la semilla de la partida.
+
+**Qué se saca.** Al terminar se sabe **si la cueva tiene una zona pintable**:
+**alrededor de una de cada tres**, fijado por la semilla, y **la cueva donde
+empieza la banda, siempre**. Decisión del usuario.
+
+Criterios:
+
+- Sin lámpara, o sin grasa, no se empieza. Una prueba por cada una.
+- Explorar consume una jornada entera de una persona del hogar. Prueba.
+- **Sonda de variedad**: explorando 50 cuevas con la misma semilla, cada una
+  presenta 2 o 3 situaciones, ninguna cueva repite situación, dos seguidas no
+  empiezan igual, y aparecen **al menos 25 situaciones distintas** del
+  repertorio. Y el repertorio tiene al menos 30.
+- Una situación ramificada lleva a otra según lo elegido: prueba del ejemplo del
+  oso, rama por rama.
+- Herida y muerte ocurren alguna vez en la sonda de 50 cuevas, y no en todas.
+- De 90 cuevas, entre 20 y 40 salen pintables, y la de la banda lo es siempre.
+  Prueba con varias semillas.
+
+#### 23. Sólo se pinta lo explorado, y donde se puede
+
+Hoy se pinta sin haber entrado. Pasa a hacer falta que la cueva **esté explorada
+y tenga zona pintable**. La de la banda, una vez explorada, siempre.
+
+- Prueba: en una cueva sin explorar no se puede pintar, en una explorada sin zona
+  tampoco, y en una explorada con zona sí; la tarjeta o la ventana dicen el
+  motivo.
+
+#### 24. El humo
+
+Toda hoguera, hogar o fuego **echa humo que se ve sobre el terreno**, y se deja de
+ver cuando el fuego se apaga.
+
+- Captura con ventana: humo sobre el hogar encendido, y ninguno con el hogar
+  apagado.
+- El fotograma no empeora de forma medible con cinco fuegos en pantalla, medido
+  con la herramienta de siempre, antes y después.
+
+#### 25. El trueque como el almacén
+
+**Una ventana como la del almacén**: a la izquierda los materiales de la banda,
+a la derecha lo que traen los visitantes, y se pasan cosas de un lado a otro.
+
+- **Cada cosa tiene un precio interno**, y **la relación con esa gente lo mueve**:
+  con buena relación lo de la banda vale más a sus ojos y lo suyo menos.
+- **El trato sale si lo que se da y lo que se recibe no se separan más de un
+  10 %**, valorado con esos precios. Decisión del usuario.
+
+Criterios:
+
+- Con los dos lados dentro del 10 % el trato se acepta, y fuera no. Prueba.
+- Con mejor relación, el mismo lote de la banda compra más. Prueba.
+- Lo que se da sale del almacén y lo que se recibe entra, exactamente. Prueba.
+- Captura con ventana de la ventana con un trato a medio hacer.
+
+#### 26. Lo que se sabe de las otras bandas
+
+**Una ventana de relaciones**: cada banda conocida, dónde vive, el trato con ella,
+qué se ha cambiado y cuándo, y lo que se sabe de ellos.
+
+- Prueba sobre lo que pinta: sale cada banda conocida, y ninguna sin conocer.
+- Tras un trueque, la ventana lo recoge.
+
+#### 27. La sepultura
+
+Cuando alguien muere:
+
+- **Una decisión: cómo se le despide.** Dejarlo, cubrirlo, o enterrarlo con ajuar
+  —ocre, conchas, una pieza—, cada una con su coste en jornadas y en materiales.
+- **Cuenta para la banda.** Enterrar bien lo recoge la crónica y el relato, y la
+  banda lo nota; dejarlo también se nota.
+- **El lugar queda en el mapa.** La sepultura se ve sobre el terreno y la banda
+  sabe dónde están sus muertos.
+- **Es un hito de la época**: la primera sepultura con ajuar cuenta como tal.
+
+Criterios:
+
+- Muere alguien y sale la decisión, con el coste de cada opción escrito. Prueba.
+- Enterrar con ajuar gasta exactamente lo que dice. Prueba.
+- Las tres opciones dejan efectos distintos en la banda, y los tres se pueden
+  leer en la crónica. Prueba.
+- La sepultura aparece sobre el terreno. Captura con ventana.
+- La primera con ajuar dispara el hito, y la segunda no. Prueba.
+- **Las cifras de cuánto nota la banda cada despedida no se inventan**:
+  `/plan-tarea` las fija con su fuente, o dice que son una decisión.
+
+#### Fuera de alcance de la tanda 4
+
+- **El guardado de partida** —cerrar el juego y seguir otro día— y **tener varios
+  grupos viviendo en mapas distintos**. El usuario los quiere, y se desarrollan
+  más adelante. Esta tanda deja sólo el estado por mapa, que ya está hecho.
+- **La agregación estacional**: sigue fuera.
+- **Otras bandas simuladas de verdad.** Los visitantes traen cosas y recuerdan el
+  trato; no viven una partida propia.
+- **Exploración de cuevas en otras épocas.** Aquí sólo el Paleolítico.
+- **Los dos fallos de la tabla de dependencias.** Van por `/depurar`.
+
+**Plan técnico de la tanda 4.** (2026-09-13, `/plan-tarea`,
+`history-of-man-11`.) Escrito contra el código. Las tareas están en ROADMAP «En
+curso» → Tanda 4.
+
+*Tres premisas que el código no sostiene tal cual:*
+
+1. **Las acciones de la ventana del abrigo son de mentira** (frentes 20, 22 y
+   23). `PanelSitios._actions_for` ofrece «trasladar», «explorar», «usar como
+   taller» y «pintar», y `DemoMain._on_cave_action` sólo **imprime una línea**
+   para tres de ellas (**«taller» ya no está** desde A1, 2026-09-13); «explorar» revela conocimiento alrededor al instante. No
+   hay traslado de campamento, ni exploración de cueva, ni pintura fuera de la
+   cueva de la banda.
+2. **La frontera se detiene por un tope, no por el agua** (frente 18).
+   `RegionBoundary.build_playable_mask` inunda la plataforma emergida con un
+   alcance de **60 km modulado con ruido** y afilado en los extremos: con el mar
+   a −120 m la línea se para antes de la costa. Y **la herramienta que horneaba
+   las máscaras ya no existe** —era el `BakeRegion` viejo—, así que hay que
+   rehacerla para volver a hornear `cantabria_eras.res`.
+3. **No hay ánimo ni cohesión de la banda** (frente 27). La sepultura «cuenta
+   para la banda», pero no existe una cifra de la banda en la que contar.
+   **Decidido por el usuario el 2026-09-13: un duelo.** Tras una muerte la banda
+   rinde algo menos unas jornadas, con la eficacia que ya existe; dejar al muerto
+   alarga el duelo y enterrarlo con ajuar lo acorta. Y **el traslado de
+   campamento no estaba construido**: en esta tanda sólo se ocultó el botón en la
+   cueva de la banda. **Se construyó el mismo día, al cerrar la tanda**, a
+   petición del usuario: ver ROADMAP, «Tras la tanda 4», y SISTEMAS §13.
+
+*Módulos afectados, por frente:*
+
+- **18, el mapa regional.** `RegionMap`: fuera `DEV_PLACES` del juego; la ficha
+  del sitio y el panel de la banda leen `GameState`, `Contacto` y las cabeceras
+  de `Guardado` —nada de estado propio: la vista lee—; ventanas más pequeñas.
+  `RegionBoundary.build_playable_mask` inunda hasta el agua, **con los límites
+  laterales que ya tiene** —para no extenderse delante de Asturias— y sin el
+  tope de distancia. Una herramienta de horneado nueva en `tools/`.
+- **19, el hogar.** `CampProjects`: el trabajo del hogar pasa de jornada a
+  **cuatro horas de trabajo**, sin tocar la unidad en que cuentan las demás obras.
+- **20, el abrigo.** `PanelSitios._actions_for` pierde «taller» y ofrece
+  «trasladar» sólo en una cueva que no sea la de la banda; `DemoMain` pierde la
+  rama. Los artesanos ya trabajan en el abrigo de la banda —`Hogar._camp_work`—:
+  se comprueba, no se cambia.
+- **21, la cueva.** `CaveMouth` se rehace como una boca en la pared de la ladera.
+  La colocación se valida **en un solo sitio**, al colocar las bocas en
+  `DemoMain._place_site_features`, con la misma pregunta de tránsito que usa la
+  marcha —`Navgrid` y `Marcha.alcanzable_desde_casa`, SPECS §4.3—, moviendo la
+  boca al punto válido más cercano. Una sonda recorre los nueve mapas horneados.
+  **Corregido al implementar (2026-09-13):** no va en `_place_site_features`
+  sino en `Bocas.colocar`, llamada por el terreno antes de excavar, porque la
+  entalladura se excava antes de que exista la rejilla; y horneado hay **un**
+  mapa, no nueve. Ver SPECS §4.3 y ROADMAP, C1.
+- **22, explorar una cueva.** Un subsistema nuevo en `sim/` con el estado de cada
+  cueva —explorada, pintable— y la orden: una persona del hogar, lámpara y grasa,
+  una jornada. **Las situaciones son datos, no código**: un repertorio de al
+  menos treinta en `sim/`, cada una con sus opciones y lo que pasa con cada
+  una, y algunas que llevan a otra. Se sortean **con un generador sembrado por
+  la semilla y la cueva**, como el día de la decisión, sin consumir `_rng`. Las
+  decisiones salen como `Moment` y se contestan por `BarraSuperior`; las heridas
+  van por `Percances` y las muertes por `SettlementSim._person_dies`, que es la
+  única salida. Pintable: una de cada tres por la semilla, la de la banda
+  siempre.
+- **23, pintar.** `Pinturas.painting_blocked_by` pregunta a la exploración:
+  «falta explorar la cueva» y «esta cueva no tiene dónde pintar».
+- **24, el humo.** `HearthFire`, `Bonfire` y `BivouacFires` echan humo con
+  partículas, apagado cuando el fuego se apaga. **Vista, reloj de pared**: no
+  entra en la instantánea.
+- **25, el trueque.** `Intercambio` gana **precios**: uno base por material y un
+  factor que mueve el trato con esa gente, y la regla del 10 %. Una ventana nueva
+  en `ui/` como `PanelAlmacen`, que sólo lee y pide.
+- **26, las relaciones.** Una ventana nueva que lee `Contacto` y el historial de
+  `Intercambio`.
+- **27, la sepultura.** Se engancha a `SettlementSim._person_dies`: un `Moment`
+  con tres despedidas y sus costes; lo que deja en la crónica y en el relato
+  —`Tale`, que ya se puede pintar—; la sepultura como sitio con marcador; y el
+  hito con el sistema de hitos que ya existe. **Lo que «nota la banda» se
+  pregunta.**
+
+*Orden de dependencias:*
+
+- **La exploración (22) antes que la pintura (23)**: la pintura le pregunta.
+- **El modelo y la colocación de la cueva (21) antes que la exploración**: se
+  explora una boca que tiene que estar donde se llega.
+- **Los precios (25) antes que la ventana de trueque**, y **la ventana de
+  relaciones (26) después**: lee el historial que deja el trueque.
+- **La sepultura (27) no depende de nada**; el hito, del sistema de hitos.
+- **La frontera (18) necesita la herramienta de horneado antes que nada.**
+
+*Riesgos:*
+
+- **Cualquier azar nuevo desplaza las partidas medidas** si sale del `_rng`. Las
+  situaciones de cueva y la cueva pintable se sortean con un generador sembrado
+  por la semilla, como el día de la decisión, precisamente para no desplazarlas.
+- **El repertorio de treinta situaciones es texto de diseño**, no código: es lo
+  que más tiempo lleva y lo que el usuario va a juzgar. Se escribe entero en esta
+  tanda y la sonda de variedad comprueba el reparto, no la calidad.
+- **Mover una boca de cueva cambia el mapa**: el abrigo de la banda puede
+  moverse, y con él `home_position`. Todas las partidas medidas en ese mapa
+  dejan de compararse si la boca de la banda se mueve.
+- **Una ventana de trueque que compra más de lo que el almacén tiene** es el
+  error clásico: lo que se da sale del almacén y se comprueba antes de dejar
+  confirmar.
 
 ---
 

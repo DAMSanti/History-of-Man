@@ -37,7 +37,7 @@ func _burn_hearth() -> void:
 		sim.hearth_lit = false
 		sim.hearth_relight = 0.0
 		sim._note(Chronicle.Kind.PENURIA,
-			"Nadie se quedó al cuidado del sim.hogar y el fuego se apagó.", 2)
+			"Nadie se quedó al cuidado del hogar y el fuego se apagó.", 2)
 		return
 
 	var wanted := SettlementSim.HEARTH_WOOD_PER_DAY
@@ -57,7 +57,7 @@ func _burn_hearth() -> void:
 	sim.hearth_lit = false
 	sim.hearth_relight = 0.0
 	sim._note(Chronicle.Kind.PENURIA,
-		"Se acabó la leña y el sim.hogar se quedó frío.", 2)
+		"Se acabó la leña y el hogar se quedó frío.", 2)
 
 
 ## Si el fuego del invierno va racionado: una noche sí y otra no.
@@ -276,7 +276,7 @@ func _tend_camp(person: Inhabitant, hours: float) -> void:
 		and _something_to_cure())
 	if smoking:
 		person.log_deed(person.current_task(),
-			"al sim.hogar, con el secadero cargado", false)
+			"al hogar, con el secadero cargado", false)
 		return
 
 	person.log_deed(person.current_task(),
@@ -323,7 +323,7 @@ func _relight_hearth(person: Inhabitant, fraction: float) -> void:
 	sim.hearth_lit = true
 	sim._hearth_tended = true
 	sim._note(Chronicle.Kind.OBRA,
-		"%s volvió a prender el sim.hogar." % person.given_name, 1)
+		"%s volvió a prender el hogar." % person.given_name, 1)
 
 
 ## Cuidar de quien no se vale solo. Adelanta la convalecencia de los heridos.
@@ -374,8 +374,14 @@ func _work_on_project(person: Inhabitant, fraction: float) -> void:
 				float(CampProjects.materials(kind)[material]))
 		sim._camp_paid = true
 
-	sim.camp_progress += fraction * person.effectiveness()
-	if sim.camp_progress < CampProjects.labor_days(kind):
+	# Por horas, sin pericia, si la obra lo pide: ver [CampProjects.por_horas].
+	if CampProjects.por_horas(kind):
+		sim.camp_progress += fraction
+	else:
+		sim.camp_progress += fraction * person.effectiveness()
+	# Con margen: cuatro horas sumadas a cachos de tick no dan exactamente 4/11
+	# en coma flotante, y la obra se quedaría un tick más sin acabar.
+	if sim.camp_progress + 0.000001 < CampProjects.labor_days(kind):
 		return
 
 	sim.camp_built[kind] = true

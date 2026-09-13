@@ -374,7 +374,8 @@ const CATALOGUE := {
 		"name": "Exploración",
 		"desc": "Salir de lo conocido. No trae comida: trae mapa, y con él los "
 			+ "sitios donde habrá comida. Batida, expedición o ascensión son "
-			+ "cosas muy distintas y se eligen aparte.",
+			+ "cosas muy distintas y se eligen aparte. Y son los que levantan "
+			+ "las pasarelas de los cruces.",
 		"activity": Subsistence.Activity.CAZA,
 		"mobile": true, "min_age": 16, "max_age": 50, "sex": Sex.AMBOS,
 	},
@@ -388,8 +389,12 @@ const CATALOGUE := {
 	},
 	Job.HOGAR: {
 		"name": "Hogar",
-		"desc": "Mantener el fuego, criar, preparar pieles y secar carne. No "
-			+ "produce comida, pero sin ello se pierde la que entra.",
+		# «Preparar pieles» se quitó el 2026-09-13: curtir es del TALLER
+		# -peletería, ver SISTEMAS §16- y aquí describía algo que este oficio no
+		# hace. Lo que sí hace y no se decía es levantar las obras del abrigo.
+		"desc": "Mantener el fuego, criar, levantar las obras del abrigo y "
+			+ "secar carne. No produce comida, pero sin ello se pierde la que "
+			+ "entra.",
 		"activity": -1,
 		"mobile": false, "min_age": 5, "max_age": 99, "sex": Sex.AMBOS,
 	},

@@ -210,10 +210,25 @@ func _tooltip(tech: TechTree.Tech) -> String:
 	var entry: Dictionary = TechTree.CATALOGUE[tech]
 	var job := TechTree.job_of(tech)
 	if job >= 0 and float(entry["days"]) > 0.0:
-		lines.append("Se aprende trabajando de %s: %d de %d jornadas." % [
+		# LAS JORNADAS NO PASAN DE LAS QUE PIDE, y cuando están hechas se dice
+		# en esta misma línea qué la frena.
+		#
+		# El contador es del OFICIO y sigue subiendo aunque la técnica esté
+		# esperando a otra: el jugador leía «82 de 70 jornadas» en la pasarela
+		# —que cuelga del núcleo preparado— y lo entendía como que debería estar
+		# aprendida ya. La causa salía tres líneas más abajo. Queja del
+		# 2026-09-13, EPOCA_01 §10.1, tanda 3.
+		var pedidas := int(entry["days"])
+		var hechas := int(_tech.days_in(job as Profession.Job))
+		var linea := "Se aprende trabajando de %s: %d de %d jornadas" % [
 			Profession.job_name(job as Profession.Job).to_lower(),
-			int(_tech.days_in(job as Profession.Job)),
-			int(entry["days"])])
+			mini(hechas, pedidas), pedidas]
+		if hechas >= pedidas and not _tech.has(tech):
+			var frena := _tech.causa(tech)
+			linea += ", ya hechas"
+			if not frena.is_empty() and frena != "lista":
+				linea += "; falta: %s" % frena
+		lines.append(linea + ".")
 
 	var cost := TechTree.learning_cost(tech)
 	if cost.is_empty():

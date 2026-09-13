@@ -20,14 +20,12 @@ const TECH_VIDEOS := {
 	TechTree.Tech.OJEO: "tech_ojeo",
 	TechTree.Tech.AZAGAYA: "tech_azagaya",
 	TechTree.Tech.PROPULSOR: "tech_propulsor",
-	TechTree.Tech.ARCO: "tech_arco",
 	TechTree.Tech.PESQUERA: "tech_pesquera",
 	TechTree.Tech.NASA: "tech_nasa",
 	TechTree.Tech.ANZUELO: "tech_anzuelo",
 	TechTree.Tech.RED: "tech_red",
 	TechTree.Tech.ARPON: "tech_arpon",
 	TechTree.Tech.PASARELA: "tech_pasarela",
-	TechTree.Tech.PIRAGUA: "tech_piragua",
 	TechTree.Tech.ARTE: "tech_arte",
 }
 
@@ -43,14 +41,12 @@ const TECH_EFFECTS := {
 	TechTree.Tech.OJEO: "Organiza a los cazadores en batidas coordinadas aumentando las capturas.",
 	TechTree.Tech.AZAGAYA: "Permite armar azagayas con punta de asta para cazar a distancia.",
 	TechTree.Tech.PROPULSOR: "Duplica el alcance y la fuerza de lanzamiento de las azagayas.",
-	TechTree.Tech.ARCO: "Permite cazar al acecho con tiro rápido y certero a gran distancia.",
 	TechTree.Tech.PESQUERA: "Permite construir presas de piedra que canalizan la pesca fluvial.",
 	TechTree.Tech.NASA: "Permite calar nasas de mimbre que capturan truchas de forma autónoma.",
 	TechTree.Tech.ANZUELO: "Permite la pesca individual con sedal de fibra y anzuelo de hueso.",
 	TechTree.Tech.RED: "Permite calar grandes redes de malla en el río para capturas masivas.",
 	TechTree.Tech.ARPON: "Permite arponear salmones con púas retenedoras durante el remonte.",
 	TechTree.Tech.PASARELA: "Permite cruzar arroyos y cauces estrechos a pie seco sin riesgo de carga.",
-	TechTree.Tech.PIRAGUA: "Abre la navegación en aguas profundas y el acceso a la otra orilla del río.",
 	TechTree.Tech.ARTE: "Fija el saber y la memoria de la banda en las paredes del abrigo.",
 }
 

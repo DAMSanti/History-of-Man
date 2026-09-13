@@ -259,6 +259,52 @@ var _region_map: PackedFloat32Array
 ## Cada entrada: {position: Vector3, radius: float, depth: float}
 var carvings: Array[Dictionary] = []
 
+## Las entalladuras DONDE SE EXCAVAN: las de [carvings] después de pasar por
+## [colocar_las_bocas]. `carvings` se queda como lo pidió el catálogo porque de
+## él sale la clave de la caché; lo que se excava, y dónde se pone cada boca, es
+## esto. Cada una lleva `desde` y `movida_m`. Ver [Bocas].
+var carvings_colocadas: Array[Dictionary] = []
+
+## La versión de la regla de las simas: qué trozo de rejilla se quita y cuánto
+## mide el embudo. Entra en la clave de la caché de la malla —ver
+## [MallaDelTerreno._carvings_hash]—, que si no se carga la malla recortada con
+## la regla de antes y el agujero no cuadra con el parche: pasó al medir.
+const SIMA_REGLAS := 8
+
+## Las simas: dónde hay que quitar la rejilla del relieve y coser en su lugar el
+## embudo fino de una boca de cueva.
+##
+## Cada una es `{"position": Vector3, "boca": float, "ruedo": float}`: el radio
+## del pozo y el del trozo de malla que se sustituye. Sale de
+## [carvings_colocadas], donde `DemoMain` dejó el radio de cada cueva —ver
+## [CaveMouth.hueco_de]—, así que la malla no tiene que saber nada de cuevas.
+## Ver [MallaDelTerreno._construir_simas].
+func simas() -> Array[Dictionary]:
+	var paso := float(terrain_size.x) / float(maxi(resolution - 1, 1))
+	var fuera: Array[Dictionary] = []
+	for boca: Dictionary in carvings_colocadas:
+		var radio := float(boca.get("boca", 0.0))
+		if radio <= 0.0:
+			continue
+		fuera.append({
+			"position": boca["position"],
+			"boca": radio,
+			"hondo": float(boca.get("hondo", 40.0)),
+			# El ruedo que se sustituye: lo justo para que quepa la boca y su
+			# labio. Cuanto más grande, más terreno se dibuja con el parche en
+			# vez de con la rejilla, y más se nota cualquier diferencia.
+			"ruedo": maxf(radio + paso * 0.5, paso * 0.8),
+		})
+	return fuera
+
+
+## Quién decide dónde se abre de verdad cada boca. Recibe este terreno CON EL
+## RELIEVE YA HECHO Y SIN EXCAVAR, y devuelve las entalladuras colocadas. Va
+## entre el relieve y la excavación porque la pregunta —¿se llega?— pide el
+## relieve, y la respuesta —dónde se excava— lo cambia. Sin él, se excava donde
+## se pidió.
+var colocar_las_bocas: Callable
+
 ## Mesh del terreno
 var _terrain_mesh: MeshInstance3D
 var _terrain_collision: StaticBody3D
@@ -434,6 +480,7 @@ func _generate_maps() -> void:
 		_ford_map = _gen_cache.ford_map
 		_region_map = _gen_cache.region_map
 		_height_range = _gen_cache.height_range
+		carvings_colocadas.assign(_gen_cache.carvings_colocadas)
 		return
 
 	var total_points := resolution * resolution
@@ -493,6 +540,9 @@ func _generate_maps() -> void:
 	print("[TIMING]   composicion de altura: %d ms" % (Time.get_ticks_msec() - tcomp0))
 
 	var tcarve0 := Time.get_ticks_msec()
+	carvings_colocadas.assign(carvings.duplicate(true))
+	if colocar_las_bocas.is_valid() and not carvings.is_empty():
+		carvings_colocadas.assign(colocar_las_bocas.call(self))
 	_apply_carvings()
 	print("[TIMING]   _apply_carvings: %d ms" % (Time.get_ticks_msec() - tcarve0))
 	_update_height_range()
@@ -616,13 +666,13 @@ func _compose_from_heightmap(base_map: PackedFloat32Array) -> void:
 ## Si puede representar la ENTALLADURA de una boca de cueva: el rebaje en la
 ## ladera donde se abre. La oquedad en si la pone una malla aparte.
 func _apply_carvings() -> void:
-	if carvings.is_empty():
+	if carvings_colocadas.is_empty():
 		return
 
 	var step_x := float(terrain_size.x) / float(resolution - 1)
 	var step_z := float(terrain_size.y) / float(resolution - 1)
 
-	for cut: Dictionary in carvings:
+	for cut: Dictionary in carvings_colocadas:
 		var centre: Vector3 = cut.get("position", Vector3.ZERO)
 		var radius: float = cut.get("radius", 12.0)
 		var depth: float = cut.get("depth", 4.0)
@@ -1036,13 +1086,14 @@ func linea_sin_agua(desde: Vector3, hasta: Vector3, cada: float,
 ## cortado, adonde la gente salia andando para quedarse atascada contra la
 ## pared.
 func path_is_passable(from_pos: Vector3, to_pos: Vector3,
-		has_boat: bool, has_bridge: bool) -> bool:
+		has_boat: bool, pasarelas: Pasarelas = null) -> bool:
 	var span := float(terrain_size.x) / float(maxi(resolution - 1, 1))
 	var steps := maxi(int(from_pos.distance_to(to_pos) / maxf(span, 0.5)), 1)
 	for s in range(steps + 1):
 		var point := from_pos.lerp(to_pos, float(s) / float(steps))
 		if not Traversal.is_passable(get_slope_at(point),
-				crossing_difficulty_at(point), has_boat, has_bridge):
+				crossing_difficulty_at(point), has_boat,
+				pasarelas != null and pasarelas.hay_en(point)):
 			return false
 	return true
 

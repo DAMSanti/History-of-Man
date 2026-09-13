@@ -8,15 +8,17 @@ func suite_name() -> String:
 	return "TechMilestones"
 
 
-func test_todas_las_19_tecnicas_tienen_mapeo_de_video() -> void:
+func test_todas_las_tecnicas_tienen_mapeo_de_video() -> void:
 	var unlockable := [
 		TechTree.Tech.NUCLEO, TechTree.Tech.HOJA, TechTree.Tech.AGUJA,
 		TechTree.Tech.LAZO, TechTree.Tech.CEPO, TechTree.Tech.RED_AVES, TechTree.Tech.FOSO,
-		TechTree.Tech.OJEO, TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR, TechTree.Tech.ARCO,
+		TechTree.Tech.OJEO, TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR,
 		TechTree.Tech.PESQUERA, TechTree.Tech.NASA, TechTree.Tech.ANZUELO, TechTree.Tech.RED,
-		TechTree.Tech.ARPON, TechTree.Tech.PASARELA, TechTree.Tech.PIRAGUA, TechTree.Tech.ARTE
+		TechTree.Tech.ARPON, TechTree.Tech.PASARELA, TechTree.Tech.ARTE
 	]
-	assert_eq(unlockable.size(), 19, "Hay exactamente 19 tecnicas desbloqueables")
+	# 17 desde el 2026-09-13: la piragua monoxila y el arco salieron del
+	# Paleolitico, y los trae EPOCA_02, que es de donde son.
+	assert_eq(unlockable.size(), 17, "Hay exactamente 17 tecnicas desbloqueables")
 	for tech: TechTree.Tech in unlockable:
 		assert_true(PopupHitoScript.TECH_VIDEOS.has(tech),
 			"La tecnica %s debe tener identificador de video" % TechTree.tech_name(tech))

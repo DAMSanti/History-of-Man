@@ -21,7 +21,8 @@ a la vez.
 | Los dos 🔴 que bloqueaban la tanda 2, y cómo se cerraron | «En curso» → La puerta de entrada |
 | Las tareas de la tanda 1 del Paleolítico | «En curso» → Tanda 1 |
 | Las tareas de la tanda 2 del Paleolítico (cerrada el 2026-09-13) | «En curso» → Tanda 2 |
-| La tanda 3: quién va, pasarela, herido, guardado, cielo | «En curso» → Tanda 3 |
+| La tanda 3 del Paleolítico (cerrada el 2026-09-13) | «En curso» → Tanda 3 |
+| La tanda 4 del Paleolítico (cerrada el 2026-09-13): cuevas, mapa regional, sepultura, trueque y relaciones | «En curso» → Tanda 4 |
 | Qué está terminado | «Estado actual» → Completado |
 | Qué está roto o a medias y molesta | «Estado actual» → Deuda pendiente, y FASE F |
 | Por qué hay dos escalas y no hay chunking | «La decisión que ordena todo lo demás» |
@@ -137,6 +138,61 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 
 El contexto largo de los bloques que se cerraron antes de este cambio sigue
 íntegro en [archivo/](archivo/); no se edita.
+
+---
+
+### ~~Tras la tanda 4: el trueque sólo en la ventana, y mudarse de cueva~~ — cerrado
+
+> **Pedido por el usuario el 2026-09-13**, directamente y sin spec aparte: «mide
+> los fotogramas, quita la tarjeta vieja de trueque, construye el traslado de
+> campamento a una cueva descubierta; la banda viajará físicamente hasta allí y
+> se asentarán, sólo si pueden llegar». Tres decisiones suyas del mismo día para
+> el traslado: **se llevan lo que puedan cargar** y el resto se queda en la cueva
+> vieja; **las obras se quedan** y hay que rehacerlas; **viajan todos juntos** y
+> dejan de trabajar.
+
+- [ ] **Medir el fotograma con las cuevas nuevas.** **Aparcado por el usuario**
+      mientras probaba el juego. `FotogramaCuevasProbe.gd` queda escrita:
+      mide con y sin cuevas en la misma corrida, alternando y con mediana. La
+      primera pasada, con media y p95, salió dominada por tirones sueltos —el
+      horno de rejillas al mover la cámara— y no servía para comparar.
+- [x] **Quitar la tarjeta vieja de trueque.**
+
+  > **HECHO (2026-09-13).** Fuera `proponer_el_trato`, `tratar` y su viaje de
+  > cuatro jornadas, las probabilidades, `Moment.Kind.TRUEQUE` y la llamada de
+  > cada estación. `Intercambio` queda con precios, la regla del 10 %, `cambiar`
+  > e historial; el primer cambio sigue siendo un hito de la crónica. **Se va
+  > también pedir gente a otra banda**, que sólo existía en la tarjeta. **Bajan
+  > las comprobaciones de 7 645 a 7 029**: son las de la tarjeta —quince pruebas
+  > de `TestIntercambio`, muchas con bucles, y dos de `TestDecisiones`—; no se
+  > perdió ninguna de lo que sigue en el juego.
+- [x] **El traslado de campamento.**
+
+  > **HECHO (2026-09-13).** `sim/Traslado.gd`. La orden sale si la banda llega
+  > andando —la rejilla de la marcha, sin la regla del rodeo— y no hay nadie de
+  > expedición. Cada cual carga hasta su capacidad, la comida primero y lo demás
+  > por su precio de trueque; lo que no cabe queda apuntado en la cueva vieja.
+  > Toda la banda anda hasta la campa nueva sin trabajar y se asienta cuando
+  > llegan todos: la casa, la cueva de la banda, el almacén con lo que traían,
+  > las obras de ese sitio —ninguna si es nuevo—, y en la vista la hoguera y los
+  > tajos. Volver a la cueva vieja devuelve sus obras y lo que se dejó. El botón
+  > de la ventana del abrigo lo hace, o sale apagado con por qué.
+  >
+  > **Compilar no era funcionar**: las pruebas colocaban a la gente a mano, y
+  > `TrasladoProbe`, en la escena real, pilló que **nadie llegaba andando** —la
+  > banda se paraba a 51–52 m con el camino gastado, porque la campa de una cueva
+  > cae en celda cerrada por la ladera— y se asentaba por la red de seguridad a
+  > las 42 horas. Ahora cuenta como llegado quien agota el camino a menos de dos
+  > celdas, y al asentarse se abre la puerta de la cueva nueva en la rejilla,
+  > como la de casa. **Medido**: 15 personas, cueva a 448 m, **asentados en 0,4
+  > horas de partida sin red de seguridad**, hoguera movida 441 m y tajos
+  > rehechos. `TestTraslado`, nueve pruebas. Suite **1 216 pruebas, 7 031
+  > comprobaciones**, huérfanas 0.
+  >
+  > **Lo que no hace**, dicho: lo que se deja en una cueva no se pudre ni se lo
+  > lleva nadie; no hay plazas de cueva, así que cualquier cueva aloja a toda la
+  > banda; y mudarse no mueve el territorio conocido ni los parajes, que son del
+  > mapa.
 
 ---
 
@@ -951,7 +1007,452 @@ funcionando antes de montar el trueque encima evita rehacer trabajo.
 **Qué se puede repartir:** V1–V2 (el frío) no dependen de nada y tocan ficheros
 distintos de E1–E4 y T1–T4; pueden ir en paralelo con otro agente. **T1–T4
 dependen de E2 y E4**, y **dos medidas nunca a la vez.**
-### Tanda 3: quién va, la pasarela que se ve, el herido, el guardado y el cielo
+### ~~Tanda 4: las cuevas, el mapa regional, la sepultura y los otros~~ — cerrada
+
+> **Cerrada el 2026-09-13.** Las veintidós tareas hechas. Lo que salió distinto
+> de lo planeado, en corto: **la cueva costó veinte vueltas de captura** con el
+> usuario mirando y acabó siendo un agujero en el propio terreno con un techo de
+> roca, no un modelo; **la lámpara ya existía** como útil y se creó dos veces por
+> un momento; **las máscaras de la frontera estaban horneadas contra otro
+> relieve**; y la sonda de variedad pilló situaciones repetidas por las ramas. Lo
+> pendiente: medir el fotograma con las cuevas nuevas, decidir si la tarjeta de
+> trueque de siempre se retira ahora que está la ventana, el traslado de
+> campamento sin construir, y los dos `/depurar` de siempre —las casillas del
+> árbol de técnicas y los «sin camino»—.
+
+**Spec escrita (2026-09-13) en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md)
+§10.1 → Tanda 4**, frentes 18 a 27, cada uno con sus criterios. Sale de la lista
+del usuario tras jugar la tanda 3.
+
+En corto: el mapa regional sin sitio de prueba, con la frontera hasta la costa de
+−120 m, la ficha de cada sitio descubierto y ventanas que caben; el hogar en
+cuatro horas; el abrigo es el taller sin botón, y trasladarse sólo a cuevas
+libres; una cueva que se ve y que nunca cae en el agua; **explorar una cueva**
+con lámpara y grasa, dos o tres decisiones de un repertorio de treinta, riesgo
+de verdad, y una de cada tres pintable; pintar sólo lo explorado; humo en los
+fuegos; **el trueque como el almacén** con precios que mueve la relación; una
+ventana de relaciones; y **la sepultura**.
+
+**Ya arreglado el mismo día por `/depurar`, antes de la spec:** «F» en el mapa
+regional funda de nuevo —ahora se entra al mapa y cada mapa guarda su estado—, la
+suite borraba el guardado real del jugador, y la batida no practicaba
+exploración.
+
+**Depende de dos fallos por `/depurar`**: las casillas del árbol de técnicas que
+no se rellenan, y los «sin camino» que no se reprodujeron.
+
+**Coste de máquina:** pruebas de segundos, capturas con ventana, y una sonda de
+variedad de cuevas que no juega jornadas. Nada pide un año.
+
+**Plan técnico en EPOCA_01 §10.1**, «Plan técnico de la tanda 4», con tres
+premisas que no se sostienen: las acciones del abrigo son de mentira, la frontera
+se para por un tope de 60 km y no por el agua —y no queda herramienta para
+hornearla—, y no hay ánimo ni cohesión en que pueda contar la sepultura. Lista
+colgada por `/plan-tarea` el 2026-09-13 por `history-of-man-11`.
+
+**Suelo de la suite al abrir: 1 167 pruebas, 7 372 comprobaciones.**
+
+**Decidido por el usuario el 2026-09-13:** todas seguidas en este orden; la
+sepultura se nota en **un duelo** que rinde menos y que la despedida acorta; y
+«trasladar el campamento» se oculta en la cueva de la banda y queda apuntado como
+no construido.
+
+**Lo barato primero**
+
+- [x] **H1. El hogar en cuatro horas.** **Toca:** `sim/CampProjects.gd`,
+      `tests/TestCampProjects.gd`. Prueba, segundos.
+
+  > **HECHO (2026-09-13).** `labor_hours: 4.0` en la entrada del hogar, y
+  > `labor_days` la convierte con `SettlementSim.HORAS_UTILES` (11), así que las
+  > demás obras siguen en jornadas. Dos cosas que no estaban en el plan: **el
+  > hogar no lo acelera la pericia** —si no, el criterio de «cuatro sí, tres no»
+  > sólo se cumplía para uno de rendimiento 1—, y **las ventanas lo escribían
+  > «0 jornadas»** (`PanelTecnicas`, `CensoDeObras`), que ahora pasan por
+  > `CampProjects.trabajo_texto`. Y un margen de coma flotante al comparar: 16
+  > cuartos de hora sumados no dan 4/11 exactos. Tres pruebas nuevas en
+  > `TestCampProjects` (cuatro horas sí y tres no a cachos de un cuarto; con
+  > hambre también en cuatro; el texto). Suite **1170 pruebas, 7 377
+  > comprobaciones**, huérfanas 0.
+- [x] **A1. El abrigo es el taller.** Fuera «taller»; «trasladar» sólo en
+      cuevas que no sean la de la banda. **Toca:** `ui/PanelSitios.gd`,
+      `DemoMain.gd`, `tests/`. Prueba, segundos.
+
+  > **HECHO (2026-09-13).** `PanelSitios._actions_for` pasa a estática y recibe
+  > si la cueva es la de la banda; `DemoMain` se lo dice comparando con
+  > `_cave_at(sim.home_position)`, que es la misma pregunta con la que
+  > `_levantar_hogar` elige la cueva de casa. La rama «taller» de
+  > `_on_cave_action` se fue. `TestAbrigo`, tres pruebas. **Sigue sin haber
+  > traslado de campamento**: el botón existe en las cuevas libres y sólo
+  > imprime una línea, como decía ESTADO §4 — la tanda no lo construye.
+- [x] **R1. Fuera Torrelavega.** **Toca:** `region/RegionMap.gd`, `tests/`.
+      Segundos.
+
+  > **HECHO (2026-09-13).** Fuera `dev_sites`, `DEV_PLACES`, `_add_dev_sites`,
+  > el color magenta y el trato aparte en la niebla. **Medido: no había ninguno
+  > horneado** en `cantabria_sites.res` —869 sitios, ninguno con id de 9000
+  > arriba—, así que el comentario de `TestNiebla` que atribuía a los de prueba
+  > la diferencia con los 862 de los documentos era falso y se corrigió. Prueba
+  > nueva en `TestNiebla`. Quedan en disco `data/dem/local/site_9000*.res`
+  > (sin versionar) y `RunLocalTiming`/`DatoProbe` que los leen: son
+  > herramientas de medida de carga, no el juego. De paso se quitó un
+  > `field.free()` sobre un `RefCounted` en `TestParajes` que soltaba un
+  > SCRIPT ERROR en cada pasada. Suite **1 174 pruebas, 7 385 comprobaciones**,
+  > huérfanas 0.
+
+**21 · La cueva**
+
+- [x] **C1. Ninguna boca donde no se llega.** Validación al colocar, en un solo
+      sitio, moviendo al punto válido más cercano; sonda por los nueve mapas.
+      **Toca:** `DemoMain.gd`, `tests/CuevasProbe.gd` (nueva), `tests/`.
+      **~5 min.**
+
+  > **HECHO (2026-09-13).** `mundo/Bocas.gd` decide dónde se abre cada boca:
+  > en seco y unida a casa, o al punto bueno más cercano en anillos de 10 m.
+  >
+  > **Dos premisas del plan se cayeron.** La primera: no podía ir en
+  > `_place_site_features`, porque la entalladura se excava en el relieve
+  > ANTES de generarlo y la rejilla sólo existe DESPUÉS; mover la boca ahí
+  > dejaba el hueco en el sitio viejo (ya pasaba con `_nudge_out_of_water`,
+  > que se ha borrado). Va dentro de `TerrainGenerator`, entre el relieve y la
+  > excavación (`colocar_las_bocas`), con lo colocado guardado en la caché
+  > (`carvings_colocadas`, versión 3) y las reglas en la clave
+  > (`Bocas.REGLAS`) — sin eso, la segunda medida cargó las bocas de la
+  > primera. La segunda: **no hay nueve mapas horneados, hay uno** —el 56—;
+  > `site_9000` era Torrelavega y ya no es un sitio. Los demás se hornean al
+  > entrar desde el mapa regional, con descarga del IGN, y pasan por la misma
+  > colocación.
+  >
+  > **Medido con `CuevasProbe`**, que entra en cada mapa como el mapa
+  > regional y pregunta a la rejilla DE LA PARTIDA: **9 bocas, 4 movidas**
+  > (10, 20, 30 y 50 m) y **ninguna mal colocada**. La primera versión pedía
+  > además que la celda de la boca se anduviera y movió 8 de 9, sacándolas de
+  > la pared: una ladera de cuevas sale cerrada por pendiente. Se quitó; la
+  > sonda sigue enseñando esa columna. Coste: la caché del terreno se rehace
+  > una vez por sitio (14 s en el 56) y la rejilla de colocar son ~900 ms más
+  > sólo cuando no hay caché. `TestBocas`, cuatro pruebas sobre `FakeTerrain`.
+  > Suite **1 178 pruebas, 7 395 comprobaciones**, huérfanas 0.
+  >
+  > **Y dos reglas más, con el usuario viendo las capturas de C2:** la boca
+  > sacada del agua va **hacia la orilla con pendiente** —entre los puntos
+  > buenos hasta el doble de la distancia del primero, 40 m como poco, el de más
+  > cuesta—, y pide seco **todo el corro que se excava**, no sólo el centro: la
+  > Cueva del Fósil quedaba en la orilla con el río dentro del hueco. Con eso y
+  > las entalladuras de C2, `CuevasProbe` da **9 bocas, 6 movidas (20 a 70 m),
+  > ninguna mal colocada**. `TestBocas`, seis pruebas.
+- [x] **C2. Una cueva en la pared.** **Toca:** `vista/CaveMouth.gd`.
+      **Capturas, ~3 min.**
+
+  > **HECHO (2026-09-13).** La cueva es **un agujero en el terreno** —una sima de
+  > 2 m de boca y 50 m de hondo, con la rejilla del relieve recortada y un
+  > embudo fino cosido en su sitio— **con un techo de roca en herradura** que la
+  > cubre por la pendiente y los costados y deja libre la entrada. Detalle en
+  > GRAFICOS.
+  >
+  > **No fueron tres minutos de capturas: fueron veinte vueltas con el usuario
+  > mirando**, y tumbó cuatro modelos enteros por el camino (visera de caliza,
+  > cámara abovedada, túnel con marco, cantos sueltos) antes de decir qué
+  > quería. Lo que hay que saberse de aquí, porque cada uno costó una vuelta:
+  > el parche del terreno necesita la normal y la tangente del campo de alturas;
+  > una malla sin tangentes no puede llevar mapa de normales; las texturas del
+  > terreno vienen comprimidas y hay que descomprimirlas para una `ImageTexture`;
+  > y la caché de la malla necesita las reglas de la sima en su clave.
+  >
+  > `CuevaCaptura.gd` nueva, con cámara propia —la del juego no baja de ~100 m y
+  > a esa distancia no se juzga un modelo de dos metros—. **Fotograma sin
+  > medir**; el catálogo trae la Cueva del Fósil **dos veces** en el mismo sitio
+  > («fosil» y «Fosil»), que es dato del conjunto y no se ha tocado. Y de paso:
+  > **ningún recurso a menos de 30 m de una boca** (`ResourceProps`), que una
+  > mata delante tapaba la entrada.
+
+**22–23 · Explorar y pintar**
+
+- [x] **E1. Explorar una cueva: la orden y el estado.** Persona del hogar,
+      lámpara, grasa, una jornada; explorada y pintable (1 de 3, la de la banda
+      siempre). **Toca:** `sim/` (nuevo), `sim/SettlementSim.gd`, `tests/`.
+      Segundos.
+
+  > **HECHO (2026-09-13).** `sim/Exploracion.gd`, colgado de la simulación.
+  > `lo_que_falta()` contesta con una frase —lámpara, grasa, alguien del hogar—
+  > y es lo que enseñará la orden; `mandar()` cobra la grasa y mete a alguien
+  > dentro; la exploración se cierra al acabar el día, **antes del reparto de
+  > práctica**, para que la jornada cuente como oficio de hogar. Lo pintable sale
+  > de la semilla, una de cada tres, con azar propio que no toca el `_rng` de la
+  > simulación (SPECS §7), y la cueva de la banda siempre.
+  >
+  > `TestExploracion`, ocho pruebas. Suite **1 188 pruebas, 7 437
+  > comprobaciones**.
+  >
+  > **Corregido el mismo día, en P1**: se creó una lámpara como obra de
+  > `CampProjects` porque EPOCA_01 §8 decía que faltaba, y **ya existía como
+  > útil** (`Tool.Kind.LAMPARA`), el que pide la pintura. Dos respuestas a la
+  > misma pregunta; se quitó la obra y la exploración pide el útil. Bajan tres
+  > comprobaciones —las que la prueba de proyectos hacía sobre la obra
+  > quitada—.
+- [x] **E2. El repertorio: 30 situaciones o más, con ramas.** Datos, sin repetir
+      en una cueva ni empezar igual dos seguidas. **Toca:** `sim/` (nuevo),
+      `tests/`. Segundos.
+
+  > **HECHO (2026-09-13).** `sim/Repertorio.gd`: **34 situaciones**, 26 que
+  > pueden abrir una visita y 8 que sólo salen por la rama de otra, cada una
+  > con sus opciones y lo que desatan (nada, hallazgo, susto, herida, peligro,
+  > pared pintable). El oso del usuario va entero, rama por rama. `visita_de()`
+  > sortea dos o tres por cueva con azar propio de la semilla y la cueva, sin
+  > repetir y sin abrir como la cueva anterior. `TestRepertorio`, ocho pruebas.
+  > Suite **1 196 pruebas, 7 576 comprobaciones**.
+- [x] **E3. Las decisiones y lo que pasa.** `Moment` en cadena, heridas por
+      `Percances`, muertes por `_person_dies`. **Toca:** el subsistema,
+      `tests/`. Segundos.
+
+  > **HECHO (2026-09-13).** Al entrar, `Exploracion` cita la primera situación
+  > como un `Moment` nuevo, `Kind.CUEVA`, y cada opción, al elegirse, aplica lo
+  > suyo y sigue por su rama o con la siguiente de la visita. Hallazgo deja ocre,
+  > sílex o asta en el almacén; herida, tres días; peligro, en quintos: uno mata
+  > —por `_person_dies`, el único camino de muerte—, dos hieren ocho días y dos
+  > salen bien. **No se usó `Percances`**: aplica percances de marcha al aire
+  > libre (dejar la carga, volverse), y aquí basta con los días de herida. Azar
+  > propio de semilla, cueva, situación y opción. El aviso de cada opción dice el
+  > aire que tiene, no el desenlace.
+  >
+  > Dos cosas que salieron al probar: morir el único de la banda cita además la
+  > derrota, que no es de la visita; y la herramienta de huérfanas confundía
+  > `elegir` con el de la barra superior, así que el método es `decidir`. Cinco
+  > pruebas más en `TestExploracion`. Suite **1 201 pruebas, 7 587
+  > comprobaciones**, huérfanas 0.
+- [x] **E4. La sonda de variedad.** 50 cuevas, sin jugar jornadas.
+      **Toca:** `tests/` (sonda nueva). **~2 min.**
+
+  > **HECHO (2026-09-13).** `CuevasVariedadProbe.gd`, sin escena y en segundos,
+  > eligiendo opciones con un azar fijo. **Cumple todo**: 50 cuevas, todas con
+  > 2 o 3 situaciones, ninguna repite dentro, ninguna abre como la anterior,
+  > **32 de las 34** situaciones del repertorio aparecen, **16 salen heridos y
+  > 4 no salen**, y **35 de 90 cuevas son pintables**.
+  >
+  > **La primera pasada pilló un fallo de verdad**: dos cuevas repetían una
+  > situación, porque una rama llevaba a otra que la visita ya tenía sorteada
+  > para después. `Exploracion` lleva ahora lo visto en cada visita y se lo
+  > salta. Y la sonda misma contaba mal los muertos —miraba si la banda quedaba
+  > vacía, con dos personas— y daba cero. Lo pintable se probó con esta semilla
+  > aquí y con otra en `TestExploracion`.
+- [x] **E5. El botón de explorar hace lo que dice.** **Toca:** `DemoMain.gd`,
+      `ui/PanelSitios.gd`. Prueba.
+
+  > **HECHO (2026-09-13).** «Explorar el interior» llama a
+  > `Exploracion.mandar`; ya no revela el entorno de golpe. Si no se puede, el
+  > botón sale **apagado con lo que falta** en el aviso
+  > (`PanelSitios.por_que_no`), y la ventana dice, si ya se exploró, si tiene
+  > pared donde pintar. Cada `CaveMouth` lleva su `id` —el índice en el
+  > catálogo— y la de casa se apunta como `cueva_de_la_banda`. El estado viaja
+  > con la partida sin tocar nada: `Instantanea` recorre las propiedades de la
+  > simulación, así que se quitaron los dos métodos de guardado que se habían
+  > escrito para esto. Dos pruebas en `TestAbrigo`. **Sin ver en pantalla
+  > todavía**: va en las capturas de R5. Suite **1 203 pruebas, 7 590
+  > comprobaciones**, huérfanas 0.
+- [x] **P1. Sólo se pinta lo explorado y pintable.** **Toca:** `sim/Pinturas.gd`,
+      `tests/`. Segundos.
+
+  > **HECHO (2026-09-13).** `Pinturas.painting_blocked_by` pide la cueva de la
+  > banda explorada y con pared, y lo dice. Va **después** de la lámpara, el
+  > ocre y la grasa, que es lo que se junta primero y lo que las pruebas viejas
+  > de `TestRelato` ya comprobaban por su mensaje; su preparación da ahora la
+  > cueva por explorada. Tres pruebas en `TestExploracion`. **Consecuencia en la
+  > partida**: para cerrar el año con la cueva pintada hay que haberla
+  > explorado antes. Suite **1 206 pruebas, 7 590 comprobaciones**.
+
+**27 · La sepultura**
+
+- [x] **S1. La despedida.** Tres opciones con coste al morir alguien. **Toca:**
+      `sim/SettlementSim.gd`, `sim/` (nuevo), `tests/`. Segundos.
+- [x] **S2. Lo que deja.** Crónica, relato, y lo que nota la banda (pendiente de
+      decisión); el hito de la primera con ajuar. **Toca:** el subsistema,
+      `tests/`. Segundos.
+
+  > **HECHOS (2026-09-13), juntos.** `sim/Sepulturas.gd`, enganchado al único
+  > camino de muerte (`_person_dies`), que ahora pregunta —salvo si era el último
+  > de la banda: entonces es la derrota—. Tres despedidas: **dejarlo** (nada, 6
+  > días de duelo), **cubrirlo** (4 de piedra, 4 días) y **enterrarlo con
+  > ajuar** (4 de piedra, 1 de ocre y 2 conchas, 2 días). La tarjeta escribe el
+  > coste y el duelo, y apaga lo que no se pueda pagar con lo que falta.
+  >
+  > **El duelo** es lo que decidió el usuario: toda la banda rinde un 15 % menos
+  > esos días (`Inhabitant.duelo_dias`, dentro de `effectiveness`). **Las cifras
+  > —días, 15 %, cantidades— son decisión, no medida**, que es lo que la spec
+  > pedía decir. El «coste en jornadas» de la spec se paga así, en rendimiento
+  > de la banda, y no como gente apartada del trabajo: no hay en el código un
+  > sitio donde apartar a alguien un día sin tocar el reparto.
+  >
+  > Cada despedida se cuenta distinta en la crónica; las dos que dejan tumba la
+  > apuntan con su sitio; y la **primera con ajuar es el hito**, contado como
+  > relato `HITO` —el mismo camino que usa el lobo—, así que se puede pintar.
+  > `TestSepulturas`, siete pruebas. Suite **1 213 pruebas, 7 610
+  > comprobaciones**, huérfanas 0.
+- [x] **S3. Se ve sobre el terreno.** **Toca:** `vista/` (nuevo), `DemoMain.gd`.
+      **Captura, ~3 min.**
+
+  > **HECHO (2026-09-13).** `vista/SepulturasView.gd`: un túmulo de nueve
+  > piedras facetadas con la roca del terreno donde se cubrió a alguien, y el
+  > mismo con una losa de ocre encima donde se le enterró con ajuar. Sólo lee
+  > `Sepulturas.tumbas` y se rehace cuando hay una nueva, como las pasarelas.
+  > Captura con `SepulturaCaptura.gd` (`user://sepultura.png`): se leen como
+  > montones de piedra en la ladera, junto a la banda. **Tres capturas antes
+  > de la buena por culpa de la sonda**: buscando seco a mano las ponía en el
+  > río; la definitiva las pone en la campa de la boca.
+
+**25–26 · El trueque y las relaciones**
+
+- [x] **T1. Precios y la regla del 10 %.** **Toca:** `sim/Intercambio.gd`,
+      `tests/TestIntercambio.gd`. Segundos.
+
+  > **HECHO (2026-09-13).** `Intercambio` gana `PRECIO`, en puñados de fruto
+  > seco: **fruto seco 1, sílex 2 y concha 3 salen de los tratos que ya
+  > existían** (6 por 3 y 6 por 2); ocre, piel, asta, grasa, piedra y leña son
+  > decisión, y lo que no está vale 1. La relación multiplica lo que da la banda
+  > y divide lo que traen ellos (`factor_con`, 1 + trato / 200, entre 0,5 y 2),
+  > así que el efecto se nota por los dos lados. `se_acepta` aplica el 10 % y
+  > `cambiar` mueve el almacén exactamente, apunta el trato en `historial` —lo
+  > leerá la ventana de relaciones— y lo cuenta como trato justo. Cuatro pruebas
+  > en `TestIntercambio`; la primera versión de una tenía la cuenta mal hecha
+  > —olvidaba que el factor actúa a los dos lados—. Suite **1 217 pruebas,
+  > 7 621 comprobaciones**, huérfanas 0.
+- [x] **T2. La ventana de trueque.** **Toca:** `ui/` (nuevo), `ui/GameUI.gd`,
+      `tests/`. Prueba y **captura, ~3 min.**
+- [x] **L1. La ventana de relaciones.** **Toca:** `ui/` (nuevo), `ui/GameUI.gd`,
+      `tests/`. Prueba y **captura, ~3 min.**
+
+  > **HECHAS (2026-09-13), juntas.** Dos botones nuevos en la barra de abajo,
+  > «Trueque» y «Relaciones». `PanelTrueque`: lo de la banda a la izquierda y lo
+  > que traen a la derecha, con − y + por material, lo que vale cada lado para
+  > ellos y para nosotros, y «Cerrar el trato» apagado mientras no compense —con
+  > cuánto se separan los dos lados—. `PanelRelaciones`: cada banda conocida por
+  > el nombre de su sitio, el trato en palabras y los tratos hechos con el
+  > último día. Las dos sólo leen y piden (SPECS §4.7). Capturas en
+  > `TruequeCaptura.gd` (`user://trueque.png`, `user://relaciones.png`).
+  >
+  > Para que la ventana tuviera derecha, `Intercambio` gana `lo_que_traen` —por
+  > semilla, sitio y estación, sílex, conchas, ocre y pieles, cantidades de
+  > decisión— y `quedan_de`, que resta lo ya cambiado esa estación: si no, se
+  > podía llevar lo mismo sin fin. `TestTruequeYRelaciones`, cuatro pruebas.
+  > **Se quitó un filtro que me había inventado** —no ofrecer lo que se
+  > pudre—: qué se da lo decide el jugador. **Queda por decidir** si la tarjeta
+  > de trueque de siempre (`proponer_el_trato`) se retira ahora que está la
+  > ventana; conviven. Suite **1 221 pruebas, 7 630 comprobaciones**.
+
+**24 · El humo**
+
+- [x] **F1. Humo en los fuegos.** **Toca:** `vista/HearthFire.gd`,
+      `vista/Bonfire.gd`, `vista/BivouacFires.gd`. **Captura y fotograma antes y
+      después, ~5 min.**
+
+  > **HECHO (2026-09-13).** Sólo `Bonfire`: el hogar, las hogueras y los vivacs
+  > son todos esa clase, así que una vez sirve para los tres. Un
+  > `GPUParticles3D` de 18 bocanadas que viven 7 s, nacen oscuras y se aclaran y
+  > ensanchan al subir, con una mancha redonda hecha en código; sale mientras
+  > arde y deja de salir al apagarse. Captura en `HumoCaptura.gd`
+  > (`user://humo.png`): se ve la columna desde lejos.
+  >
+  > **Fotograma, medido en la misma corrida** —con el humo saliendo y con el
+  > humo parado, que entre corridas el reloj de pared no se compara—: **56,11
+  > ms las dos veces, con 7 fuegos**. Sin diferencia medible. Ojo: ese
+  > fotograma de 56 ms lo pone todo lo demás, no el humo.
+
+**18 · El mapa regional**
+
+- [x] **R2. La frontera hasta el agua.** Sin tope de distancia, con límites
+      laterales, y la herramienta de horneado. **Toca:** `datos/RegionBoundary.gd`,
+      `tools/` (nueva), `data/sites/cantabria_eras.res`, `tests/`.
+      **Horneado ~2 min y captura.**
+
+  > **HECHO (2026-09-13).** `RegionBoundary.build_playable_mask` pierde el tope
+  > de 60 km y el ruido que modulaba el alcance: la inundación sigue mientras
+  > haya fondo emergido, y los límites laterales —la costa de Cantabria— se
+  > quedan. `tools/HornearEras.gd` nueva rehornea `cantabria_eras.res` en unos
+  > 13 s (0, −60 y −120 m). `TestFrontera`: a −120 m, **ninguna celda de fondo
+  > emergido pegada al territorio queda fuera** dentro de los límites laterales.
+  >
+  > **Y un fallo que no estaba en el plan**: las máscaras viejas eran de
+  > **1792×1536** y el relieve regional de hoy es de **1792×1280**; estaban
+  > horneadas contra otro relieve y se pintaban estiradas en vertical, que por sí
+  > solo apartaba la línea de la costa. No se pudo medir el antes celda a celda
+  > por eso mismo. La primera versión de la prueba estimaba los límites laterales
+  > por su cuenta y falló por dos columnas; usa ahora el cálculo del constructor.
+  > **La captura del mapa regional va con R5.** Suite **1 222 pruebas, 7 632
+  > comprobaciones**, huérfanas 0.
+- [x] **R3. La ficha del sitio descubierto.** **Toca:** `region/RegionMap.gd`,
+      `tests/`. Segundos.
+- [x] **R4. La banda y los mapas guardados.** **Toca:** `region/RegionMap.gd`,
+      `region/Guardado.gd`, `tests/`. Segundos.
+
+  > **HECHOS (2026-09-13), juntos.** El mapa regional no tiene simulación, así
+  > que lo que sabe sale de **las cabeceras de los mapas guardados**:
+  > `Guardado.guardar` apunta ahora el trato con cada banda, cuántas cuevas se
+  > han explorado y cuántas tienen pared, si la cueva está pintada, y el año y la
+  > estación; `Guardado.cabeceras()` las lee todas sin la foto.
+  >
+  > `RegionMap.ficha_del_sitio` —estática, sólo lee—: de un sitio descubierto,
+  > si vive gente y el trato, los recursos que se ven desde fuera, y el estado de
+  > sus cuevas; **de uno sin descubrir, nada, ni el nombre**. Va encima de los
+  > datos del terreno que ya enseñaba. `RegionMap.panel_de_la_banda`, debajo del
+  > botón de volver: cada mapa guardado con su jornada y su gente, dónde está la
+  > banda y cómo volver. `TestMapaRegional`, cinco pruebas. **Un tropiezo**: el
+  > mapa regional no tiene `class_name`, la prueba lo pedía por nombre, no
+  > compilaba, y la suite se colgó —el aviso de siempre: `--check-only` antes—.
+  > Suite **1 227 pruebas, 7 645 comprobaciones**, huérfanas 0.
+- [x] **R5. Ventanas que caben.** **Toca:** `region/RegionMap.gd`. **Capturas a
+      1920×1080 y 1280×720, ~5 min.**
+
+  > **HECHO (2026-09-13).** `RegionCaptura.gd` no sólo captura: **recorre todos
+  > los controles visibles y dice cuáles se salen de la pantalla**. Al empezar
+  > se salía la ficha del sitio —1 505 px de alto— a las dos resoluciones. Ahora
+  > va anclada a todo el alto del lado derecho con desplazamiento, 360 px de
+  > ancho, y la letra de los paneles del mapa regional baja a 12: **0 controles
+  > fuera a 1920×1080 y a 1280×720**, y ya no se pisan la cabecera con la
+  > leyenda ni la ficha con el panel de la banda. La sonda tuvo que aprender
+  > que lo de dentro de un panel con desplazamiento lo recorta el panel. En la
+  > misma captura se ve **la línea amarilla siguiendo la plataforma emergida
+  > hasta el agua** (R2). Queda el panel de rendimiento de F3 tapando la
+  > leyenda, que es de depuración y se oculta con F3.
+
+**Cierre**
+
+- [x] **M. Cerrar.** Suite verde y ≥ 7 372 comprobaciones, huérfanas en 0, y lo
+      aprendido a SISTEMAS §5 y §13, GRAFICOS, INTERFAZ §4, SPECS y ESTADO.
+
+  > **HECHO (2026-09-13).** Suite **1 227 pruebas, 7 645 comprobaciones** —de
+  > 1 167 y 7 372 al abrir—, sin un SCRIPT ERROR, huérfanas 0. Lo aprendido va
+  > en cada cita de arriba y en SISTEMAS §5 y §13, GRAFICOS, INTERFAZ, SPECS
+  > §4.3 y EPOCA_01.
+
+**Presupuesto de máquina: ~40 min**, repartido en capturas —cueva, sepultura,
+trueque, relaciones, humo, mapa regional a dos resoluciones— y dos sondas cortas
+—colocación de cuevas por los nueve mapas y variedad de 50 cuevas—, más el
+horneado de la frontera. **Nada pide correr jornadas largas.**
+
+---
+
+### ~~Tanda 3: quién va, la pasarela que se ve, el herido, el guardado y el cielo~~ — cerrada
+
+**CERRADA el 2026-09-13.** Diecisiete tareas, todas hechas, más los dos
+`/depurar` que la bloqueaban. Suite **1 145 pruebas y 7 332 comprobaciones**,
+desde 1 076/7 161; `LlamadasHuerfanas` en **0** —las dos «de siempre» eran
+falsas y se arregló el comprobador—. Lo aprendido está en SISTEMAS §3, §4, §16
+y §20, GRAFICOS, INTERFAZ §4, SPECS §4.3, §4.5, §6.4 y §8, ESTADO §2, §3 y §5,
+y EPOCA_01 §10.1.
+
+| | |
+|---|---|
+| Las decisiones | Salen en una jornada sorteada del **segundo mes**, no el día 1: se decide habiendo vivido la estación |
+| La expedición | **El jugador elige a quién manda**, se lleva tienda y hoguera, **sale y vuelve andando** por el borde del mapa y **despeja el minimapa por donde pasa** |
+| La cumbre | El jugador elige la cordada, con el mínimo que ya tenía |
+| El herido | Se queda en el abrigo hasta curarse, y vuelve solo a lo suyo |
+| La pasarela | **Una obra en un cruce**, no un permiso sobre el mapa: la banda elige dónde, cuesta 40 de leña y 6 jornadas, **se ve** y **una riada se la lleva** |
+| El taller | Practica sin encargo y **curte la piel cruda**; medido: **1,98 jornadas/día durante 90** y la talla laminar hacia la 51 |
+| El guardado | **Existe** (FASE A3): automático al volver al mapa regional, y la partida cargada da **las mismas firmas** que la que no se guardó |
+| El cielo | Nubes, **estrellas que giran con el polo**, sol y luna en su sitio. Y la cámara ya lo puede mirar |
+| Las ventanas | «Trabajos» dice **quién no está**, Oficios enseña las jornadas del árbol, y el Shift del almacén está probado |
+
+**Lo que NO quedó hecho, y por qué:** nada de la tanda. Lo que sigue abierto es
+de antes —el 🔴 del hambre del segundo invierno, ESTADO §5 punto 13, que va por
+`/depurar`— y los cinco fallos de la tabla de dependencias que no bloqueaban
+ningún frente.
 
 **Spec escrita (2026-09-13) en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md)
 §10.1 → Tanda 3**, frentes 9 a 17, cada uno con sus criterios. Sale de la lista
@@ -977,6 +1478,407 @@ tanda 2 esté midiendo.**
 **Coste de máquina:** casi todo son pruebas de segundos y capturas con
 ventana. La única corrida larga es la del taller, unos 45 minutos, la que A4 ya
 tenía prevista.
+
+**Plan técnico en EPOCA_01 §10.1**, «Plan técnico de la tanda 3», con tres
+premisas que no se sostienen: el cielo ya existe y le faltan las nubes, el
+Shift del almacén ya está, y el guardado parte de `Instantanea.volcar`. Lista
+colgada por `/plan-tarea` el 2026-09-13 por `history-of-man-11`.
+
+**Suelo de la suite al abrir: 1 076 pruebas, 7 161 comprobaciones.**
+
+**Antes, por `/depurar`:** ~~el fallo 1 (la práctica que no cuenta) bloquea el
+frente 14~~ **arreglado el 2026-09-13** —la cuenta se ha mudado a la simulación,
+ver ESTADO §2—, y ~~el 2 (la pasarela en 82/70) bloquea el 13~~ **arreglado el
+2026-09-13**: no era el material ni las jornadas, era que cuelga del núcleo
+preparado y el cartel enseñaba «82 de 70». **Los dos frentes quedan
+desbloqueados.**
+
+**Decidido por el usuario el 2026-09-13:** primero los dos `/depurar` y después
+la tanda entera en orden; el día de la decisión sale de la semilla, sin tocar el
+`_rng`; la pasarela sirve para cauces de hasta **2 celdas (~16 m)** y cuesta
+**40 de leña y 6 jornadas-persona**.
+
+**9 · Las decisiones en el segundo mes**
+
+- [x] **D1. El día de la decisión, sorteado en [16, 30].** Se sortea al entrar
+      la estación y en `iniciar_partida`, y salta al cerrar esa jornada. Las
+      tres pruebas de la spec, y `TestDecisiones` puesto al día.
+      **Toca:** `sim/SettlementSim.gd`, `tests/TestDecisiones.gd`. Segundos.
+
+      > **HECHO (2026-09-13).** `SettlementSim.dia_de_decidir` —estática, sin
+      > estado— saca el día de la semilla, el año y la estación; `_citar_la_
+      > decision` la cita al entrar la estación y en `iniciar_partida`, y el
+      > cierre de la jornada pregunta con `_revisar_la_decision`. Seis pruebas
+      > nuevas en `TestDecisiones`, incluida una que pasa por `_end_of_day` de
+      > verdad y no por la regla a mano. Y una trampa evitada: si se entra en la
+      > estación con el día ya pasado —una partida que arranca a mitad, o un
+      > estado construido— se decide en cuanto se puede, en vez de perder la
+      > decisión de esa estación. Suite: 1 090 pruebas, 7 193 comprobaciones.
+
+**12 · El herido** (va antes que 10 y 11, que lo usan)
+
+- [x] **H1. Tocado se queda en casa.** `Inhabitant.esta_tocado()`; `Reparto` le
+      da sólo hogar; al curarse, su oficio y prioridades de antes, con **la
+      misma receta que la berrea**, sacada a un sitio. Cuatro pruebas.
+      **Toca:** `banda/Inhabitant.gd`, `sim/Reparto.gd`, `sim/SettlementSim.gd`,
+      `tests/TestHerido.gd` (nuevo). Segundos.
+
+      > **HECHO (2026-09-13), y por una vía más simple que la del plan.** El plan
+      > decía reutilizar la receta de la berrea —guardar las prioridades y
+      > devolverlas al curar—. No hace falta: basta con **no tocarlas** y filtrar
+      > en el reparto, así que al curarse vuelve solo. La berrea sigue
+      > guardándolas porque ella sí las cambia. Seis pruebas en `TestHerido`,
+      > incluida la de que al sano sí se le deja salir —sin ese control, «no
+      > sale» podría ser que no saliera nadie— y la de que no se le manda de
+      > expedición. Suite: 1 096 pruebas, 7 209 comprobaciones. SISTEMAS §3.
+
+**10 · La expedición**
+
+- [x] **X1. El equipo.** Piel y leña con las constantes del vivac; la opción
+      se bloquea diciendo qué falta; las pieles vuelven. `Moment` aprende la
+      opción bloqueada. Una prueba por cada cosa que falta, y la del gasto.
+
+      > **HECHO (2026-09-13).** `Expedicion.hace_falta_para` y `lo_que_falta`,
+      > con las constantes del vivac y sin cifras nuevas: 3 personas y 12
+      > jornadas piden **72 raciones, 3 pieles y 39 de leña**, y las pieles
+      > vuelven. `Moment.opcion` admite `bloqueo`, la barra pinta el botón
+      > apagado con lo que falta —no lo esconde: así se sabe a por qué ir— y
+      > `elegir` sobre una opción bloqueada cae a la que no compromete, que es lo
+      > que lo hace cierto también para las sondas. Suite: 1 100 pruebas, 7 220
+      > comprobaciones.
+      **Toca:** `sim/Expedicion.gd`, `banda/Moment.gd`, `ui/BarraSuperior.gd`,
+      `tests/TestExpedicion.gd`. Segundos.
+- [x] **X2. Elegir a quién se manda.** `Moment` aprende la elección de personas
+      —candidatos, mínimo, marcados—, la barra la pinta, el coste se recalcula,
+      con menos de 3 no se confirma, y `contestar_todo` marca a los primeros
+      aptos. Sin niños ni tocados.
+      **Toca:** `banda/Moment.gd`, `ui/BarraSuperior.gd`, `sim/Expedicion.gd`,
+      `tests/TestExpedicion.gd`, `tests/TestDecisiones.gd`, `tests/AnoProbe.gd`.
+      Segundos.
+
+      > **HECHO (2026-09-13).** `Moment` aprende `candidatos`, `nombres`,
+      > `minimo_elegidos`, `elegidos` y `marcar()`, y un `al_cambiar_la_eleccion`
+      > que rehace las opciones: **el coste depende de cuántos van**. La barra
+      > pinta una casilla por candidato y repinta la tarjeta al marcar —diferido,
+      > que reconstruirla desde la señal de su propia casilla borra el nodo que
+      > la emite—. `Expedicion.mandar_a` respeta la lista del jugador y vuelve a
+      > comprobar que cada uno pueda ir. `contestar_todo` marca a los primeros
+      > que puedan: sin eso una sonda no podría decir que sí nunca. **La parte
+      > de interfaz no la cubre ninguna prueba**: se ve en la sonda de escena de
+      > X3. Suite: 1 104 pruebas, 7 233 comprobaciones.
+- [ ] **X3. Que se les vea irse y volver.** Salida por la celda del borde
+      alcanzable más cercana al rumbo del destino; se ocultan al llegar,
+      reaparecen el día que toca y vuelven andando, sin trabajar en todo el
+      tramo. **Toca:** `sim/Expedicion.gd`, `sim/Marcha.gd`,
+      `sim/SettlementSim.gd`, la vista de las personas, `tests/ExpedicionProbe.gd`.
+      **Sonda en escena, ~5 min, y una captura con ventana.**
+
+      > **HECHO (2026-09-13).** `Expedicion.puerta_del_valle` busca la celda del
+      > borde **alcanzable** —`Marcha.alcanzable_desde_casa`, que nadie da un
+      > paso sin camino debajo— que menos se desvía del rumbo del destino
+      > regional. Salen andando hacia ella y, al llegar, se les saca de la vista
+      > mandando su cuerpo bajo tierra: sin eso se quedaban plantados en el
+      > borde doce jornadas, porque la simulación no los tocaba y la vista
+      > seguía pintándolos donde los dejó. **Vuelven por la misma puerta** y
+      > andan a casa solos. Medido en la escena: la puerta cae a **1 m del
+      > borde** y a 2 115 m del abrigo, Haro los recorre en dos jornadas y
+      > desaparece, y al volver los tres están en la puerta y no en la cueva.
+      >
+      > **Y despejan el minimapa por donde pasan** (pedido por el usuario ese
+      > mismo día): la misma ojeada que hace cualquiera que anda, no un segundo
+      > sistema. Medido: del **2,0 % al 6,2 %** de mapa conocido sólo con la
+      > ida. Con prueba, y con su control —quien ya está fuera no descubre nada
+      > del valle—.
+      >
+      > **Y un hallazgo de la partida**: con el equipo del vivac, al empezar no
+      > hay ni pieles ni leña, así que **la primera expedición no puede salir
+      > hasta que la banda tenga 3 pieles y 39 haces guardados**. La sonda tuvo
+      > que abastecerse a mano para poder medir lo suyo.
+
+**11 · La cumbre**
+
+- [x] **C1. Elegir quién sube**, con la misma elección y
+      `Cumbres.MIN_CLIMBING_PARTY` de mínimo. Prueba.
+      **Toca:** `sim/Cumbres.gd`, `tests/TestDecisiones.gd`. Segundos.
+
+      > **HECHO (2026-09-13).** `Cumbres.subir_con` pone en ascensión a **todos
+      > los elegidos** —que es lo que `_ascension_party_size` cuenta, así que la
+      > cordada elegida es la que permite atacar una cumbre dura— y abre paso el
+      > que mejor trepa de ellos. El mínimo no es una cifra nueva: 1 en una
+      > cumbre suave y `MIN_CLIMBING_PARTY` en una dura, que ya estaba. Los
+      > tocados no salen en la lista. Suite: 1 106 pruebas, 7 238 comprobaciones.
+
+**13 · La pasarela** (después del fallo 2)
+
+- [x] **B1. La piragua sale del Paleolítico.** Prueba sobre el árbol.
+      **Toca:** `economia/TechTree.gd`, `DemoMain.gd`, `ui/PopupHitoTecnico.gd`.
+      Segundos.
+
+      > **HECHO (2026-09-13).** Fuera del `enum`, del catálogo, de su coste y de
+      > la rama de exploración, que se queda en la pasarela. EPOCA_02 decía «ya
+      > en `TechTree.Tech.PIRAGUA`» y ahora dice que hay que añadirla: se
+      > corrigió. El árbol pasa de 19 técnicas desbloqueables a **18**, y las dos
+      > pruebas que la usaban de ejemplo —el arte pide hogar levantado— se
+      > escribieron con el arte, que pide lo mismo.
+- [ ] **B2. Un cruce, no el mapa.** `Navgrid.paso_entre` abre las celdas con
+      pasarela en las cuatro estaciones; se borra `has_bridge` de
+      `Hydrography.tope_de_vado`, del horno y de la simulación. Pruebas: con la
+      técnica y sin obra sigue cerrado; con obra se abre ese y ningún otro.
+      **Toca:** `mundo/Navgrid.gd`, `mundo/Hydrography.gd`,
+      `mundo/HornoDeRejillas.gd`, `sim/Marcha.gd`, `sim/SettlementSim.gd`,
+      `DemoMain.gd`, `tests/TestFording.gd`. Segundos.
+
+      > **HECHO (2026-09-13).** `has_bridge` ya no existe. El parámetro que
+      > viajaba por toda la capa de mundo pasa a llamarse `con_pasarela` y
+      > significa **«hay una AQUÍ»**: la rejilla lo pregunta celda a celda con
+      > `Navgrid._hay_pasarela`, y la regla de paso sigue en un solo sitio
+      > —`Hydrography.can_cross`—. Las rejillas guardan las celdas con las que se
+      > midieron y su versión: levantar o perder una pasarela las invalida.
+      > Trampa evitada: el `Tajo` cacheaba con un sí/no de puente, y ahora
+      > cachea con la versión, que es lo que de verdad cambia adónde se puede
+      > ir. **Y una lección repetida**: las pruebas seguían llamando a la firma
+      > vieja y la suite se quedó **colgada**, no en rojo —un fichero que no
+      > compila no falla, no termina—.
+- [ ] **B3. La banda elige dónde y la levanta.** `Pasarelas` (`sim/`): el cruce
+      de sus veredas que más rodeo ahorra, hasta **2 celdas de ancho**, por
+      **40 de leña y 6 jornadas-persona** (decididos por el usuario), y obra con jornadas y leña como
+      `CampProjects`. Pruebas. **Toca:** `sim/Pasarelas.gd` (nuevo),
+      `sim/SettlementSim.gd`, `tests/TestPasarela.gd` (nuevo). Segundos.
+
+      > **HECHO (2026-09-13).** `Pasarelas.elegir_cruce` mira las veredas que la
+      > banda sabe —SISTEMAS §18— y se queda con la que **más se desvía de la
+      > línea recta entre sus extremos**: lo que rodea un camino en un valle con
+      > río es el río. Donde esa recta corta el agua se cuentan las celdas
+      > seguidas, y si pasan de dos no es cauce para dos troncos. **No se mide
+      > rehaciendo la rejilla con la pasarela puesta**: sería hornear una rejilla
+      > por candidato, 900 ms cada una, para contestar lo mismo. La levanta quien
+      > ese día salió de exploración, a jornada por cabeza.
+- [ ] **B4. La riada.** Al entrar la estación, si su rejilla cierra ese vado
+      sin contar la pasarela, se pierde y se cuenta en la crónica. Sin crecida
+      no se pierde nunca. Pruebas. **Toca:** `sim/Pasarelas.gd`,
+      `tests/TestPasarela.gd`. Segundos.
+
+      > **HECHO (2026-09-13).** Se pierde cuando el cauce de esa celda llega a
+      > `Hydrography.FORD_IMPASSABLE` con el caudal de la estación que entra:
+      > **sin sorteo y sin cifra nueva** —si el río viene tan alto que ya no se
+      > vadea, viene lo bastante alto como para llevarse dos troncos—. Con el río
+      > bajo aguanta todas las estaciones que haga falta, y eso también tiene
+      > prueba: sin ella, «se la lleva la riada» sería «se cae sola».
+- [x] **B5. Se ve sobre el terreno.** `PasarelaView` (`vista/`), que se quita
+      con la riada. **Toca:** `vista/PasarelaView.gd` (nuevo), `DemoMain.gd`.
+      **Una captura con ventana, ~3 min.**
+
+      > **HECHO (2026-09-13), con dos vueltas.** La vista se repinta cuando
+      > cambia `Pasarelas.version`, así que se quita sola con la riada. La
+      > primera captura salió con **cero troncos**: la vista se refresca al
+      > cerrar la jornada y la sonda tiene el reloj parado. La segunda la plantó
+      > en mitad del cauce ancho —donde la banda no construiría— porque la sonda
+      > buscaba «la primera celda mojada»; ahora busca **el paso más estrecho**,
+      > puntuando cuánta agua hay alrededor. Y dos troncos de 28 cm desde la
+      > distancia de gestión son dos rayas: lleva el tejido de ramas que dice su
+      > propia ficha. `PasarelaCaptura` (nueva).
+
+**14 · El taller** (después del fallo 1)
+
+- [ ] **T1. Practica sin demanda, y curte la piel.** Las tres reglas, con
+      pruebas sobre un taller construido. **Y el curtido sin pedido**, añadido
+      por el usuario el 2026-09-13: hoy nadie curte piel si nadie ha pedido una
+      prenda o un odre, y las pieles crudas se amontonan. **Toca:** `sim/Taller.gd`, `sim/Reparto.gd`,
+      `tests/TestTaller.gd` (o la que ya lo cubra). Segundos.
+
+      > **HECHO (2026-09-13).** `Taller.puede_practicar` abre la puerta del
+      > reparto: con encargo o practicando. Sin encargo se talla para aprender
+      > —gasta **1 unidad de la materia del oficio por jornada**, que es una
+      > decisión, no una medida— y si no queda técnica de manufactura que
+      > aprender, no se practica: no se gasta piedra por gastarla. **Y la piel
+      > cruda se curte aunque nadie pida prendas**, que lo pidió el usuario al
+      > verlo jugando: el curtido ya existía, pero a peletería sólo se mandaba a
+      > alguien si había una pieza pedida que llevara piel. Ocho pruebas en
+      > `TestTaller`. Suite: 1 126 pruebas, 7 284 comprobaciones.
+- [x] **T2. La medida de A4.** `ArbolPasoProbe`, 90 jornadas, `MANU=2`: ≥ 2,00
+      jornadas de manufactura al día, y en qué jornada llega la talla laminar o
+      por qué no llega. **Corrida larga, ~45 min.** Toca ESTADO §2.
+
+      > **CORTADA POR EL USUARIO (2026-09-13), y la cifra queda pendiente.** El
+      > presupuesto de 45 min salió de lo que costó esta misma sonda en la tanda
+      > anterior, con 60 jornadas; con 90 y la máquina venida de las pasadas
+      > largas iba camino de **hora y media larga**. Se paró en la jornada 20 de
+      > 90. Lo que alcanzó a medir: a la jornada 11, **18 jornadas de manufactura
+      > con dos artesanos** —o sea las 2,00 al día que el criterio pide— y 88 de
+      > piedra en el almacén. No basta para dar el criterio por cumplido: hace
+      > falta ver si se sostiene cuando el utillaje se cubre, que es lo que
+      > paraba al taller hacia la jornada 31. **El frente 14 queda medido sólo
+      > por pruebas**, y esta cifra se retoma cuando haya máquina.
+
+      > **MEDIDA ENTERA (2026-09-13), y el criterio se cumple.** Relanzada al
+      > acabar lo demás: 90 jornadas, `MANU=2`, 1 h 40. **1,98 jornadas de
+      > manufactura al día sostenidas las noventa** —el criterio pedía no bajar
+      > de 2,00, y esto es el redondeo de la primera jornada— frente a la caída a
+      > **0,3** que el 🔴 medía hacia la jornada 31. **La talla laminar se
+      > aprende hacia la jornada 51**, con el núcleo por la 21–31. Lo que ahora
+      > frena el árbol no es el taller: es el material animal —azagaya sin asta
+      > ni tendón, aguja sin hueso— y el ocre y la grasa del arte parietal.
+      > Cifras en ESTADO §2, «El taller ya no se para».
+
+**15 · El guardado** (después de 10 y 13)
+
+- [ ] **G1. Guardar y leer, sin pérdida.** `Guardado` (`region/`): cabecera y
+      versión propias, la instantánea más el `GameState` que ella no guarda;
+      una versión distinta se rechaza. Pruebas: misma firma al guardar y al
+      cargar, y 5 jornadas iguales con la misma semilla; y una expedición a
+      medias vuelve su día. **Toca:** `region/Guardado.gd` (nuevo),
+      `tools/Instantanea.gd` si hace falta un gancho, `tests/TestGuardado.gd`
+      (nuevo). Segundos.
+
+      > **HECHO (2026-09-13).** `Guardado` (`region/`) con su cabecera y su
+      > versión: dentro, la instantánea —que ya sabía recorrer y volcar la
+      > partida entera, azar incluido— y lo que ella no guarda, que es lo que
+      > cruza escenas: qué emplazamiento se juega, qué se ha descubierto de la
+      > comarca, la era, la cota del mar y el recuadro local. **Un fichero de
+      > otra versión se rechaza** en vez de cargarse a medias. Seis pruebas.
+      > Trampa: el emplazamiento se guarda desde `Expedition.site` y no desde
+      > `GameState.home`, que sólo lo pone `GameState.begin`; guardando el
+      > segundo, una partida montada por sonda quedaba imposible de retomar.
+- [x] **G2. Al volver al mapa se guarda, y se retoma.** `DemoMain` guarda,
+      `RegionMap` ofrece retomar, y la escena arranca volcando. SPECS §6.4 y §8
+      corregidos. **Toca:** `DemoMain.gd`, `region/RegionMap.gd`,
+      `region/Expedition.gd`, docs/SPECS.md
+
+      > **HECHO (2026-09-13).** Se guarda al volver al mapa regional, con el
+      > reloj parado y desde fuera del paso. El mapa regional enseña **«Volver
+      > con la banda (jornada N)»** sólo si hay algo que retomar, y
+      > `Expedition.retomando` distingue retomar de fundar otra vez en el mismo
+      > sitio: una partida retomada **no llama a `iniciar_partida`**, que
+      > volvería a levantar el momento inicial y a citar la decisión de la
+      > estación..
+- [x] **G3. En dos procesos, y el mapa regional se entera.** `GuardadoProbe`
+      con `MODO=guardar` y luego `MODO=cargar`, y en escena: tras una expedición
+      el mapa enseña la cueva más los 4. **~5 min.**
+
+      > **HECHO (2026-09-13), y el primer resultado era del instrumento.** Las
+      > cinco jornadas salían distintas en tres de cinco, y dos corridas **del
+      > mismo brazo** tampoco coincidían: la sonda tomaba la firma al salir del
+      > bucle de espera, o sea en un punto cualquiera del paso, y en un mismo
+      > fotograma corren varios pasos. Tomándola en `paso_cerrado` —«el único
+      > límite limpio de la partida», SPECS §3.2— la hora es siempre 0,00 y
+      > **las cinco jornadas salen idénticas**: la partida cargada es la misma
+      > que la que no se guardó nunca. Lo de siempre: si las cifras no cuadran,
+      > sospechar del instrumento antes que de lo medido.
+      >
+      > **Y el mapa regional se entera** porque `GameState.discovered` es lo que
+      > filtra lo que enseña —medido en la tanda 2, `TestNiebla`— y ahora además
+      > se guarda: `ExpedicionProbe` mide en la escena que una expedición lo
+      > sube de 0 a 4.
+
+**16 · El cielo**
+
+- [x] **S0. Qué cielo hay hoy y por qué no se ve.** Capturas con ventana a
+      cuatro horas desde la cámara de juego. **~3 min.** Si resulta que se ve y
+      sólo le faltan nubes, S1 es sólo eso.
+
+      > **HECHO (2026-09-13), y la respuesta eran dos cosas, ninguna «no hay
+      > cielo».** Primera: **la cámara no lo mira**. `OrbitalCamera` clampa la
+      > inclinación a [-89º, -10º], o sea que siempre mira hacia abajo, y en un
+      > valle las laderas llenan el cuadro: a 300 m de distancia no entra ni una
+      > franja. Segunda: **el cielo que hay es gris a propósito** —la escena
+      > `WorldEnvironment.tscn` pone un cenit gris azulado y un horizonte gris,
+      > que es la paleta de un día encapotado—, así que cuando entra en cuadro
+      > no se lee como cielo. `CieloCaptura` (nueva) hace las cuatro horas.
+- [x] **S1. Nubes, y el cielo con la hora.** Shader de cielo en
+      `WorldEnvironmentSetup`; cuatro capturas, dos separadas unos segundos, y
+      el fotograma medido antes y después en Alto. **Toca:**
+      `vista/WorldEnvironmentSetup.gd`, `shaders/` (nuevo), docs/GRAFICOS.md.
+      **~15 min.**
+
+      > **HECHO EL CIELO (2026-09-13), y ampliado por el usuario a «rotación de
+      > cielo, sol, luna, estrellas».** `shaders/cielo.gdshader` sustituye al
+      > `ProceduralSkyMaterial`: degradado con la hora, **nubes que pasan**,
+      > **estrellas que giran alrededor del polo celeste** —a la altura de la
+      > latitud, no de la vertical: en Cantabria son 43º— y **el sol y la luna
+      > donde de verdad están**. Las direcciones no las calcula el cielo: se las
+      > da `WorldEnvironmentSetup` desde `SolarPosition`, que es quien ya orienta
+      > las luces; una segunda cuenta separaría el sol de la sombra del sol
+      > pintado. Las nubes van con el reloj de pared —son vista, SPECS §4.7— y
+      > las estrellas con el ángulo horario del juego. Y el color: la paleta gris
+      > de la escena es la de encapotado, así que se mezcla con un azul limpio
+      > según lo que tapen las nubes, que salen del tiempo que hace.
+      >
+      > **Y las dos cosas que faltaban, hechas al soltar T2 la máquina.** El tope
+      > de inclinación de la cámara sube de -10º a **-3º** (decisión del
+      > usuario): ahora el cielo entra en cuadro de verdad, y la captura de
+      > mediodía despejado lo enseña azul. **El fotograma no se nota**: `PicoProbe`
+      > con `VEL=5 DIAS=2`, **40,6 ms de media con el cielo viejo y 40,5 con el
+      > nuevo**, un tirón de más de 100 ms en cada corrida. Es un shader de
+      > pantalla completa sin geometría: la diferencia es menor que el ruido
+      > entre dos corridas. Para poder compararlo se dejó `CIELO=viejo`, un
+      > interruptor **de medida** como `NOCHE=0` o `SEMILLA=`.
+
+**17 · Las ventanas** (al final: pintan lo de 10, 11 y 12)
+
+- [ ] **V1. «Trabajos»: quién está fuera.** Expedición, cumbre y heridos,
+      aparte, con dónde y cuándo vuelven. Prueba sobre lo que pinta, y captura.
+      **Toca:** `ui/PanelTrabajos.gd`, `tests/TestPanelTrabajos.gd` (nuevo).
+      **~3 min** de captura.
+
+      > **HECHO (2026-09-13).** Una sección «QUIÉN NO ESTÁ» con tres casos —de
+      > camino al borde del valle, fuera del valle, descansando en el abrigo— y
+      > la jornada en que vuelve o se cura. Quien está fuera **desaparece de la
+      > rejilla**, que no se le puede dar trabajo hoy; el herido se queda, porque
+      > lo que se le marque es lo que hará al curarse. La lista la calcula
+      > `PanelTrabajos.ausentes`, que no pinta nada: así se comprueba con una
+      > prueba y no con una captura —la vista lee, no decide—. Cuatro pruebas y
+      > una captura con `PanelProbe`.
+- [x] **V2. El Shift del almacén**, que ya existe: prueba de lo que hace y
+      comprobarlo jugando. **Toca:** `tests/` (nueva prueba). Segundos.
+
+      > **HECHO (2026-09-13).** Estaba, sin prueba y sin escribir en ninguna
+      > parte. Se saca a `PanelAlmacen.paso_del_objetivo(con_shift)` —una función
+      > sin teclado, porque `Input.is_key_pressed` no se puede preguntar en una
+      > prueba sin pantalla— y se comprueba: 1 sin Shift, 10 con él. **Ojo con
+      > la lectura**: en los pedidos de utillaje eso es «de 1 en 1 y de 10 en
+      > 10», pero el tope de comida multiplica ese paso por diez, así que ahí va
+      > de 10 en 10 y de 100 en 100. Es deliberado —un tope de comida en
+      > raciones de una en una sería inmanejable— y ahora está escrito.
+- [x] **V3. Oficios, al día.** Lista de textos revisados en la cita de HECHO, y
+      las jornadas de cada oficio leídas del árbol, con prueba de que coinciden.
+      **Toca:** `ui/PanelOficios.gd`, `tests/`. Segundos.
+
+      > **HECHO (2026-09-13).** Cada oficio enseña ahora **«N jornadas
+      > trabajadas · la siguiente, X, pide M»**, leído de `TechTree.days_in` —la
+      > misma cifra que hace subir el árbol, no una copia— con su prueba.
+      >
+      > **Textos revisados, y los dos que decían algo que el juego no hace:**
+      > el hogar decía «preparar pieles», y curtir es del taller —peletería,
+      > SISTEMAS §16—: ahora dice «levantar las obras del abrigo», que sí lo
+      > hace y no se decía. Y exploración no mencionaba lo que la tanda 3 le
+      > añade: es quien levanta las pasarelas de los cruces. Los demás
+      > —recolección, caza, ribera, manufactura y las diecisiete
+      > especialidades— se leyeron uno a uno y describen lo que el juego hace.
+
+**Cierre**
+
+- [x] **M. Cerrar.** Suite verde y ≥ 7 161 comprobaciones, `LlamadasHuerfanas`
+      **en 0** —las 2 «de siempre» eran falsas y se arreglaron el 2026-09-13:
+      el comprobador llamaba huérfana a una función estática pedida por su
+      clase—, y lo aprendido a SISTEMAS §4, §5 y §18, GRAFICOS,
+      INTERFAZ §4, SPECS §4.3, §4.6, §6.4 y §8, y ESTADO §2 y §3.
+
+**Presupuesto de máquina: ~1 h 20**, casi todo en T2 (45 min). Lo demás son
+capturas y sondas cortas (S0 + S1 ~18 min, X3 ~5, G3 ~5, B5 y V1 ~3 cada una),
+más las pasadas de la suite. **Ningún criterio pide correr un año.**
+
+> **Lo que costó de verdad: ~3 h 15.** T2 se presupuestó en 45 min con lo que
+> costó la misma sonda en la tanda anterior —60 jornadas— y con 90 se fue a
+> **1 h 40**; se cortó a la jornada 20, el usuario decidió dejarla para el final,
+> y se relanzó entera al acabar todo lo demás. El resto cuadró: las capturas y
+> las sondas cortas, unos 40 min contando las repeticiones —la del cielo hubo
+> que hacerla cuatro veces para encontrar un encuadre donde se viera—, y las
+> pasadas de la suite, unos 55 min en total. **Ningún criterio pidió correr un
+> año**, que era lo que se quería evitar.
+
+**Qué puede ir a la vez:** 9, 12, 15-G1, 16 y 17-V2/V3 tocan ficheros
+distintos y se pueden repartir, salvo que 9 y 12 comparten `SettlementSim`.
+**Las medidas, nunca a la vez**: Godot es de uno en uno.
 
 ---
 
@@ -1632,15 +2534,18 @@ Lo que falta para que esto deje de ser dos visores y pase a ser un juego.
 - **Lo que falta**: salir al mapa regional y volver **no conserva el estado**.
   Eso es A3.
 
-### A3. Persistencia — **sin empezar, y con una confusión que aclarar**
+### ~~A3. Persistencia~~ — **hecha el 2026-09-13**
 - Guardar y cargar de verdad: cerrar el juego y recuperar la partida.
 - **`Instantanea` no es esto.** Es un instrumento de medida —comparar dos
   corridas, arrancar una sonda en la jornada N— y no promete que un fichero de
   hoy sirva mañana. Ver SPECS.md §6.4. Reutilizar su recorrido por reflexión es
   razonable; darla por guardado, no.
 - Criterio: cerrar el juego y recuperar la partida.
-- **Tiene spec desde el 2026-09-13**: EPOCA_01 §10.1 → Tanda 3, frente 15. Se
-  guarda solo al volver al mapa regional, y los criterios están allí.
+- **HECHA el 2026-09-13** (tanda 3, frente 15): `Guardado` (`region/`), un
+  fichero automático por partida, que se escribe al volver al mapa regional y se
+  ofrece desde él —«Volver con la banda»—. Medido en dos procesos: guardar,
+  cerrar, abrir y cargar da **las mismas cinco firmas diarias** que la partida
+  que no se guardó. Ver SPECS §6.4 y ROADMAP «En curso» → Tanda 3, G1–G3.
 
 ---
 

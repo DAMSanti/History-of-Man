@@ -51,13 +51,23 @@ func painting_blocked_by() -> String:
 	if sim.techs == null or not sim.techs.has(TechTree.Tech.ARTE):
 		return "todavía no se sabe pintar"
 	if not sim.camp_built.get(CampProjects.Kind.HOGAR, false):
-		return "hace falta el sim.hogar"
+		return "hace falta el hogar"
 	if sim.toolkit.count(Tool.Kind.LAMPARA) <= 0:
 		return "no hay lámpara: dentro no se ve nada"
 	if sim.store.amount(Materia.Kind.OCRE) < SettlementSim.PINTURA_OCRE:
 		return "falta ocre"
 	if sim.store.amount(Materia.Kind.GRASA) < SettlementSim.PINTURA_GRASA:
 		return "falta grasa para la lámpara"
+	# SÓLO SE PINTA LO EXPLORADO, Y DONDE SE PUEDE (frente 23, 2026-09-13).
+	# Antes se pintaba sin haber entrado nunca. Se pinta en la cueva de la banda,
+	# que una vez explorada tiene pared siempre: ver
+	# [Exploracion.cueva_de_la_banda]. Va DESPUÉS de lo que se lleva dentro —la
+	# lámpara, el ocre, la grasa—, que es lo que el jugador junta primero.
+	var cueva := sim.exploracion.cueva_de_la_banda
+	if not sim.exploracion.explorada(cueva):
+		return "hay que explorar la cueva antes de pintarla"
+	if not sim.exploracion.pintable(cueva):
+		return "esta cueva no tiene pared donde pintar"
 	if sim.painting_queue != null:
 		return "ya hay una pared empezada"
 	return ""

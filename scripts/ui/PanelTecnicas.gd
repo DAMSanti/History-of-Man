@@ -240,12 +240,11 @@ func _camp_row(body: VBoxContainer, kind: CampProjects.Kind) -> void:
 	# relleno de serie en medio de una piel escrita a mano canta a widget, y es
 	# justo lo que esta ventana esta dejando de ser.
 	if ui.sim.camp_queue == kind:
-		_fila(body, "▸  %s" % name_text, "en marcha: %.0f de %.0f jornadas" % [
-			ui.sim.camp_progress, CampProjects.labor_days(kind)],
+		_fila(body, "▸  %s" % name_text, "en marcha: %s" % CampProjects.trabajo_texto(
+			kind, ui.sim.camp_progress),
 			UISkin.OCHRE, CampProjects.project_desc(kind))
 	else:
-		_fila(body, "▸  %s" % name_text, "%.0f jornadas de hogar"
-			% CampProjects.labor_days(kind), UISkin.INK,
+		_fila(body, "▸  %s" % name_text, CampProjects.trabajo_texto(kind), UISkin.INK,
 			CampProjects.project_desc(kind))
 	_escrito(body, "     %s" % CampProjects.project_desc(kind), true)
 	_escrito(body, "     %s" % _materials_line(CampProjects.materials(kind)), true)

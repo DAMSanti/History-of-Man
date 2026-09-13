@@ -451,7 +451,7 @@ static func seasonal_ford_modifier(season: Subsistence.Season) -> float:
 ## `season` mueve el umbral: el mismo vado que no existe en febrero se cruza en
 ## agosto. Es lo que convierte al rio en una barrera ESTACIONAL, que es lo que
 ## de verdad era, en vez de en un muro permanente.
-static func can_cross(difficulty: float, has_boat: bool, has_bridge: bool,
+static func can_cross(difficulty: float, has_boat: bool, con_pasarela: bool,
 		season: int = -1) -> bool:
 	var adjusted := difficulty
 	if season >= 0:
@@ -462,7 +462,7 @@ static func can_cross(difficulty: float, has_boat: bool, has_bridge: bool,
 		if difficulty >= 1.0:
 			adjusted = 1.0
 
-	var tope := tope_de_vado(has_boat, has_bridge)
+	var tope := tope_de_vado(has_boat, con_pasarela)
 	return adjusted < tope.x if tope.y > 0.5 else adjusted <= tope.x
 
 
@@ -475,12 +475,15 @@ static func can_cross(difficulty: float, has_boat: bool, has_bridge: bool,
 ## sigue viviendo aqui y en un solo sitio: `can_cross` sale de esta misma
 ## funcion.
 ##
-## Sin barca ni puente se pasa hasta [FORD_IMPASSABLE] incluido. Con una de las
+## `con_pasarela` es «hay una pasarela AQUÍ», no «la banda sabe hacerlas»: una
+## pasarela abre su cruce y no el mapa entero. Ver [Pasarelas], 2026-09-13.
+##
+## Sin barca ni pasarela se pasa hasta [FORD_IMPASSABLE] incluido. Con una de las
 ## dos se pasa cualquier cosa por debajo de 1,0 -mar abierta no, que ni la barca
 ## ni el puente de la epoca salvan cualquier anchura-, y eso incluye de sobra
 ## todo lo que ya pasaba sin ellas.
-static func tope_de_vado(has_boat: bool, has_bridge: bool) -> Vector2:
-	if has_boat or has_bridge:
+static func tope_de_vado(has_boat: bool, con_pasarela: bool) -> Vector2:
+	if has_boat or con_pasarela:
 		return Vector2(1.0, 1.0)
 	return Vector2(FORD_IMPASSABLE, 0.0)
 

@@ -29,6 +29,14 @@ const REGION_SCENE := "res://scenes/region_map.tscn"
 const LOCAL_SCENE := "res://scenes/demo_main.tscn"
 
 
+## Si lo que se va a montar es una partida GUARDADA y no una fundación nueva.
+##
+## Lo pone el mapa regional al pulsar «retomar» y lo lee [DemoMain] al acabar de
+## montar la escena: no basta con que haya un fichero guardado, porque fundar de
+## nuevo en el mismo emplazamiento es una partida distinta. Ver [Guardado].
+static var retomando: bool = false
+
+
 static func is_active() -> bool:
 	return site != null and not heightmap_path.is_empty()
 

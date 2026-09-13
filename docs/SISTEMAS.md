@@ -21,7 +21,7 @@ Lo que hace hoy el juego **medido**, con qué sonda y con qué cifra, está en
 | [§13](#13-lo-que-se-cuenta-y-lo-que-se-pinta) | Lo que se cuenta al volver, y lo que se queda en la pared |
 | [§14](#14-los-desechos-y-el-lobo) | Los desechos, el conchero y el lobo que viene a ellos |
 | [§15](#15-la-bellota) | La bellota: la comida que hay que preparar en otoño |
-| [§16](#16-el-curtido-de-piel) | El curtido de piel |
+| [§16](#16-el-curtido-de-piel-y-el-taller-que-practica) | El curtido de piel |
 | [§17](#17-el-agua-odres-y-por-qué-llenar-uno-puede-ser-una-salida) | El agua: odres, y por qué llenar uno puede ser una salida |
 
 **Diseño de destino** — lo que cruza las once épocas y aún no existe entero:
@@ -39,6 +39,7 @@ Lo que hace hoy el juego **medido**, con qué sonda y con qué cifra, está en
 | [§9](#9-cómo-se-usa-esto-con-el-roadmap) | Cómo se usa esto con el ROADMAP |
 | [§18](#18-los-caminos-que-la-banda-aprende) | Los caminos que la banda aprende, y por qué caducan |
 | [§19](#19-la-temperatura-y-el-abrigo-que-se-lleva-puesto) | La temperatura, y el abrigo que se lleva puesto |
+| [§20](#20-la-pasarela-una-obra-en-un-cruce-no-un-permiso) | La pasarela: una obra en un cruce, y no un permiso sobre el mapa |
 
 Las once fichas de época (`EPOCA_01_PALEOLITICO.md`… `EPOCA_11_EL_VAPOR.md`)
 serían once listas sueltas sin este esqueleto. Fueron doce: el siglo corto
@@ -212,6 +213,15 @@ estaba desde el principio, lo construido aparece desde que se levanta, y con
 
 ## 3. Los oficios a través de las épocas
 
+**Quien está tocado no sale del abrigo** (2026-09-13). Un percance que todavía
+dura —`Inhabitant.esta_tocado()`— deja a esa persona en **trabajo de hogar y
+nada más**, que es el que se hace en la campa de la boca, y la aparta de la
+expedición y de la cumbre. **No se le tocan las prioridades**: son del jugador,
+así que al curarse vuelve solo a su oficio sin que nadie tenga que devolvérselas
+—al revés que la berrea, que sí las cambia y por eso sí las guarda—. Antes el
+percance sólo bajaba lo que rendía y se salía igual, con la pierna mal. Con
+prueba: `TestHerido`.
+
 `Profession.Job` y `Profession.Speciality` son hoy enteros de un `enum`
 cerrado, todos del Paleolítico. Añadir un oficio de época posterior es
 añadir un valor al `enum`, una entrada a `CATALOGUE` y, si hace falta,
@@ -305,6 +315,19 @@ los 862 de golpe; los descubre"*.
 > vuelta, 3 adultos, uno de cada cinco ocupado— **son decisiones y lo dicen en
 > el código**. Se ajustan con la partida delante.
 >
+> **Y se les ve salir y volver** (2026-09-13): salen andando de la cueva hasta
+> la celda del borde del mapa **alcanzable** que mira al destino, y al llegar
+> dejan de estar en el valle; a la vuelta aparecen por esa misma puerta y andan
+> a casa. Las jornadas del paseo van DENTRO de las doce. Y **despejan el
+> minimapa por donde pasan**, con la misma ojeada que cualquiera que anda.
+>
+> **Y se lleva el vivac** (2026-09-13): además de las raciones, una piel de
+> tienda por persona —que vuelve al abrigo— y una de leña por persona y noche
+> más la de margen, con **las constantes de la acampada de la cumbre**
+> (`SettlementSim.VIVAC_PIEL`, `VIVAC_LENA`, `VIVAC_MARGEN_NOCHES`). Con tres
+> personas y doce jornadas: 72 raciones, 3 pieles y 39 de leña. Si falta algo, la
+> tarjeta enseña el botón apagado diciendo qué falta, y no se sale.
+>
 > **Y la primera expedición siempre encuentra gente** (2026-09-13, decisión del
 > usuario): su destino se puebla al volver (`Contacto.poblar`), lo hubiera
 > sorteado o no. Sólo el destino deja contacto, y con uno de cada cinco
@@ -355,6 +378,21 @@ Paleolítico ya exige que exista.
 ---
 
 ## 5. El comercio, de la concha de lejos al mercado nacional
+
+> **Hecho (2026-09-13)**: `Intercambio.PRECIO` —fruto seco 1, sílex 2 y
+> concha 3 heredados de los tratos de antes; lo demás, decisión—, la relación
+> como factor a los dos lados, `se_acepta` con el 10 % y `cambiar` exacto, con
+> historial. Lo que traen los visitantes sale de la semilla y se gasta por
+> estación. **La tarjeta de trueque de cada estación, y su viaje de cuatro
+> jornadas, se quitaron el mismo día**: el trueque es sólo la ventana. Con ella
+> se fue pedir gente a otra banda.
+>
+> **Spec (2026-09-13)**: el trueque pasa a ser **una ventana como la del
+> almacén**, con los materiales de la banda a un lado y lo que traen los
+> visitantes al otro. Cada cosa tiene un precio interno que **mueve la relación**
+> con esa gente, y el trato sale si los dos lados no se separan más de un 10 %.
+> Y una **ventana de relaciones** con lo que se sabe de cada banda. Criterios en
+> EPOCA_01 §10.1 → Tanda 4, frentes 25 y 26.
 
 Es una sola escalera con cuatro peldaños reales, y el primero **ya está
 obligado por los datos**: `archivo/SLICE_PALEOLITICO.md` §4 dice sin rodeos que el
@@ -700,6 +738,24 @@ por la mañana y luego pesca con lo mejor que tenga.
 
 ## 13. Lo que se cuenta, y lo que se pinta
 
+> **Mudarse de cueva (2026-09-13)**: `Traslado`. Sólo a una cueva a la que se
+> llegue andando; cada cual carga hasta su capacidad —comida primero— y el resto
+> se queda en la cueva vieja; la banda entera anda hasta allí sin trabajar; y al
+> llegar, las obras son las del sitio, ninguna si es nuevo. Volver devuelve lo
+> que se dejó y las obras que había. Medido en ROADMAP, «Tras la tanda 4».
+>
+> **Hecho (2026-09-13)**: explorar y pintar ya van así —`Exploracion`,
+> `Repertorio` y `Pinturas`—, con lo medido en ROADMAP, tanda 4, E1 a P1. La
+> lámpara es el útil `Tool.Kind.LAMPARA`, el mismo para las dos cosas.
+>
+> **Spec (2026-09-13)**: **sólo se pinta lo explorado, y donde se puede.**
+> Explorar una cueva pide lámpara, grasa y una jornada de alguien del hogar, y
+> trae dos o tres decisiones de un repertorio de al menos treinta, con riesgo de
+> verdad. Al acabar se sabe si tiene zona pintable: una de cada tres, y la de la
+> banda siempre. Y **la sepultura** entra: una decisión al morir alguien, que
+> queda en el relato, en el mapa y, la primera con ajuar, como hito. Criterios en
+> EPOCA_01 §10.1 → Tanda 4, frentes 22, 23 y 27.
+
 La mitad existía y no se veía: `_knowledge_transmission` acerca cada noche a los
 que duermen en la cueva a lo que sabe el mejor de ellos, y eso **es** contar la
 cacería junto al fuego. Lo que faltaba era enseñárselo al jugador y, sobre todo,
@@ -865,7 +921,7 @@ no la tienes en enero**.
 
 ---
 
-## 16. El curtido de piel
+## 16. El curtido de piel, y el taller que practica
 
 `Materia.Kind.PIEL` estaba en el catálogo con `dias: 0` —no se pudre— y su
 propia ficha decía *«sin curtir se pudre»*. `Profession.SPECIALITY_INFO`
@@ -898,6 +954,21 @@ mismos materiales que ya usa la pintura parietal, así que el ocre deja de
 ser sólo cosa del arte.
 
 ---
+
+
+> **Y se curte aunque nadie pida prendas** (2026-09-13, tanda 3, frente 14). El
+> curtido existía, pero a peletería sólo se mandaba a alguien si había una
+> **pieza pedida** que llevara piel —`Taller._next_piece`—, así que sin demanda
+> de odres ni vestidos las pieles crudas se amontonaban y se pudrían sin que
+> nadie las tocara. Lo vio el usuario jugando. Ahora `Taller.hay_que_curtir`
+> abre la puerta del reparto por sí sola.
+>
+> **Lo mismo con la talla**: si no hay pieza pedida pero queda una técnica de
+> manufactura por aprender y hay materia prima, el artesano **talla para
+> aprender**, gastando una unidad de la materia del oficio por jornada —una
+> decisión, no una medida—. Si no queda nada que aprender, no practica: no se
+> gasta piedra por gastarla. Es lo que cierra el 🔴 «el taller se para solo», y
+> la salida que eligió el usuario entre cuatro.
 
 ## 17. El agua: odres, y por qué llenar uno puede ser una salida
 
@@ -1177,5 +1248,39 @@ altitud, y que dormir al raso en enero no sea lo mismo que en julio
 (`Inhabitant.cold`). Y una regla de arquitectura: «¿cuántos grados hace aquí y
 ahora?» se contesta **desde un solo sitio** —invariante 3 de SPECS.md §7—, porque
 el hogar, el vivac, la ropa y la escalera térmica van a preguntarlo los cuatro.
+
+---
+
+---
+
+## 20. La pasarela: una obra en un cruce, no un permiso
+
+**Construida el 2026-09-13** (EPOCA_01 §10.1, tanda 3, frente 13). Antes,
+aprender la técnica ponía `SettlementSim.has_bridge = true` y con eso se vadeaba
+**cualquier** cauce del valle menos la mar abierta: dos troncos funcionaban como
+un permiso sobre el mapa entero, y sobre el terreno no aparecía nada.
+
+| | |
+|---|---|
+| La técnica | **Permite construir**, no abre nada por sí sola |
+| Dónde | Lo elige **la banda**, no el jugador: el cruce de sus veredas (§18) que más rodeo ahorra |
+| Hasta qué ancho | **Dos celdas de agua**, unos 16 m. Decisión del usuario |
+| Qué cuesta | **40 de leña y 6 jornadas-persona**. Decisión del usuario: el doble de lo que cuesta aprender la técnica |
+| Qué abre | **Ese cruce, las cuatro estaciones**, que es lo que un vado no da |
+| Cómo se pierde | Cuando la crecida de la estación que entra pasa de `Hydrography.FORD_IMPASSABLE` en esa celda. **Sin sorteo** |
+| Dónde vive | `Pasarelas` (`sim/`), `Navgrid._hay_pasarela`, `PasarelaView` (`vista/`) |
+
+**Cómo elige el sitio, y por qué así.** La vereda que más se desvía de la línea
+recta entre sus dos extremos es, por definición, la que rodea algo, y lo que se
+rodea en un valle con río es el río. Se mira dónde corta esa recta el agua y se
+cuentan las celdas seguidas. **No se mide rehaciendo la rejilla con la pasarela
+puesta**: eso es hornear una rejilla por candidato —900 ms cada una— para
+contestar la misma pregunta.
+
+**Y la piragua monóxila salió del Paleolítico**: es del Mesolítico, y la trae
+[EPOCA_02](EPOCA_02_MESOLITICO.md). La rama de exploración de esta época se
+queda en la pasarela. **El arco, también**, a petición del usuario el mismo día:
+la caza del Paleolítico termina en el propulsor, y los factores que el arco
+daba a la caza (×1,70 menor, ×1,20 mayor) vuelven con él en el Mesolítico.
 
 ---

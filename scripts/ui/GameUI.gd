@@ -138,6 +138,11 @@ var tecnicas: PanelTecnicas = PanelTecnicas.new(self)
 ## Que hay pintado en el mundo. Ver [PanelCenso].
 var censo: PanelCenso = PanelCenso.new(self)
 
+## El trueque, como el almacén, y lo que se sabe de las otras bandas. Ver
+## [PanelTrueque] y [PanelRelaciones].
+var trueque: PanelTrueque = PanelTrueque.new(self)
+var relaciones: PanelRelaciones = PanelRelaciones.new(self)
+
 ## Celebración y presentación de hitos tecnológicos con vídeo.
 var popup_hito: PopupHitoTecnico = null
 
@@ -182,8 +187,9 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 	sitios.show_resource(kind, world, activity)
 
 
-func show_feature(data: Dictionary, world: Vector3, home: Vector3) -> void:
-	sitios.show_feature(data, world, home)
+func show_feature(data: Dictionary, world: Vector3, home: Vector3,
+		de_la_banda: bool = false) -> void:
+	sitios.show_feature(data, world, home, de_la_banda)
 
 
 ## Que la interfaz se entere de los momentos: hallazgos que enseñar y
@@ -368,6 +374,7 @@ func _build_taskbar() -> void:
 		["territorio", "Territorio"],
 		["cronica", "Crónica"], ["parajes", "Parajes"], ["rastros", "Rastros"],
 		["entidades", "Entidades"], ["obras", "Obras"],
+		["trueque", "Trueque"], ["relaciones", "Relaciones"],
 		["controles", "Controles"],
 	]:
 		var button := Button.new()
@@ -593,6 +600,8 @@ func _toggle(id: String) -> void:
 		return
 	match id:
 		"controles": show_controls()
+		"trueque": trueque.show_trade()
+		"relaciones": relaciones.show_relations()
 		"almacen": show_store()
 		"trabajos": show_jobs()
 		"banda": show_band()

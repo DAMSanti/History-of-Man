@@ -61,7 +61,7 @@ func _init() -> void:
 		print("sin terreno o simulacion"); quit(); return
 
 	var started := Time.get_ticks_usec()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var build_ms := float(Time.get_ticks_usec() - started) / 1000.0
 
 	print("")

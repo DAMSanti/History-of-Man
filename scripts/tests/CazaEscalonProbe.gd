@@ -33,9 +33,6 @@ const ESCALONES := [
 	{"nombre": "+ ojeo", "armas": [Tool.Kind.AZAGAYA],
 		"tecnicas": [TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR,
 			TechTree.Tech.OJEO]},
-	{"nombre": "+ arco", "armas": [Tool.Kind.AZAGAYA],
-		"tecnicas": [TechTree.Tech.AZAGAYA, TechTree.Tech.PROPULSOR,
-			TechTree.Tech.OJEO, TechTree.Tech.ARCO]},
 ]
 
 

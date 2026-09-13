@@ -446,9 +446,10 @@ func _rehacer_el_horno(sim: SettlementSim) -> void:
 	for paso in range(1, 4):
 		var season := (suya + paso) % 4
 		sim.horno._rejillas[season] = Navgrid.preparar(sim._terrain,
-			sim.has_boat, sim.has_bridge,
+			sim.has_boat, sim.pasarelas.celdas(),
 			float(Temporada.CAUDAL.get(season, 1.0)),
-			float(Temporada.ENCHARCA.get(season, 0.0)))
+			float(Temporada.ENCHARCA.get(season, 0.0)),
+			sim.pasarelas.version)
 		sim.horno._cola.append(season)
 
 

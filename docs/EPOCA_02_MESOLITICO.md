@@ -21,15 +21,16 @@ la banda y el centro de gravedad se mueve al mar, que sube deprisa.
 |---|---|---|---|---|
 | Pico asturiense | (ninguno, es cadena B3) | `RECOLECCION`/cantera | Arrancar lapa en la rasa | ATESTIGUADO (costa occidental) |
 | Microlitos | `Tech.HOJA` | `MANUFACTURA` | Filos pequeños en serie sobre asta/madera | ATESTIGUADO |
-| Arco | ya en `TechTree.Tech.ARCO`, hereda de `PROPULSOR` | `CAZA` | Precisión y tiro repetido; caza de acecho individual | ATESTIGUADO (Aziliense) |
-| Piragua | ya en `TechTree.Tech.PIRAGUA`, hereda de `NUCLEO` | `EXPLORACION` | Cruzar estuario, pesca en aguas profundas | INFERIDO para esta región concreta |
+| Arco | **por añadir al `enum`**: se quitó del Paleolítico el 2026-09-13, decidido por el usuario, porque es de esta época. Heredaría de `PROPULSOR`, y trae sus factores de caza (×1,70 menor, ×1,20 mayor, ver `Hunting.MEJORAS`) | `CAZA` | Precisión y tiro repetido; caza de acecho individual | ATESTIGUADO (Aziliense) |
+| Piragua | **por añadir al `enum`**: se quitó del Paleolítico el 2026-09-13 —EPOCA_01 §10.1, frente 13— porque es de esta época. Heredaría de `NUCLEO` | `EXPLORACION` | Cruzar estuario, pesca en aguas profundas | INFERIDO para esta región concreta |
 | Conchero como obra | nueva, no existe | — | Subproducto acumulado que es, a la vez, el yacimiento | ATESTIGUADO |
 
-**El arco y la piragua ya están en `TechTree.CATALOGUE`** — el árbol técnico
-del Paleolítico ya se adelantó a esta época, cosa que EPOCAS.md no señala y
-que conviene decirlo aquí: si una banda del Paleolítico llega a dominarlos
-antes del cierre de época, el Mesolítico no tiene que reenseñarlos, sólo dar
-continuidad. Lo nuevo real de esta época es el **pico asturiense** y los
+**El arco y la piragua YA NO están en `TechTree.CATALOGUE`.** Estuvieron —el
+árbol del Paleolítico se había adelantado a esta época— y se quitaron el
+2026-09-13: la piragua con la tanda 3 de EPOCA_01 (frente 13) y el arco a
+petición del usuario ese mismo día. **Son de esta época y se añaden aquí**, con
+la rama de exploración y la de caza del Paleolítico terminando en la pasarela y
+en el propulsor. Lo nuevo real de esta época es el **pico asturiense** y los
 **microlitos**, que hoy no tienen entrada en `TechTree`.
 
 **El techo térmico no cambia.** Sigue siendo el hogar abierto a ~700 °C: el
@@ -45,8 +46,8 @@ cambia ni dónde se vive, ni qué se fabrica del todo, ni quién decide—.
 |---|---|---|---|
 | El pico asturiense | interno | nueva técnica en `TechTree` (o proceso de `ProcessRecipe` si no compensa un `Tech` completo) | — |
 | Microlitos | interno | técnica nueva, `needs: [Tech.HOJA]` | — |
-| El arco | interno | ya alcanzable con el árbol actual | — |
-| La piragua | interno | ya alcanzable con el árbol actual | — |
+| El arco | interno | **técnica nueva** en `TechTree`, `needs: [Tech.PROPULSOR]`; se quitó del Paleolítico el 2026-09-13 | — |
+| La piragua | interno | **técnica nueva** en `TechTree`, `needs: [Tech.NUCLEO]`; se quitó del Paleolítico el 2026-09-13 | — |
 | El conchero | interno | acumulación de subproducto de marisqueo sobre el mismo `Paraje`, ver §5 | `Feature` nuevo o marca sobre `ABRIGO`/`OTRO` |
 | El territorio pequeño | social, sin gatillo mecánico propio | se lee del patrón de exploración: radio de batida menor que en la época 1 | — |
 | El muerto en la basura | interno | entierro dentro del conchero, mismo requisito que "la sepultura" de la época 1 pero en otro lugar | — |

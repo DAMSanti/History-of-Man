@@ -851,8 +851,18 @@ func _tech_behind(kind: Tool.Kind) -> int:
 ## De uno en uno, que es lo previsible, y de diez en diez con Mayúsculas para
 ## las cantidades grandes. Se mira la tecla en el momento de pulsar porque la
 ## señal `pressed` no trae el evento.
+## Cuánto sube o baja un máximo por clic: **de 1 en 1, y con Shift de 10 en 10**.
+##
+## Estaba ya, sin prueba y sin escribir en ninguna parte —la queja del usuario
+## del 2026-09-13 lo pedía como si no existiera—. Se saca a una función sin
+## teclado para poder comprobarlo: `Input.is_key_pressed` no se puede preguntar
+## en una prueba sin pantalla.
+static func paso_del_objetivo(con_shift: bool) -> float:
+	return 10.0 if con_shift else 1.0
+
+
 func _goal_step() -> float:
-	return 10.0 if Input.is_key_pressed(KEY_SHIFT) else 1.0
+	return paso_del_objetivo(Input.is_key_pressed(KEY_SHIFT))
 
 
 ## Los tres botones del objetivo, iguales en las dos tablas.

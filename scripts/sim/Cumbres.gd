@@ -366,6 +366,9 @@ func climber_for(peak: Dictionary) -> Inhabitant:
 	for person: Inhabitant in sim.people:
 		if not Profession.can_do(Profession.Job.EXPLORACION, person):
 			continue
+		# Tocado no sube: se queda descansando en el abrigo. Frente 12.
+		if person.esta_tocado():
+			continue
 		var skill := person.skill_in(task)
 		if Ascent.dares(skill) < hardness:
 			continue
@@ -724,38 +727,104 @@ func cumbre_de_este_verano() -> Dictionary:
 	return mejor
 
 
-## Propone la decisión del verano. Lo llama [SettlementSim] al entrar el
-## verano.
+## Quién puede subir a esa cumbre: se atreve, y no está tocado.
+func _quienes_pueden_subir(peak: Dictionary) -> Array[Inhabitant]:
+	var out: Array[Inhabitant] = []
+	for person: Inhabitant in climbers_for(peak):
+		if person.esta_tocado():
+			continue
+		out.append(person)
+	return out
+
+
+## Manda a subir a los elegidos. Devuelve el motivo si no se puede, o vacío.
+##
+## **Los elegidos SON la cordada**: `_ascension_party_size` cuenta a quien está
+## puesto en ascensión, así que ponerlos a todos es lo que hace que una cumbre
+## dura —que pide [MIN_CLIMBING_PARTY]— se pueda intentar. Sube quien mejor
+## trepa de ellos, que es a quien le tocaría abrir paso.
+func subir_con(elegidos: Array[int], peak: Dictionary) -> String:
+	if peak.is_empty():
+		return "No hay tal cumbre."
+	var cordada: Array[Inhabitant] = []
+	for person: Inhabitant in _quienes_pueden_subir(peak):
+		if elegidos.has(person.id):
+			cordada.append(person)
+	if cordada.is_empty():
+		return "No va nadie."
+	var task := Profession.task_id(Profession.Job.EXPLORACION,
+		Profession.Speciality.ASCENSION)
+	var mejor: Inhabitant = null
+	for person: Inhabitant in cordada:
+		person.set_priority(task, 1)
+		if mejor == null or person.skill_in(task) > mejor.skill_in(task):
+			mejor = person
+	sim.apply_priorities()
+	return order_ascent(peak, mejor)
+
+
+## Propone la decisión del verano. Lo llama [SettlementSim] el día citado del
+## segundo mes.
 ##
 ## Es la estación que la puerta del frío deja abierta: sin ropa, en primavera se
 ## cierra casi todo lo que pasa de 164 m, y en verano no hasta los 1 364. Si
 ## este verano no se sube, **la ventana se cierra hasta el año que viene** o
 ## hasta que se cosan vestidos, y eso se dice en la tarjeta.
+##
+## **Y quién sube lo elige el jugador** (tanda 3, frente 11), con el mínimo que
+## la ascensión ya tenía: uno para una cumbre suave, [MIN_CLIMBING_PARTY] para
+## una dura.
 func proponer_la_subida() -> void:
 	var peak := cumbre_de_este_verano()
 	if peak.is_empty():
 		return
-	var quien := climber_for(peak)
-	if quien == null:
+	var pueden := _quienes_pueden_subir(peak)
+	if pueden.is_empty():
 		return
-	var skill := quien.skill_in(Profession.task_id(Profession.Job.EXPLORACION,
-		Profession.Speciality.ASCENSION))
-	var riesgo := clampf(1.0 - Ascent.chance(skill, float(peak["hard"]),
-		sim.weather.risk_factor(), quien.fatigue), 0.0, 1.0)
 	var moment := Moment.new()
 	moment.kind = Moment.Kind.ASCENSO
 	moment.title = "Verano: ahora no hiela arriba"
 	moment.text = ("Hay una cumbre por subir que se ve desde el abrigo. Ahora se "
 		+ "puede sin abrigo; en cuanto refresque, ya no.")
+	for person: Inhabitant in pueden:
+		moment.candidatos.append(person.id)
+		moment.nombres[person.id] = person.given_name
+	moment.minimo_elegidos = 1 if float(peak["hard"]) < HARD_PEAK_PARTY_THRESHOLD 		else MIN_CLIMBING_PARTY
+	for id: int in moment.candidatos:
+		if moment.elegidos.size() >= moment.minimo_elegidos:
+			break
+		moment.elegidos.append(id)
+	moment.al_cambiar_la_eleccion = func() -> void: _opciones_de_la_subida(moment, peak)
+	_opciones_de_la_subida(moment, peak)
+	sim.raise_moment(moment)
+
+
+## Las opciones de la tarjeta del verano, con el riesgo de quien abriría paso.
+func _opciones_de_la_subida(moment: Moment, peak: Dictionary) -> void:
+	var task := Profession.task_id(Profession.Job.EXPLORACION,
+		Profession.Speciality.ASCENSION)
+	var mejor: Inhabitant = null
+	for person: Inhabitant in _quienes_pueden_subir(peak):
+		if moment.elegidos.has(person.id) 				and (mejor == null or person.skill_in(task) > mejor.skill_in(task)):
+			mejor = person
+	var riesgo := 1.0
+	var nombre := "Nadie"
+	if mejor != null:
+		nombre = mejor.given_name
+		riesgo = clampf(1.0 - Ascent.chance(mejor.skill_in(task),
+			float(peak["hard"]), sim.weather.risk_factor(), mejor.fatigue), 0.0, 1.0)
+	var bloqueo := ""
+	if not moment.hay_bastantes():
+		bloqueo = "hacen falta %d" % moment.minimo_elegidos
 	moment.options = [
 		Moment.opcion("No subir",
 			"Nadie sube. La ventana sin ropa se cierra con el verano.",
 			func() -> void: pass),
 		Moment.opcion("Mandar a subir",
-			("%s lo intentaría. Sale bien %d de cada diez veces, y quien "
-				+ "sube se revela media comarca.") % [quien.given_name,
+			("Abre paso %s. Sale bien %d de cada diez veces, y quien sube se "
+				+ "revela media comarca.") % [nombre,
 					int(round((1.0 - riesgo) * 10.0))],
-			func() -> void: order_ascent(peak, quien),
-			{"riesgo": riesgo, "jornadas": 1}),
+			func() -> void: subir_con(moment.elegidos, peak),
+			{"riesgo": riesgo, "jornadas": moment.elegidos.size()},
+			bloqueo),
 	]
-	sim.raise_moment(moment)

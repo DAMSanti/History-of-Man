@@ -90,10 +90,31 @@ func test_los_862_NO_son_los_de_esta_epoca() -> void:
 	assert_lt(float(del_paleolitico), 200.0,
 		"pero ni de lejos los 862 del conjunto entero")
 	assert_eq(del_paleolitico, 72, "los del Paleolítico, medidos")
-	# 869 y no los 862 que repiten los documentos: la diferencia son los
-	# emplazamientos de prueba, que se hornean con id por encima de
-	# `RegionMap.DEV_SITE_BASE` y se saltan la niebla a propósito.
+	# 869 y no los 862 que repetían los documentos. Medido el 2026-09-13: no
+	# hay ninguno de prueba horneado —ningún id de 9000 para arriba—; el de
+	# Torrelavega lo añadía el mapa regional al abrirse, y ya no existe.
 	assert_eq(conjunto.sites.size(), 869, "y el conjunto horneado entero")
+
+
+func test_no_queda_ningun_sitio_de_prueba() -> void:
+	# Decisión del usuario del 2026-09-13: «quita Torrelavega». Ni en el conjunto
+	# horneado ni añadido por el mapa regional al abrirse, que es donde vivía.
+	var conjunto := _conjunto()
+	if conjunto != null:
+		# Un solo assert y no uno por sitio: 869 comprobaciones de golpe
+		# inflarían el suelo de la suite sin comprobar nada más.
+		var de_prueba := 0
+		for site: Site in conjunto.sites:
+			if site.id >= 9000:
+				de_prueba += 1
+		assert_eq(de_prueba, 0, "ningún id de sitio de prueba horneado")
+	var mapa := load("res://scripts/region/RegionMap.gd") as GDScript
+	assert_false(mapa.get_script_constant_map().has("DEV_PLACES"),
+		"el mapa regional no lleva sitios de prueba")
+	var propiedades: Array = []
+	for propiedad: Dictionary in mapa.get_script_property_list():
+		propiedades.append(propiedad["name"])
+	assert_false("dev_sites" in propiedades, "ni el interruptor para ponerlos")
 
 
 func test_descubrir_levanta_la_niebla_de_uno_y_solo_de_uno() -> void:

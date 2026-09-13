@@ -14,6 +14,22 @@ func _initialize() -> void:
 	sim.people = Inhabitant.create_band(15, Vector3.ZERO, rng)
 	sim.apply_priorities()
 
+	# Y con gente FUERA, que es lo que la tanda 3 añadió a esta ventana: una
+	# expedición de tres y un herido. Sin ellos, la sección «quién no está» no
+	# sale y la captura no dice nada de lo que hay que mirar.
+	sim.chronicle = Chronicle.new()
+	sim.store = Storehouse.new()
+	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.LENA, 200.0)
+	sim.day = 20
+	sim.expedicion.mandar(3, 1000)
+	for person: Inhabitant in sim.people:
+		if not sim.expedicion.fuera.has(person.id):
+			person.hurt_days = 4
+			break
+	sim.apply_priorities()
+
 	var ui := GameUI.new()
 	ui.sim = sim
 	get_root().add_child(ui)
@@ -77,6 +93,22 @@ func _initialize() -> void:
 		else "NO (%d repetidas, %d ausentes)" % [repeated, missing]])
 
 	await _probe_store(ui, sim)
+	print("")
+	print("--- QUIEN NO ESTA ---")
+	for uno: Dictionary in PanelTrabajos.ausentes(sim):
+		print("   %s · %s · %s la jornada %d" % [uno["quien"], uno["donde"],
+			uno["que"], int(uno["cuando"])])
+	# Sólo la ventana que se está mirando: la sonda abre también el almacén para
+	# medirlo, y encima tapaba justo lo que hay que ver.
+	for id: String in (ui._windows as Dictionary).keys():
+		(ui._windows[id] as Control).visible = id == "trabajos"
+	await process_frame
+	await process_frame
+	# La captura necesita ventana: sin ella no hay textura que guardar.
+	var shot := get_root().get_texture().get_image()
+	if shot != null:
+		shot.save_png("user://trabajos.png")
+		print("captura en %s" % ProjectSettings.globalize_path("user://trabajos.png"))
 	quit()
 
 

@@ -712,7 +712,7 @@ func _report_spoilage() -> void:
 		elif not sim.hearth_lit:
 			why = " El secadero está frío: sin brasas no se ahúma."
 		elif sim.hogar._hearth_hands().is_empty():
-			why = " El secadero está cargado y no hay nadie al sim.hogar."
+			why = " El secadero está cargado y no hay nadie al hogar."
 
 	var weight := 1 if sim.spoiled_rations_today >= SettlementSim.MERMA_QUE_DUELE else 0
 	sim._note(Chronicle.Kind.PENURIA,

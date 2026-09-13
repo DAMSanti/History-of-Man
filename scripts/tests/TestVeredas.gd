@@ -20,7 +20,7 @@ func suite_name() -> String:
 
 ## Una rejilla sin medir ni una celda: aquí sólo interesa con qué río se horneó.
 func _rejilla(caudal: float, encharque: float) -> Navgrid:
-	return Navgrid.preparar(null, false, false, caudal, encharque)
+	return Navgrid.preparar(null, false, [], caudal, encharque)
 
 
 func _camino() -> PackedVector3Array:
@@ -186,7 +186,7 @@ func _recta() -> PackedVector3Array:
 
 func _abierto() -> Navgrid:
 	if _grid_real == null:
-		_grid_real = Navgrid.from_terrain(FakeTerrain.new(), false, false)
+		_grid_real = Navgrid.from_terrain(FakeTerrain.new(), false, [])
 	return _grid_real
 
 

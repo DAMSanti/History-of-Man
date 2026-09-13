@@ -155,10 +155,10 @@ static func pace_both_ways(slope: float, ground: Ground,
 ## valle. Lo intransitable es lo que no se sube andando con carga, y el agua
 ## que no se vadea.
 static func is_passable(slope: float, ford_difficulty: float,
-		has_boat: bool, has_bridge: bool) -> bool:
+		has_boat: bool, con_pasarela: bool) -> bool:
 	if absf(slope) > CLIMB_LIMIT:
 		return false
-	return Hydrography.can_cross(ford_difficulty, has_boat, has_bridge)
+	return Hydrography.can_cross(ford_difficulty, has_boat, con_pasarela)
 
 
 ## Desde cuánta agua somera el suelo es barro, en seco y encharcado.

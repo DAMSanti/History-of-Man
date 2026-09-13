@@ -57,31 +57,6 @@ func test_cuentan_las_tres_cifras_de_la_spec() -> void:
 		assert_true(m.la_eleccion_importa(), "«%s» cuenta como coste" % clave)
 
 
-func test_el_trueque_es_una_decision_que_importa() -> void:
-	var sim := SettlementSim.new()
-	sim.chronicle = Chronicle.new()
-	sim.contacto.ocupados[7] = true
-	sim.contacto.conocerse(7)
-	var caja := {"m": null}
-	sim.moment_raised.connect(func(m: Moment) -> void: caja["m"] = m)
-	sim.intercambio.proponer_el_trato()
-	var tarjeta := caja["m"] as Moment
-	assert_true(tarjeta != null, "sale la tarjeta del trueque")
-	if tarjeta == null:
-		return
-	assert_true(tarjeta.la_eleccion_importa(), "y elegir cambia cifras")
-
-
-func test_ir_a_tratar_con_comida_cuesta_despensa_y_con_piel_no() -> void:
-	# La piel no se come: ofrecerla no toca la despensa, sólo las jornadas.
-	var con_comida := Intercambio._cuesta(Materia.Kind.FRUTO_SECO, Intercambio.Como.JUSTO)
-	var con_piel := Intercambio._cuesta(Materia.Kind.PIEL, Intercambio.Como.JUSTO)
-	assert_lt(float(con_comida.get("despensa", 0.0)), 0.0, "la comida sale de la despensa")
-	assert_near(float(con_piel.get("despensa", 0.0)), 0.0, 0.0001, "la piel no")
-	assert_eq(int(con_piel.get("jornadas", 0)), Intercambio.JORNADAS_DE_TRUEQUE,
-		"pero las jornadas se van igual")
-
-
 # --------------------------------------- D3: la berrea deja de ser gratis --
 
 ## Una banda con dos que pueden cazar y un anciano que no, todos recolectando.
@@ -197,6 +172,12 @@ func _tarjetas_al_entrar_en(sim: SettlementSim, estacion: Subsistence.Season) ->
 	var salidas := []
 	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
 	sim._advance_local_season()
+	# La decisión ya NO salta al entrar la estación: se cita para un día del
+	# segundo mes y salta al cerrar esa jornada. Ver
+	# [SettlementSim._citar_la_decision] y la tanda 3, frente 9.
+	for i in range(Subsistence.DAYS_PER_SEASON):
+		sim.season_day += 1
+		sim._revisar_la_decision()
 	GameState.season = season_antes
 	GameState.year = year_antes
 	return salidas
@@ -228,6 +209,10 @@ func _banda_completa() -> SettlementSim:
 		p.skill[subir] = 0.9
 		sim.people.append(p)
 	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
+	# Tienda y hoguera: sin ellas la expedición de la tanda 3 no sale, y la
+	# tarjeta saldría con la opción apagada. Ver [Expedicion.hace_falta_para].
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.LENA, 200.0)
 	var comarca := SiteSet.new()
 	for i in range(4):
 		var s := Site.new()
@@ -290,6 +275,27 @@ func test_en_un_ano_salen_las_cuatro() -> void:
 	for kind in [Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA,
 			Moment.Kind.INVIERNO]:
 		assert_true(tipos.has(kind), "la de %s sale en el año" % Moment.Kind.keys()[kind])
+
+
+func test_la_cumbre_pregunta_quien_sube() -> void:
+	# Frente 11: lo mismo que la expedición, en la decisión del verano.
+	var sim := _banda_completa()
+	var m := _de_tipo(_tarjetas_al_entrar_en(sim, Subsistence.Season.VERANO),
+		Moment.Kind.ASCENSO)
+	assert_true(m != null, "sale la tarjeta del verano")
+	if m != null:
+		assert_gt(m.candidatos.size(), 0, "con quién puede subir")
+		assert_gt(m.elegidos.size(), 0, "y alguien ya marcado")
+		assert_true(m.hay_bastantes(), "bastantes para poder confirmar")
+
+
+func test_un_tocado_no_sube() -> void:
+	var sim := _banda_completa()
+	for person: Inhabitant in sim.people:
+		person.hurt_days = 4
+	var m := _de_tipo(_tarjetas_al_entrar_en(sim, Subsistence.Season.VERANO),
+		Moment.Kind.ASCENSO)
+	assert_true(m == null, "con toda la banda tocada no se propone subir a nadie")
 
 
 func test_mandar_la_expedicion_desde_la_tarjeta_la_manda() -> void:
@@ -356,14 +362,87 @@ func test_el_racionamiento_se_acaba_con_el_invierno() -> void:
 
 func test_al_empezar_la_partida_sale_la_decision_de_primavera() -> void:
 	# LO QUE DESTAPÓ LA PRUEBA DE HUMO. La partida empieza ya en primavera, y
-	# las decisiones de estación saltan al CAMBIAR de estación: la del primer
+	# las decisiones de estación se citan al CAMBIAR de estación: la del primer
 	# año no salía, y la primera expedición esperaba al año 2.
+	#
+	# Desde la tanda 3 no sale el primer día: se cita para el segundo mes, y
+	# aquí se dejan correr las jornadas de la estación hasta que salta.
 	var sim := _banda_completa()
 	var season_antes := GameState.season
 	GameState.season = Subsistence.Season.PRIMAVERA
 	var salidas := []
 	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
 	sim.iniciar_partida()
+	assert_gt(sim.dia_de_la_decision, 0, "queda citada nada más empezar")
+	for i in range(Subsistence.DAYS_PER_SEASON):
+		sim.season_day += 1
+		sim._revisar_la_decision()
 	GameState.season = season_antes
 	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) != null,
 		"en la primera primavera ya se puede mandar la expedición")
+
+
+func test_el_cierre_de_la_jornada_la_saca() -> void:
+	# EL CABLE DE VERDAD, y no sólo la regla: quien pregunta si hoy toca
+	# decidir es el cierre de la jornada. Comprobarlo llamando a
+	# `_revisar_la_decision` a mano dejaría fuera justo eso.
+	var sim := _banda_completa()
+	var season_antes := GameState.season
+	GameState.season = Subsistence.Season.PRIMAVERA
+	var salidas := []
+	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
+	sim.season_day = SettlementSim.DECISION_PRIMER_DIA - 2
+	sim.dia_de_la_decision = SettlementSim.DECISION_PRIMER_DIA
+	sim._end_of_day()
+	GameState.season = season_antes
+	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) != null,
+		"la jornada citada, al cerrarse, saca la tarjeta")
+	assert_eq(sim.dia_de_la_decision, 0, "y no se vuelve a sacar")
+
+
+func test_la_decision_cae_en_el_segundo_mes() -> void:
+	# EL CRITERIO DEL FRENTE 9: en todas las estaciones de dos años, entre la
+	# jornada 16 y la 30 de la estación.
+	for anyo in range(1, 3):
+		for estacion in [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO,
+				Subsistence.Season.OTONO, Subsistence.Season.INVIERNO]:
+			var dia := SettlementSim.dia_de_decidir(42, anyo,
+				estacion as Subsistence.Season)
+			assert_true(dia >= SettlementSim.DECISION_PRIMER_DIA
+				and dia <= SettlementSim.DECISION_ULTIMO_DIA,
+				"año %d, %s: la jornada %d cae en el segundo mes" % [anyo,
+					Subsistence.season_name(estacion as Subsistence.Season), dia])
+
+
+func test_la_misma_semilla_da_los_mismos_dias() -> void:
+	for estacion in [Subsistence.Season.PRIMAVERA, Subsistence.Season.INVIERNO]:
+		assert_eq(SettlementSim.dia_de_decidir(42, 1, estacion as Subsistence.Season),
+			SettlementSim.dia_de_decidir(42, 1, estacion as Subsistence.Season),
+			"la misma partida decide el mismo día")
+
+
+func test_semillas_distintas_dan_dias_distintos() -> void:
+	# Sin esto, «se sortea» podría ser una constante disfrazada.
+	var vistos := {}
+	for semilla in range(1, 11):
+		vistos[SettlementSim.dia_de_decidir(semilla, 1,
+			Subsistence.Season.PRIMAVERA)] = true
+	assert_gt(vistos.size(), 1,
+		"con diez semillas salen al menos dos jornadas distintas")
+
+
+func test_no_se_decide_el_primer_dia_de_la_estacion() -> void:
+	# Que es de lo que iba la queja: decidir la expedición de primavera sin
+	# haber vivido la primavera.
+	var sim := _banda_completa()
+	var season_antes := GameState.season
+	GameState.season = Subsistence.Season.INVIERNO
+	var salidas := []
+	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
+	sim._advance_local_season()
+	for i in range(SettlementSim.DECISION_PRIMER_DIA - 2):
+		sim.season_day += 1
+		sim._revisar_la_decision()
+	GameState.season = season_antes
+	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) == null,
+		"en la primera quincena todavía no se decide")

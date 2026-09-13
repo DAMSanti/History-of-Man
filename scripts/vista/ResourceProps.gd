@@ -353,6 +353,24 @@ func _load_library() -> void:
 		_library = null
 
 
+## Las bocas de cueva del mapa. Alrededor de cada una no se siembra nada: la
+## entrada tiene que verse, y una mata de avellano delante de la sima la tapa.
+## Decisión del usuario del 2026-09-13, con la misma idea que el claro de árboles
+## de [Forest.RADIO_DEL_CLARO], pero más ancho.
+var bocas: Array[Vector3] = []
+
+## Cuánto se deja libre alrededor de una boca de cueva, en metros.
+const LEJOS_DE_LA_BOCA := 30.0
+
+
+## Si un punto cae en el ruedo libre de alguna boca de cueva.
+func _junto_a_una_boca(donde: Vector3) -> bool:
+	for boca: Vector3 in bocas:
+		if Vector2(donde.x - boca.x, donde.z - boca.z).length() < LEJOS_DE_LA_BOCA:
+			return true
+	return false
+
+
 func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	_terrain = terrain
 	_field = field
@@ -661,6 +679,8 @@ func _place(spec: Dictionary, from_x: int, from_z: int, span_x: int,
 					var spot := seed_spot + Vector3(
 						cos(angle) * away, 0.0, sin(angle) * away)
 					if _terrain.crossing_difficulty_at(spot) > 0.05:
+						continue
+					if _junto_a_una_boca(spot):
 						continue
 					if _terrain.get_slope_at(spot) > 0.9:
 						continue

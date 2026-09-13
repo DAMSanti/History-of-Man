@@ -102,7 +102,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	
 	if event is InputEventMouseMotion and _is_rotating:
 		orbit_angle_h -= event.relative.x * rotate_speed
-		orbit_angle_v = clampf(orbit_angle_v - event.relative.y * rotate_speed, -89.0, -10.0)
+		# HASTA -3º Y NO -10º, decidido por el usuario el 2026-09-13: con el tope
+		# viejo la cámara miraba siempre hacia abajo y el cielo —nubes, estrellas,
+		# sol y luna, ver `shaders/cielo.gdshader`— no entraba en cuadro en un
+		# valle. Tres grados dejan mirar casi al horizonte sin que esto deje de
+		# ser una cámara de gestión. Ver EPOCA_01 §10.1, tanda 3, frente 16.
+		orbit_angle_v = clampf(orbit_angle_v - event.relative.y * rotate_speed, -89.0, -3.0)
 		_update_camera()
 		get_viewport().set_input_as_handled()
 

@@ -177,6 +177,12 @@ número. Pero conviene mirarlo: si el siguiente tema cerrado ya se distingue
    5.171 a 5.164. **Ese número hay que mirarlo**: 716 pruebas «en verde» con
    siete comprobaciones menos no es verde.
 
+   **Y desde el 2026-09-13 sabe distinguir una estática.** Llamaba huérfana a
+   `PanelTrabajos.ausentes(sim)` —que es exactamente como se llama a una función
+   estática— y por eso el repositorio arrastraba «dos falsas de siempre»: eran
+   falsas, y ahora el comprobador dice **cero** de verdad. Si vuelve a subir, es
+   real.
+
 ---
 
 ## 4. Estilo de código

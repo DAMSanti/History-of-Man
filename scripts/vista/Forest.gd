@@ -243,6 +243,30 @@ var _far_material: Array[ShaderMaterial] = []
 var _total := 0
 
 
+## Cuánto se deja sin árboles alrededor de cada boca de cueva, en metros.
+##
+## **Decisión del usuario del 2026-09-13**: «la entrada de las cuevas tiene que
+## estar libre de árboles, por lo menos 25 m alrededor», y de todas las bocas
+## del mapa, no sólo la de la banda. Antes el bosque se sembraba por ruido y
+## sólo esquivaba el agua, así que plantaba pinos encima de la boca y de las
+## obras de la campa.
+const RADIO_DEL_CLARO := 25.0
+
+## Las bocas de cueva del mapa, alrededor de las cuales no se siembra. Las pone
+## [DemoMain] antes de `setup`, que es cuando se siembra.
+var claros: PackedVector3Array = PackedVector3Array()
+
+
+## Si ese punto cae en el claro de alguna boca. En planta: la altura no cuenta,
+## que una boca en la ladera tiene el árbol de arriba a la misma distancia.
+static func en_un_claro(punto: Vector3, bocas: PackedVector3Array,
+		radio: float = RADIO_DEL_CLARO) -> bool:
+	for boca: Vector3 in bocas:
+		if Vector2(punto.x - boca.x, punto.z - boca.z).length() < radio:
+			return true
+	return false
+
+
 func setup(terrain: TerrainGenerator) -> void:
 	_terrain = terrain
 	if not ResourceLoader.exists(PropModels.LIBRARY_PATH):
@@ -353,6 +377,9 @@ func _sow() -> void:
 
 			# Ni en el agua ni en la orilla.
 			if ground <= water_y + 0.6:
+				continue
+			# Ni en la boca de una cueva. Ver [RADIO_DEL_CLARO].
+			if not claros.is_empty() 					and en_un_claro(Vector3(wx, 0.0, wz), claros):
 				continue
 			if not river.is_empty() and river[idx] > 0.08:
 				continue

@@ -47,7 +47,8 @@ func show_ground(world: Vector3, terrain: TerrainGenerator) -> void:
 	var slope := terrain.get_slope_at(world)
 	var ford := terrain.crossing_difficulty_at(world)
 	var ground := Traversal.classify_ground(slope, ford)
-	var passable := Traversal.is_passable(slope, ford, ui.sim.has_boat, ui.sim.has_bridge)
+	var passable := Traversal.is_passable(slope, ford, ui.sim.has_boat,
+		ui.sim.pasarelas.hay_en(world))
 
 	ui._text(body, "Suelo: %s · pendiente %d%%" % [
 		_ground_name(ground), int(slope * 100.0)])
@@ -719,7 +720,10 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 
 
 ## Ventana de un elemento pinchado en el mundo.
-func show_feature(data: Dictionary, world: Vector3, home: Vector3) -> void:
+## `de_la_banda`: si es el abrigo donde vive la banda, que no se ofrece como
+## sitio al que mudarse. Ver [_actions_for].
+func show_feature(data: Dictionary, world: Vector3, home: Vector3,
+		de_la_banda: bool = false) -> void:
 	var body := ui._window("lugar", "Lugar")
 	ui._clear(body)
 
@@ -764,28 +768,63 @@ func show_feature(data: Dictionary, world: Vector3, home: Vector3) -> void:
 
 	body.add_child(HSeparator.new())
 	ui._heading(body, "QUÉ HACER")
-	for entry: Array in _actions_for(feature_class):
+	# Lo que se sabe del interior, si se ha explorado.
+	if data.has("cueva") and ui.sim != null:
+		var cueva := int(data["cueva"])
+		if ui.sim.exploracion.explorada(cueva):
+			ui._text(body, "Explorada. %s" % ("Tiene una pared donde se puede pintar."
+				if ui.sim.exploracion.pintable(cueva)
+				else "No tiene pared buena para pintar."), true)
+
+	for entry: Array in _actions_for(feature_class, de_la_banda):
 		var button := Button.new()
 		button.text = entry[1]
 		button.tooltip_text = entry[2]
+		# SI NO SE PUEDE, SE DICE POR QUÉ: el botón se enseña apagado con lo que
+		# falta, que es lo que deja ir a por ello. Ver [Exploracion.lo_que_falta].
+		var falta := por_que_no(String(entry[0]), data, ui.sim)
+		if not falta.is_empty():
+			button.disabled = true
+			button.tooltip_text = falta.substr(0, 1).to_upper() + falta.substr(1)
 		button.pressed.connect(func() -> void:
 			ui.cave_action.emit(entry[0] as String, data))
 		body.add_child(button)
 
 
-func _actions_for(feature_class: Site.Feature) -> Array:
+## Por qué no se puede hacer una acción sobre un lugar, o vacío si se puede:
+## explorar y mudarse. Pintar lo dice su propia tarjeta.
+static func por_que_no(accion: String, data: Dictionary, sim: SettlementSim) -> String:
+	if sim == null or not data.has("cueva"):
+		return ""
+	match accion:
+		"explorar":
+			return sim.exploracion.lo_que_falta(int(data["cueva"]))
+		"ocupar":
+			return sim.traslado.lo_que_falta(int(data["cueva"]),
+				data.get("campa", Vector3.ZERO))
+	return ""
+
+
+##
+## Sin «usar como taller de talla» desde el 2026-09-13, por decisión del usuario:
+## los artesanos trabajan en el abrigo donde está asentada la banda, sin que
+## nadie tenga que decirlo, así que el botón pedía algo que ya pasa. Y
+## «trasladar el campamento aquí» sólo en cuevas que no son la de la banda: en la
+## suya no hay adónde mudarse.
+static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false) -> Array:
 	match feature_class:
 		Site.Feature.ABRIGO:
-			return [
-				["ocupar", "Trasladar el campamento aquí",
-					"La banda se muda a esta cavidad."],
-				["explorar", "Explorar el interior",
-					"Recorrerla a fondo: puede haber galerías, agua o restos."],
-				["taller", "Usar como taller de talla",
-					"Trabajar la piedra a cubierto y con la materia prima a mano."],
-				["pintar", "Pintar la pared del fondo",
-					"Requiere dominar el fuego y la talla laminar."],
-			]
+			var acciones: Array = []
+			if not de_la_banda:
+				acciones.append(["ocupar", "Trasladar el campamento aquí",
+					"La banda carga lo que puede, anda hasta aquí y se asienta. "
+					+ "Lo que no cabe se queda en la cueva de ahora, y las obras "
+					+ "hay que volver a levantarlas."])
+			acciones.append(["explorar", "Explorar el interior",
+				"Recorrerla a fondo: puede haber galerías, agua o restos."])
+			acciones.append(["pintar", "Pintar la pared del fondo",
+				"Requiere dominar el fuego y la talla laminar."])
+			return acciones
 		Site.Feature.SURGENCIA:
 			return [["explorar", "Reconocer el manantial",
 				"Comprobar si mana todo el año."]]

@@ -47,7 +47,10 @@ const FILAS_POR_VUELTA := 1
 
 var _terrain: TerrainGenerator = null
 var _boat := false
-var _bridge := false
+## Las celdas con pasarela con las que se encargaron las rejillas, y su
+## versión: si se levanta o se pierde una, hay que rehacerlas. Ver [Pasarelas].
+var _pasarelas: Array = []
+var _pasarelas_version: int = -1
 
 ## Estación -> rejilla. Las que están a medias también viven aquí.
 var _rejillas: Dictionary = {}
@@ -63,28 +66,30 @@ var _cola: Array[int] = []
 ## mismo con [Temporada.ENCHARCA]. Las dos cosas hacen falta y por lo mismo:
 ## una rejilla de invierno hay que medirla con el río de enero Y con el barro
 ## de enero, o costea el valle como si fuera agosto.
-func encargar(terrain: TerrainGenerator, has_boat: bool, has_bridge: bool,
+func encargar(terrain: TerrainGenerator, has_boat: bool, pasarelas: Array,
 		hoy: Subsistence.Season, caudales: Dictionary,
-		encharques: Dictionary = {}) -> void:
+		encharques: Dictionary = {}, pasarelas_version: int = 0) -> void:
 	_terrain = terrain
 	_boat = has_boat
-	_bridge = has_bridge
+	_pasarelas = pasarelas.duplicate()
+	_pasarelas_version = pasarelas_version
 	_rejillas.clear()
 	_cola.clear()
 	if terrain == null:
 		return
 
 	# La de hoy, entera y ahora: sin ella no hay partida.
-	_rejillas[int(hoy)] = Navgrid.from_terrain(terrain, has_boat, has_bridge,
-		float(caudales.get(hoy, 1.0)), float(encharques.get(hoy, 0.0)))
+	_rejillas[int(hoy)] = Navgrid.from_terrain(terrain, has_boat, _pasarelas,
+		float(caudales.get(hoy, 1.0)), float(encharques.get(hoy, 0.0)),
+		_pasarelas_version)
 
 	# Las otras tres, preparadas y a la cola. Por orden de LLEGADA -la que
 	# viene después de hoy primero-, que es el orden en que van a hacer falta.
 	for paso in range(1, 4):
 		var season := ((int(hoy) + paso) % 4)
-		_rejillas[season] = Navgrid.preparar(terrain, has_boat, has_bridge,
+		_rejillas[season] = Navgrid.preparar(terrain, has_boat, _pasarelas,
 			float(caudales.get(season, 1.0)),
-			float(encharques.get(season, 0.0)))
+			float(encharques.get(season, 0.0)), _pasarelas_version)
 		_cola.append(season)
 
 
@@ -132,9 +137,9 @@ func de(season: Subsistence.Season) -> Navgrid:
 
 ## Si las que hay valen para este utillaje. Barca y puente cambian por dónde se
 ## pasa, así que invalidan las cuatro de golpe.
-func sirven(has_boat: bool, has_bridge: bool) -> bool:
+func sirven(has_boat: bool, pasarelas_version: int) -> bool:
 	return not _rejillas.is_empty() and _boat == has_boat \
-		and _bridge == has_bridge
+		and _pasarelas_version == pasarelas_version
 
 
 ## Cuántas quedan por hornear, para la barra de rendimiento y las sondas.

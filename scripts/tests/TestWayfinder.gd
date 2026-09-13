@@ -18,7 +18,7 @@ func suite_name() -> String:
 ## La comarca de mentira, medida una vez para todas las pruebas del fichero.
 func _fake_grid() -> Navgrid:
 	if _grid == null:
-		_grid = Navgrid.from_terrain(FakeTerrain.new(), false, false)
+		_grid = Navgrid.from_terrain(FakeTerrain.new(), false, [])
 	return _grid
 
 
@@ -293,7 +293,7 @@ func test_una_pena_suelta_no_cierra_la_celda() -> void:
 	# perfectamente andable cerraba los cuarenta enteros.
 	var terrain := RuggedTerrain.new()
 	terrain.roughness = 0.15
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 
 	assert_eq(grid.areas, 1,
 		"una comarca sin agua ni cortados es UNA sola zona, no %d" % grid.areas)
@@ -744,8 +744,8 @@ func test_la_rejilla_se_mide_al_caudal_que_se_le_diga() -> void:
 	# ([Hydrography.FORD_WADEABLE], 0,35): con un estiaje fuerte el cauce se
 	# pasa de piedra en piedra y con la crecida no.
 	var terrain := FakeTerrain.new()
-	var seca := Navgrid.from_terrain(terrain, false, false, 0.30)
-	var crecida := Navgrid.from_terrain(terrain, false, false, 1.55)
+	var seca := Navgrid.from_terrain(terrain, false, [], 0.30)
+	var crecida := Navgrid.from_terrain(terrain, false, [], 1.55)
 	assert_lt(crecida.open_fraction(), seca.open_fraction(),
 		"con el rio crecido se anda menos valle que en el estiaje")
 
@@ -755,9 +755,9 @@ func test_un_vado_se_cierra_en_invierno() -> void:
 	# en algunas temporadas». Con el caudal del invierno tiene que haber celdas
 	# que dejan de pasarse.
 	var terrain := FakeTerrain.new()
-	var verano := Navgrid.from_terrain(terrain, false, false,
+	var verano := Navgrid.from_terrain(terrain, false, [],
 		Temporada.CAUDAL[Subsistence.Season.VERANO])
-	var invierno := Navgrid.from_terrain(terrain, false, false,
+	var invierno := Navgrid.from_terrain(terrain, false, [],
 		Temporada.CAUDAL[Subsistence.Season.INVIERNO])
 	var cerradas := 0
 	for i in range(mini(verano.cost.size(), invierno.cost.size())):
@@ -770,8 +770,8 @@ func test_un_vado_se_cierra_en_invierno() -> void:
 func test_hornear_a_trozos_da_la_misma_rejilla_que_de_golpe() -> void:
 	# Es la condicion para que amasar en segundo plano no cambie la partida.
 	var terrain := FakeTerrain.new()
-	var golpe := Navgrid.from_terrain(terrain, false, false, 1.0)
-	var trozos := Navgrid.preparar(terrain, false, false, 1.0)
+	var golpe := Navgrid.from_terrain(terrain, false, [], 1.0)
+	var trozos := Navgrid.preparar(terrain, false, [], 1.0)
 	var vueltas := 0
 	while not trozos.amasar(terrain, 1):
 		vueltas += 1
@@ -791,7 +791,7 @@ func test_el_horno_da_la_de_hoy_entera_desde_el_primer_momento() -> void:
 	# otras tres quedan a medias, a la cola.
 	var terrain := FakeTerrain.new()
 	var horno := HornoDeRejillas.new()
-	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+	horno.encargar(terrain, false, [], Subsistence.Season.VERANO,
 		Temporada.CAUDAL)
 	assert_true(horno.de(Subsistence.Season.VERANO).horneada(),
 		"la de hoy esta lista ya")
@@ -803,7 +803,7 @@ func test_mientras_se_hornea_una_se_anda_con_otra() -> void:
 	# camino a ninguna parte, y con eso la banda se queda en el abrigo.
 	var terrain := FakeTerrain.new()
 	var horno := HornoDeRejillas.new()
-	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+	horno.encargar(terrain, false, [], Subsistence.Season.VERANO,
 		Temporada.CAUDAL)
 	var invierno := horno.de(Subsistence.Season.INVIERNO)
 	assert_true(invierno.horneada(),
@@ -813,9 +813,9 @@ func test_mientras_se_hornea_una_se_anda_con_otra() -> void:
 func test_la_barca_invalida_las_cuatro() -> void:
 	var terrain := FakeTerrain.new()
 	var horno := HornoDeRejillas.new()
-	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+	horno.encargar(terrain, false, [], Subsistence.Season.VERANO,
 		Temporada.CAUDAL)
-	assert_true(horno.sirven(false, false), "sirven para lo que se hornearon")
+	assert_true(horno.sirven(false, 0), "sirven para lo que se hornearon")
 	assert_false(horno.sirven(true, false),
 		"con barca cambian los pasos y hay que rehacerlas")
 
@@ -827,7 +827,7 @@ func test_la_rejilla_que_se_pide_es_la_de_esa_estacion() -> void:
 	# lo rápida que fuera. Ahora se termina la que se pide, en el momento.
 	var terrain := FakeTerrain.new()
 	var horno := HornoDeRejillas.new()
-	horno.encargar(terrain, false, false, Subsistence.Season.VERANO,
+	horno.encargar(terrain, false, [], Subsistence.Season.VERANO,
 		Temporada.CAUDAL)
 	var invierno := horno.de(Subsistence.Season.INVIERNO)
 	assert_true(invierno.horneada(), "entera")
@@ -868,7 +868,7 @@ func test_no_basta_con_que_haya_camino_tiene_que_andarse() -> void:
 ## trazaba la misma ruta por el mismo sitio. Todos los dias y varios a la vez.
 func test_una_celda_desmentida_se_cierra() -> void:
 	var terrain := FakeTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var seco := Vector3(500.0, 0.0, 500.0)
 	assert_true(grid.passable(seco), "la meseta se anda")
 
@@ -919,7 +919,7 @@ func test_el_vado_estrecho_no_cierra_el_valle() -> void:
 	# Primero, que el caso este bien montado: si el rio saliera cerrado del
 	# todo, las pruebas de abajo pasarian sin probar nada.
 	var terrain := VadoTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	assert_true(grid.connected(Vector3(820.0, 0.0, 900.0),
 		Vector3(820.0, 0.0, 1100.0)), "por el vado se pasa de una orilla a otra")
 
@@ -947,7 +947,7 @@ func test_ningun_tramo_del_camino_se_mete_en_el_agua() -> void:
 	# de lejos y en diagonal -que es cuando el recorte de la escalera tiene algo
 	# que recortar- y se cata cada tramo como lo cataria quien lo anda.
 	var terrain := VadoTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 
 	var pares := [
 		[Vector3(400.0, 0.0, 900.0), Vector3(1200.0, 0.0, 1100.0)],
@@ -978,7 +978,7 @@ func test_lo_que_dice_connected_lo_encuentra_el_buscador() -> void:
 	# entera y volvia sin camino, y eso desde fuera era «se quedo sin camino
 	# trazado» sobre un sitio que la rejilla juraba alcanzable.
 	var terrain := VadoTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 
@@ -1019,7 +1019,7 @@ func test_el_vado_de_enfrente_solo_se_cruza_en_verano() -> void:
 
 	var rodeos := {}
 	for estacion: int in [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO]:
-		var grid := Navgrid.from_terrain(terrain, false, false,
+		var grid := Navgrid.from_terrain(terrain, false, [],
 			float(Temporada.CAUDAL[estacion]),
 			float(Temporada.ENCHARCA[estacion]))
 		assert_true(grid.connected(casa, enfrente),
@@ -1121,7 +1121,7 @@ func test_el_riesgo_no_encarece_mas_que_el_rodeo_que_se_anda() -> void:
 	# Y muerde: una celda de canchal en cuesta no puede costar mas de
 	# RIESGO_MAXIMO veces lo que cuesta el TIEMPO de andarla.
 	var terrain := VadoDeVerano.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var llano := grid.cost[grid.cell_of(Vector3(
 		VadoDeVerano.ENFRENTE_X, 0.0, VadoDeVerano.RIO_Z - 400.0))]
 	assert_gt(llano, 0.0, "la meseta se anda")
@@ -1165,3 +1165,29 @@ func test_la_regla_del_rodeo_mide_el_camino_que_se_anda() -> void:
 	GameState.season = antes
 	sim.free()
 	terrain.free()
+
+
+# ------------------------------------ el rodeo de lo cercano (2026-09-13) --
+
+func test_lo_cercano_entra_aunque_de_la_vuelta() -> void:
+	# El caso del usuario: «el raizal del paso», 226 m en recta y 786 andados.
+	# Con la proporción sola (2,5 veces más 80 m, 645) salía inalcanzable.
+	var sim := SettlementSim.new()
+	assert_true(sim.marcha.rodeo_aceptable(226.0, 786.0),
+		"786 m andados para 226 en recta: se va")
+
+
+func test_lo_lejano_sigue_bajo_la_proporcion() -> void:
+	# El caso que justificaba la regla sigue fuera: dar la vuelta al río por un
+	# vado a dos kilómetros para un avellanar que se ve desde casa.
+	var sim := SettlementSim.new()
+	assert_false(sim.marcha.rodeo_aceptable(400.0, 2200.0),
+		"2,2 km andados para 400 m en recta no compensan")
+
+
+func test_el_suelo_es_de_un_kilometro() -> void:
+	var sim := SettlementSim.new()
+	assert_true(sim.marcha.rodeo_aceptable(300.0, Marcha.SIEMPRE_SE_ANDA),
+		"justo en el kilómetro, vale")
+	assert_false(sim.marcha.rodeo_aceptable(300.0, Marcha.SIEMPRE_SE_ANDA + 10.0),
+		"y pasado, vuelve a mandar la proporción: 1 010 m para 300 no compensa")

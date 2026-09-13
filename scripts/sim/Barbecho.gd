@@ -74,13 +74,34 @@ func revisar() -> void:
 		# arregla y sólo impediría usarlas.
 		if not Materia.renews(paraje.kind):
 			continue
-		var queda := sim.field.stock_fraction_around(
-			paraje.activity, paraje.position, RADIO)
+		var queda := cuanto_queda(paraje)
 		if paraje.resting:
 			if queda >= REPUESTO:
 				_devolver(paraje, queda)
 		elif queda < ESQUILMADO:
 			_descansar(paraje, queda)
+
+
+## Cuánto le queda a un paraje, en tanto por uno de lo que tenía intacto.
+##
+## **Lo peor de dos medidas, y las dos hacen falta.** El redondel de [RADIO] es
+## el que usa el reparto de tajos para puntuar un sitio: si el barbecho mirara
+## otra cosa, los dos dirían cosas distintas del mismo paraje. Pero en un río
+## ese redondel se come tramos que nadie ha tocado, y la media no bajaba del
+## 20 % mientras el tramo que se pescaba se vaciaba del todo. Lo destapó el
+## usuario el 2026-09-13: «los parajes de pesca los vacían y no se regeneran, y
+## no sale ni el aviso». Y lo remataba `Parajes.prune_exhausted`, que mira LA
+## CELDA del paraje: al llegar ésa al 4 % lo secaba y lo borraba sin haberlo
+## dejado descansar nunca.
+##
+## Metiendo aquí la celda del paraje, que es la misma que mira quien lo seca,
+## **el descanso llega siempre antes que el secado**: se descansa al 20 % y se
+## seca al 4 %, y un paraje en barbecho no se trabaja.
+func cuanto_queda(paraje: Paraje) -> float:
+	var alrededor := sim.field.stock_fraction_around(
+		paraje.activity, paraje.position, RADIO)
+	var suya := sim.field.stock_fraction(paraje.activity, paraje.cell_x, paraje.cell_z)
+	return minf(alrededor, suya)
 
 
 func _descansar(paraje: Paraje, queda: float) -> void:

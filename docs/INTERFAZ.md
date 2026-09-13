@@ -150,6 +150,54 @@ orden que les toca. **La captura necesita ventana**: con `--headless`,
 sonda sin pantalla. Y el desgaste del vestido se ve **antes** de que la pieza se
 rompa, que es lo que hace que el jugador mande coser a tiempo.
 
+**Lo que pide la tanda 4 (spec, 2026-09-13)**, con criterios en
+[EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 → Tanda 4:
+
+- **El mapa regional se juega**: sin sitio de prueba, la ficha de cada sitio
+  descubierto con lo que se sabe, el estado de la banda y de los mapas guardados,
+  y ventanas más pequeñas que **no salen de la pantalla a 1920×1080 ni a
+  1280×720**.
+- **La ventana del abrigo**: fuera el botón «usar como taller de talla»; y
+  «trasladar el campamento aquí» sólo en cuevas no habitadas. **Hecho
+  (2026-09-13)**: el taller es el abrigo donde vive la banda, sin botón, y la
+  cueva propia no se ofrece como destino (`PanelSitios._actions_for`). **El
+  traslado ya existe** (2026-09-13, `Traslado`): el botón muda a la banda, o
+  sale apagado diciendo por qué —no se llega, hay gente de expedición—.
+- **El trueque como el almacén**: la banda a la izquierda, los visitantes a la
+  derecha, con precios que mueve la relación. **Hecho (2026-09-13)**:
+  `PanelTrueque`, botón «Trueque» en la barra de abajo.
+- **Una ventana de relaciones** con cada banda conocida y lo que se sabe de ella.
+  **Hecho (2026-09-13)**: `PanelRelaciones`, botón «Relaciones».
+
+**El minimapa ya no pinta los `work_sites`** (2026-09-13): eran un punto cian
+por actividad, de antes de que los parajes tuvieran sus chapas, y el jugador los
+veía como marcadores antiguos que no decían nada.
+
+**«Trabajos» dice quién no está** (2026-09-13, tanda 3). Una sección aparte,
+antes de la rejilla, con quien está **de camino al borde del valle**, **fuera
+del valle** o **descansando en el abrigo**, y la jornada en que vuelve o se cura.
+Quien está fuera no sale en la rejilla —no se le puede dar trabajo hoy—; el
+herido sí, porque lo que se le marque es lo que hará al curarse. La lista la
+calcula `PanelTrabajos.ausentes`, que no pinta: la ventana sólo la escribe.
+
+**Y «Oficios» enseña las jornadas trabajadas de cada oficio**, con la técnica que
+pagan y cuánto pide, leídas del árbol (`TechTree.days_in`). Es la misma cifra que
+hace subir las técnicas, no una copia.
+
+**El Shift del almacén**: un clic mueve los máximos de uno en uno y con Shift de
+diez en diez (`PanelAlmacen.paso_del_objetivo`). El tope de comida multiplica ese
+paso por diez —va de 10 en 10, y de 100 en 100 con Shift— porque en raciones el
+paso de uno sería inmanejable.
+
+**La tarjeta de una decisión puede preguntar a quién se manda** (2026-09-13,
+tanda 3). Cuando la decisión mueve gente —la expedición de primavera, la cumbre
+de verano—, la tarjeta enseña **una casilla por persona que puede ir**, con los
+del mínimo ya marcados para que decir que sí sea un clic. Al marcar o desmarcar,
+**la tarjeta se rehace entera**: lo que cuesta depende de cuántos van. Y si no
+llegan al mínimo, o falta equipo, el botón de confirmar sale **apagado con lo
+que falta escrito al lado** —no escondido: así se sabe a por qué ir—. Ver
+`Moment.candidatos` y `BarraSuperior._build_moment_card`.
+
 **El panel de técnicas no dice por qué una técnica está parada.** Es la queja
 literal del jugador —«hay varias técnicas que no se desbloquean, no sé por
 qué»— y tiene tres causas distintas que hoy se ven igual: falta el
@@ -159,6 +207,14 @@ despensa no da para seguir practicando. Decir «parada: faltan 6 de asta» vale
 para las veinte técnicas del árbol, no sólo para la azagaya. Va por `/depurar`
 junto con el resto de los fallos, pero la decisión de diseño —el panel dice la
 causa, no sólo el porcentaje— se anota aquí.
+
+> **Y las jornadas no pasan de las que la técnica pide (2026-09-13,
+> `/depurar`).** El contador es del oficio y sigue subiendo mientras la técnica
+> espera a la que va antes: el cartel de la pasarela decía «82 de 70 jornadas»
+> —imposible de leer como otra cosa que «ya debería estar»— y la causa salía
+> tres líneas más abajo. Ahora esa línea se corta en lo que pide y, cuando están
+> hechas, dice en el mismo sitio qué falta: «70 de 70 jornadas, ya hechas;
+> falta: tras núcleo preparado». Con prueba: `TestArbolVentana`.
 
 > **Hecho (2026-09-12, `/depurar`), y la causa dominante no era la que se
 > creía.** Medido con `ArbolPasoProbe`, **ninguna técnica estaba parada por

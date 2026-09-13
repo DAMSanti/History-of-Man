@@ -26,6 +26,10 @@ func _pintable() -> SettlementSim:
 	sim.toolkit.craft(Tool.Kind.LAMPARA, Tool.Stuff.CUARCITA, 0.6)
 	sim.store.add(Materia.Kind.OCRE, 20.0)
 	sim.store.add(Materia.Kind.GRASA, 20.0)
+	# Explorada y con pared: desde el frente 23 no se pinta sin entrar antes.
+	# Ver [TestExploracion] para esa regla.
+	sim.exploracion._sabido[sim.exploracion.cueva_de_la_banda] = {
+		"explorada": true, "pintable": true}
 	return sim
 
 

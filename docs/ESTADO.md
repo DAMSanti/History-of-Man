@@ -20,6 +20,8 @@ con cuál.
 | Por qué la caza mayor no llega en un año (la cadena de prerrequisitos) | §2, «Por qué la caza da 0,27» |
 | **Dos años con un jugador que decide**: la banda muere en el segundo invierno por el tope de la despensa | §2, «Dos años con un jugador que decide» |
 | Por qué la ropa no cambia nada en el invierno en casa | §2, «El invierno en la cueva» |
+| Por qué el árbol de técnicas no subía en ribera ni en hogar | §2, «La ribera y el hogar practicaban cero» |
+| Si el taller se sigue parando, y cuándo llega la talla laminar | §2, «El taller ya no se para» |
 | **Qué sistemas están sólidos, y con qué sonda se comprobó** | **§3** |
 | Qué pide el diseño y no existe | §4 |
 | **Qué haría por orden**, con lo ya hecho tachado | **§5** |
@@ -240,7 +242,13 @@ en primavera siguen siendo 213 de 282, los mismos que antes.
 encima de x2,5, y el rodeo de verano sigue por encima del de las otras tres
 estaciones (x1,43 contra x1,18). Es pequeño y ya no se ve, pero no es cero.
 
-### 🔴 El taller se para solo hacia la jornada 31
+### ~~🔴 El taller se para solo hacia la jornada 31~~ — arreglado el 2026-09-13
+
+> **Ya no se para**: con el artesano practicando sin encargo —tanda 3, frente
+> 14— la práctica se sostiene en **1,98 jornadas/día durante 90**, frente a la
+> caída a 0,3 que describe lo de abajo. Ver arriba, «El taller ya no se para».
+> Lo que sigue debajo es el diagnóstico de entonces, que es lo que explica por
+> qué hacía falta el arreglo.
 
 **Sin arreglar. Encontrado el 2026-09-12 buscando otra cosa**, y es la causa de
 verdad de que la talla laminar no llegue. Medido con `ArbolPasoProbe`, 60
@@ -581,6 +589,80 @@ berrea. Lo que sí dice es que un cazador ya llega a lo que come (1,69). Ribera
 sale a cero porque el reparto por defecto no pone a nadie: es el aviso de la
 cabecera de `AnoProbe`, no un cambio.
 
+### La ribera y el hogar practicaban cero, y era el instrumento
+
+**Medido el 2026-09-13** con `PracticaProbe` (nueva), 10 jornadas en la escena
+real, tres personas en la orilla, tres en el hogar y una en el taller. Sale del
+`/depurar` del fallo 1 de la tanda 3.
+
+| oficio | jornadas en el árbol tras 10 días, **antes** | **después** |
+|---|---|---|
+| Ribera | **0** | **27** |
+| Hogar | **0** | **30** |
+| Manufactura | 10 | 9 |
+| Caza | 10 | 11 |
+
+Y la pesquera de piedra, que el jugador veía clavada en 0 % tras **dos años de
+partida con material de sobra**, pasa a **45 % en diez jornadas**.
+
+**La práctica se contaba en `DemoMain`, a medianoche, mirando `has_task`** —que
+significa «tiene tajo en el mapa ahora mismo»—, y además **después** de que
+`apply_priorities` hubiera repartido ya el día siguiente. Así, quien trabaja en
+la cueva —el hogar— no practicaba **nunca**, y la ribera tampoco: a esa hora ya
+no tiene tajo. La caza y la recolección se salvaban de casualidad.
+
+Ahora la cuenta es una regla del juego y vive en la simulación
+(`SettlementSim._practica_del_dia`): una jornada por persona que trabajó, en el
+oficio en que trabajó, apuntado en el momento de trabajar. Lo mismo vale para
+**la temporada que la banda conoce**, que se anotaba con la misma bandera y en
+el mismo sitio. Con prueba: `TestPractica`.
+
+**Lo que esto NO arregla**, y conviene no confundirlo: manufactura sube despacio
+porque el taller se para sin demanda —es el frente 14 de la tanda 3—, y las
+técnicas que van detrás de otra siguen a 0 % hasta que llegue la previa. La
+azagaya espera a la hoja, y la hoja al núcleo.
+
+### El taller ya no se para: 1,98 jornadas al día durante 90
+
+**Medido el 2026-09-13** con `ArbolPasoProbe`, `MANU=2 DIAS=90`, 1 h 40 de
+reloj. Es la medida que A4 dejó pendiente y que el frente 14 de la tanda 3
+reabrió, ahora con el artesano practicando sin encargo.
+
+| oficio | jornadas en 90 | al día |
+|---|---|---|
+| Recolección | 811 | 9,01 |
+| **Manufactura** | **178** | **1,98** |
+| Hogar | 270 | 3,00 |
+| Caza | 91 | 1,01 |
+
+**El 🔴 «el taller se para solo hacia la jornada 31» queda cerrado.** Lo medido
+entonces era práctica a 2,00 jornadas/día treinta días y caída a **0,3**
+mientras la cuarcita se acumulaba de 96 a 3 054: el artesano se iba al canchal y
+no volvía. Ahora se sostiene **1,98 durante las noventa**, y la cuarcita se queda
+en 102 —se gasta lo que se talla—.
+
+**Y la talla laminar se aprende**, que era la otra mitad de la pregunta:
+
+| técnica | jornada |
+|---|---|
+| Núcleo preparado | ~21–31 |
+| Lazo de fibra | ~31–41 |
+| **Talla laminar** | **~51** |
+
+**Lo que sigue parado, y por qué** —la ventana lo dice ya con su causa—:
+
+| técnica | lo que la frena |
+|---|---|
+| Azagaya de asta | **material**: 65 % de jornadas y 9 % pagado; faltan 7 asta y 2 tendón |
+| Arte parietal | **material**: jornadas al 100 %, faltan 8 ocre y 3 grasa |
+| Aguja de hueso | **material**: 94 % de jornadas, faltan 2 hueso |
+| Pesquera de piedra | **jornadas**: nadie en ribera en esta corrida |
+| Pasarela de troncos | **jornadas**: nadie en exploración en esta corrida |
+
+O sea: con el taller arreglado, **lo que ahora frena el árbol es el material de
+origen animal** —asta, tendón, hueso— y el ocre y la grasa del arte. Eso ya no
+es el taller: es la caza, que sigue a 1,01 jornadas/día con un cazador.
+
 ### El invierno en la cueva no enferma a nadie, con ropa o sin ella
 
 **Medido el 2026-09-13** con `FrioInviernoProbe`, `SEMILLA=42`, un invierno
@@ -621,7 +703,7 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**1 076 pruebas y 7 161 comprobaciones en verde (2026-09-13).**
+**1 216 pruebas y 7 031 comprobaciones en verde (2026-09-13).** Bajan de 7 645 porque se quitó la tarjeta de trueque y sus pruebas; ver ROADMAP, «Tras la tanda 4».
 
 > **Ésta es la única copia de esa cifra en el repositorio, y es a propósito.**
 > Llegó a estar escrita en ocho sitios —CLAUDE.md, README.md, ARQUITECTURA.md,

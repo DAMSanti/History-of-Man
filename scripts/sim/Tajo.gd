@@ -462,7 +462,9 @@ func _search_target(person: Inhabitant) -> Vector3:
 ## simulacion. Ver la tarea 21 de docs/specs/LO_MISMO_MAS_DEPRISA.md.
 func _abanico_de(person: Inhabitant) -> Array:
 	# Barca, puente o abrigo nuevos cambian lo que se puede pisar: se rehace.
-	var con := Vector2i(1 if sim.has_boat else 0, 1 if sim.has_bridge else 0)
+	# La versión de las pasarelas y no un sí/no: cada obra nueva -o cada una que
+	# se lleva la riada- cambia adónde se puede ir.
+	var con := Vector2i(1 if sim.has_boat else 0, sim.pasarelas.version)
 	if con != _abanicos_con or sim.home_position != _abanicos_desde:
 		_abanicos.clear()
 		_abanicos_con = con
@@ -484,7 +486,8 @@ func _abanico_de(person: Inhabitant) -> Array:
 			candidate.y = sim._terrain.get_height_at(candidate)
 
 			if not Traversal.is_passable(sim._terrain.get_slope_at(candidate),
-					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat, sim.has_bridge):
+					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat,
+					sim.pasarelas.hay_en(candidate)):
 				continue
 			puntos.append([candidate, distance])
 	_abanicos[person.id] = puntos
@@ -1032,7 +1035,8 @@ func _forage_drift(person: Inhabitant, hours: float) -> void:
 			candidate.y = sim._terrain.get_height_at(candidate)
 			# No se va a recoger al otro lado de un cortado ni al agua
 			if not Traversal.is_passable(sim._terrain.get_slope_at(candidate),
-					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat, sim.has_bridge):
+					sim._terrain.crossing_difficulty_at(candidate), sim.has_boat,
+					sim.pasarelas.hay_en(candidate)):
 				continue
 			if waterside and attempt < tries - 1 and not _water_beside(candidate):
 				continue

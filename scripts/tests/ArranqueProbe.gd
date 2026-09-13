@@ -188,7 +188,7 @@ func _pisadas_en_lo_hondo(sim: Node) -> int:
 	var cuantas := 0
 	for person: Inhabitant in sim.people:
 		var calado: float = sim._terrain.crossing_difficulty_at(person.position)
-		if not Hydrography.can_cross(calado, sim.has_boat, sim.has_bridge):
+		if not Hydrography.can_cross(calado, sim.has_boat, false):
 			cuantas += 1
 	return cuantas
 

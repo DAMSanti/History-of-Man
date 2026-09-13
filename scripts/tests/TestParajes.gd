@@ -237,7 +237,7 @@ func test_la_puerta_de_casa_siempre_se_anda() -> void:
 	# consecuencias son enormes y calladas -la banda entera queda en una celda
 	# que no existe y no se le puede trazar nada-.
 	var terrain := FakeTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 
 	# El peor sitio posible: el abrigo con el pie metido en el rio
 	var home := Vector3(700.0, 0.0, FakeTerrain.RIVER_Z)
@@ -259,7 +259,7 @@ func test_abrir_la_puerta_no_regala_un_vado() -> void:
 	# Se abre porque hay que salir, no porque sea buen camino: las celdas
 	# forzadas quedan CARAS para que el trazado siga prefiriendo rodear
 	var terrain := FakeTerrain.new()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var home := Vector3(700.0, 0.0, FakeTerrain.RIVER_Z)
 	grid.open_around_home(home, terrain)
 
@@ -297,7 +297,6 @@ func test_lo_sabido_sobrevive_a_la_vuelta_del_ano() -> void:
 	if paraje.contents.has(aprendido):
 		assert_true(bool((paraje.contents[aprendido] as Dictionary)["sabido"]),
 			"y al volver a estar en temporada NO sale otra vez como ???")
-	field.free()
 
 
 
@@ -1603,3 +1602,78 @@ func test_un_desmogadero_entrega_asta() -> void:
 	var extras: Array = Parajes.EXTRAS_BY_ACTIVITY[Subsistence.Activity.MATERIA_PRIMA]
 	assert_true(extras.has(Materia.Kind.ASTA),
 		"y por tanto sale tambien en la ficha de los demas sitios de piedra")
+
+
+# -------------------------- el barbecho de la pesca (depurar, 2026-09-13) --
+#
+# Queja del usuario: «en los parajes de pesca los pobladores los VACÍAN del todo
+# y no se regeneran; no he visto ni aviso ni nada». La regla del 20 % existía,
+# pero miraba un REDONDEL de 90 m, y en un río ese redondel se come tramos que
+# nadie ha tocado: la media no bajaba del 20 % mientras el sitio donde se
+# pescaba se vaciaba, y `prune_exhausted` —que mira la celda del paraje— lo
+# secaba y lo borraba antes.
+
+## Un río de una fila de celdas, lleno, con un paraje de pesca en medio.
+func _rio_con_paraje() -> Dictionary:
+	var field := ResourceField.new()
+	field.setup(8, 8, Vector2(512.0, 512.0))
+	for x in range(8):
+		field.set_abundance(Subsistence.Activity.PESCA, x, 4, 1.0)
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.field = field
+	var paraje := _paraje(4, 4, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	sim.parajes.add(paraje)
+	return {"sim": sim, "field": field, "paraje": paraje}
+
+
+func _vaciar_la_celda(field: ResourceField, x: int, z: int, queda: float) -> void:
+	var i := z * field.width + x
+	var grid: PackedFloat32Array = field.grids[Subsistence.Activity.PESCA]
+	grid[i] = queda
+	field.grids[Subsistence.Activity.PESCA] = grid
+
+
+func test_el_tramo_que_se_pesca_descansa_aunque_el_rio_siga_lleno() -> void:
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	# Se pesca en el paraje y sólo ahí: su celda al 10 %, el resto del río lleno.
+	_vaciar_la_celda(montaje["field"], 4, 4, 0.10)
+	sim.barbecho.revisar()
+	assert_true(paraje.resting,
+		"el sitio donde se pesca, al 10 %, se deja descansar aunque el río de al lado esté lleno")
+
+
+func test_descansa_antes_de_que_se_seque() -> void:
+	# EL ORDEN: el barbecho tiene que llegar ANTES que `prune_exhausted`, que
+	# seca y borra el paraje. Si el umbral de descanso no estuviera por encima
+	# del de agotado, un sitio pasaría de trabajado a borrado sin descansar.
+	assert_gt(Barbecho.ESQUILMADO, Parajes.EXHAUSTED,
+		"se descansa al 20 %, bastante antes del 4 % en que se seca")
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	_vaciar_la_celda(montaje["field"], 4, 4, 0.15)
+	sim.barbecho.revisar()
+	assert_true(paraje.resting, "al 15 % ya descansa")
+	assert_true(sim.parajes.list.has(paraje), "y sigue existiendo: no se ha secado")
+
+
+func test_y_se_cuenta_en_la_cronica() -> void:
+	# «No he visto ni aviso ni nada»: el aviso es la otra mitad.
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	_vaciar_la_celda(montaje["field"], 4, 4, 0.10)
+	var antes := sim.chronicle.entries.size()
+	sim.barbecho.revisar()
+	assert_gt(sim.chronicle.entries.size(), antes, "sale el aviso en la crónica")
+
+
+func test_con_el_tramo_lleno_no_descansa() -> void:
+	# El control: sin esto, «descansa» podría ser que descansara siempre.
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	sim.barbecho.revisar()
+	assert_false(paraje.resting, "lleno, se sigue pescando")

@@ -122,7 +122,11 @@ var areas: int = 0
 ## Con qué se contaba al construirla. Barca y puente cambian lo que se pasa,
 ## así que hay que rehacerla cuando aparecen.
 var built_with_boat: bool = false
-var built_with_bridge: bool = false
+## Las celdas con pasarela con las que se midió, y su versión. Una pasarela
+## abre SU cruce, así que la rejilla tiene que saber cuáles había: si se levanta
+## o se pierde una, esta rejilla ya no vale. Ver [Pasarelas].
+var built_with_pasarelas: Array = []
+var built_with_pasarelas_version: int = -1
 
 ## Y con que caudal se midio.
 ##
@@ -158,10 +162,10 @@ const CELDAS_POR_RELOJ := 16
 ## Construye la rejilla a partir del terreno. Es lo caro -novecientos
 ## milisegundos medidos- y pasa una vez por estacion.
 static func from_terrain(terrain: TerrainGenerator,
-		has_boat: bool, has_bridge: bool, con_caudal: float = 1.0,
-		con_encharque: float = 0.0) -> Navgrid:
-	var grid := preparar(terrain, has_boat, has_bridge, con_caudal,
-		con_encharque)
+		has_boat: bool, pasarelas: Array, con_caudal: float = 1.0,
+		con_encharque: float = 0.0, pasarelas_version: int = 0) -> Navgrid:
+	var grid := preparar(terrain, has_boat, pasarelas, con_caudal,
+		con_encharque, pasarelas_version)
 	while not grid.horneada():
 		grid.amasar(terrain, grid.tall)
 	return grid
@@ -174,11 +178,12 @@ static func from_terrain(terrain: TerrainGenerator,
 ## segundos y medio de tiron, y hacerlas al cambiar de estacion seria un
 ## parpadeo a mitad de partida. Ver [HornoDeRejillas].
 static func preparar(terrain: TerrainGenerator, has_boat: bool,
-		has_bridge: bool, con_caudal: float = 1.0,
-		con_encharque: float = 0.0) -> Navgrid:
+		pasarelas: Array, con_caudal: float = 1.0,
+		con_encharque: float = 0.0, pasarelas_version: int = 0) -> Navgrid:
 	var grid := Navgrid.new()
 	grid.built_with_boat = has_boat
-	grid.built_with_bridge = has_bridge
+	grid.built_with_pasarelas = pasarelas.duplicate()
+	grid.built_with_pasarelas_version = pasarelas_version
 	grid.built_with_caudal = con_caudal
 	grid.built_with_encharque = con_encharque
 	if terrain == null:
@@ -226,7 +231,7 @@ func amasar(terrain: TerrainGenerator, filas: int,
 			# retraso hasta tener la del verano: la banda seguia sin poder
 			# cruzar el rio con el rio ya bajo.
 			var medida := _medir_la_celda(terrain, centre, built_with_boat,
-				built_with_bridge, built_with_caudal, built_with_encharque)
+				_hay_pasarela(centre), built_with_caudal, built_with_encharque)
 			cost[i] = medida.x
 			if cost[i] > BLOCKED:
 				vado[i] = int(medida.y)
@@ -290,7 +295,7 @@ const PASO_N := 16
 ## cuesta medirla— y sólo entonces se catan finas las cuatro medias líneas. El
 ## monte seco, que es casi todo el mapa, no paga nada de esto.
 static func _paso_de_la_celda(terrain: TerrainGenerator, centre: Vector3,
-		has_boat: bool, has_bridge: bool, con_caudal: float,
+		has_boat: bool, con_pasarela: bool, con_caudal: float,
 		moja: bool) -> int:
 	if terrain == null:
 		return 0
@@ -307,21 +312,21 @@ static func _paso_de_la_celda(terrain: TerrainGenerator, centre: Vector3,
 			[PASO_S, Vector3(0.0, 0.0, 1.0)],
 			[PASO_N, Vector3(0.0, 0.0, -1.0)]]:
 		if _media_linea_se_vadea(terrain, centre, lado[1] as Vector3,
-				has_boat, has_bridge, con_caudal):
+				has_boat, con_pasarela, con_caudal):
 			mask |= int(lado[0])
 	return mask
 
 
 ## Si del centro de la celda a uno de sus lados se va sin meterse en el agua.
 static func _media_linea_se_vadea(terrain: TerrainGenerator, centre: Vector3,
-		hacia: Vector3, has_boat: bool, has_bridge: bool,
+		hacia: Vector3, has_boat: bool, con_pasarela: bool,
 		con_caudal: float) -> bool:
 	var catas := maxi(int(ceil(CELL * 0.5 / CATA_DEL_VADO)), 2)
 	var hondo := 0.0
 	for i in range(catas + 1):
 		var point := centre + hacia * (CELL * 0.5 * float(i) / float(catas))
 		hondo = maxf(hondo, terrain.crossing_difficulty_with(point, con_caudal))
-	return Hydrography.can_cross(hondo, has_boat, has_bridge)
+	return Hydrography.can_cross(hondo, has_boat, con_pasarela)
 
 
 ## Si por esta celda se cruza de LADO A LADO en uno de los dos sentidos.
@@ -329,13 +334,13 @@ static func _media_linea_se_vadea(terrain: TerrainGenerator, centre: Vector3,
 ## `a_lo_ancho` es la fila de en medio -se va en X, la Z fija-, que es por donde
 ## pasa quien entra por el este y sale por el oeste. Lo otro es la columna.
 static func _linea_se_vadea(terrain: TerrainGenerator, centre: Vector3,
-		a_lo_ancho: bool, has_boat: bool, has_bridge: bool,
+		a_lo_ancho: bool, has_boat: bool, con_pasarela: bool,
 		con_caudal: float) -> bool:
 	var uno := Vector3(1.0, 0.0, 0.0) if a_lo_ancho else Vector3(0.0, 0.0, 1.0)
-	if not _media_linea_se_vadea(terrain, centre, uno, has_boat, has_bridge,
+	if not _media_linea_se_vadea(terrain, centre, uno, has_boat, con_pasarela,
 			con_caudal):
 		return false
-	return _media_linea_se_vadea(terrain, centre, -uno, has_boat, has_bridge,
+	return _media_linea_se_vadea(terrain, centre, -uno, has_boat, con_pasarela,
 			con_caudal)
 
 
@@ -414,22 +419,22 @@ const CATA_DEL_VADO := 3.0
 ## Dos pasadas: la de las nueve muestras, que es barata y descarta la inmensa
 ## mayoria de las celdas, y una fina por la linea que aquella daba por buena.
 static func _vado_de_verdad(terrain: TerrainGenerator, centre: Vector3,
-		fords: PackedFloat32Array, has_boat: bool, has_bridge: bool,
+		fords: PackedFloat32Array, has_boat: bool, con_pasarela: bool,
 		con_caudal: float) -> bool:
-	if not _has_ford(fords, has_boat, has_bridge):
+	if not _has_ford(fords, has_boat, con_pasarela):
 		return false
 	if terrain == null:
 		return true
 
 	for a_lo_ancho: bool in [true, false]:
-		if _linea_se_vadea(terrain, centre, a_lo_ancho, has_boat, has_bridge,
+		if _linea_se_vadea(terrain, centre, a_lo_ancho, has_boat, con_pasarela,
 				con_caudal):
 			return true
 	return false
 
 
 static func _has_ford(fords: PackedFloat32Array, has_boat: bool,
-		has_bridge: bool) -> bool:
+		con_pasarela: bool) -> bool:
 	# La fila y la columna de en medio de la malla de muestras.
 	var mid := PROBE_SIDE / 2
 	var across: Array[int] = []
@@ -441,7 +446,7 @@ static func _has_ford(fords: PackedFloat32Array, has_boat: bool,
 		var deepest := 0.0
 		for i: int in line:
 			deepest = maxf(deepest, fords[i])
-		if Hydrography.can_cross(deepest, has_boat, has_bridge):
+		if Hydrography.can_cross(deepest, has_boat, con_pasarela):
 			return true
 	return false
 
@@ -503,7 +508,7 @@ func open_around_home(home: Vector3, terrain: TerrainGenerator) -> int:
 			# Por la misma puerta que todo lo demas: una sola pasada por la
 			# celda. Ver [_medir_la_celda].
 			var paso := int(_medir_la_celda(terrain, point, built_with_boat,
-				built_with_bridge, built_with_caudal, built_with_encharque).y)
+				_hay_pasarela(point), built_with_caudal, built_with_encharque).y)
 			if paso == MOJA:
 				paso = 0
 
@@ -534,7 +539,7 @@ const FORCED_COST := 9.0
 ## la rejilla del verano. La banda seguia sin poder cruzar el rio con el rio ya
 ## bajo, y los parajes de la otra orilla salian «no alcanzable» sin serlo.
 static func _medir_la_celda(terrain: TerrainGenerator, centre: Vector3,
-		has_boat: bool, has_bridge: bool, con_caudal: float,
+		has_boat: bool, con_pasarela: bool, con_caudal: float,
 		con_encharque: float) -> Vector2:
 	if terrain == null:
 		return Vector2(BLOCKED, 0.0)
@@ -553,9 +558,9 @@ static func _medir_la_celda(terrain: TerrainGenerator, centre: Vector3,
 		if ford > Hydrography.ROZA_EL_AGUA:
 			moja = true
 
-	var paso := _paso_de_la_celda(terrain, centre, has_boat, has_bridge,
+	var paso := _paso_de_la_celda(terrain, centre, has_boat, con_pasarela,
 		con_caudal, moja)
-	var coste := _measure(terrain, centre, has_boat, has_bridge, con_caudal,
+	var coste := _measure(terrain, centre, has_boat, con_pasarela, con_caudal,
 		con_encharque, paso)
 	return Vector2(coste, float(paso))
 
@@ -571,7 +576,7 @@ static func _medir_la_celda(terrain: TerrainGenerator, centre: Vector3,
 ## cruzar. Se probó a aflojarlo y el resultado, medido, fue gente parada
 ## contra una pared durante horas.
 static func _measure(terrain: TerrainGenerator, centre: Vector3,
-		has_boat: bool, has_bridge: bool, con_caudal: float = 1.0,
+		has_boat: bool, con_pasarela: bool, con_caudal: float = 1.0,
 		con_encharque: float = 0.0, paso: int = -1) -> float:
 	var total := 0.0
 	var worst := 0.0
@@ -682,7 +687,7 @@ static func _measure(terrain: TerrainGenerator, centre: Vector3,
 			and (paso & (PASO_E | PASO_O)) != (PASO_E | PASO_O) \
 			and (paso & (PASO_S | PASO_N)) != (PASO_S | PASO_N):
 			return BLOCKED
-	elif not _vado_de_verdad(terrain, centre, fords, has_boat, has_bridge,
+	elif not _vado_de_verdad(terrain, centre, fords, has_boat, con_pasarela,
 			con_caudal):
 		return BLOCKED
 
@@ -743,10 +748,25 @@ func is_ready() -> bool:
 	return wide > 0 and tall > 0
 
 
-## Si esta rejilla sirve todavía, o hay que rehacerla porque la banda ya sabe
-## cruzar el agua.
-func matches(has_boat: bool, has_bridge: bool) -> bool:
-	return built_with_boat == has_boat and built_with_bridge == has_bridge
+## Si esta rejilla sirve todavía, o hay que rehacerla: la barca abre el agua
+## para siempre, y una pasarela nueva —o una que se ha llevado la riada— cambia
+## por dónde se cruza. Ver [Pasarelas.version].
+func matches(has_boat: bool, pasarelas_version: int) -> bool:
+	return built_with_boat == has_boat \
+		and built_with_pasarelas_version == pasarelas_version
+
+
+## Si esa celda tiene pasarela. Media celda de radio: la obra ocupa su celda.
+##
+## Es lo que convierte «la banda sabe hacer pasarelas» en «AQUÍ hay una»: la
+## regla de paso sigue viviendo en [Hydrography.can_cross] y en [paso_entre],
+## sin una segunda respuesta a la misma pregunta.
+func _hay_pasarela(centre: Vector3) -> bool:
+	for celda: Vector3 in built_with_pasarelas:
+		if absf(celda.x - centre.x) <= CELL * 0.5 \
+				and absf(celda.z - centre.z) <= CELL * 0.5:
+			return true
+	return false
 
 
 func cell_of(point: Vector3) -> int:

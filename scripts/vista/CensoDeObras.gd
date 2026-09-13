@@ -170,8 +170,8 @@ func _campamento() -> Array[Dictionary]:
 		if kind == CampProjects.Kind.HOGAR:
 			lines.append("El fuego está %s." % (
 				"encendido" if sim.hearth_lit else "APAGADO"))
-		lines.append("Costó %.0f jornadas de hogar."
-			% CampProjects.labor_days(kind as CampProjects.Kind))
+		lines.append("Costó %s."
+			% CampProjects.trabajo_texto(kind as CampProjects.Kind))
 		out.append({
 			"id": "campamento:%d" % kind,
 			"pos": sim.home_position,

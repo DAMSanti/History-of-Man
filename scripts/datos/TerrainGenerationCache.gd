@@ -18,7 +18,14 @@ extends Resource
 ## entraban en la comprobacion, asi que cambiarlos cargaba la malla vieja sin
 ## avisar. Las caches de v1 no dicen con que detalle se hicieron, y por eso no
 ## sirven.
-const CACHE_VERSION := 2
+##
+## v3 (2026-09-13): se anade `carvings_colocadas`. Las bocas de cueva se mueven
+## al generar si caen en el agua o donde no se llega —ver [Bocas]—, y una cache
+## que no guarda donde quedaron no sabe donde excavo. Las reglas de [Bocas] no
+## piden subirla: entran en `carvings_hash` con [Bocas.REGLAS].
+## v4 (2026-09-13): la boca de una cueva hunde el relieve cincuenta metros, como
+## una sima. Una cache de v3 tiene el terreno sin hundir.
+const CACHE_VERSION := 4
 @export var version: int = CACHE_VERSION
 
 ## Version del heightmap fuente (HeightmapData.pipeline_version) con el que se
@@ -40,6 +47,10 @@ const CACHE_VERSION := 2
 ## Hash de las entalladuras (bocas de cueva) con las que se genero. Cambia si
 ## cambian los emplazamientos excavados en la malla para esta epoca.
 @export var carvings_hash: int = 0
+
+## Donde se excavaron de verdad, tras [Bocas.colocar]. Ver
+## [TerrainGenerator.carvings_colocadas].
+@export var carvings_colocadas: Array[Dictionary] = []
 
 ## Hash del relieve INVENTADO: amplitud, frecuencia y octavas del detalle, su
 ## ganancia por pendiente, y el relieve de plataforma. Van juntos porque son

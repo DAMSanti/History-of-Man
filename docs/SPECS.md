@@ -204,7 +204,7 @@ emplazamiento paga la descarga, las siguientes no.
 `TerrainGenerator` (procedural y real), `MallaDelTerreno`, `TerrainSurround`,
 `TerrainInpainter`, `TerrainLayers`, `TerrainMaterialManager`,
 `ProceduralTextureGenerator` (hoy **sólo el agua**), `Erosion`, `Hydrography`,
-`Temporada`, `Navgrid`, `Traversal`, `Wayfinder`, `HornoDeRejillas`.
+`Temporada`, `Navgrid`, `Traversal`, `Wayfinder`, `HornoDeRejillas`, `Bocas`.
 
 **Contrato único de tránsito, y es el que más ha costado.** Hubo seis capas
 contestando distinto a la misma pregunta, y el resultado fueron 41 atascos por
@@ -228,8 +228,26 @@ partida y 5 741 pasos sobre terreno cortado. Hoy:
   esquivar lo peligroso no puede multiplicar el coste de una celda más que eso,
   tampoco puede provocar un rodeo mayor. El tope es al recargo por riesgo, no
   al tiempo: lo que se tarda en subir una cuesta sigue entero.
+- **Y lo cercano se anda aunque rodee** (2026-09-13). La regla del rodeo
+  —`Marcha.rodeo_aceptable`, la única— consiente 2,5 veces la recta, pero
+  **todo camino de menos de 1 km vale siempre** (`Marcha.SIEMPRE_SE_ANDA`). La
+  proporción sola dejaba fuera un raizal a 226 m al que se llegaba andando 786.
+  El suelo no toca el miedo: `RIESGO_MAXIMO` sigue siendo la proporción.
 - **Nadie da un paso sin camino debajo.** Quedarse sin ruta no es salir derecho
   hacia el destino.
+- **Dónde se abre una boca de cueva lo dice `Bocas.colocar`, y nadie más**
+  (2026-09-13). En seco y unida a casa por `Navgrid.connected` —la celda
+  abierta más cercana, como la marcha—; si no, al punto bueno más cercano en
+  anillos de 10 m y, **entre los buenos hasta el doble de esa distancia (40 m
+  como poco), el de más pendiente**, porque las cuevas se abren en la ladera
+  —decisión del usuario—. Pide seco también el corro que se excava, radio y
+  medio. **No pide que la celda de la boca se ande**: una cueva está
+  en ladera, y pedirlo sacaba 8 de 9 bocas de la pared. Lo llama
+  `TerrainGenerator` **entre el relieve y la excavación**, por `colocar_las_bocas`,
+  porque la entalladura tiene que ir donde queda la boca: `carvings` es lo que
+  pide el catálogo —la clave de la caché, con `Bocas.REGLAS`— y
+  `carvings_colocadas` lo que se excava, guardado en la caché (v3). Sustituye a
+  `DemoMain._nudge_out_of_water`, que sólo miraba el agua.
 
 `HornoDeRejillas` amasa las rejillas de la estación siguiente en trozos, **aun
 con el reloj parado**, con presupuesto por cuadro. Un presupuesto más fino que
@@ -282,7 +300,13 @@ quepa en los cestos (`POR_CESTO`) y odres (`POR_ODRE`) que existan, recalculado
 al cerrar cada jornada porque los cestos se rompen. Un tope en raciones no es
 una mecánica: es un número, y nada en el mundo impide seguir amontonando.
 
-`TechTree`: las técnicas **se aprenden practicando**, no investigando. El
+`TechTree`: las técnicas **se aprenden practicando**, no investigando. **Quién
+practica lo cuenta `SettlementSim._practica_del_dia`**, al cerrar la jornada y
+antes del reparto del día siguiente: una jornada por persona que **trabajó** ese
+día, en el oficio en que trabajó (`Inhabitant.oficio_de_hoy`). Estuvo en
+`DemoMain` hasta el 2026-09-13, mirando `has_task` a medianoche —cuando ya no
+hay tajo y el reparto de mañana ya ha corrido—, y con eso el hogar y la ribera
+**no practicaban nunca**. El
 prerrequisito manda, y es lo que hoy deja la caza mayor fuera de un año de
 partida (`AZAGAYA` ← `HOJA` ← `NUCLEO` ← `LASCA`). Eso es un hallazgo medido,
 no un fallo por arreglar a ciegas.
@@ -438,9 +462,44 @@ primer `assert` no falla: pasa. Lo que la delata es el total de comprobaciones.
 
 ### 6.4. Persistencia
 
-**No existe**, y conviene no confundirla con lo que sí hay. `Instantanea` es un
-instrumento de medida, no un guardado: no sobrevive a un cambio de esquema y no
-lo pretende. El guardado de partida es la FASE A3 del ROADMAP.
+**Existe desde el 2026-09-13**, y es la FASE A3: `Guardado` (`region/`), **un
+fichero por MAPA** en `user://mapas/sitio_<id>.sav`, automático al volver al mapa
+regional. Entrar en un mapa ya visitado —con F o con el botón— **lo retoma**;
+entrar en uno nuevo no toca a los demás; y lo descubierto de la comarca se suma
+al cargar, no se pisa.
+
+> **Era un fichero por partida, y así se perdió una partida del usuario** (el
+> mismo día): salió al mapa regional, eligió su sitio, pulsó F y se le fundó una
+> nueva encima. Y peor, **la suite de pruebas borraba el guardado real**:
+> `TestGuardado` escribía y borraba sobre la misma ruta que el juego. Desde
+> entonces `Guardado.carpeta` es la del jugador en el juego y otra en las
+> pruebas y sondas, con una prueba que lo comprueba. **Una prueba no toca nunca
+> los datos del jugador.**
+>
+> Esto es el **estado de los mapas**, que vive mientras dura la partida. El
+> **guardado de partida** —cerrar el juego y seguir otro día— se desarrollará
+> aparte, más adelante.
+
+Cada fichero lleva dos cosas: el recorrido de `Instantanea` —la partida entera,
+azar incluido— y lo que ella no guarda porque cruza escenas: el emplazamiento
+que se juega, lo descubierto de la comarca, la era, la cota del mar y el recuadro
+local.
+
+**No es la instantánea, aunque use su recorrido.** `Instantanea` es un
+instrumento de medida y no promete que un fichero de hoy sirva mañana;
+`Guardado` promete una sola cosa, y por eso tiene su propia versión: **un
+fichero de otra versión se rechaza avisando**, no se carga a medias.
+
+Medido en dos procesos con `GuardadoProbe`: guardar, cerrar, abrir y cargar da
+**las mismas cinco firmas diarias** que la partida que no se guardó. Y la firma
+se toma en `paso_cerrado` (§3.2), no cuando cambia el número de jornada: en un
+mismo fotograma corren varios pasos, y tomarla fuera de ahí hace que dos
+corridas iguales parezcan distintas.
+
+Fuera de alcance por ahora: el guardado de partida entero, guardar a mano, y
+compatibilidad entre versiones del juego. Y **en el mapa regional no se «funda»:
+se «entra al mapa»**, decidido por el usuario; tener varios grupos viviendo en
+mapas distintos se desarrollará más adelante.
 
 ### 6.5. Datos
 
@@ -479,6 +538,7 @@ Lo que rompe el juego sin dar un solo error de compilación:
 
 - Multijugador.
 - Streaming de chunks (cancelado, no aplazado).
-- Guardado/carga persistente (FASE A3, todavía no).
+- Guardado manual, varias ranuras, y que un guardado de otra versión cargue
+  (el automático sí existe: §6.4).
 - Build de exportación.
 - Autoloads nuevos (§2.2).

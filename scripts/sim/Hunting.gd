@@ -74,18 +74,18 @@ static func raciones_por_pieza(speciality: Profession.Speciality) -> float:
 ##
 ## No se suman: se multiplican, y por eso el salto de tener las tres es
 ## grande. La azagaya es la que abre la caza mayor de verdad —sin ella se
-## caza al acecho y con trampa, no se mata un uro—, el propulsor dobla el
-## alcance útil y el arco cambia el acecho entero.
+## caza al acecho y con trampa, no se mata un uro— y el propulsor dobla el
+## alcance útil. El arco, que cambiaba el acecho entero (×1,70 en caza menor y
+## ×1,20 en mayor), salió del Paleolítico el 2026-09-13: es del Mesolítico, y
+## sus factores vuelven con él cuando se construya EPOCA_02.
 const MEJORAS := {
 	Profession.Speciality.CAZA_MENOR: [
 		{"tech": TechTree.Tech.AZAGAYA, "factor": 1.25},
-		{"tech": TechTree.Tech.ARCO, "factor": 1.70},
 	],
 	Profession.Speciality.CAZA_MAYOR: [
 		{"tech": TechTree.Tech.AZAGAYA, "factor": 1.60},
 		{"tech": TechTree.Tech.PROPULSOR, "factor": 1.45},
 		{"tech": TechTree.Tech.OJEO, "factor": 1.35},
-		{"tech": TechTree.Tech.ARCO, "factor": 1.20},
 	],
 }
 

@@ -267,7 +267,7 @@ func _terrain_lure(point: Vector3) -> float:
 	#
 	# Una orilla es justo lo contrario: tierra firme desde la que se ve el rio.
 	var ford := sim._terrain.crossing_difficulty_at(point)
-	if Hydrography.can_cross(ford, sim.has_boat, sim.has_bridge):
+	if Hydrography.can_cross(ford, sim.has_boat, sim.pasarelas.hay_en(point)):
 		var reach_water := 60.0
 		for offset: Vector2 in [Vector2(reach_water, 0.0), Vector2(-reach_water, 0.0),
 				Vector2(0.0, reach_water), Vector2(0.0, -reach_water)]:
@@ -349,7 +349,7 @@ func _least_known_around(centre: Vector3, near: float, far: float,
 			candidate.y = terreno.get_height_at(candidate)
 			if not Traversal.is_passable(terreno.get_slope_at(candidate),
 					terreno.crossing_difficulty_at(candidate),
-					sim.has_boat, sim.has_bridge):
+					sim.has_boat, sim.pasarelas.hay_en(candidate)):
 				continue
 			# Y que no haya cauce de por medio: pisable no es alcanzable, y la
 			# otra orilla es las dos cosas menos la segunda. Ver
@@ -612,7 +612,7 @@ func clear_scout_order() -> void:
 		return
 	sim.has_scout_order = false
 	sim._note(Chronicle.Kind.GENTE,
-		"Se levanta la orden de sim.reconocimiento: la banda vuelve a elegir "
+		"Se levanta la orden de reconocimiento: la banda vuelve a elegir "
 			+ "adonde mirar.", 0)
 
 

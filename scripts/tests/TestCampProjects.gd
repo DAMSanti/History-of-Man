@@ -139,23 +139,25 @@ func test_el_fuego_no_se_investiga() -> void:
 			"el fuego no es una tecnica que se descubra")
 
 
-func test_la_piragua_y_el_arte_piden_hogar_construido() -> void:
-	# Las dos necesitan fuego DE VERDAD -un tronco se vacia a fuego, una cueva
-	# se pinta con luz- y por eso dependian de `Tech.FUEGO`. Al quitarlo, la
-	# dependencia pasa a un hecho del campamento, no a un saber.
-	for tech: TechTree.Tech in [TechTree.Tech.PIRAGUA, TechTree.Tech.ARTE]:
+func test_el_arte_pide_hogar_construido() -> void:
+	# Necesita fuego DE VERDAD -una cueva se pinta con luz- y por eso dependia
+	# de `Tech.FUEGO`. Al quitarlo, la dependencia pasa a un hecho del
+	# campamento, no a un saber. La piragua pedia lo mismo y salio del
+	# Paleolitico el 2026-09-13: es del Mesolitico, ver EPOCA_02.
+	for tech: TechTree.Tech in [TechTree.Tech.ARTE]:
 		assert_eq(TechTree.needs_camp(tech), CampProjects.Kind.HOGAR,
 			"%s pide hogar levantado" % TechTree.tech_name(tech))
 
 
-func test_sin_hogar_no_se_alcanza_la_piragua() -> void:
+func test_sin_hogar_no_se_alcanza_el_arte() -> void:
 	var tree := TechTree.new()
-	tree.known[TechTree.Tech.NUCLEO] = true
-	assert_false(tree.is_available(TechTree.Tech.PIRAGUA),
-		"con nucleo pero sin hogar, todavia no")
+	# El arte cuelga de la HOJA, no del nucleo: la piragua era la del nucleo.
+	tree.known[TechTree.Tech.HOJA] = true
+	assert_false(tree.is_available(TechTree.Tech.ARTE),
+		"con la hoja pero sin hogar, todavia no")
 
 	tree.camp_built[CampProjects.Kind.HOGAR] = true
-	assert_true(tree.is_available(TechTree.Tech.PIRAGUA),
+	assert_true(tree.is_available(TechTree.Tech.ARTE),
 		"con el hogar levantado, ya")
 
 
@@ -194,6 +196,44 @@ func test_levantar_el_hogar_lo_deja_prendido() -> void:
 	assert_true(sim.camp_built.get(CampProjects.Kind.HOGAR, false),
 		"la obra termina")
 	assert_true(sim.hearth_lit, "y queda prendido")
+
+
+## El hogar, en horas: `veces` ticks de `horas` cada uno, con los materiales.
+func _hogar_tras(horas_por_tick: float, veces: int, pericia_baja: bool) -> SettlementSim:
+	var sim := SettlementSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	if pericia_baja:
+		person.hunger = 200.0
+	sim.people = [person]
+	sim.store.add(Materia.Kind.PIEDRA, 20.0)
+	sim.store.add(Materia.Kind.LENA, 20.0)
+	sim.queue_project(CampProjects.Kind.HOGAR)
+	for _i in range(veces):
+		sim.hogar._work_on_project(person, horas_por_tick / SettlementSim.HORAS_UTILES)
+	return sim
+
+
+func test_el_hogar_se_levanta_en_cuatro_horas_y_no_en_tres() -> void:
+	# Decisión del usuario (2026-09-13): «4 horas de trabajo de hogar una vez
+	# tenga los materiales». A cachos de un cuarto de hora, como un tick.
+	assert_true(_hogar_tras(0.25, 16, false).camp_built.get(
+		CampProjects.Kind.HOGAR, false), "a las cuatro horas está levantado")
+	assert_false(_hogar_tras(0.25, 12, false).camp_built.get(
+		CampProjects.Kind.HOGAR, false), "a las tres, no")
+
+
+func test_las_cuatro_horas_no_las_estira_la_pericia() -> void:
+	assert_true(_hogar_tras(1.0, 4, true).camp_built.get(
+		CampProjects.Kind.HOGAR, false), "uno hambriento también en cuatro horas")
+
+
+func test_el_hogar_se_cuenta_en_horas() -> void:
+	assert_eq(CampProjects.trabajo_texto(CampProjects.Kind.HOGAR), "4 horas de hogar",
+		"el hogar se dice en horas, no en «0 jornadas»")
+	assert_eq(CampProjects.trabajo_texto(CampProjects.Kind.HOGAR,
+		1.0 / SettlementSim.HORAS_UTILES), "1 de 4 horas", "y lo que va, también")
 
 
 func test_el_hogar_gasta_lena_cada_dia() -> void:

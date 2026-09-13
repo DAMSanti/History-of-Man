@@ -17,12 +17,18 @@ const INFO := {
 		"desc": "Fogata delimitada con piedras, como en Cueva Morín o El "
 			+ "Esquilleu. La comida cocinada rinde más: se digiere mejor y se "
 			+ "aprovecha más de lo que se come.",
-		# Una jornada, y ni una más. Delimitar una fogata con piedras es acarrear
-		# cantos del río y ponerlos en corro: es trabajo de una mañana larga,
-		# no una obra. Estaba en dos jornadas y con el rendimiento de la gente
-		# por medio salían tres o cuatro días de partida en los que la banda
-		# comía crudo por una fogata.
+		# CUATRO HORAS DE TRABAJO, decidido por el usuario el 2026-09-13: «el
+		# hogar se debe hacer más rápido, deben ser 4 horas de trabajo de hogar
+		# una vez tenga los materiales». Estaba en una jornada y, con el
+		# rendimiento de la gente por medio, un recién llegado de pericia baja
+		# tardaba dos o tres días de partida en delimitar una fogata con
+		# piedras. Por eso va POR HORAS y no por rendimiento: apilar cantos en
+		# corro no lo hace mejor el que más sabe. Eso último es decisión del plan
+		# de la tanda 4 y no del usuario: su criterio —«a las cuatro horas está
+		# levantado, y a las tres no»— no se cumple si la pericia estira o encoge
+		# las horas. Ver [por_horas].
 		"labor_days": 1.0,
+		"labor_hours": 4.0,
 		"materials": {Materia.Kind.PIEDRA: 6.0, Materia.Kind.LENA: 3.0},
 		"requires": -1,
 	},
@@ -71,7 +77,30 @@ static func project_desc(kind: Kind) -> String:
 
 
 static func labor_days(kind: Kind) -> float:
+	if por_horas(kind):
+		return float(INFO[kind]["labor_hours"]) / SettlementSim.HORAS_UTILES
 	return float(INFO[kind]["labor_days"])
+
+
+## Lo que cuesta de trabajo, dicho como se mide: «4 horas de hogar» o «2
+## jornadas de hogar». Con `hecho` delante, lo que va: «1 de 4 horas…». Una
+## obra de cuatro horas escrita en jornadas saldría «0 jornadas».
+static func trabajo_texto(kind: Kind, hecho: float = -1.0) -> String:
+	var total := labor_days(kind)
+	var unidad := "jornadas"
+	if por_horas(kind):
+		total *= SettlementSim.HORAS_UTILES
+		hecho *= SettlementSim.HORAS_UTILES
+		unidad = "horas"
+	if hecho < 0.0:
+		return "%.0f %s de hogar" % [total, unidad]
+	return "%.0f de %.0f %s" % [hecho, total, unidad]
+
+
+## Si esta obra se mide en horas de trabajo y no se acelera con la pericia. Hoy
+## sólo el hogar: ver su entrada en [INFO].
+static func por_horas(kind: Kind) -> bool:
+	return (INFO[kind] as Dictionary).has("labor_hours")
 
 
 static func materials(kind: Kind) -> Dictionary:

@@ -41,6 +41,7 @@ func show_jobs() -> void:
 			ui.sim.population(), ui.sim.idle_count()])
 	_legend(body)
 
+	_los_que_no_estan(body)
 	_job_grid(body)
 
 	ui._text(body, "Cada cual hace lo que tiene MÁS ARRIBA de lo que puede. Si "
@@ -60,6 +61,50 @@ func show_jobs() -> void:
 		+ "saca a quien menos ganas tenga de lo suyo y lo anota en la crónica. "
 		+ "Sin fuego no se cocina, no se seca la carne y no avanza ninguna obra.",
 		true)
+
+
+## Quién no está, y hasta cuándo.
+##
+## Frente 17 de EPOCA_01 §10.1, tanda 3: «quien está de expedición, en la cumbre
+## o herido aparece separado de los presentes, con dónde está y la jornada en que
+## vuelve o se cura». Antes, el que salía de expedición desaparecía del mapa y la
+## ventana no decía nada: el jugador no sabía quién se había ido.
+##
+## **La lista la calcula [ausentes], que no pinta nada**: la vista no decide, lee
+## —SPECS §4.7— y así se puede comprobar con una prueba en vez de con una
+## captura.
+static func ausentes(sim: SettlementSim) -> Array:
+	var fuera: Array = []
+	if sim == null:
+		return fuera
+	for person: Inhabitant in sim.people:
+		if sim.expedicion != null and sim.expedicion.fuera.has(person.id):
+			var donde := "de camino al borde del valle" if person.expedicion_andando 				else "fuera del valle"
+			fuera.append({
+				"quien": person.given_name, "donde": donde,
+				"cuando": sim.expedicion.vuelve_el_dia, "que": "vuelve"})
+			continue
+		if sim.cumbres != null and sim.cumbres.has_peak_order 				and person.current_speciality == Profession.Speciality.ASCENSION:
+			fuera.append({
+				"quien": person.given_name, "donde": "subiendo a la cumbre",
+				"cuando": -1, "que": "vuelve"})
+			continue
+		if person.esta_tocado():
+			fuera.append({
+				"quien": person.given_name, "donde": "descansando en el abrigo",
+				"cuando": sim.day + person.hurt_days, "que": "se cura"})
+	return fuera
+
+
+func _los_que_no_estan(body: VBoxContainer) -> void:
+	var fuera := ausentes(ui.sim)
+	if fuera.is_empty():
+		return
+	ui._heading(body, "QUIÉN NO ESTÁ")
+	for uno: Dictionary in fuera:
+		var cuando := int(uno["cuando"])
+		var cola := "" if cuando < 0 else " · %s la jornada %d" % [uno["que"], cuando]
+		ui._text(body, "%s, %s%s" % [uno["quien"], uno["donde"], cola])
 
 
 ## La leyenda de los numeros. Sin ella la rejilla es una cuadricula de digitos
@@ -127,6 +172,11 @@ func _job_grid(body: VBoxContainer) -> void:
 	for person: Inhabitant in ui.sim.people:
 		if not _can_work_at_all(person):
 			hidden += 1
+			continue
+		# Quien está fuera del valle no recibe trabajo hoy: sale arriba, en
+		# «quién no está». El herido SÍ sigue en la rejilla, porque lo que se
+		# marque es lo que hará al curarse.
+		if ui.sim.expedicion != null and ui.sim.expedicion.fuera.has(person.id):
 			continue
 		_person_row(body, person, index)
 		index += 1

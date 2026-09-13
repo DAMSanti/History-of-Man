@@ -171,6 +171,86 @@ func _curar_piel(person: Inhabitant, hours: float) -> bool:
 	return true
 
 
+## La materia prima de cada especialidad: lo que se gasta practicando.
+##
+## No es una tabla nueva de recetas —las recetas siguen en [Tool]—: es de qué
+## está hecho el oficio, para poder decir «sin piedra no se talla».
+const MATERIA_DEL_OFICIO := {
+	Profession.Speciality.TALLA: Materia.Kind.PIEDRA,
+	Profession.Speciality.ASTA: Materia.Kind.ASTA,
+	Profession.Speciality.CORDELERIA: Materia.Kind.FIBRA,
+}
+
+## Lo que se gasta en una jornada entera de práctica sin encargo.
+##
+## **Es una decisión, no una medida** (2026-09-13): una unidad de la materia del
+## oficio por jornada. Practicar no puede salir gratis —si no, el taller sería
+## una máquina de jornadas— ni costar como una pieza terminada, que sería tirar
+## la piedra a la basura.
+const PRACTICA_POR_JORNADA := 1.0
+
+
+## Si hay piel cruda esperando y con qué curtirla.
+##
+## Hasta el 2026-09-13 a peletería sólo se mandaba a alguien si había una PIEZA
+## PEDIDA que llevara piel, así que sin demanda de prendas ni odres las pieles
+## crudas se amontonaban y no se curtía ninguna. Lo vio el usuario jugando.
+func hay_que_curtir() -> bool:
+	if sim.store.amount(Materia.Kind.PIEL) <= 0.0:
+		return false
+	if sim.store.amount(Materia.Kind.PIEL_CURTIDA) >= CURTIDO_RESERVA:
+		return false
+	return sim.toolkit.count(Tool.Kind.RAEDERA) > 0
+
+
+## Si queda alguna técnica de manufactura por aprender y al alcance.
+func queda_por_aprender() -> bool:
+	if sim.techs == null:
+		return false
+	for t: int in (TechTree.BRANCHES.get(Profession.Job.MANUFACTURA, []) as Array):
+		var tech := t as TechTree.Tech
+		if not sim.techs.has(tech) and sim.techs.is_available(tech):
+			return true
+	return false
+
+
+## Si el artesano puede practicar SIN encargo: queda algo que aprender y hay
+## materia del oficio con la que hacerlo.
+##
+## Cierra lo que A4 dejó abierto —el taller no se para, termina— y es la opción
+## que eligió el usuario el 2026-09-13 entre las cuatro: que el artesano
+## practique, en vez de bajar las jornadas que pide la talla laminar o subir la
+## demanda natural de piezas.
+func puede_practicar(speciality: Profession.Speciality) -> bool:
+	if speciality == Profession.Speciality.PELETERIA:
+		return hay_que_curtir()
+	if not MATERIA_DEL_OFICIO.has(speciality):
+		return false
+	if not queda_por_aprender():
+		return false
+	return sim.store.amount(MATERIA_DEL_OFICIO[speciality] as Materia.Kind) \
+		>= PRACTICA_POR_JORNADA
+
+
+## Tallar para aprender, sin encargo: gasta materia del oficio y nada más.
+##
+## Las jornadas de práctica no se suman aquí: las cuenta
+## `SettlementSim._practica_del_dia` por haber trabajado, y el oficio ya es
+## manufactura. Lo que hace esto es que **cueste** y que se pueda parar.
+func _practicar(person: Inhabitant, fraction: float) -> void:
+	var speciality := person.current_speciality as Profession.Speciality
+	if not puede_practicar(speciality):
+		return
+	# La peletería practica curtiendo, y eso ya lo ha hecho `_curar_piel` antes
+	# de llegar aquí: no se gasta nada más.
+	if speciality == Profession.Speciality.PELETERIA:
+		return
+	var gasto := PRACTICA_POR_JORNADA * fraction * person.effectiveness()
+	if gasto <= 0.0:
+		return
+	sim.store.take(MATERIA_DEL_OFICIO[speciality] as Materia.Kind, gasto)
+
+
 ## Cuantas piezas de cada tipo le hacen falta a la banda ahora mismo.
 ##
 ## Sale de quien esta trabajando en que, no de una tabla fija: si el jugador
@@ -511,6 +591,9 @@ func _craft(person: Inhabitant, hours: float) -> void:
 	var speciality := person.current_speciality as Profession.Speciality
 	var kind := _next_piece(speciality)
 	if kind < 0:
+		# LO PEDIDO VA PRIMERO, y esto es lo que pasa cuando no hay nada
+		# pedido: se talla para aprender. Ver [puede_practicar].
+		_practicar(person, fraction)
 		return
 	var kind_value := kind as Tool.Kind
 

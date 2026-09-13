@@ -94,6 +94,12 @@ var trap_markers: TrapMarkers
 ## Las nasas caladas en la orilla. Ver [NasaMarkers].
 var nasa_markers: NasaMarkers
 
+## Las pasarelas levantadas, sobre el terreno. Ver [PasarelaView].
+var pasarela_view: PasarelaView
+
+## Las tumbas de la banda sobre el terreno. Ver [SepulturasView].
+var sepulturas_view: SepulturasView
+
 ## La hoguera en la boca de la cueva. Ver [HearthFire].
 var hearth_fire: HearthFire
 
@@ -201,21 +207,38 @@ func _mark_cave_carvings() -> void:
 	if not Expedition.is_active() or terrain == null:
 		return
 
+	# Dónde se abre de verdad cada boca lo decide [Bocas] al generar, con el
+	# relieve hecho y antes de excavar: si cae en el agua o donde no se llega
+	# desde casa, se mueve, y la entalladura va con ella.
+	var casa := terrain.geo_to_world(Expedition.site.lon, Expedition.site.lat)
+	terrain.colocar_las_bocas = func(t: TerrainGenerator) -> Array[Dictionary]:
+		return Bocas.colocar(t, t.carvings, casa)
+
 	var marked := 0
-	for f: Dictionary in Expedition.site.features_in(Expedition.era):
+	var features := Expedition.site.features_in(Expedition.era)
+	for indice in range(features.size()):
+		var f: Dictionary = features[indice]
 		if int(f.get("class", Site.Feature.OTRO)) != Site.Feature.ABRIGO:
 			continue
 		var world := terrain.geo_to_world(f.get("lon", 0.0), f.get("lat", 0.0))
 		if world.x < 0.0 or world.z < 0.0 				or world.x > terrain_size.x or world.z > terrain_size.y:
 			continue
-		# Mas honda y algo mas estrecha que antes. La entalladura es la CUEVA:
-		# lo que se ve como hueco lo hace el terreno, no la geometria que se
-		# pone encima, y con 5 m de profundidad la oscuridad sobresalia y
-		# parecia un bulto pegado a la ladera.
+		# Ceñida a la visera de ESA cueva, que va de 3 a 6 m: ver
+		# [CaveMouth.entalladura_de]. Eran 13 m de radio y 9 de hondo para todas.
+		var hueco := CaveMouth.entalladura_de(f)
 		terrain.carvings.append({
 			"position": world,
-			"radius": 13.0,
-			"depth": 9.0,
+			"radius": float(hueco["radius"]),
+			"depth": float(hueco["depth"]),
+			# La sima: el radio del pozo y lo que baja. La malla del relieve
+			# quita su ruedo y cose ahi un embudo fino, que a un punto cada
+			# cinco metros un agujero de dos sale cuadrado. Ver
+			# [TerrainGenerator.simas] y [MallaDelTerreno._construir_simas].
+			"boca": CaveMouth.hueco_de(f),
+			"hondo": CaveMouth.PROFUNDIDAD_DE_LA_SIMA,
+			# Para que [_place_site_features] ponga cada boca donde quedó SU
+			# entalladura, y no donde decía el catálogo.
+			"feature": indice,
 		})
 		marked += 1
 	print("Bocas de cueva excavadas en la malla: %d" % marked)
@@ -238,7 +261,13 @@ func _place_site_features() -> void:
 	# Solo lo que YA EXISTE en la epoca. Un dolmen o una ermita los levanto
 	# alguien despues: no son elementos del terreno, son prueba de ocupacion
 	# posterior y se cuentan aparte, en las atestiguaciones del emplazamiento.
-	for f: Dictionary in Expedition.site.features_in(Expedition.era):
+	# Dónde quedó cada boca, por su índice en el catálogo. Ver [Bocas].
+	var bocas := {}
+	for boca: Dictionary in terrain.carvings_colocadas:
+		bocas[int(boca.get("feature", -1))] = boca
+	var features := Expedition.site.features_in(Expedition.era)
+	for indice in range(features.size()):
+		var f: Dictionary = features[indice]
 		# Las simas no se pintan: son pozos verticales de catalogo
 		# espeleologico, no sitios que le importen al jugador. Siguen en los
 		# datos porque senalan karst, que es pista de exploracion.
@@ -253,22 +282,30 @@ func _place_site_features() -> void:
 
 		var is_cave: bool = int(f.get("class", Site.Feature.OTRO)) == Site.Feature.ABRIGO
 
-		# Una boca de cueva no está dentro del río. Si la coordenada cae en
-		# agua es porque el cauce de hoy no es el de hace veinte mil años —el
-		# meandro se ha movido, o el catálogo redondea— así que se aparta a la
-		# orilla seca más cercana en vez de dejarla flotando en la corriente.
-		if is_cave:
-			world = _nudge_out_of_water(world)
+		# La boca, donde la dejó [Bocas]: nunca en el agua ni donde no se llega.
+		if is_cave and bocas.has(indice):
+			var boca: Dictionary = bocas[indice]
+			world = boca["position"]
+			if float(boca.get("movida_m", 0.0)) > 0.0:
+				print("Cueva %s movida %.0f m: caía en el agua o donde no se llega"
+					% [String(f.get("name", "")), float(boca["movida_m"])])
 
-		# La altura la da el terreno YA excavado, para que el vano se apoye
-		# en el fondo de la entalladura
-		world.y = terrain.get_height_at(world)
+		# LA ALTURA ES LA DEL BORDE, no la del fondo. Desde que la cueva es una
+		# sima de cincuenta metros —ver [CaveMouth.PROFUNDIDAD_DE_LA_SIMA]—,
+		# preguntar la cota en el punto de la boca devuelve el fondo del pozo, y
+		# con ella se hundían la marca, la gente y la hoguera. El borde se mide en
+		# corro, por fuera de la boca.
+		if is_cave:
+			world.y = _borde_de_la_sima(world, CaveMouth.hueco_de(f))
+		else:
+			world.y = terrain.get_height_at(world)
 
 		if is_cave:
 			# Boca construida contra la ladera y orientada cuesta abajo, que es
 			# como se abre una cueva. La media esfera mirando al cielo que
 			# habia aqui parecia un agujero pintado en el suelo.
 			var cave := CaveMouth.new()
+			cave.id = indice
 			root.add_child(cave)
 			cave.build(terrain, world, f)
 			_caves.append(cave)
@@ -400,6 +437,14 @@ func _levantar_marcadores() -> void:
 	nasa_markers.name = "Nasas"
 	add_child(nasa_markers)
 
+	pasarela_view = PasarelaView.new()
+	pasarela_view.name = "Pasarelas"
+	add_child(pasarela_view)
+
+	sepulturas_view = SepulturasView.new()
+	sepulturas_view.name = "Sepulturas"
+	add_child(sepulturas_view)
+
 	# Y lo que está haciendo cada cual, encima de su cabeza: sin esto quien
 	# trabaja y quien da vueltas se ven exactamente igual.
 	craft_markers = WorkMarkers.new()
@@ -469,6 +514,10 @@ func _levantar_vegetacion() -> void:
 	props = ResourceProps.new()
 	props.name = "Recursos"
 	add_child(props)
+	# Las bocas de cueva, ANTES de sembrar: alrededor de cada una no va nada.
+	# Ver [ResourceProps.LEJOS_DE_LA_BOCA].
+	for cave: CaveMouth in _caves:
+		props.bocas.append(cave.pick_position())
 	props.setup(terrain, field)
 
 	# LA HIERBA VA APAGADA, y es una decisión, no un descuido.
@@ -495,6 +544,13 @@ func _levantar_vegetacion() -> void:
 	forest = Forest.new()
 	forest.name = "Bosque"
 	add_child(forest)
+	# Las bocas de cueva, ANTES de sembrar: alrededor de cada una se deja un
+	# claro. Ver [Forest.RADIO_DEL_CLARO].
+	# `pick_position` y no `global_position`: el nodo de la boca se queda en el
+	# origen y lo que está en su sitio es la geometría, construida en
+	# `CaveMouth.build` alrededor de la boca.
+	for cave: CaveMouth in _caves:
+		forest.claros.append(cave.pick_position())
 	forest.setup(terrain)
 
 
@@ -510,15 +566,22 @@ func _levantar_hogar() -> void:
 	# La cueva de casa manda dónde se duerme y dónde se hace corro. Sin esto la
 	# banda se apila en el punto del emplazamiento, a la intemperie.
 	var home_cave := _cave_at(sim.home_position)
+	# Y si la banda se muda, la hoguera y los tajos van con ella. Ver [Traslado].
+	sim.campamento_trasladado.connect(_on_campamento_trasladado)
 	if home_cave != null:
+		# La de casa sale siempre pintable al explorarla. Ver
+		# [Exploracion.cueva_de_la_banda].
+		sim.exploracion.cueva_de_la_banda = home_cave.id
 		sim.home_inside = home_cave.inside_point()
 		sim.home_forecourt = home_cave.forecourt_point()
 		# El interior NO se apoya en el terreno, y ahí está la diferencia: la
 		# galería se mete DENTRO de la ladera, así que preguntarle la altura al
 		# terreno en ese punto devuelve la del monte que hay encima —medido,
 		# once metros más arriba— y la banda dormía en el tejado de su cueva. El
-		# suelo de la cueva es el de su boca.
-		sim.home_inside.y = home_cave.pick_position().y
+		# suelo de la cueva es el de su boca, que es la altura que ya trae
+		# `inside_point`. Antes se tomaba la de `pick_position`, que va 2,8 m
+		# por encima para que se pueda pinchar: la banda dormía flotando.
+		sim.home_inside.y = home_cave.inside_point().y
 		if terrain:
 			sim.home_forecourt.y = terrain.get_height_at(sim.home_forecourt)
 
@@ -596,6 +659,11 @@ func _levantar_fauna_y_tecnica() -> void:
 		# Y el arbol consulta la despensa: aprender cuesta material, no solo
 		# jornadas. Ver `TechTree.LEARNING_COST`.
 		tech.larder = sim.store
+		# Y la escena escucha lo que se aprende. La cuenta de jornadas es de la
+		# simulacion -ver [SettlementSim._practica_del_dia]-; el relato, el hito
+		# y el aviso son de aqui.
+		if not sim.tecnica_aprendida.is_connected(_on_tecnica_aprendida):
+			sim.tecnica_aprendida.connect(_on_tecnica_aprendida)
 
 
 ## La interfaz, el censo de lo pintado y las capas que van encima.
@@ -633,11 +701,56 @@ func _levantar_interfaz() -> void:
 		ui.barra.watch_moments(sim)
 		# AHORA, y no antes: sim.setup() ya corrió y nadie escuchaba todavía.
 		# Ver [SettlementSim.iniciar_partida].
-		sim.iniciar_partida()
+		#
+		# Y una partida RETOMADA no empieza: sigue. Ni momento inicial ni
+		# decisión de la estación, que ya se citó en su día y viene guardada.
+		if Expedition.retomando:
+			_retomar_la_partida()
+		else:
+			sim.iniciar_partida()
 
 	minimapa._build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
 	_check_discoveries()
+
+
+## La cota del borde de una sima: la mediana del corro de alrededor, que no la
+## mueve ni un canchal ni una vaguada sueltos.
+func _borde_de_la_sima(centro: Vector3, radio: float) -> float:
+	var cotas: Array[float] = []
+	for i in range(12):
+		var angulo := TAU * float(i) / 12.0
+		cotas.append(terrain.get_height_at(centro + Vector3(
+			cos(angulo) * radio * 1.4, 0.0, sin(angulo) * radio * 1.4)))
+	cotas.sort()
+	return cotas[cotas.size() / 2]
+
+
+## La cueva de un id, o null.
+func _cueva_por_id(id: int) -> CaveMouth:
+	for cave: CaveMouth in _caves:
+		if cave.id == id:
+			return cave
+	return null
+
+
+## Los tres puntos de una cueva que la banda usa como casa: la boca, dónde se
+## duerme y la campa. Con las mismas alturas que al empezar —ver
+## [_levantar_hogar]—: dentro, la del suelo de la cueva; fuera, la del terreno.
+func _casa_de(cave: CaveMouth) -> Dictionary:
+	var dentro := cave.inside_point()
+	var campa := cave.forecourt_point()
+	if terrain:
+		campa.y = terrain.get_height_at(campa)
+	return {"boca": cave.boca(), "dentro": dentro, "campa": campa}
+
+
+## La banda se ha asentado en otra cueva: la hoguera va a la campa nueva y los
+## tajos se buscan otra vez alrededor de la casa nueva.
+func _on_campamento_trasladado(_cueva: int) -> void:
+	if hearth_fire != null:
+		hearth_fire.global_position = sim.home_forecourt
+	_elegir_tajos(sim.home_position)
 
 
 ## Donde se va a trabajar: de los sitios que ofrece el valle, los que de
@@ -905,63 +1018,69 @@ func _on_day_passed(_day: int) -> void:
 		trap_markers.refresh(sim.trampas.traps, terrain)
 	if nasa_markers and sim:
 		nasa_markers.refresh(sim.nasas_line.nasas, terrain)
+	# Las pasarelas: se repintan solas cuando cambia la lista, así que
+	# preguntar cada jornada no cuesta nada. Ver [PasarelaView.refresh].
+	if pasarela_view and sim:
+		pasarela_view.refresh(sim.pasarelas, terrain)
+	# Las tumbas, igual: se rehacen sólo si hay una nueva.
+	if sepulturas_view and sim:
+		sepulturas_view.refresh(sim.sepulturas, terrain)
 	# La baliza de exploracion colgaba del guardia de las TRAMPAS, que no pinta
 	# nada aqui: sin marcador de trampas no se veia adonde se habia mandado
 	# mirar. Va con las chapas de paraje, que es de lo que es.
 	if paraje_markers and sim:
 		paraje_markers.set_scout_beacon(sim.scout_order, sim.has_scout_order, terrain)
 
-	# Una temporada no se sabe hasta haberla trabajado. Se anota por la
-	# actividad de cada cual, no en bloque: la banda puede haber vivido tres
-	# otonos de caza sin haber visto nunca el remonte del salmon, porque nadie
-	# estaba en el rio esos dias.
-	if knowledge:
-		for person: Inhabitant in sim.people:
-			if person.state == Inhabitant.State.TRABAJANDO or person.has_task:
-				knowledge.record_season(person.activity, GameState.season)
-
-	# Las tecnicas salen de la practica, no de gastar un recurso abstracto: se
-	# suma una jornada por cada persona que ha SALIDO A TRABAJAR en ese oficio.
-	#
-	# Por OFICIO y no por actividad, que es lo que se pidio: «si me pide 100
-	# jornadas de caza contara cada jornada que un cazador sale; si cada dia
-	# salen 5, con 20 dias valdra». Ver [TechTree.job_of].
-	if tech:
-		var worked: Dictionary = {}
-		for person: Inhabitant in sim.people:
-			if person.job == Profession.Job.OCIOSO or not person.can_work():
-				continue
-			# Que haya SALIDO, no que estuviera apuntado: quien tiene oficio y
-			# se queda en el abrigo sin tajo no practica nada.
-			if not person.has_task:
-				continue
-			worked[person.job] = float(worked.get(person.job, 0.0)) + 1.0
-		for job: int in worked.keys():
-			for gained: int in tech.add_practice(
-					job as Profession.Job, float(worked[job])):
-				var learned := gained as TechTree.Tech
-				print("Tecnica aprendida: %s" % TechTree.tech_name(learned))
-				# Aprender a hacer algo es un hito, y se cuenta como tal: con
-				# su relato y con la opcion de dejarlo en la pared. Ver [Tale].
-				if sim:
-					sim.tell_technique(learned)
-				# Las tecnicas de cruce no son un adorno de la ficha: abren
-				# territorio de verdad, porque la simulacion las consulta
-				if learned == TechTree.Tech.PIRAGUA:
-					sim.has_boat = true
-				elif learned == TechTree.Tech.PASARELA:
-					sim.has_bridge = true
-				if ui != null:
-					ui.show_tech_milestone(learned)
+	# LAS TECNICAS YA NO SE CUENTAN AQUI. Contarlas en la señal de medianoche,
+	# mirando quien tenia tajo en ese instante, dejaba al hogar y a la ribera sin
+	# practicar nunca: ver [SettlementSim._practica_del_dia], que es donde vive
+	# ahora la regla. Aqui solo queda lo que de verdad es de la escena -el
+	# relato, el hito y el aviso-, colgado de `tecnica_aprendida`.
 
 
-## Vuelve al mapa regional, llevandose el estado de la banda
+## Vuelve al mapa regional, llevandose el estado de la banda... y GUARDANDO.
+##
+## Antes de la tanda 3 sólo viajaban la población y la comida: el asentamiento
+## se perdía y no había forma de retomarlo. Ahora se guarda entero en disco
+## —ver [Guardado]— y el mapa regional ofrece volver.
+##
+## Se guarda con el reloj parado y desde fuera del paso: esto lo llama la
+## tecla, o sea entre fotogramas, no a mitad de un `_advance`. Una instantánea
+## tomada a medio paso es media partida, SPECS §3.2.
 func _return_to_region() -> void:
 	if sim:
+		sim.time_scale = 0.0
 		GameState.population = sim.population()
 		GameState.food = sim.store.food_rations()
+		var fallo := Guardado.guardar(sim, herds, _caves)
+		if fallo.is_empty():
+			print("Estado del mapa guardado en %s" % Guardado.ruta_de(
+				Expedition.site.id if Expedition.site != null else -1))
+		else:
+			print("NO se ha podido guardar: %s" % fallo)
 	Expedition.clear()
 	get_tree().change_scene_to_file(Expedition.REGION_SCENE)
+
+
+## Vuelca la partida guardada sobre la escena recién montada.
+##
+## Va al final de `_ready`, cuando ya existen la simulación, la fauna y las
+## cuevas: [Instantanea.volcar] ata lo guardado a lo que hay, y lo que no
+## existiera todavía se crearía suelto y sin que nadie lo apunte.
+func _retomar_la_partida() -> void:
+	if not Expedition.retomando:
+		return
+	Expedition.retomando = false
+	var sitio := Expedition.site.id if Expedition.site != null else -1
+	var guardado := Guardado.leer(sitio)
+	if guardado.is_empty():
+		print("Se pedía retomar y no hay estado de este mapa que leer")
+		return
+	var errores := Guardado.volcar(guardado, sim, herds, _caves)
+	if errores.is_empty():
+		print("Partida retomada: jornada %d" % sim.day)
+	else:
+		print("La partida se retoma a medias: %s" % ", ".join(errores))
 
 
 func _setup_terrain() -> void:
@@ -1096,45 +1215,23 @@ func _setup_performance_overlay() -> void:
 	add_child(overlay)
 
 
+## Se ha aprendido una tecnica practicandola. Lo cuenta [SettlementSim].
+func _on_tecnica_aprendida(gained: int) -> void:
+	var learned := gained as TechTree.Tech
+	print("Tecnica aprendida: %s" % TechTree.tech_name(learned))
+	# Aprender a hacer algo es un hito, y se cuenta como tal: con su relato y
+	# con la opcion de dejarlo en la pared. Ver [Tale].
+	if sim:
+		sim.tell_technique(learned)
+		# La pasarela ya no abre nada por sí sola: permite CONSTRUIR, y lo que
+		# abre un cruce es la obra. Ver [Pasarelas] y EPOCA_01 §10.1, frente 13.
+	if ui != null:
+		ui.show_tech_milestone(learned)
+
+
 func _connect_signals() -> void:
 	# Conectar señales del TerrainGenerator
 	terrain.generation_complete.connect(_on_terrain_generated)
-
-
-## Aparta un punto del agua hasta la orilla seca más cercana.
-##
-## Se busca en espiral: anillos de radio creciente y ocho rumbos por anillo, y
-## se toma el primer punto seco. Así el desplazamiento es el mínimo que
-## resuelve el problema —una boca junto al río sigue junto al río— en vez de
-## mandarla a la ladera de enfrente.
-##
-## Si en cien metros no hay tierra seca, se deja donde estaba: será una
-## cavidad que de verdad se abre sobre el agua, y las hay.
-const NUDGE_STEP := 12.0
-const NUDGE_MAX_RINGS := 8
-
-
-func _nudge_out_of_water(world: Vector3) -> Vector3:
-	if terrain == null:
-		return world
-	if terrain.crossing_difficulty_at(world) <= 0.0:
-		return world
-
-	for ring in range(1, NUDGE_MAX_RINGS + 1):
-		var radius := float(ring) * NUDGE_STEP
-		for i in range(8):
-			var angle := (float(i) / 8.0) * TAU
-			var candidate := world + Vector3(
-				cos(angle) * radius, 0.0, sin(angle) * radius)
-			if candidate.x < 0.0 or candidate.z < 0.0 \
-					or candidate.x > float(terrain_size.x) \
-					or candidate.z > float(terrain_size.y):
-				continue
-			if terrain.crossing_difficulty_at(candidate) <= 0.0:
-				print("Cueva apartada del cauce: %.0f m" % radius)
-				return candidate
-
-	return world
 
 
 func _on_terrain_generated() -> void:
@@ -1374,22 +1471,22 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 	var label := String(data.get("name", "la cavidad"))
 	match action:
 		"ocupar":
-			print("Banda: se traslada el campamento a %s" % label)
+			# EL TRASLADO DE VERDAD: la banda carga, anda hasta aquí y se asienta,
+			# sólo si se llega. Ver [Traslado].
+			var cueva := _cueva_por_id(int(data.get("cueva", -1)))
+			if sim != null and cueva != null:
+				var casa := _casa_de(cueva)
+				if not sim.traslado.mandar(cueva.id, casa["boca"], casa["dentro"],
+						casa["campa"]):
+					print("Banda: no se muda a %s: %s" % [label,
+						sim.traslado.lo_que_falta(cueva.id, casa["campa"])])
 		"explorar":
-			# Explorar ENSENA: es la mecanica que arregla no saber donde estan
-			# las cosas, y por eso da conocimiento de golpe en su entorno
-			if knowledge and terrain:
-				var world := terrain.geo_to_world(
-					data.get("lon", 0.0), data.get("lat", 0.0))
-				for activity: int in [Subsistence.Activity.CAZA,
-						Subsistence.Activity.RECOLECCION,
-						Subsistence.Activity.MATERIA_PRIMA]:
-					for i in range(6):
-						knowledge.observe(activity as Subsistence.Activity, world, 1.0)
-				minimapa._refresh_resource_overlay()
-			print("Banda: reconocido el entorno de %s" % label)
-		"taller":
-			print("Banda: %s pasa a usarse como taller de talla" % label)
+			# EXPLORAR DE VERDAD: lámpara, grasa y una jornada de alguien del
+			# hogar, con sus decisiones dentro. Antes revelaba el entorno de
+			# golpe y no costaba nada. Ver [Exploracion].
+			if sim != null and not sim.exploracion.mandar(int(data.get("cueva", -1))):
+				print("Banda: no se puede explorar %s: %s" % [label,
+					sim.exploracion.lo_que_falta(int(data.get("cueva", -1)))])
 		"pintar":
 			if tech and not tech.has(TechTree.Tech.ARTE):
 				print("Banda: todavia no se sabe pintar (falta %s)" %
@@ -1479,8 +1576,16 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 
 	var cave := _pick_cave(event.position)
 	if cave and ui:
-		ui.sitios.show_feature(cave.feature, cave.pick_position(),
-			sim.home_position if sim else Vector3.ZERO)
+		# Con su número de cueva, que la ventana necesita para decir si se
+		# puede explorar y qué se sabe de ella.
+		var datos := cave.feature.duplicate()
+		datos["cueva"] = cave.id
+		# La campa, para que la ventana pueda decir si se llega. Ver
+		# [Traslado.lo_que_falta].
+		datos["campa"] = _casa_de(cave)["campa"]
+		ui.sitios.show_feature(datos, cave.pick_position(),
+			sim.home_position if sim else Vector3.ZERO,
+			sim != null and cave == _cave_at(sim.home_position))
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1605,6 +1710,11 @@ func _pick_ground(screen: Vector2) -> Vector3:
 func _sync_weather() -> void:
 	if weather_view and sim and sim.weather:
 		weather_view.show_weather(sim.weather.kind)
+		# Y el cielo: las nubes que se ven arriba son las del tiempo que hace,
+		# no una decoración aparte. Ver [WorldEnvironmentSetup.nubes_por_el_tiempo].
+		var entorno := _first_world_environment(get_tree().root)
+		if entorno != null and entorno.get_parent() != null 				and entorno.get_parent().has_method("nubes_por_el_tiempo"):
+			entorno.get_parent().call("nubes_por_el_tiempo", int(sim.weather.kind))
 
 
 func _find_environment() -> Environment:

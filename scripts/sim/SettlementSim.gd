@@ -44,6 +44,15 @@ signal storage_full(units_lost: float)
 ## qué se hace con el momento; sólo que ha ocurrido.
 signal moment_raised(moment: Moment)
 
+## Se ha aprendido una técnica, practicándola. La levanta el cierre de la
+## jornada -ver [_practica_del_dia]- y la escucha quien la cuente: la escena la
+## convierte en hito, relato y aviso de la interfaz.
+signal tecnica_aprendida(tech: int)
+
+## La banda se ha asentado en otra cueva. Lo escucha la vista, que tiene que
+## mover la hoguera y los tajos a la casa nueva. Ver [Traslado].
+signal campamento_trasladado(cueva: int)
+
 ## Segundos reales por dia de juego.
 ##
 ## Estaba en 24 y era el fallo de calibrado que rompia toda la simulacion: con
@@ -311,7 +320,10 @@ const LANE_PACE := 0.06
 ## eso es justo lo que hace que el rio importe: define el territorio al que se
 ## puede llegar a pie. Conseguirlos abre media comarca de golpe.
 @export var has_boat: bool = false
-@export var has_bridge: bool = false
+## Las pasarelas levantadas. Aquí estaba `has_bridge`, un sí/no que abría
+## TODOS los cauces del valle en cuanto se aprendía la técnica. Ver [Pasarelas]
+## y EPOCA_01 §10.1, tanda 3, frente 13.
+var pasarelas: Pasarelas = Pasarelas.new(self)
 
 ## Lo que el territorio tiene y lo que la banda sabe que tiene. Los pone la
 ## escena; sin ellos la simulacion funciona como antes.
@@ -734,6 +746,15 @@ var _stranded_this_frame: int = 0
 
 ## El fuego del abrigo y lo que se hace a su alrededor. Ver [Hogar].
 var hogar: Hogar = Hogar.new(self)
+
+## Lo que se sabe de cada cueva, y quién está dentro. Ver [Exploracion].
+var exploracion: Exploracion = Exploracion.new(self)
+
+## Cómo se despide la banda de sus muertos, y dónde están. Ver [Sepulturas].
+var sepulturas: Sepulturas = Sepulturas.new(self)
+
+## Mudar el campamento a otra cueva. Ver [Traslado].
+var traslado: Traslado = Traslado.new(self)
 
 
 ## Pone una obra del campamento en cola. Lo hace [Hogar]; se deja el pasamanos
@@ -1475,11 +1496,19 @@ func _advance(delta: float) -> void:
 	Cronometro.tramo("gente (todos los ticks)")
 	for _s in range(steps):
 		for i in range(people.size()):
+			# LA BANDA SE ESTÁ MUDANDO: todos andan hacia la cueva nueva y nadie
+			# trabaja. Ver [Traslado].
+			if traslado.en_marcha():
+				traslado.andar(people[i], i, slice_hours, slice)
+				continue
 			# QUIEN ESTA DE EXPEDICION NO ESTA EN EL MAPA. No anda, no come de la
 			# despensa -comio al salir, ver [Expedicion.mandar]- ni trabaja: ha
 			# salido de los cuatro kilometros. Simularlo aqui seria tenerlo
 			# paseando por un valle del que se ha ido.
 			if people[i].esta_de_expedicion(day):
+				# Los que todavía van andando hacia el borde del valle SÍ se
+				# mueven: se les ve irse. Los que ya están fuera, no.
+				expedicion.andar(people[i], i, slice_hours, slice)
 				continue
 			_tick_person(people[i], i, slice_hours, slice)
 	Cronometro.cierra("gente (todos los ticks)")
@@ -1504,6 +1533,9 @@ func _advance(delta: float) -> void:
 			_fauna_pendiente = 0.0
 
 	# Y el paso queda cerrado. Ver [paso_cerrado].
+	# Si la banda se estaba mudando y han llegado todos, se asienta. Con el paso
+	# cerrado, que es el único límite limpio de la partida (SPECS §3).
+	traslado.revisar()
 	paso_cerrado.emit(day)
 
 
@@ -1692,8 +1724,7 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 
 	if _crowd and index < _bodies.size():
 		Cronometro.tramo("gente: cuerpos (vista)")
-		_crowd.update(_bodies[index], person.position, _headings[index], person.state,
-			person.age_group)
+		_pintar_a(person, index)
 		Cronometro.cierra("gente: cuerpos (vista)")
 
 	Cronometro.tramo("gente: aprender")
@@ -1967,7 +1998,26 @@ func _radio_de_llegada(hours: float) -> float:
 		arrive_radius, LLEGADA_MAXIMA)
 
 
+## Si en este estado se está trabajando el oficio: lo que cuenta como jornada
+## de práctica. **Una pregunta, un sitio** —ver [_practica_del_dia]—.
+##
+## Trabajar en el tajo o en la campa, prospectar un paraje buscando lo que da, y
+## batir el monte reconociéndolo. Hasta el 2026-09-13 esto se apuntaba DENTRO
+## de la rama de TRABAJANDO y nada más, y la batida —que corre en
+## RECONOCIENDO— dejó de practicar exploración: «la técnica de exploración no
+## sube con las batidas», lo vio el usuario. Aquí, antes de repartir por estado,
+## no se puede olvidar ninguna rama.
+static func cuenta_como_trabajo(state: Inhabitant.State) -> bool:
+	return state == Inhabitant.State.TRABAJANDO 		or state == Inhabitant.State.BUSCANDO 		or state == Inhabitant.State.RECONOCIENDO
+
+
 func _tick_daylight(person: Inhabitant, hours: float) -> void:
+	# Lo que se trabaja hoy se apunta AQUÍ, antes de repartir por estado. Ver
+	# [cuenta_como_trabajo] e [Inhabitant.oficio_de_hoy].
+	if cuenta_como_trabajo(person.state):
+		person.oficio_de_hoy = person.job
+		if person.has_task:
+			person.actividad_de_hoy = person.activity
 	match person.state:
 		Inhabitant.State.DURMIENDO, Inhabitant.State.OCIOSO:
 			# Y POR OFICIO, que es lo que decide cuanto cuesta: decidir la
@@ -2117,6 +2167,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 		Inhabitant.State.RECONOCIENDO:
 			reconocimiento._survey(person, hours)
 		Inhabitant.State.TRABAJANDO:
+			# Lo trabajado ya se apuntó arriba. Ver [cuenta_como_trabajo].
 			if hogar._works_at_camp(person):
 				hogar._camp_work(person, hours)
 			else:
@@ -2382,12 +2433,64 @@ func raise_moment(moment: Moment) -> void:
 ## [Partida.momento_inicial] y docs/specs/QUE_FALTA_PARA_JUGARLO.md.
 func iniciar_partida() -> void:
 	raise_moment(partida.momento_inicial())
-	# Y LA DECISIÓN DE LA ESTACIÓN EN QUE SE EMPIEZA. Las decisiones de
-	# estación saltan al CAMBIAR de estación, y la partida empieza ya dentro de
-	# la primavera: sin esto, la de primavera del primer año —mandar la
+	# Y SE CITA LA DECISIÓN DE LA ESTACIÓN EN QUE SE EMPIEZA. Las decisiones se
+	# citan al CAMBIAR de estación, y la partida empieza ya dentro de la
+	# primavera: sin esto, la de primavera del primer año —mandar la
 	# expedición— no salía nunca, la primera expedición esperaba al año 2 y el
 	# primer año tenía tres decisiones y no cuatro. Lo destapó la prueba de humo
 	# de la pasada larga, antes de lanzarla.
+	_citar_la_decision()
+
+
+## Primer y último día de la estación en que puede caer su decisión.
+##
+## El segundo mes: así se decide **habiendo vivido** la estación —cómo se ha
+## salido del invierno, qué ha dado la primavera— y no el primer día, a ciegas.
+## Decisión del usuario del 2026-09-13: «a lo largo del 2º mes, ± 7 días».
+const DECISION_PRIMER_DIA := 16
+const DECISION_ULTIMO_DIA := 30
+
+## El día de ESTA estación en que salta su decisión, contando desde 1. Cero
+## mientras no hay ninguna citada -ya salió, o no había qué decidir-.
+var dia_de_la_decision: int = 0
+
+
+## Cita la decisión de la estación que acaba de entrar.
+##
+## **El día se sortea con la semilla de la partida, no con el `_rng`.** Con el
+## `_rng` cada sorteo desplazaría todas las tiradas siguientes y ninguna cifra
+## medida hasta hoy se podría comparar con una de después —pasó al repartir
+## quién vive dónde, ver SPECS §4.4—. Sale de la semilla, el año y la estación,
+## así que la misma partida da siempre los mismos días y dos partidas distintas
+## dan días distintos, que es lo que el criterio pide. Decisión del usuario del
+## 2026-09-13.
+func _citar_la_decision() -> void:
+	dia_de_la_decision = dia_de_decidir(game_seed, GameState.year,
+		GameState.season as Subsistence.Season)
+	# Si se entra en la estación ya pasado ese día -una partida que arranca a
+	# mitad, o un estado construido-, se decide en cuanto se pueda: mejor tarde
+	# que no tenerla.
+	if season_day + 1 >= dia_de_la_decision:
+		_revisar_la_decision()
+
+
+## Qué día de esa estación toca decidir, de [DECISION_PRIMER_DIA] a
+## [DECISION_ULTIMO_DIA]. Estático y sin estado: la misma semilla, el mismo día.
+static func dia_de_decidir(semilla: int, anyo: int, estacion: Subsistence.Season) -> int:
+	var azar := RandomNumberGenerator.new()
+	# Mezclado a mano y con primos: `seed` a secas con números vecinos da
+	# rachas, y aquí los números son vecinos a propósito -año y estación van de
+	# uno en uno-.
+	azar.seed = semilla * 1000003 + anyo * 10007 + int(estacion) * 101
+	return DECISION_PRIMER_DIA + azar.randi_range(
+		0, DECISION_ULTIMO_DIA - DECISION_PRIMER_DIA)
+
+
+## ¿Toca hoy la decisión de la estación? Lo pregunta el cierre de la jornada.
+func _revisar_la_decision() -> void:
+	if dia_de_la_decision <= 0 or season_day + 1 < dia_de_la_decision:
+		return
+	dia_de_la_decision = 0
 	_decision_de_la_estacion()
 
 
@@ -2408,6 +2511,28 @@ func _decision_de_la_estacion() -> void:
 			_offer_rut_choice()
 		Subsistence.Season.INVIERNO:
 			hogar.proponer_el_fuego()
+
+
+## Pone el cuerpo de esta persona donde está. La vista sólo lee.
+func _pintar_a(person: Inhabitant, index: int) -> void:
+	if _crowd == null or index >= _bodies.size():
+		return
+	_crowd.update(_bodies[index], person.position, _headings[index], person.state,
+		person.age_group)
+
+
+## Se lo lleva de la vista: ha salido de los cuatro kilómetros.
+##
+## No se borra su cuerpo —los huecos de la multitud son por índice— sino que se
+## manda bajo tierra, que es lo que hace la multitud con lo que no toca ver. Sin
+## esto, quien se iba de expedición se quedaba plantado en el borde del mapa
+## doce jornadas: la simulación no lo tocaba y la vista seguía pintándolo donde
+## lo dejó.
+func _sacar_del_mapa(person: Inhabitant, index: int) -> void:
+	if _crowd == null or index >= _bodies.size():
+		return
+	_crowd.update(_bodies[index], person.position + Vector3(0.0, -1000.0, 0.0),
+		_headings[index], person.state, person.age_group)
 
 
 ## Dónde se pone esta persona cuando está en el abrigo, según lo que hace.
@@ -2926,7 +3051,10 @@ func _speciality_can_work(speciality: Profession.Speciality) -> bool:
 		return not trampas.traps.is_empty() or _can_afford_a_trap()
 	if not SPECIALITY_MAKES.has(speciality):
 		return true
-	return taller._next_piece(speciality) >= 0
+	# Con encargo, o practicando: el taller no se queda parado porque nadie
+	# haya pedido una pieza, y la peletería tampoco deja la piel cruda sin
+	# curtir. Ver [Taller.puede_practicar] y el frente 14 de EPOCA_01 §10.1.
+	return taller._next_piece(speciality) >= 0 or taller.puede_practicar(speciality)
 
 
 ## Si en el abrigo hay con que armar alguna de las trampas que se saben hacer.
@@ -3186,6 +3314,9 @@ func _end_of_day() -> void:
 	despensa.pasar_cuenta_de_proteina()
 	lobo.nuevo_dia()
 	expedicion.nuevo_dia()
+	# La obra del cruce: la banda la levanta sola con quien ese día ha salido
+	# de exploración. Ver [Pasarelas].
+	pasarelas.nuevo_dia()
 	_acabar_la_berrea()
 	# Y revista a los parajes: lo que baja del veinte por ciento se deja
 	# descansar solo, sin que el jugador tenga que estar mirandolo.
@@ -3255,6 +3386,14 @@ func _end_of_day() -> void:
 	# esta noche no oye nada de esto.
 	_knowledge_transmission()
 
+	# Lo trabajado hoy, al arbol de tecnicas y a lo que la banda sabe de la
+	# temporada. VA ANTES DEL REPARTO: el de abajo es ya el de manana.
+	# ANTES de repartir la práctica: la jornada de quien ha estado dentro de una
+	# cueva cuenta como oficio de hogar. Ver [Exploracion.nueva_jornada].
+	exploracion.nueva_jornada()
+	sepulturas.nueva_jornada()
+	_practica_del_dia()
+
 	# El reparto se rehace cada jornada: una persona que ha dejado de criar,
 	# o un crio que ha crecido, entran solos en los trabajos que ya tenian
 	# marcados sin que el jugador tenga que acordarse.
@@ -3282,6 +3421,49 @@ func _end_of_day() -> void:
 	season_day += 1
 	if season_day >= Subsistence.DAYS_PER_SEASON:
 		_advance_local_season()
+	else:
+		# Y si hoy tocaba decidir, se decide. Va DESPUÉS del cambio de
+		# estación: el que acaba de entrar cita la suya y no se le pisa.
+		_revisar_la_decision()
+
+
+## Lo trabajado hoy: una jornada de práctica por cada cual, en el oficio en que
+## trabajó, y la temporada que ha visto trabajando.
+##
+## **Una jornada por persona que trabajó, no por horas**: es la unidad con la
+## que están calibradas las técnicas —«si me pide 100 jornadas de caza contará
+## cada jornada que un cazador sale»— y se respeta.
+##
+## Vivía en `DemoMain._on_day_passed`, que es la capa que monta la escena:
+## contaba a quien tuviera oficio y `has_task` **en la señal de medianoche**, o
+## sea después de que `apply_priorities` hubiera repartido ya el día siguiente y
+## cuando nadie tiene tajo. Con eso, el hogar no practicaba nunca —trabaja en la
+## cueva, nunca tiene tajo en el mapa— y la ribera tampoco. Medido el 2026-09-13
+## con `PracticaProbe`: 3 personas, 10 jornadas en la orilla, **0 jornadas de
+## ribera** en el árbol. Ahora es una regla del juego, vive en la simulación y
+## tiene prueba.
+func _practica_del_dia() -> void:
+	var jornadas: Dictionary = {}
+	for person: Inhabitant in people:
+		if person.oficio_de_hoy >= 0 and person.oficio_de_hoy != Profession.Job.OCIOSO:
+			jornadas[person.oficio_de_hoy] = int(
+				jornadas.get(person.oficio_de_hoy, 0)) + 1
+		# Una temporada no se sabe hasta haberla trabajado, y se anota por la
+		# actividad de cada cual: la banda puede haber vivido tres otoños de
+		# caza sin ver el remonte del salmón, porque nadie estaba en el río.
+		if knowledge != null and person.actividad_de_hoy >= 0:
+			knowledge.record_season(
+				person.actividad_de_hoy as Subsistence.Activity,
+				GameState.season as Subsistence.Season)
+		person.oficio_de_hoy = -1
+		person.actividad_de_hoy = -1
+
+	if techs == null:
+		return
+	for job: int in jornadas:
+		for gained: int in techs.add_practice(
+				job as Profession.Job, float(jornadas[job])):
+			tecnica_aprendida.emit(gained)
 
 
 ## Cuanta distancia hacia el techo transmisible se cierra en una noche de
@@ -3436,10 +3618,8 @@ func _advance_local_season() -> void:
 		relevo.revisar_vejez()
 		relevo.evaluar_nacimiento()
 		partida.evaluar_victoria()
-	# El trueque YA NO OCURRE SOLO: se propone, una vez por estación, y decide
-	# el jugador. Hasta el 2026-09-12 aquí se llamaba a `intentar()` y la banda
-	# cambiaba fruto seco por sílex sin preguntar ni avisar. Ver [Intercambio].
-	intercambio.proponer_el_trato()
+	# El trueque no se propone aquí: se trata cuando el jugador abre la ventana.
+	# Ver [Intercambio] y [PanelTrueque].
 	GameState.last_report = "Empieza %s, año %d." % [
 		Subsistence.season_name(GameState.season), GameState.year]
 	_note(Chronicle.Kind.TIERRA, _season_line(), 2)
@@ -3457,7 +3637,10 @@ func _advance_local_season() -> void:
 
 	if GameState.season == Subsistence.Season.PRIMAVERA:
 		hogar.fin_del_invierno()
-	_decision_de_la_estacion()
+	# Y la crecida de la estación que entra puede llevarse una pasarela. Va
+	# aquí, con el caudal de la estación nueva, que es el que la arrastra.
+	pasarelas.revisar_riada(float(Temporada.CAUDAL.get(GameState.season, 1.0)))
+	_citar_la_decision()
 
 
 ## Cuánto sube de precio la lesión de quien decide aguantar y seguir fuera.
@@ -3651,6 +3834,9 @@ func _person_dies(person: Inhabitant, texto: String) -> void:
 
 	if people.is_empty():
 		partida.declarar_derrota(texto)
+		return
+	# Y queda despedirlo: se pregunta cómo. Ver [Sepulturas].
+	sepulturas.al_morir(person.given_name, person.position)
 
 
 ## Cuantos estan en cada estado, para la interfaz

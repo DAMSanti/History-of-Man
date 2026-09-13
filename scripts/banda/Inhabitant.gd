@@ -541,6 +541,21 @@ var survey_hours: float = 0.0
 ## mandado la partida lejos, y se paga durante dias, no en el momento.
 var hurt_days: int = 0
 
+## Días de duelo que le quedan. Mientras dura, rinde menos: ver
+## [Sepulturas.RINDE_EN_DUELO].
+var duelo_dias: int = 0
+
+
+## Si está tocada: con un percance que todavía dura.
+##
+## **Una pregunta, un sitio que la contesta.** Quien está tocado se queda
+## descansando en el abrigo —sólo trabajo de hogar— y no se le puede mandar de
+## expedición ni a una cumbre. Ver [Reparto.apply_priorities], `Expedicion` y
+## `Cumbres`. Antes el percance sólo bajaba lo que rendía: se salía igual, con
+## la pierna mal. EPOCA_01 §10.1, tanda 3, frente 12.
+func esta_tocado() -> bool:
+	return hurt_days > 0
+
 
 ## Cuanto le penaliza el percance, de 0 -entero- a 1.
 func hurt_factor() -> float:
@@ -626,6 +641,20 @@ var cold: float = 0.0
 var state: State = State.OCIOSO
 var activity: Subsistence.Activity = Subsistence.Activity.CAZA
 var has_task: bool = false
+
+## En qué oficio se ha TRABAJADO hoy, y en qué actividad. -1 si todavía no.
+##
+## No es lo mismo que `job` ni que `has_task`, y la diferencia costó dos ramas
+## enteras del árbol de técnicas: `job` es lo que le toca ahora mismo y
+## `has_task` si tiene tajo EN EL MAPA en este instante. La práctica se contaba
+## con esas dos a medianoche —cuando ya no hay tajo y el reparto del día
+## siguiente ya ha corrido—, así que el hogar, que trabaja en la cueva, no
+## practicaba NUNCA, y la ribera tampoco: medido el 2026-09-13 con
+## `PracticaProbe`, tres personas diez jornadas en la orilla y **cero jornadas**
+## de ribera en el árbol. Esto guarda lo que se hizo, cuando se hizo, y lo
+## borra el cierre de la jornada después de contarlo.
+var oficio_de_hoy: int = -1
+var actividad_de_hoy: int = -1
 
 ## Antes de esta hora del juego -absoluta: jornada por 24 mas la hora- no se
 ## vuelve a pensar la jornada.
@@ -714,6 +743,15 @@ var expedicion_hasta: int = -1
 
 
 ## Si está fuera, en una expedición regional, esa jornada.
+## Si va andando hacia el borde del valle, o volviendo de él.
+##
+## Una expedición dura doce jornadas y la mayoría las pasa fuera del mapa, donde
+## no se la simula. Pero **la salida y la vuelta se ven**: se sale andando de la
+## cueva hasta el borde y se vuelve por el mismo sitio, y esas jornadas van
+## DENTRO de las doce, no se suman. EPOCA_01 §10.1, tanda 3, frente 10.
+var expedicion_andando: bool = false
+
+
 func esta_de_expedicion(dia: int) -> bool:
 	return expedicion_hasta >= 0 and dia < expedicion_hasta
 
@@ -955,7 +993,10 @@ func can_work() -> bool:
 ## Cuanto rinde: destreza por estado. Alguien hambriento o agotado cunde menos.
 func effectiveness() -> float:
 	var condition := 1.0 - (hunger / 220.0) - (fatigue / 260.0) - (cold / 300.0) 		- hurt_factor() - (flaqueza / 260.0)
-	return clampf(skill_in(current_task()) * 1.4, 0.2, 1.4) * clampf(condition, 0.15, 1.0)
+	# De duelo se rinde menos. Ver [Sepulturas].
+	var duelo := Sepulturas.RINDE_EN_DUELO if duelo_dias > 0 else 1.0
+	return clampf(skill_in(current_task()) * 1.4, 0.2, 1.4) \
+		* clampf(condition, 0.15, 1.0) * duelo
 
 
 ## Lo que come al dia, en jornadas-persona. Un nino come menos.

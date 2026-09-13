@@ -164,7 +164,15 @@ func _feather(mask: PackedFloat32Array, w: int, h: int, radius: int) -> PackedFl
 ## El crecimiento es una inundacion por vecindad sobre el fondo marino que
 ## emerge, no una proyeccion recta: asi el contorno lo dibuja la batimetria y
 ## sale con la forma quebrada de una costa real.
-func build_playable_mask(data: HeightmapData, sea_level_m: float, reach_km: float = 60.0) -> PackedFloat32Array:
+##
+## **HASTA EL AGUA** desde el 2026-09-13. Había un tope de 60 km de alcance, con
+## ruido para que el borde no saliera en arco, y a −120 m la línea amarilla se
+## paraba antes de llegar a la costa de la época: el usuario la vio a medio
+## camino en el mapa regional. Ahora la inundación sigue mientras haya fondo
+## marino emergido, y el borde lo pone el mar. **Los límites laterales se
+## quedan** —la costa de Cantabria, medida en la costa—: sin ellos la plataforma
+## se extendería por delante de Asturias y del País Vasco.
+func build_playable_mask(data: HeightmapData, sea_level_m: float) -> PackedFloat32Array:
 	var mask := rasterize(data)
 	var w := data.width
 	var h := data.height
@@ -190,31 +198,9 @@ func build_playable_mask(data: HeightmapData, sea_level_m: float, reach_km: floa
 	if x_max <= x_min:
 		return mask
 
-	# --- 3. inundacion con alcance irregular ---------------------------
-	# Donde manda la batimetria el contorno ya sale quebrado. Donde el limite
-	# lo pone la distancia saldria un arco liso, asi que el alcance se modula
-	# con ruido y se afila hacia los extremos laterales.
-	# Dos escalas de ruido: una ancha que mete entrantes y salientes de varios
-	# kilometros, y otra fina que rompe el borde a escala de cientos de metros.
-	# Con una sola octava lenta el limite salia escalonado, no quebrado.
-	var noise := FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	noise.frequency = 0.012
-	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	noise.fractal_octaves = 5
-	noise.fractal_lacunarity = 2.3
-	noise.fractal_gain = 0.55
-	noise.seed = 20250902
-
-	var detail := FastNoiseLite.new()
-	detail.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	detail.frequency = 0.055
-	detail.fractal_octaves = 3
-	detail.seed = 771
-
-	var reach_cells := reach_km * 1000.0 / data.meters_per_sample
-	var taper := float(x_max - x_min) * 0.12
-
+	# --- 3. inundacion hasta el agua ------------------------------------
+	# Por vecindad sobre el fondo marino que emerge, sin tope de distancia: el
+	# contorno lo dibuja la batimetria, que ya sale quebrado como una costa real.
 	var dist := PackedInt32Array()
 	dist.resize(n)
 	var queue := PackedInt32Array()
@@ -233,14 +219,6 @@ func build_playable_mask(data: HeightmapData, sea_level_m: float, reach_km: floa
 		var d := dist[i]
 		var x := i % w
 		var z := i / w
-
-		# Alcance permitido en este punto
-		var edge: float = minf(float(x - x_min), float(x_max - x)) / maxf(taper, 1.0)
-		var wide: float = noise.get_noise_2d(float(x), float(z)) * 0.5 + 0.5
-		var fine: float = detail.get_noise_2d(float(x), float(z)) * 0.5 + 0.5
-		var allowed := reach_cells * clampf(edge, 0.0, 1.0) 			* (0.55 + 0.70 * wide) * (0.82 + 0.36 * fine)
-		if float(d) >= allowed:
-			continue
 
 		for dz: int in [-1, 0, 1]:
 			var zz := z + dz

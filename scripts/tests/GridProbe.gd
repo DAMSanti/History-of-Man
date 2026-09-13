@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var terrain := FakeTerrain.new()
 
 	var started := Time.get_ticks_usec()
-	var grid := Navgrid.from_terrain(terrain, false, false)
+	var grid := Navgrid.from_terrain(terrain, false, [])
 	var build_us := Time.get_ticks_usec() - started
 
 	print("=== REJILLA ===")

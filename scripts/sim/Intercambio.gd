@@ -1,21 +1,16 @@
 class_name Intercambio
 extends RefCounted
-## Trueque con la gente de ahí fuera: se decide, se paga, y se recuerda.
+## Trueque con la gente de ahí fuera: precios, la regla del 10 %, y lo que se ha
+## cambiado.
 ##
-## El primer peldaño de la escalera del comercio de docs/SISTEMAS.md §5. Era un
-## envío automático —6 de fruto seco por 3 de sílex, un 55 % fijo, una vez por
-## estación— que ocurría **sin que el jugador decidiera nada ni se enterara**.
-## Ahora son las cuatro decisiones de la spec (EPOCA_01 §10.1, tanda 2, frente
-## 6): con quién, qué se ofrece y cuánto, qué se pide, y si se va.
-##
-## ## Cómo caben cuatro decisiones en una tarjeta
-##
-## Combinadas darían veintisiete opciones, y eso no es una decisión: es un
-## formulario. Se ofrece **un puñado de tratos con sentido**, siempre con la
-## contraparte **de mejor trato** —así «con quién» lo decide la memoria que has
-## ido dejando, no un desplegable—, y **con el coste escrito en cada opción**,
-## que es lo que el frente 8 pide antes de elegir. Es una simplificación y está
-## dicha: si el juego pide elegir contraparte a mano, se añade entonces.
+## El primer peldaño de la escalera del comercio de docs/SISTEMAS.md §5. Tuvo tres
+## formas: un envío automático sin que el jugador decidiera nada (hasta el
+## 2026-09-12), una tarjeta por estación con tratos cerrados y un viaje de cuatro
+## jornadas (tanda 2), y **una ventana como la del almacén** (tanda 4,
+## `PanelTrueque`). La tarjeta y su viaje **se quitaron el 2026-09-13**, a
+## petición del usuario, cuando la ventana ya estaba: dos maneras de tratar con la
+## misma gente eran dos respuestas a la misma pregunta. Con la tarjeta se fue
+## también pedir gente a otra banda, que sólo existía ahí.
 
 var sim: SettlementSim
 
@@ -24,71 +19,160 @@ func _init(settlement: SettlementSim) -> void:
 	sim = settlement
 
 
-## Qué se pide a cambio.
-enum Pide { SILEX, CONCHA, GENTE }
+## Cuánto mejora el trato con esa gente un cambio cerrado a gusto de los dos.
+## Dos: es lo que movía «lo justo» en la tarjeta de antes, y se hereda. Decisión,
+## no medida, con la misma forma que `ElLobo.trato`.
+const TRATO_POR_CAMBIO := 2.0
 
-## Cómo se ofrece.
-enum Como { REGATEAR, JUSTO, GENEROSO }
+# --- El trueque como el almacén: precios y la regla del 10 % ------------------
+#
+# Frente 25 de EPOCA_01 §10.1, tanda 4. Una ventana como la del almacén, con lo
+# de la banda a un lado y lo de los visitantes al otro, y se pasan cosas. Cada
+# cosa tiene un precio, la relación lo mueve, y el trato sale si los dos lados
+# no se separan más de un 10 %.
 
-
-## Lo justo que se ofrece por un trato, en unidades de lo que se da.
-##
-## Seis, que es lo que se daba antes por el sílex: la cifra se hereda del
-## trueque automático, no se elige ahora. Lo que cambia es que ahora se puede
-## dar más o menos.
-const LO_JUSTO := 6.0
-
-## Cuánto de lo justo se ofrece según cómo.
-const CUANTO_SE_OFRECE := {
-	Como.REGATEAR: 0.5,
-	Como.JUSTO: 1.0,
-	Como.GENEROSO: 1.5,
+## Lo que vale cada cosa, en «puñados de fruto seco», que es la moneda que ya
+## usaba el trueque de antes. **Las tres primeras NO se inventan**: salen de los
+## tratos que ya existían —6 de fruto seco por 3 de sílex, y por 2 conchas—. El
+## resto son decisión, puestas a ojo de lo que cuesta conseguir cada cosa, y así
+## se dice.
+const PRECIO := {
+	Materia.Kind.FRUTO_SECO: 1.0,
+	Materia.Kind.SILEX: 2.0,
+	Materia.Kind.CONCHA: 3.0,
+	# Decisión: lo que se trae de lejos o cuesta días, más; lo que está a mano,
+	# menos.
+	Materia.Kind.OCRE: 3.0,
+	Materia.Kind.PIEL: 4.0,
+	Materia.Kind.ASTA: 2.0,
+	Materia.Kind.GRASA: 2.0,
+	Materia.Kind.PIEDRA: 0.5,
+	Materia.Kind.LENA: 0.3,
 }
 
-## Cuánto se mueve el trato con esa gente según cómo se ofrezca.
-##
-## **La memoria de la contraparte**, que es lo que la spec pide: el 55 % fijo
-## deja de serlo porque ellos recuerdan. Se mueve en cada intento, salga bien o
-## mal —si regateas y no tienen nada que darte, igualmente se acuerdan de que
-## regateaste—. La forma es la de `ElLobo.trato`, que ya funciona así. Las
-## cifras son decisiones, no medidas, y se ajustan con la partida delante.
-const CUANTO_MUEVE_EL_TRATO := {
-	Como.REGATEAR: -8.0,
-	Como.JUSTO: 2.0,
-	Como.GENEROSO: 10.0,
-}
+## Lo que vale lo que no está en [PRECIO]. Uno, como el fruto seco: decisión.
+const PRECIO_POR_DEFECTO := 1.0
 
-## Lo que llega de lo que se pide, cuando sale bien.
-const LLEGA_SILEX := 3.0
-const LLEGA_CONCHA := 2.0
+## Cuánto pueden separarse los dos lados para que el trato salga. Decisión del
+## usuario del 2026-09-13: «un intercambio equivalente», con un 10 % de margen.
+const MARGEN := 0.10
 
-## Cuántas jornadas está fuera quien va a tratar.
-##
-## Cuatro: ir y volver a otra comarca sin quedarse a vivir. **Decisión.** Esas
-## jornadas **no se recolectan**, que es el cuarto criterio del frente.
-const JORNADAS_DE_TRUEQUE := 4
+## Cuánto mueve el trato el precio. Con trato 0 todo vale lo suyo; cada 100 de
+## trato, lo de la banda vale un 50 % más a sus ojos y lo suyo un tercio menos.
+## Con topes para que ni regalen ni roben. Decisión de forma, no medida.
+const TRATO_QUE_DOBLA := 200.0
 
-## La probabilidad de que salga bien con un trato de cero.
-##
-## 0,55, que es la del trueque automático de antes: se hereda como punto de
-## partida. El trato la sube o la baja desde ahí.
-const PROBABILIDAD_DE_PARTIDA := 0.55
+## Lo que se ha cambiado, para la ventana de relaciones: `{"con", "dia", "da",
+## "recibe"}`.
+var historial: Array[Dictionary] = []
+
+
+## Lo que vale un material, sin relación de por medio.
+static func precio(material: Materia.Kind) -> float:
+	return float(PRECIO.get(material, PRECIO_POR_DEFECTO))
+
+
+## Por cuánto multiplica la relación lo que da la banda. Lo que traen ellos va
+## dividido por lo mismo.
+func factor_con(con: int) -> float:
+	var t := sim.contacto.trato_con(con) if sim.contacto != null else 0.0
+	return clampf(1.0 + t / TRATO_QUE_DOBLA, 0.5, 2.0)
+
+
+## Lo que vale para ELLOS lo que da la banda.
+func valor_de_lo_que_se_da(lote: Dictionary, con: int) -> float:
+	var total := 0.0
+	for material: int in lote:
+		total += float(lote[material]) * precio(material as Materia.Kind)
+	return total * factor_con(con)
+
+
+## Lo que vale lo que traen ELLOS, visto por la banda.
+func valor_de_lo_que_se_recibe(lote: Dictionary, con: int) -> float:
+	var total := 0.0
+	for material: int in lote:
+		total += float(lote[material]) * precio(material as Materia.Kind)
+	return total / factor_con(con)
+
+
+## Si el trato sale: los dos lados valen algo y no se separan más del margen.
+func se_acepta(da: Dictionary, recibe: Dictionary, con: int) -> bool:
+	var dado := valor_de_lo_que_se_da(da, con)
+	var recibido := valor_de_lo_que_se_recibe(recibe, con)
+	if dado <= 0.0 or recibido <= 0.0:
+		return false
+	return absf(dado - recibido) <= MARGEN * maxf(dado, recibido) + 0.0001
+
+
+## Cambia: sale del almacén lo que se da y entra lo que se recibe, exactamente.
+## Dice si ha salido. No sale si no se acepta o si no hay lo que se da.
+func cambiar(con: int, da: Dictionary, recibe: Dictionary) -> bool:
+	if not se_acepta(da, recibe, con):
+		return false
+	# No se lleva uno más de lo que traen.
+	var quedan := quedan_de(con)
+	for material: int in recibe:
+		if float(quedan.get(material, 0.0)) + 0.0001 < float(recibe[material]):
+			return false
+	for material: int in da:
+		if sim.store.amount(material as Materia.Kind) < float(da[material]):
+			return false
+	for material: int in da:
+		sim.store.take(material as Materia.Kind, float(da[material]))
+	for material: int in recibe:
+		sim.store.add(material as Materia.Kind, float(recibe[material]))
+	historial.append({"con": con, "dia": sim.day, "anyo": GameState.year,
+		"estacion": int(GameState.season), "da": da.duplicate(),
+		"recibe": recibe.duplicate()})
+	# Un trato cerrado a gusto de los dos se recuerda. Ver [TRATO_POR_CAMBIO].
+	if sim.contacto != null:
+		sim.contacto.mover_el_trato(con, TRATO_POR_CAMBIO)
+	consumados += 1
+	# El primero es un hito en la crónica, como lo era con la tarjeta.
+	sim._note(Chronicle.Kind.TRUEQUE, "Se cierra un trato con otra gente."
+		if logrado_alguna_vez else "Primer trueque con otra gente: la banda ya "
+		+ "no depende sólo de lo que da su valle.", 1 if logrado_alguna_vez else 2)
+	logrado_alguna_vez = true
+	return true
+
+
+## Lo que trae esa gente cada estación. Sale de la semilla, el sitio y la
+## estación, con azar propio (SPECS §7): la misma gente trae lo mismo en la misma
+## estación de la misma partida. Traen lo que la banda no tiene a mano —sílex de
+## fuera, conchas de la costa, ocre, pieles—, que es para lo que se trata.
+## Cantidades: decisión.
+func lo_que_traen(con: int) -> Dictionary:
+	var azar := RandomNumberGenerator.new()
+	azar.seed = hash([sim.game_seed, con, GameState.year, int(GameState.season), "traen"])
+	var traen := {}
+	for material: Materia.Kind in [Materia.Kind.SILEX, Materia.Kind.CONCHA,
+			Materia.Kind.OCRE, Materia.Kind.PIEL]:
+		if azar.randf() < 0.75:
+			traen[material] = float(azar.randi_range(2, 8))
+	if traen.is_empty():
+		traen[Materia.Kind.SILEX] = 4.0
+	return traen
+
+
+## Lo que les queda por cambiar esta estación: lo que traían menos lo que ya se
+## ha llevado la banda.
+func quedan_de(con: int) -> Dictionary:
+	var quedan := lo_que_traen(con)
+	for trato_hecho: Dictionary in historial:
+		if int(trato_hecho["con"]) != con or int(trato_hecho.get("anyo", -1)) != GameState.year \
+				or int(trato_hecho.get("estacion", -1)) != int(GameState.season):
+			continue
+		for material: int in (trato_hecho["recibe"] as Dictionary):
+			quedan[material] = maxf(float(quedan.get(material, 0.0))
+				- float(trato_hecho["recibe"][material]), 0.0)
+	return quedan
+
 
 ## Si ha salido bien alguna vez. El primero es un hito en la crónica.
 var logrado_alguna_vez := false
 
-## Lo que la sonda cuenta.
-var intentados := 0
+## Los cambios cerrados, para la sonda del año.
 var consumados := 0
-
-
-## La probabilidad de que salga bien con esa gente, según lo que recuerdan.
-##
-## Con trato 0 es la de partida; cada 100 de trato suma o resta 0,5, con topes
-## para que nunca sea seguro ni imposible. Decisión de forma, no medida.
-func probabilidad_con(id: int) -> float:
-	var trato := sim.contacto.trato_con(id) if sim.contacto != null else 0.0
-	return clampf(PROBABILIDAD_DE_PARTIDA + trato / 200.0, 0.05, 0.95)
 
 
 ## Con quién se trata: la gente conocida con mejor trato, y a igualdad, la de
@@ -107,149 +191,3 @@ func con_quien() -> int:
 			mejor_trato = t
 			mejor = id
 	return mejor
-
-
-## Se trata. Devuelve si ha salido bien.
-##
-## Cuatro cosas pasan siempre que se va, salga como salga: alguien sale del
-## mapa esas jornadas, se cuenta el intento, y el trato con esa gente se mueve
-## según cómo se ofreció. Y dos pasan sólo si sale bien: se entrega lo ofrecido
-## y llega lo pedido.
-func tratar(con: int, ofrece: Materia.Kind, como: Como, pide: Pide) -> bool:
-	if sim.contacto == null or not sim.contacto.se_conocen(con):
-		return false
-	var cuanto := LO_JUSTO * float(CUANTO_SE_OFRECE[como])
-	if sim.store.amount(ofrece) < cuanto:
-		sim._note(Chronicle.Kind.TRUEQUE,
-			"No hay bastante que ofrecer para ir a tratar.", 0)
-		return false
-
-	var quien := _quien_va()
-	if quien == null:
-		return false
-
-	# LA SUERTE SE LEE CON EL TRATO DE ANTES de este intento, y por eso va
-	# antes de moverlo. Si se moviera primero, ser generoso compraría la suerte
-	# del propio trato en que lo eres, y regatear no tendría riesgo inmediato:
-	# lo que recuerdan es lo de las veces anteriores.
-	var probabilidad := probabilidad_con(con)
-
-	# IR CUESTA, y cuesta aunque salga mal. Se usa la misma marca que la
-	# expedición: está fuera del mapa, no trabaja ni se le simula.
-	quien.expedicion_hasta = sim.day + JORNADAS_DE_TRUEQUE
-	intentados += 1
-	sim.contacto.mover_el_trato(con, float(CUANTO_MUEVE_EL_TRATO[como]))
-
-	if sim._rng.randf() > probabilidad:
-		sim._note(Chronicle.Kind.TRUEQUE,
-			"%s vuelve de tratar con las manos vacías: esta vez no había trato."
-				% quien.given_name, 0)
-		return false
-
-	sim.store.take(ofrece, cuanto)
-	_llega(pide)
-	consumados += 1
-
-	var peso := 1
-	if not logrado_alguna_vez:
-		logrado_alguna_vez = true
-		peso = 2
-	sim._note(Chronicle.Kind.TRUEQUE, _linea_del_trato(pide, quien), peso)
-	return true
-
-
-## Lo que llega de lo que se pidió.
-func _llega(pide: Pide) -> void:
-	match pide:
-		Pide.SILEX:
-			sim.store.add(Materia.Kind.SILEX, LLEGA_SILEX)
-		Pide.CONCHA:
-			sim.store.add(Materia.Kind.CONCHA, LLEGA_CONCHA)
-		Pide.GENTE:
-			# Alguien viene a vivir con la banda. Así funcionaban las redes
-			# paleolíticas de verdad: se movía gente, no sólo cosas.
-			var nuevo := Inhabitant.create(sim.relevo.id_libre(),
-				sim.home_position, sim._rng)
-			nuevo.position = sim.home_position
-			sim.people.append(nuevo)
-
-
-func _linea_del_trato(pide: Pide, quien: Inhabitant) -> String:
-	match pide:
-		Pide.CONCHA:
-			return ("%s vuelve con conchas de un mar que no es el nuestro. "
-				+ "Alguien, lejos, las ha cogido en su playa.") % quien.given_name
-		Pide.GENTE:
-			return ("%s no vuelve solo: con la banda viene a vivir alguien de "
-				+ "la otra gente.") % quien.given_name
-		_:
-			return "%s vuelve con sílex de la otra gente." % quien.given_name
-
-
-## Quién va a tratar: el primer adulto que esté en casa.
-func _quien_va() -> Inhabitant:
-	for person: Inhabitant in sim.people:
-		if person.age_group != Inhabitant.Age.ADULTO:
-			continue
-		if person.esta_de_expedicion(sim.day):
-			continue
-		return person
-	return null
-
-
-## Propone un trueque, si se conoce a alguien. Lo llama [SettlementSim] al
-## empezar cada estación.
-##
-## **Ya no trata: pregunta.** La primera opción es **no ir**, y es deliberado
-## por dos motivos. El primero, que no decidir no puede costar nada. Y el
-## segundo, práctico: las sondas contestan los momentos eligiendo la primera
-## opción, y si ésa fuera tratar, «en un año sin que el jugador decida nada,
-## cero intercambios» —el primer criterio del frente— haría tratos él solo.
-func proponer_el_trato() -> void:
-	var con := con_quien()
-	if con < 0:
-		return
-	var moment := Moment.new()
-	moment.kind = Moment.Kind.TRUEQUE
-	moment.title = "Se puede ir a tratar"
-	moment.text = ("La otra gente está a %d jornadas de ida y vuelta. "
-		+ "Con lo que recuerdan de vosotros, sale bien %d de cada diez veces.") % [
-			JORNADAS_DE_TRUEQUE, int(round(probabilidad_con(con) * 10.0))]
-	moment.options = [
-		Moment.opcion("Dejarlo esta estación",
-			"No va nadie. No cuesta nada y no llega nada.",
-			func() -> void: pass),
-		Moment.opcion("Sílex por fruto seco, lo justo",
-			"Cuesta %d de fruto seco y %d jornadas de alguien." % [
-				int(LO_JUSTO), JORNADAS_DE_TRUEQUE],
-			func() -> void: tratar(con, Materia.Kind.FRUTO_SECO, Como.JUSTO, Pide.SILEX),
-			_cuesta(Materia.Kind.FRUTO_SECO, Como.JUSTO)),
-		Moment.opcion("Sílex, siendo generosos",
-			"Cuesta %d de fruto seco. Os lo tendrán en cuenta." % int(LO_JUSTO * 1.5),
-			func() -> void: tratar(con, Materia.Kind.FRUTO_SECO, Como.GENEROSO, Pide.SILEX),
-			_cuesta(Materia.Kind.FRUTO_SECO, Como.GENEROSO)),
-		Moment.opcion("Sílex, regateando",
-			"Cuesta sólo %d de fruto seco. También os lo tendrán en cuenta." % int(LO_JUSTO * 0.5),
-			func() -> void: tratar(con, Materia.Kind.FRUTO_SECO, Como.REGATEAR, Pide.SILEX),
-			_cuesta(Materia.Kind.FRUTO_SECO, Como.REGATEAR)),
-		Moment.opcion("Concha, por carne seca",
-			"Cuesta %d de carne seca: la concha de un mar lejano." % int(LO_JUSTO),
-			func() -> void: tratar(con, Materia.Kind.CARNE_SECA, Como.JUSTO, Pide.CONCHA),
-			_cuesta(Materia.Kind.CARNE_SECA, Como.JUSTO)),
-		Moment.opcion("Que venga alguien a vivir, por piel",
-			"Cuesta %d de piel, y siendo generosos: se pide mucho." % int(LO_JUSTO * 1.5),
-			func() -> void: tratar(con, Materia.Kind.PIEL, Como.GENEROSO, Pide.GENTE),
-			_cuesta(Materia.Kind.PIEL, Como.GENEROSO)),
-	]
-	sim.raise_moment(moment)
-
-
-## Lo que cuesta ir a tratar ofreciendo eso, en las cifras de [Moment.options].
-## La comida cuenta en la despensa; la piel no, que no se come. Las jornadas se
-## van siempre, salga como salga.
-static func _cuesta(ofrece: Materia.Kind, como: Como) -> Dictionary:
-	var cuesta := {"jornadas": JORNADAS_DE_TRUEQUE}
-	if Materia.is_food(ofrece):
-		var unidades := LO_JUSTO * float(CUANTO_SE_OFRECE[como])
-		cuesta["despensa"] = -unidades * Materia.nutrition(ofrece)
-	return cuesta

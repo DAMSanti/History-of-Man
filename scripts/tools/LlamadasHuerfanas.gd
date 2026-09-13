@@ -50,10 +50,16 @@ func _revisar(fachada: String, clases: Array) -> int:
 			campo[tipo] = partes[0].strip_edges()
 
 	var mudados: Dictionary = {}
+	# De quién es cada nombre, para no llamar huérfana a una ESTÁTICA pedida por
+	# su clase. `PanelTrabajos.ausentes(sim)` es exactamente como se llama a una
+	# función estática, y esto la daba por mal puesta: diez falsas el
+	# 2026-09-13, con la tanda 3.
+	var dueno: Dictionary = {}
 	for clase: String in clases:
 		var ruta := fachada.get_base_dir().path_join(clase + ".gd")
 		for nombre: String in _metodos(ruta):
 			mudados[nombre] = campo.get(clase, clase.to_lower())
+			dueno[nombre] = clase
 		# Y las VARIABLES, que es por donde entro el peor de estos fallos:
 		# `sim.wildlife = herds` estuvo meses sin conectar la fauna a la caza
 		# porque asignar una propiedad que no existe no da error hasta que
@@ -88,6 +94,9 @@ func _revisar(fachada: String, clases: Array) -> int:
 				if not _accede_a(fila, nombre):
 					continue
 				if fila.contains(String(mudados[nombre]) + "." + nombre):
+					continue
+				# Pedida por su propia clase: es una estática, y está bien.
+				if dueno.has(nombre) 						and fila.contains(String(dueno[nombre]) + "." + nombre):
 					continue
 				print("  %s:%d  %s -> se pide por «%s»" % [
 					ruta, linea, nombre, mudados[nombre]])

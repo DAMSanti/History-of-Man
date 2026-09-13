@@ -244,8 +244,10 @@ func _update_minimap() -> void:
 			_plot(image, position, Color(0.95, 0.62, 0.30), 1)
 
 	if demo.sim:
-		for a: int in demo.sim.work_sites.keys():
-			_plot(image, demo.sim.work_sites[a], Color(0.35, 0.9, 0.95), 2)
+		# Aquí se pintaban los `work_sites` en cian, uno por actividad. Se
+		# quitaron el 2026-09-13: son de antes de que los parajes tuvieran sus
+		# propias chapas, y el jugador los veía como «marcadores azules
+		# antiguos» que no decían nada. Lo que orienta hoy son los parajes.
 		for person: Inhabitant in demo.sim.people:
 			_plot(image, person.position, Color(1.0, 0.92, 0.55), 1)
 		_plot(image, demo.sim.home_position, Color(1.0, 0.42, 0.35), 3)

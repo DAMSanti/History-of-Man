@@ -73,7 +73,8 @@ func can_reach(world_position: Vector3, margin: float = -1.0) -> bool:
 	# Las dos cosas que cortan el paso: el agua honda y el cortado. Mirar solo
 	# el agua dejaba asignar tajos detras de una pared, y la gente salia hacia
 	# ellos para quedarse atascada.
-	if not sim._terrain.path_is_passable(sim.home_position, stop, sim.has_boat, sim.has_bridge):
+	if not sim._terrain.path_is_passable(sim.home_position, stop, sim.has_boat,
+			sim.pasarelas):
 		return false
 
 	# Y lo que de verdad manda: la REJILLA, que es quien traza los caminos.
@@ -749,7 +750,7 @@ func agua_deja_pasar_con(world_position: Vector3, caudal: float) -> bool:
 		return true
 	return Hydrography.can_cross(
 		sim._terrain.crossing_difficulty_with(world_position, caudal),
-		sim.has_boat, sim.has_bridge)
+		sim.has_boat, sim.pasarelas.hay_en(world_position))
 
 
 ## Si se puede poner el pie en un punto concreto.
@@ -801,7 +802,8 @@ func _can_step_into(world_position: Vector3) -> bool:
 
 	var slope := sim._terrain.get_slope_at(world_position)
 	return Traversal.is_passable(slope,
-		sim._terrain.crossing_difficulty_at(world_position), sim.has_boat, sim.has_bridge)
+		sim._terrain.crossing_difficulty_at(world_position), sim.has_boat,
+		sim.pasarelas.hay_en(world_position))
 
 
 ## Manda a alguien a un sitio TRAZANDO el camino, no en linea recta.
@@ -820,6 +822,20 @@ func _can_step_into(world_position: Vector3) -> bool:
 ## vado a dos kilometros para trabajar un avellanar que se ve desde casa no lo
 ## es. Pendiente de playtest.
 const RODEO_QUE_SE_ANDA := 2.5
+
+## Hasta cuánto camino se anda sin mirar la vuelta que da, en metros.
+##
+## **Decisión del usuario del 2026-09-13**, con el caso delante: «el raizal del
+## paso» salía inalcanzable a 226 m en recta porque se llegaba andando 786, y
+## 786 pasa de 2,5 veces 226. La vara era una PROPORCIÓN y castigaba justo a los
+## sitios cercanos: 786 m no es un viaje —las cuadrillas andan 400 a 560 m a sus
+## tajos— y el caso que la justificaba era otro, «dar la vuelta al río por un
+## vado a dos kilómetros». Con este suelo, lo cercano entra aunque rodee y lo
+## lejano sigue bajo la proporción.
+##
+## Y NO toca el miedo: `Navgrid.RIESGO_MAXIMO` es [RODEO_QUE_SE_ANDA], la
+## proporción, y ésa no cambia.
+const SIEMPRE_SE_ANDA := 1000.0
 
 ## Por debajo de esto no se mide rodeo ninguno: es andar, no irse lejos.
 ##
@@ -854,6 +870,10 @@ const SALTO_CORTO := Navgrid.CELL * 2.0
 func rodeo_aceptable(derecho: float, andado: float,
 		veces: float = RODEO_QUE_SE_ANDA) -> bool:
 	if derecho <= SALTO_CORTO:
+		return true
+	# LO QUE SE ANDA EN MENOS DE UN KILÓMETRO VALE SIEMPRE, dé la vuelta que dé.
+	# Ver [SIEMPRE_SE_ANDA].
+	if andado <= SIEMPRE_SE_ANDA:
 		return true
 	return andado <= derecho * veces + SALTO_CORTO
 
@@ -1101,7 +1121,9 @@ func cruza_el_agua(desde: Vector3, hasta: Vector3) -> bool:
 	# LA CATA ENTERA LA HACE EL TERRENO, de una llamada: ver
 	# [TerrainGenerator.linea_sin_agua]. Aqui se hacian dos llamadas por punto
 	# y ochenta y siete puntos por candidato.
-	var tope := Hydrography.tope_de_vado(sim.has_boat, sim.has_bridge)
+	# El tope SIN pasarela: lo que una pasarela abre es su celda, y eso lo
+	# contesta la rejilla celda a celda. Ver [Navgrid._hay_pasarela].
+	var tope := Hydrography.tope_de_vado(sim.has_boat, false)
 	return not sim._terrain.linea_sin_agua(desde, hasta, CATA_DEL_PASO,
 		caudal_de_hoy(), tope.x, tope.y > 0.5)
 
@@ -1408,9 +1430,9 @@ func _navgrid() -> Navgrid:
 	# caminos de enero no son los de agosto: con una sola rejilla -horneada en
 	# seco- la banda planeaba rutas por vados que ya no existian. Ver
 	# [HornoDeRejillas], que amasa las otras tres mientras se juega.
-	if not sim.horno.sirven(sim.has_boat, sim.has_bridge):
+	if not sim.horno.sirven(sim.has_boat, sim.pasarelas.version):
 		var started := Time.get_ticks_msec()
-		sim.horno.encargar(sim._terrain, sim.has_boat, sim.has_bridge,
+		sim.horno.encargar(sim._terrain, sim.has_boat, sim.pasarelas.celdas(),
 			GameState.season as Subsistence.Season, Temporada.CAUDAL,
 			Temporada.ENCHARCA)
 		sim._grid = sim.horno.de(GameState.season as Subsistence.Season)
