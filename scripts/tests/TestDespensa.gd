@@ -374,12 +374,25 @@ func test_no_hay_dos_raciones() -> void:
 
 
 ## Lo que sobra de un nutriente no tapa lo que falta del otro, pero tampoco se
-## tira: la grasa es energia de verdad aunque no traiga proteina.
+## tira: la miel es energia de verdad aunque no traiga proteina.
+##
+## Era la GRASA hasta el 2026-09-13, y dejó de valer: el usuario pidió que no se
+## la coman, que es la lámpara, el curtido y la pintura. Ver
+## `test_la_grasa_no_se_come`.
 func test_lo_que_sobra_de_uno_vale_menos_pero_no_cero() -> void:
-	assert_gt(Materia.nutrition(Materia.Kind.GRASA), 0.0,
-		"la grasa alimenta, aunque no traiga proteina")
-	assert_lt(Materia.nutrition(Materia.Kind.GRASA),
-		Materia.kcal(Materia.Kind.GRASA) / Materia.KCAL_RACION,
-		"pero menos de lo que dirian sus calorias solas")
 	assert_gt(Materia.nutrition(Materia.Kind.MIEL), 0.0,
-		"y la miel igual")
+		"la miel alimenta, aunque no traiga proteina")
+	assert_lt(Materia.nutrition(Materia.Kind.MIEL),
+		Materia.kcal(Materia.Kind.MIEL) / Materia.KCAL_RACION,
+		"pero menos de lo que dirian sus calorias solas")
+
+
+## Queja del usuario (2026-09-13): «no quiero que se coman la grasa, quiero que
+## la utilicen solo como material». Y no es sólo gusto: curtir pide grasa, y
+## con la grasa en la despensa no quedaba para curtir ninguna piel.
+func test_la_grasa_no_se_come() -> void:
+	assert_false(Materia.is_food(Materia.Kind.GRASA), "no es comida")
+	assert_eq(Materia.nutrition(Materia.Kind.GRASA), 0.0, "y no da raciones")
+	var despensa := Storehouse.new()
+	despensa.add(Materia.Kind.GRASA, 10.0)
+	assert_eq(despensa.food_rations(), 0.0, "diez de grasa no son comida guardada")

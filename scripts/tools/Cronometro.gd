@@ -188,20 +188,20 @@ static var _raiz: Dictionary = {}
 
 ## Marca un tramo que es UN `_process` COMPLETO de un nodo.
 static func tramo_raiz(nombre: String) -> void:
-	if not activo:
+	if not activo or not _en_el_hilo_principal():
 		return
 	_raiz[nombre] = true
 	_abierto[nombre] = Time.get_ticks_usec()
 
 
 static func tramo(nombre: String) -> void:
-	if not activo:
+	if not activo or not _en_el_hilo_principal():
 		return
 	_abierto[nombre] = Time.get_ticks_usec()
 
 
 static func cierra(nombre: String) -> void:
-	if not activo or not _abierto.has(nombre):
+	if not activo or not _abierto.has(nombre) or not _en_el_hilo_principal():
 		return
 	var gastado := Time.get_ticks_usec() - int(_abierto[nombre])
 	_abierto.erase(nombre)
@@ -252,3 +252,11 @@ static func cuenta(nombre: String) -> void:
 	_veces[nombre] = int(_veces.get(nombre, 0)) + 1
 	if not _gasto.has(nombre):
 		_gasto[nombre] = 0
+
+
+## Si quien marca es el hilo principal. El cepo es un puñado de diccionarios
+## estáticos: con campamentos dando pasos en otros hilos se los pisarían, así que
+## fuera del principal no cuenta. Se mira DESPUÉS de `activo`, para que con el
+## cepo apagado —lo normal— no cueste nada. Ver SISTEMAS §23.
+static func _en_el_hilo_principal() -> bool:
+	return OS.get_thread_caller_id() == OS.get_main_thread_id()

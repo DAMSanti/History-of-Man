@@ -156,7 +156,7 @@ func remaining_units(activity: Subsistence.Activity, kind: Materia.Kind) -> floa
 	var per_day := _yield_per_day(activity, kind)
 	if per_day <= 0.0:
 		return 0.0
-	var season := ResourceField.seasonal_factor(activity, GameState.season)
+	var season := ResourceField.seasonal_factor(activity, sim.estacion)
 	return per_day * SettlementSim.TYPICAL_YIELD_FRACTION * season * remaining_person_days(activity)
 
 
@@ -171,7 +171,7 @@ func remaining_units_at(activity: Subsistence.Activity, kind: Materia.Kind,
 	var per_day := _yield_per_day(activity, kind)
 	if per_day <= 0.0:
 		return 0.0
-	var season := ResourceField.seasonal_factor(activity, GameState.season)
+	var season := ResourceField.seasonal_factor(activity, sim.estacion)
 	var cell_days := sim.field.abundance_cell(activity, cell_x, cell_z) / SettlementSim.DEPLETION_PER_DAY
 	return per_day * SettlementSim.TYPICAL_YIELD_FRACTION * season * cell_days
 
@@ -185,7 +185,7 @@ func remaining_units_in(paraje: Paraje, activity: Subsistence.Activity,
 	var per_day := _yield_per_day(activity, kind)
 	if per_day <= 0.0:
 		return 0.0
-	var season := ResourceField.seasonal_factor(activity, GameState.season)
+	var season := ResourceField.seasonal_factor(activity, sim.estacion)
 	var stock := sim.field.stock_fraction_in(activity, paraje.huella)
 	var cell_days := sim.field.abundance_cell(activity, paraje.cell_x, paraje.cell_z) \
 		/ SettlementSim.DEPLETION_PER_DAY
@@ -304,11 +304,28 @@ func _cobertura_de_explorar(speciality: Profession.Speciality) -> float:
 func _speciality_pressure(speciality: Profession.Speciality) -> float:
 	var makes: Array = SettlementSim.SPECIALITY_MAKES.get(speciality, [])
 	if not makes.is_empty():
+		# UN ENCARGO QUE SE PUEDE HACER LO PIDE TODO. Sin esto, un encargo con
+		# la meta cubierta se quedaba escrito en la cola y no iba nadie al
+		# taller a hacerlo: la presion salia de la cobertura, y la cobertura
+		# decia «satisfecho». Ver SISTEMAS §22.
+		for entrada: Dictionary in sim.taller.cola_de_trabajo(int(speciality)):
+			if not bool(entrada["automatico"]) \
+					and String(entrada["motivo"]).is_empty():
+				return 0.0
 		# La cobertura PEOR de lo que hace, no la media: una especialidad con
 		# tres cosas cubiertas y una a cero tiene un problema, no un notable
 		var worst := INF
 		for kind: int in makes:
+			# Lo apartado no tira de nadie: una pieza en nunca a cobertura cero
+			# mandaria artesanos al taller a hacer justo lo que el jugador dijo
+			# que no queria.
+			if sim.prioridades.de_pieza(kind as Tool.Kind) == Prioridades.Nivel.NUNCA:
+				continue
 			worst = minf(worst, sim.taller.tool_coverage(kind as Tool.Kind))
+		if worst == INF:
+			# Todo apartado: nada que hacer aqui, y «satisfecho» es la forma de
+			# decirlo con el vocabulario de esta cuenta.
+			return 1.0
 		return worst
 
 	# Las de comida no producen UN material: producen comida, y la comida se
@@ -432,26 +449,6 @@ func job_counts() -> Dictionary:
 ##
 ## Devuelve cuantas se pudieron colocar de verdad: puede ser menos de las
 ## pedidas si no hay quien cumpla los requisitos.
-## Fija -o quita- la especialidad de toda la gente de un oficio.
-func set_speciality(job: Profession.Job, speciality: Profession.Speciality) -> void:
-	for person: Inhabitant in sim.people:
-		if person.job == job:
-			person.speciality = speciality
-			person.current_speciality = speciality
-
-
-## Cuánta gente hay en cada especialidad de un oficio, contando lo que ejercen
-## HOY: quien rota cuenta en la que le ha tocado.
-func speciality_counts(job: Profession.Job) -> Dictionary:
-	var counts := {}
-	for person: Inhabitant in sim.people:
-		if person.job != job:
-			continue
-		counts[person.current_speciality] = int(
-			counts.get(person.current_speciality, 0)) + 1
-	return counts
-
-
 ## Cuanta gente hay en un oficio, moviendo PRIORIDADES.
 ##
 ## Se conserva porque es comodo para las pruebas y para el reparto automatico,

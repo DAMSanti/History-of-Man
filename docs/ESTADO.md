@@ -22,6 +22,7 @@ con cuál.
 | Por qué la ropa no cambia nada en el invierno en casa | §2, «El invierno en la cueva» |
 | Por qué el árbol de técnicas no subía en ribera ni en hogar | §2, «La ribera y el hogar practicaban cero» |
 | Si el taller se sigue parando, y cuándo llega la talla laminar | §2, «El taller ya no se para» |
+| **Cuánto cuesta un campamento que no se mira**, y que es la misma partida | §2, «Un campamento sin mirar» |
 | **Qué sistemas están sólidos, y con qué sonda se comprobó** | **§3** |
 | Qué pide el diseño y no existe | §4 |
 | **Qué haría por orden**, con lo ya hecho tachado | **§5** |
@@ -156,6 +157,11 @@ No es calibración. Es una **cadena de prerrequisitos**:
 Tech.AZAGAYA → needs Tech.HOJA → needs Tech.NUCLEO → needs Tech.LASCA
 ```
 
+> **Las jornadas de la laminar son 45 desde el 2026-09-13**, por decisión del
+> usuario (ver EPOCA_01 §7). Todo lo medido en este apartado es de ANTES, con
+> 110: la cadena de prerrequisitos sigue igual, pero la conclusión —«no llega en
+> un año»— hay que volver a medirla.
+
 `AZAGAYA` se practica cazando (140 jornadas) pero cuelga de `HOJA`, que se
 practica en **manufactura** (110 jornadas). En el año medido se aprendieron
 Lazo, Cepo, Red de aves, Foso y Núcleo preparado: **nunca llegó la talla
@@ -268,6 +274,11 @@ recupera. No es falta de material: en esas mismas jornadas la cuarcita pasa de
 96 a 3 054, o sea que la banda se fue al canchal y no volvió al taller. Con esa
 caída la laminar (110 jornadas) no llega ni en un año, que es exactamente lo
 que midió §2 desde fuera.
+
+> Y se bajaron: **45 desde el 2026-09-13**, porque al usuario le importaba otra
+> cosa —que las técnicas lleguen dentro de la partida— y no tapar esto. Lo de
+> abajo sigue siendo verdad: con el taller parándose en la jornada 31, el
+> síntoma vuelve con la siguiente técnica de manufactura.
 
 **Bajar las jornadas de la talla laminar taparía esto**, y por eso no se
 tocaron: con el taller parándose en la jornada 31, cualquier cifra nueva
@@ -480,6 +491,22 @@ acuesta a la vez**, y el que volvía andando del monte bloqueaba la aceleración
 esa hora larga. La spec decía «cuando nadie está trabajando» desde el
 principio; la lectura estricta era del plan, no de la spec.
 
+> **Sustituido el 2026-09-14** por un objetivo —10 h de noche en 2 s, a
+> cualquier velocidad— con tope de 60 ms por cuadro (`NOCHE_HORAS_POR_SEGUNDO`,
+> `MS_DE_NOCHE_TOPE`). El barrido de abajo era **sin ventana**; con ventana y la
+> partida del usuario (`NocheCimaPasarelaProbe`, 1080p, sitio 56, jornada 2):
+>
+> | | hora de día | hora de noche | noche entera (10 h) |
+> |---|---|---|---|
+> | x5, con 8 ms | 1 000 ms | 450 ms | ~4,5 s |
+> | x5, objetivo y tope de 60 | 1 000 ms | **315 ms** | **~3,2 s** |
+> | x1, objetivo y tope de 60 | 5 000 ms | **~800 ms** | **~8 s** |
+>
+> **No llega a los 2 s pedidos.** De noche simular una hora de juego cuesta
+> ~180 ms de CPU a cualquier velocidad, y el tope de 60 ms por cuadro no lo cubre.
+> Lo que queda es decisión: subir el tope (menos cuadros por segundo de noche) o
+> abaratar el paso nocturno.
+
 **El presupuesto, barrido y medido** (con «nadie trabaja»):
 
 | `MS_DE_NOCHE_POR_CUADRO` | 4 | **8** | 16 | 24 | 48 | 96 |
@@ -684,6 +711,108 @@ spec, «sin ropa alguien enferma o muere de frío», no se cumple en el invierno
 casa.** Donde el vestido sí manda es fuera del fuego: la puerta del frío de las
 cumbres (comprobada con `TestFrio`), el vivac y la noche racionada.
 
+### Un campamento sin mirar es la misma partida, y lo que cuesta simularlo
+
+> Medido el 2026-09-14 con `CampamentosProbe`, la puerta de la fase 1 de
+> [SISTEMAS.md](SISTEMAS.md) §23. Headless —sin dibujar nada—, `VEL=5`, semilla
+> de sonda, sitio 56 de primero.
+
+**La partida es la misma.** El primer campamento, simulado **sin vista** y
+llevado por el `RelojDeLaPartida`, da **las diez firmas diarias iguales** que el
+mismo campamento mirado con la escena entera (`TironAnualProbe`): solo, y con un
+segundo campamento vivo al lado. Los dos acaban en la misma jornada y hora, y
+**sobreviven a un cambio de escena**. Para llegar ahí hubo que sacar de la vista
+dos cosas que decidían partida —el caudal del río y la búsqueda de cumbres, que
+apunta en la crónica— y arreglar el reloj para que respete la pausa del
+arranque; ver SISTEMAS §23, «Lo que cambió al implementarlo».
+
+**Y lo que cuesta**, con el proceso entero:
+
+| Campamentos | Montar cada uno | Memoria del proceso | Reloj por jornada de juego | Fotograma medio · peor |
+|---|---|---|---|---|
+| 1 | 2,0 s | 412 MB (+294) | **16,8 s** | 17,7 ms · 380 ms |
+| 2 | 2,5 s con caché (18,5 s sin ella) | 546 MB | **27,2 s** | **160 ms** · 596 ms |
+| 3 | 3,4 s | 677 MB | **55,1 s** | **389 ms** · 1 054 ms |
+
+Cómo se lee:
+
+- **La memoria cabe**: unos 130 MB por campamento más, sin la GPU —headless no
+  sube mallas a la tarjeta; la de vídeo está sin medir—.
+- **La CPU no.** A ×5 la jornada nominal son 24 s de reloj menos la noche que se
+  salta; con un campamento se va a 16,8 s, o sea que la máquina llega. **Con dos
+  ya no llega** —la partida anda a un 60 % de su ritmo— **y con tres, a un 30 %**.
+  Y eso sin dibujar: con la vista del campamento que se mira, peor.
+- **Montar un mapa sin caché son 17 s** (regenerar el relieve): es lo que hoy
+  paga la primera entrada a un mapa, y al fundar a mitad de partida sería un
+  tirón de ese tamaño.
+
+**Dónde se va el tiempo**, medido con el cepo a ×5 y ya con el editor cerrado
+(`CampamentosProbe` con `CEPO=1`, 3 jornadas; el cepo se lleva un 20 %):
+
+| | 1 campamento (56) | 2 campamentos (56 y 14) |
+|---|---|---|
+| Un paso de simulación, por campamento | 18,4 ms | 25,1 ms de media (el 14, ~32) |
+| · la gente, dentro del paso | 13,9 ms | 20,6 ms |
+| · · el agua, por persona y tick | 0,018 ms | **0,096 ms** |
+| · · pintar los cuerpos, por persona y tick | 0,020 ms | 0,022 ms |
+| · la fauna, cada cuatro pasos | 17,3 ms | 17,3 ms |
+| Fotograma medio | 50,8 ms | 273,7 ms |
+
+Cómo se lee:
+
+- **Un campamento es una simulación entera, y la simulación usa un solo núcleo.**
+  A ×5 hacen falta 30 pasos por segundo de reloj: 30 × 18 ms son medio núcleo
+  para el 56, y el 14 se acerca a uno entero. Dos campamentos a ×5 no caben en
+  un núcleo, y por eso la partida se frena.
+- **El coste de la gente crece con la velocidad**: a ×5 cada persona da cinco
+  ticks por paso (`ceil(time_scale)`). A ×1 la gente cuesta la quinta parte.
+- **El agua del sitio 14 cuesta cinco veces la del 56**, y no es la regla sino la
+  consulta: `Despensa._drink_and_thirst` pregunta en cada tick
+  `Tajo._water_beside` —hasta 16 muestras del relieve— por la persona, y en el
+  sitio 14 casi nadie está junto al agua, así que se agotan las 16. **Se creyó
+  primero que pesaba igual la pregunta por la casa** (`Hogar._home_by_water`,
+  que no cambia en toda la jornada): se recuerda ya, pero el agua sólo bajó de
+  0,096 a 0,091 ms por tick. Lo caro es la de la persona, y ésa no se puede
+  recordar sin cambiar la regla, porque la gente se mueve.
+- **Un campamento sin mirar pinta cuerpos** (`gente: cuerpos (vista)`): un 7 % de
+  la gente, en una malla que nadie ve.
+
+**Las dos que sobraban, quitadas, y lo que dan** (el mismo día): recordar el agua
+de la casa y no pintar cuerpos donde no se mira (`SettlementSim.se_mira`). Con
+dos campamentos y el cepo, **el paso baja de 25,1 a 23,1 ms (−8 %)** y la gente
+de 20,6 a 18,4 ms. La firma sigue IGUAL las diez jornadas. **No basta para que
+dos quepan a ×5**: la raíz es la de arriba —una simulación entera por campamento,
+en un solo núcleo—.
+
+**Y en paralelo, un hilo por campamento** (el mismo día, SISTEMAS §23, fase 1b):
+los que no se miran dan su paso en el `WorkerThreadPool`, fuera del árbol.
+Medido con `CampamentosProbe`, a ×5, con el editor cerrado:
+
+| Campamentos | En serie | En paralelo |
+|---|---|---|
+| 2 (56 y 14), 10 jornadas | 22,5 s por jornada · fotograma 72,8 ms | **18,5 s · 29,5 ms** |
+| 3 (56, 14 y 33), 3 jornadas | 33,9 s · 205 ms | **21,1 s · 103 ms** |
+
+Con dos en paralelo la partida va casi al ritmo de uno solo (16,8 s). **Y es la
+misma partida**: los dos campamentos dan las diez firmas iguales en serie y en
+paralelo, bit a bit, y dos corridas en paralelo dan lo mismo entre sí. Para eso
+hizo falta sacar del paso `exp` y `pow` de la librería, que no dan el mismo último
+bit en el hilo principal que en el pool (`Calculo`, SPECS §7). **Las firmas de
+antes de ese cambio no se comparan con las de después**: la exponencial propia no
+da el mismo bit que la de la librería.
+
+**Dos avisos sobre estas cifras.** Las de reloj **no son firmes al factor**, y la
+prueba es que la misma corrida de dos campamentos, repetida tras optimizar, dio
+**35,7 s por jornada y 237 ms de fotograma, peor que los 27,2 s y 160 ms de
+antes**: el reloj de pared varía más entre corridas que lo que se ganó. Para
+comparar sirve el cepo —milisegundos por llamada—, no el reloj. Y al principio,
+durante parte de las corridas estuvo abierto el editor de Godot del usuario, que
+horas antes ocupaba media CPU, y el reloj de pared no se compara entre corridas
+con el equipo en distinto estado. El salto de 17,7 a 160 ms es demasiado grande
+para ser eso, pero el 60 % y el 30 % pueden moverse. Y **son tres, no cuatro**:
+el cuarto sitio con relieve horneado (9000) no tiene ficha en la comarca, y
+medir un cuarto pedía hornear otro.
+
 ## 3. Lo que está construido y funciona
 
 Para no perderlo de vista mientras se habla de lo que falta.
@@ -703,7 +832,154 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**1 216 pruebas y 7 031 comprobaciones en verde (2026-09-13).** Bajan de 7 645 porque se quitó la tarjeta de trueque y sus pruebas; ver ROADMAP, «Tras la tanda 4».
+**1 483 pruebas y 8 142 comprobaciones en verde (2026-09-15, con la pantalla de
+carga).** Suben de 1 468 y 8 051 con `TestCarga` (el reparto de la barra, sus textos,
+el reloj parado mientras carga), `TestNieblaRegional` (la clave de la caché de la malla
+regional) y `TestBosque` (la vuelta al valle no siembra).
+
+Antes: **1 468 pruebas y 8 051 comprobaciones en verde (2026-09-15, tras depurar el humo,
+los tooltips y el slider del 3D).** Suben de 1 462 y 8 017.
+
+Antes: **1 462 pruebas y 8 017 comprobaciones en verde (2026-09-15, con el bosque de
+árboles 3D).** Suben de 1 445 y 7 911 con `TestBosque` (el color por estación, el
+brillo del atlas, la altura de los bloques) y `TestConfiguracion` (el selector de
+árboles).
+
+**El bosque, medido (2026-09-15, GRAFICOS §7.1).** El color de cada especie cae a
+**ΔE ≤ 10 de sus fotos, casi todo por debajo de 3**, en los cuatro escalones
+(`ArbolColorProbe`); **cero aros y cero huecos** en los cuatro (`ArbolAroProbe`,
+`ArbolHuecoProbe`); y el bosque de Medio cuesta **3,4-3,5 ms de GPU** en la vista de
+medida frente a 1,9 de Mínimo (`GpuProfile ARBOLES=1`), aceptado aunque la casilla
+es de 3,0. **Montar el mapa, 18,1-18,2 s en Medio frente a 16,2-16,3 en Mínimo**,
+también aceptado; y como Medio es el nivel por defecto, el juego abre con árboles 3D.
+
+Antes: **1 445 pruebas y 7 911 comprobaciones en verde (2026-09-15, con la pared que se
+ve).** Suben de 1 419 y 7 848.
+
+Antes: **1 419 pruebas y 7 848 comprobaciones en verde (2026-09-14, tras depurar la
+segunda tanda de quejas de la noche).** Suben de 1 407 y 7 824, que fue el total
+con las veredas que duran el año; ésos de 1 404 y 7 813 (las siete quejas de la
+tarde), y ésos de 1 397 y 7 798.
+
+**La pared de la cueva, medida (2026-09-15).** Colocar una figura cuesta **~50 ms**
+dentro del paso (`ParedProbe`, 60 figuras en 3 paredes; la primera versión, 248). Cada
+figura recalca mejor que el **100 % de los sitios libres**. Entrar en la sala cuesta
+**0,4–0,6 s** y **2,0–2,1 ms de GPU** (`CuevaCaptura`, GRAFICOS §7.2).
+
+**Un hueco que se vio de paso: la primera sepultura no se puede pintar.** Su hito
+(`Sepulturas._hito`) no lleva tarea, y un relato sin tarea no es pintable; su
+comentario dice que «es lo que se puede dejar en la pared». El del lobo sí la lleva.
+Pendiente de `/depurar`.
+
+**Lo que cuesta ir al mapa regional y volver: 20 s de ida y 15 de vuelta la primera
+vez, y 1,3 y 5,4 desde la segunda** (2026-09-15, con la pantalla de carga, INTERFAZ §9).
+Medido con `TransitoProbe` (sin ventana, o sea sólo el coste de construir las escenas),
+sitio 56, bosque en su nivel; el primer viaje en frío —sin malla regional en caché ni
+siembra guardada—:
+
+| Tramo | Con pantalla (dos corridas) | Sin pantalla, la misma tarde (dos) | Dónde se va |
+|---|---|---|---|
+| Montar la banda la primera vez | **16,2-16,3 s** | 15,6-16,1 s | sembrar el bosque, 9,5-9,8 s |
+| Ida al regional, en frío | **20,2-20,3 s** | 19,2-19,6 s | la malla regional, y guardarla |
+| Vuelta a la banda, en frío | **15,0-15,1 s** | 14,5-15,7 s | sembrar el bosque |
+| Ida al regional, segunda vez | **1,3 s** | 1,3-1,5 s | la malla sale de la caché |
+| Vuelta a la banda, segunda vez | **5,4 s** | 5,1-6,0 s | el bosque de lejos, 3,6-3,9 s; no se siembra |
+
+**Trocear la carga cuesta un 3-5 %** (el criterio pedía no pasar del 10 %). Retomar el
+campamento en el que se estaba, con ventana (`CargaProbe`): 5,5 s frente a 15. La
+siembra guardada ocupa **35 MB**.
+
+> *Lo que había antes de la pantalla de carga*, que esta tabla sustituye: ida **27,1 s**
+> —la malla regional, regenerada entera cada vez, 24,6— y vuelta **18,4 s** —sembrar el
+> bosque, 13,8—, iguales en el segundo viaje. Por qué no cacheaba, abajo.
+
+> *Vuelto a medir el 2026-09-15*, antes de la pantalla de carga (INTERFAZ §9, tarea 1):
+> **ida 29,2-30,4 s y vuelta 22,5-23,4 s** (`TransitoProbe`, dos corridas), con el
+> bosque 3D ya dentro. Con ventana (`CargaProbe`), sembrar el bosque son 14,0 s de la
+> vuelta y la malla regional 24,5 s de la ida, y cada viaje es **un único cuadro
+> congelado** de principio a fin.
+
+> *Con el bosque 3D* (2026-09-15, `GpuProfile ARBOLES=1`, con ventana y otra medida:
+> desde cambiar de escena hasta el bosque asentado): `_levantar_vegetacion` 10,7 s en
+> Mínimo y 12,7 en Medio; de los 2 s de diferencia, 1,4 son cargar los modelos 3D y
+> 0,84 los impostores (GRAFICOS §7.1).
+
+> *Spec para acortarlo y enseñarlo con una pantalla de carga*: INTERFAZ §9
+> (2026-09-15), cerrada ese día con la tabla de arriba.
+
+Los dos viajes medían lo mismo: **no se cacheaba nada entre ellos**. Las dos causas
+eran distintas, y las dos se arreglaron en INTERFAZ §9 (tareas 7 y 8):
+
+- **La malla regional no encuentra caché nunca** porque `RegionMap._setup_terrain`
+  hace `data.duplicate()` para aplicarle el relieve de la plataforma, y una copia
+  **no tiene `resource_path`**; la clave de caché sale justo de ahí
+  (`MallaDelTerreno._cache_base_path`). El mapa local sí cachea —404 ms frente a
+  22 s en frío— por eso mismo: el suyo viene de `load()`.
+- **La vegetación se resiembra entera al volver.** Ya se sabía que era cara —por
+  eso se aplica al montar el mapa y no en caliente, ver GRAFICOS— pero no que
+  fueran 13,8 s de cada vuelta.
+
+Y de paso: al cambiar de escena **quedan vivos objetos de la anterior**.
+`Campamentos` sigue llamando al `GameUI` liberado
+(`GameUI._escuchar_los_campamentos`) y `RelojDeLaPartida` escribe sobre una
+simulación liberada. Salen como `SCRIPT ERROR` en cada viaje. **Siguen igual con la
+pantalla de carga** —16-17 por `TransitoProbe`, los mismos con ella y sin ella, en
+`RelojDeLaPartida._process`, `_repartir_el_giro`, `Campamentos.de_sitio` y
+`GameUI._escuchar_los_campamentos`—; quedaron fuera de su alcance.
+
+**Los atascos, medidos y de acuerdo con lo que ve el jugador.** Queja: «se quedó
+sin camino a donde iba» y «llegó y el estado no se enteró», 22 y 6 en 113
+jornadas. `AtascoProbe` con 20 jornadas da **5 y 1**, o sea 0,25 y 0,05 por
+jornada frente a los 0,19 y 0,05 del jugador: el instrumento y la partida dicen
+lo mismo. Son las dos costuras con contador de §18, y el andador está sano
+—`pasos SIN CAMINO 0`, `BARRER LA ORILLA 0,0 %`—: una cada cinco jornadas en toda
+la banda. No se tocó nada, porque no hay síntoma que le cueste nada al jugador.
+
+**Lo que vale guardar las veredas de una estación a otra: un 0,3 %.** Medido con
+`VeredasProbe` en el sitio 56, `SEMILLA=42`, cuatro jornadas por tramo —primavera,
+invierno y primavera otra vez—: al volver la primavera, **150,5 búsquedas
+completas de camino por jornada guardándolas frente a 151,0 tirándolas**, con 350
+veredas guardadas frente a 200. El tope de 200 por rejilla **se satura en cuatro
+jornadas**, así que de una estación a la siguiente sobrevive sólo lo último
+andado. Ver SISTEMAS §18: el cambio se hizo porque lo aprendido no debe tirarse
+—y porque la pasarela de §20 lo necesitaba—, no por rendimiento.
+
+Antes: **1 397 pruebas y 7 798 comprobaciones, al cerrar la configuración.** Suben de 1 381 y 7 680 con `TestConfiguracion` (el fichero, los
+niveles, la cuenta atrás, los dos menús, los buses y el tope). Lo que necesita
+ventana o dos procesos lo miran `ConfiguracionProbe`, `ConfiguracionCaptura` y
+`GpuProfile NIVELES=1`. Ver INTERFAZ §8 y GRAFICOS §7.
+
+Antes, ese mismo día: **1 381 pruebas y 7 680 comprobaciones, al cerrar el rumbo y
+la niebla.** Suben de 1 352 y 7 590 con `TestNieblaRegional` (la niebla, el
+pasillo, la barrera, la cumbre, la ficha de rumbo y la visita), `TestExpedicion`
+rehecha para el rumbo, dos de `TestGuardado` (la niebla guardada y un guardado sin
+niebla) y `TestDecisiones` con tres decisiones al año. Lo que necesita ventana lo
+mira `NieblaCaptura`. Ver SISTEMAS §4 y ROADMAP.
+
+Antes, ese mismo día: **1 352 pruebas y 7 590 comprobaciones, al cerrar varios
+campamentos y migrar.** Suben de 1 316 y 7 481 con `TestReloj` (el reloj de la
+partida, las decisiones con nombre), `TestCalculo` (`exp` y `pow` iguales en
+todos los hilos), `TestViaje` (cuánto se tarda, lo que se cobra, llegar, el
+campamento vacío y el registro que lleva los viajes) y tres de `TestGuardado`
+(varios campamentos, un grupo de camino y un fichero de la versión 1). Lo que
+necesita escenas lo recorre `MigracionProbe`. Ver SISTEMAS §23 y ROADMAP.
+
+Antes de eso, ese mismo día: **1 316 pruebas y 7 481 comprobaciones, al cerrar las
+prioridades.** Suben de 1 286 y 7 407 —el suelo medido antes de empezar ese
+trabajo— con `TestPrioridades` (16 pruebas: los niveles, la presa, la carga y el
+peso del paraje), `TestColaDelTaller` (12: el orden de la cola, los encargos, a
+quién se manda al taller y que la pieza que termina cada artesano es la cabeza
+de su cola) y dos de `TestGuardado` (que las prioridades y los
+encargos sobreviven, y que un guardado de antes carga en normal). Ver SISTEMAS
+§22 y ROADMAP.
+
+Antes de eso, ese mismo día: **1 286 y 7 407**, que subían de 1 257 y 7 271 con
+los dos `/depurar` de la jornada —el agua del río, la lámpara, la frontera
+quebrada, el remonte de primavera, los nombres de lugar, la cima con un solo
+aviso, el botón de pintar, la aguja y la raedera; y después la caché de
+alfileres, la visita sin banda, las pasarelas en los vados que se cierran, la
+campa en seco, la cima que corona, el conchero por familias, el relieve de la
+plataforma, la noche y el minimapa; ver ROADMAP—.
 
 > **Ésta es la única copia de esa cifra en el repositorio, y es a propósito.**
 > Llegó a estar escrita en ocho sitios —CLAUDE.md, README.md, ARQUITECTURA.md,
@@ -778,7 +1054,13 @@ es un número de kcal por puñado, que es balanceo, no mecánica.
 5. **El otoño como pico.** La berrea ya multiplica ×1,70 la caza. Hace falta
    que además sea **la única ventana** en la que se puede acumular carne seca
    para el invierno, y que el secadero sea el cuello de botella.
-6. **La pesca se agota en un mes y nadie se muda.** Medido con `ParajesProbe`,
+6. > **Sin volver a medir desde el remonte de primavera (2026-09-14)**: desde
+   > entonces el río se repuebla entero al entrar cada primavera
+   > (`ResourceField.remonte`, SISTEMAS §12), así que el «1 % el resto del año»
+   > de abajo ya no puede durar más allá del invierno. La cifra de un año nuevo
+   > está por tomar.
+
+   **La pesca se agota en un mes y nadie se muda.** Medido con `ParajesProbe`,
    dos pescadores y un año: el tajo de ribera baja al 75 % en **8 jornadas**, al
    50 % en 15, al 25 % en 24 y al **1 % en 32**, y ahí se queda el resto del año
    —sube al 3 % y no pasa de ahí—. Eso explica por sí solo que la ribera dé 1,79

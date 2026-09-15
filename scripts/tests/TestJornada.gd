@@ -255,6 +255,89 @@ func test_beber_en_casa_sigue_gratis_junto_al_rio() -> void:
 		"y no hace falta gastar nada del almacén")
 
 
+# --- el agua del río no es agua gastada ----------------------------------
+#
+# Queja del usuario del 2026-09-14: «el consumo de agua natural del río no se
+# debe contar en el almacén como consumido, solo lo que consumen de odres» —con
+# la cueva junto al río, 1 277 de agua gastada en 167 jornadas—.
+
+## Un abrigo junto al río de [FakeTerrain], con la campa a treinta metros del
+## cauce: dentro de casa, pero sin el agua al alcance de la mano.
+func _abrigo_junto_al_rio() -> SettlementSim:
+	var sim := _sim()
+	sim._terrain = FakeTerrain.new()
+	sim.toolkit = Toolkit.new()
+	sim.home_position = Vector3(0.0, 0.0,
+		FakeTerrain.RIVER_Z - FakeTerrain.RIVER_HALF - 15.0)
+	sim.home_forecourt = sim.home_position + Vector3(0.0, 0.0, -30.0)
+	return sim
+
+
+func test_el_odre_que_no_se_bebe_vuelve_lleno_y_no_cuenta_como_gastado() -> void:
+	var sim := _abrigo_junto_al_rio()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	sim.store.add(Materia.Kind.AGUA, 1.0)
+	var person := _person(sim, sim.home_position)
+	sim.despensa._hand_out_containers(person)
+	person.state = Inhabitant.State.TRABAJANDO
+	# Toda la jornada en la orilla: se bebe del río, no del odre.
+	sim.despensa._drink_and_thirst(person, 6.0)
+	sim.despensa._deliver(person)
+	assert_near(sim.store.amount(Materia.Kind.AGUA), 1.0, 0.001,
+		"el odre vuelve con su agua")
+	assert_near(float(sim.store.spent_today.get(int(Materia.Kind.AGUA), 0.0)), 0.0,
+		0.001, "y beber del río no apunta agua gastada")
+
+
+func test_lo_unico_gastado_es_lo_que_se_bebe_del_odre() -> void:
+	var sim := _abrigo_junto_al_rio()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	sim.store.add(Materia.Kind.AGUA, 1.0)
+	var person := _person(sim, sim.home_position)
+	sim.despensa._hand_out_containers(person)
+	person.position = Vector3(900.0, 0.0, 900.0)
+	person.state = Inhabitant.State.TRABAJANDO
+	var medio := (SettlementSim.SED_HORAS_CON_ODRE - SettlementSim.SED_HORAS_SIN_ODRE) * 0.5
+	sim.despensa._drink_and_thirst(person, medio)
+	person.position = sim.home_position
+	sim.despensa._deliver(person)
+	assert_near(sim.store.amount(Materia.Kind.AGUA), 0.5, 0.001,
+		"medio odre bebido lejos del agua: vuelve medio")
+	assert_near(float(sim.store.spent_today.get(int(Materia.Kind.AGUA), 0.0)), 0.5,
+		0.001, "y lo gastado es ese medio, no el odre entero")
+
+
+func test_salir_otra_vez_con_el_odre_puesto_no_saca_otro() -> void:
+	# Quien vuelve sin carga no pasaba por `_deliver`, se quedaba el odre puesto,
+	# y a la salida siguiente sacaba OTRO lleno del almacén: un odre por salida,
+	# bebiera o no. Es la fuga de las 1 277.
+	var sim := _abrigo_junto_al_rio()
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL, 0.5)
+	sim.store.add(Materia.Kind.AGUA, 2.0)
+	var person := _person(sim, sim.home_position)
+	sim.despensa._hand_out_containers(person)
+	sim.despensa._hand_out_containers(person)
+	assert_near(sim.store.amount(Materia.Kind.AGUA), 1.0, 0.001,
+		"un odre encima es un odre, por muchas veces que se salga")
+
+
+func test_en_casa_junto_al_rio_no_se_gasta_agua_aunque_no_se_este_en_la_orilla() -> void:
+	# Quien está en la campa o dentro de la cueva no está a veinte metros del
+	# cauce, pero la CUEVA sí: bajar a beber es cruzar la campa, no una salida.
+	var sim := _abrigo_junto_al_rio()
+	sim.store.add(Materia.Kind.AGUA, 5.0)
+	var person := _person(sim, sim.home_forecourt)
+	person.water_left = 0.0
+	person.state = Inhabitant.State.OCIOSO
+	assert_true(sim._at_shelter(person), "está en casa")
+	assert_false(sim.tajo._water_beside(person.position), "pero no en la orilla")
+	sim.despensa._drink_and_thirst(person, 3.0)
+	assert_gt(person.water_left, 0.0, "bebe")
+	assert_near(sim.store.amount(Materia.Kind.AGUA), 5.0, 0.001,
+		"y no del almacén: la cueva está junto al río")
+
+
 # --- el trampero no sale de vacio ----------------------------------------
 
 func test_sin_fibra_ni_lena_no_se_sale_a_trampear() -> void:
@@ -371,9 +454,13 @@ func test_un_odre_hecho_no_esta_lleno_hasta_que_se_llena() -> void:
 	sim.despensa._hand_out_containers(person)
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
 		"el que sale se lleva un odre lleno, y deja de contar en casa")
+	# Bebido entero lejos del agua. Desde el 2026-09-14 un odre vuelve con lo
+	# que NO se bebió —ver [Despensa.agua_en_el_odre]—; lo que sigue siendo
+	# verdad es que entrar por la boca no lo rellena.
+	person.water_left = SettlementSim.SED_HORAS_SIN_ODRE
 	sim.despensa._deliver(person)
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 1.0,
-		"y vuelve VACIO: no se rellena solo por entrar por la boca de la cueva")
+		"y bebido vuelve VACIO: no se rellena solo por entrar por la boca de la cueva")
 
 
 func test_sin_odres_hechos_no_hay_agua_guardada() -> void:
@@ -664,3 +751,54 @@ func test_se_puede_pedir_azar_de_verdad() -> void:
 	assert_true(una != SettlementSim.SEMILLA_DE_SONDA,
 		"«azar» devuelve el reloj, no la semilla de sonda")
 	OS.set_environment("SEMILLA", "")
+
+
+## La chapa del artesano se apaga a la hora de cenar, en vez de cambiarse por otra.
+##
+## Queja del usuario del 2026-09-14: «por la noche, a la hora de cenar, a los
+## trabajadores de manufactura se les pone la barra de progreso encima de la
+## cabeza a 0 hasta el dia siguiente, que continua por donde iba». No era su
+## progreso puesto a cero: `Taller.crafting_now` devuelve vacio fuera de las
+## horas de taller y `doing_now` seguia de largo hasta la ultima rama, la de «lo
+## que llevas en el cesto», que para un artesano es siempre cero.
+func test_el_artesano_no_lleva_chapa_fuera_de_las_horas_de_taller() -> void:
+	var sim := _sim()
+	var person := _person(sim)
+	person.job = Profession.Job.MANUFACTURA
+	person.current_speciality = Profession.Speciality.TALLA
+	person.state = Inhabitant.State.TRABAJANDO
+	person.craft_progress = 0.4
+	# Con el almacén vacío no hay pieza que tallar y la chapa no se enciende
+	# nunca: entonces la prueba pasaría sin comprobar nada.
+	sim.store.add(Materia.Kind.PIEDRA, 20.0)
+
+	sim.hour = SettlementSim.HORA_SALIDA + 2.0
+	var trabajando := sim.doing_now(person)
+
+	sim.hour = SettlementSim.HORA_REGRESO + 1.0
+	var cenando := sim.doing_now(person)
+
+	sim.free()
+	assert_true(not trabajando.is_empty(),
+		"en horas de taller el artesano deberia llevar chapa")
+	assert_true(cenando.is_empty(),
+		"a la hora de cenar no deberia llevar ninguna chapa, y llevaba: %s"
+			% str(cenando))
+
+
+## Y el progreso no se pierde: sigue donde estaba al volver el dia siguiente.
+func test_la_chapa_que_se_apaga_no_borra_lo_tallado() -> void:
+	var sim := _sim()
+	var person := _person(sim)
+	person.job = Profession.Job.MANUFACTURA
+	person.current_speciality = Profession.Speciality.TALLA
+	person.state = Inhabitant.State.TRABAJANDO
+	person.craft_progress = 0.4
+
+	sim.hour = SettlementSim.HORA_REGRESO + 1.0
+	var _cenando := sim.doing_now(person)
+	var guardado := person.craft_progress
+
+	sim.free()
+	assert_near(guardado, 0.4, 0.001,
+		"mirar la chapa no puede tocar lo que lleva tallado")

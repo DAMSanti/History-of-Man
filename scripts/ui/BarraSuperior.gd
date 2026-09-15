@@ -103,6 +103,15 @@ func watch_moments(simulation: SettlementSim) -> void:
 
 
 func _on_moment(moment: Moment) -> void:
+	# UN AVISO DE UN CAMPAMENTO QUE NO SE MIRA NO SALE EN TARJETA: va a la crónica
+	# del que se mira, con su nombre (SISTEMAS §23, punto 7). Una tarjeta es para
+	# lo que se tiene delante; con cuatro campamentos, cada paraje bautizado en
+	# otro valle taparía el propio. Las decisiones sí salen, de cualquiera.
+	if not moment.is_decision() and moment.desde != null and ui.sim != null 			and moment.desde != ui.sim:
+		ui.sim.chronicle.record(ui.sim.day, ui.sim.estacion as int, ui.sim.anyo,
+			Chronicle.Kind.HALLAZGO, "%s: %s. %s" % [moment.desde.nombre_del_campamento,
+				moment.title, moment.text])
+		return
 	ui._moments.append(moment)
 	if ui._moment_card == null:
 		_show_next_moment()
@@ -242,6 +251,10 @@ func _build_moment_card(moment: Moment) -> Control:
 
 	var head := Label.new()
 	head.text = moment.title.to_upper()
+	# Con más de un campamento, de cuál es: la decisión se contesta desde donde se
+	# esté, y el mismo titular puede venir de dos valles.
+	if moment.desde != null and Campamentos.vivos.size() > 1:
+		head.text = "%s · %s" % [head.text, moment.desde.nombre_del_campamento.to_upper()]
 	head.add_theme_font_size_override("font_size", 13)
 	head.add_theme_color_override("font_color", _moment_tint(moment))
 	column.add_child(head)
@@ -553,7 +566,7 @@ func _build_temp_gauge(strip: HBoxContainer) -> void:
 	# Sin esto, el rotulo de los grados salia DEBAJO de la barra del invierno y
 	# no se leia. Se vio en la captura, no en el texto: es justo para lo que
 	# INTERFAZ.md §4 manda mirar la pantalla.
-	ui._temp_label.custom_minimum_size = Vector2(250, 0)
+	ui._temp_label.custom_minimum_size = Vector2(400, 0)
 	ui._temp_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	strip.add_child(ui._temp_label)
 	_update_temp_gauge()
@@ -580,12 +593,23 @@ func _update_temp_gauge() -> void:
 	# La peor pieza y no la media: la media no se mueve cuando una sola se está
 	# acabando, y es ésa la que se va a romper. Se enseña para que dé tiempo a
 	# mandar coser. Ver INTERFAZ.md §4.
-	var abrigo := "sin abrigo"
+	#
+	# Y DICHO CON SUS NOMBRES. Ponía «abrigo 5 de 15, la peor al 78 %», y el
+	# usuario lo leyó como el aforo de la cueva (2026-09-14): «abrigo» es a la
+	# vez la ropa y la cueva. Ahora dice vestidos, y el aforo va al lado con su
+	# propio nombre —[SettlementSim.plazas_abrigo]—, que es lo otro que quería ver.
+	var abrigo := "sin vestidos"
 	if vestidos > 0:
-		abrigo = "abrigo %d de %d" % [vestidos, gente]
+		abrigo = "%d %s para %d" % [vestidos,
+			"vestido" if vestidos == 1 else "vestidos", gente]
 		if peor >= 0.0:
-			abrigo += ", la peor al %d %%" % int(peor * 100.0)
-	ui._temp_label.text = "%.0f °C   %s" % [grados, abrigo]
+			abrigo += ", el más gastado al %d %%" % int(peor * 100.0)
+	var aforo := "cueva %d/%d" % [gente, ui.sim.plazas_abrigo()]
+	ui._temp_label.text = "%.0f °C   %s   ·   %s" % [grados, abrigo, aforo]
+	ui._temp_label.tooltip_text = ("Vestidos: cuántas prendas de piel hay para "
+		+ "la banda, y cómo está la más gastada, que es la próxima que se rompe.\n"
+		+ "Cueva: cuántos sois y cuántos caben en el abrigo. Pasarse no impide "
+		+ "vivir, pero se duerme apretado y se descansa peor.")
 
 	# Hematites cuando el frío muerde y no hay para todos; ocre cuando falta
 	# abrigo pero no aprieta; ceniza el resto del tiempo.
@@ -639,6 +663,11 @@ func _build_speed_buttons(strip: HBoxContainer) -> void:
 
 func _set_speed(speed: float) -> void:
 	if ui.sim == null:
+		return
+	# De visita el reloj sólo corre si hay campamentos vivos que lo lleven: la
+	# simulación de la visita la dirige entonces el reloj. Ver
+	# [DemoMain._montar_la_visita].
+	if Expedition.visita and not ui.sim.dirigido:
 		return
 	ui.sim.time_scale = speed
 	_paint_speed_buttons()

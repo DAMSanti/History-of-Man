@@ -58,6 +58,8 @@ func show_obras() -> void:
 		+ "encontrado antes, y encontrarla es justo lo que aquí se intenta.",
 		true)
 
+	_pasarelas(body)
+
 	var grupos := ui.census.obras.groups()
 	if grupos.is_empty():
 		ui._text(body, "La banda no ha puesto nada todavía: ni una trampa, ni "
@@ -75,6 +77,53 @@ func show_obras() -> void:
 			familia = String(grupo["family"])
 			ui._heading(body, familia.to_upper())
 		_fila_de_grupo(body, grupo)
+
+
+## Las pasarelas: las que hay, la que se está armando y, si no hay ninguna, por
+## qué. Van aparte de las demás obras porque no las pone el jugador ni se pinchan
+## en el mundo: las levanta la banda sola (SISTEMAS §20). El usuario preguntó por
+## ellas el 2026-09-14 —«dime si aparecen en obras, si no, deberían»— y no salían
+## en ninguna ventana.
+func _pasarelas(body: VBoxContainer) -> void:
+	var pasarelas: Pasarelas = ui.sim.pasarelas
+	if pasarelas == null:
+		return
+	ui._heading(body, "PASARELAS DE TRONCOS")
+	if pasarelas.puentes.is_empty():
+		ui._text(body, "Ninguna armada todavía.", true)
+	for puente: Array in pasarelas.puentes:
+		var donde: Vector3 = puente[0]
+		ui._text(body, "· un paso de %d m en %s" % [
+			int(float(puente.size()) * Navgrid.CELL),
+			ui.sim.parajes.place_name(donde, ui.sim.home_position)])
+	if not pasarelas.obra.is_empty():
+		var donde: Vector3 = pasarelas.obra[0]
+		ui._text(body, "En marcha en %s: %d de %d jornadas puestas, y %.0f de leña al rematarla." % [
+			ui.sim.parajes.place_name(donde, ui.sim.home_position),
+			int(pasarelas.jornadas_puestas), int(Pasarelas.JORNADAS), Pasarelas.LENA], true)
+	else:
+		ui._text(body, _por_que_no_hay_pasarela(), true)
+
+
+## Por qué no se está armando ninguna. Las mismas preguntas que [Pasarelas.nuevo_dia]
+## hace al cerrar la jornada, en el orden en que las hace.
+func _por_que_no_hay_pasarela() -> String:
+	var sim := ui.sim
+	if sim.techs == null or not sim.techs.has(TechTree.Tech.PASARELA):
+		return "No se sabe armarlas todavía: es una técnica de exploración."
+	var exploradores := 0
+	for person: Inhabitant in sim.people:
+		if person.oficio_de_hoy == Profession.Job.EXPLORACION:
+			exploradores += 1
+	if sim.pasarelas.elegir_cruce().is_empty():
+		return ("No queda cruce que armar: lo que no se alcanza está al otro lado "
+			+ "de un cauce de más de %d m, que dos troncos no salvan."
+			% int(Pasarelas.CELDAS_DE_ANCHO * Navgrid.CELL))
+	if exploradores <= 0:
+		return "Hay un cruce que armar, pero hoy no sale nadie a explorar: nadie la levanta."
+	if sim.store.amount(Materia.Kind.LENA) < Pasarelas.LENA:
+		return "Hay un cruce que armar y faltan haces de leña: hacen falta %.0f." % Pasarelas.LENA
+	return "Hay un cruce que armar: empieza al cerrar la jornada."
 
 
 ## Una clase de obra: cómo se llama, cuántas hay y el botón de entrar.
@@ -204,6 +253,6 @@ func _llevar_camara(point: Vector3) -> void:
 	if ui.camera == null:
 		return
 	ui.camera.set_target(point)
-	var cerca := ui.camera.min_distance * 1.6
+	var cerca := ui.camera.distancia_para_mirar()
 	if ui.camera.orbit_distance > cerca:
 		ui.camera.set_distance(cerca)

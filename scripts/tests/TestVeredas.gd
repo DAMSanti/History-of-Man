@@ -87,14 +87,19 @@ func test_la_vereda_de_otra_rejilla_no_se_entrega() -> void:
 		"la vereda de otro río no se anda")
 
 
-func test_la_vereda_caducada_no_se_queda_ocupando_sitio() -> void:
-	# Descartarla al leerla y dejarla en el diccionario sería una fuga lenta:
-	# doscientas veredas muertas esperando a que el tope las empuje.
+## Cambió el 2026-09-14 (SISTEMAS §18): antes, leerla con otra rejilla la
+## BORRABA —«para no dejarla ocupando sitio»—, y con eso la vereda de primavera no
+## llegaba a la primavera siguiente. Ahora se queda dormida, y lo que impide que se
+## acumulen es el tope por rejilla.
+func test_la_vereda_caducada_se_queda_dormida() -> void:
 	var saber := BandKnowledge.new()
-	saber.recordar_vereda("casa>vado", _camino(), _rejilla(1.0, 0.0))
-	assert_eq(saber.veredas_recordadas(), 1, "se aprendió una")
-	saber.vereda("casa>vado", _rejilla(0.55, 0.0))
-	assert_eq(saber.veredas_recordadas(), 0, "y al caducar se borra de verdad")
+	var mayo := _rejilla(1.0, 0.0)
+	saber.recordar_vereda("casa>vado", _camino(), mayo)
+	assert_true(saber.vereda("casa>vado", _rejilla(0.55, 0.0)) == null,
+		"con la rejilla de agosto no se entrega")
+	assert_eq(saber.veredas_recordadas(), 1, "pero sigue guardada")
+	assert_true(saber.vereda("casa>vado", mayo) != null,
+		"y se vuelve a andar cuando vuelve su rejilla")
 
 
 func test_olvidarlas_todas_las_olvida() -> void:
@@ -299,3 +304,39 @@ func test_si_el_destino_ya_es_el_final_no_se_anade_hito() -> void:
 	var camino := senda.remate(Vector3(600.0, 0.0, 600.0),
 		final + Vector3(3.0, 0.0, 3.0), grid)
 	assert_eq(camino.size(), senda.hitos.size(), "no crece por un metro")
+
+
+# ------------------------------------- que lo aprendido dure el año (§18) --
+
+func test_una_vereda_espera_a_que_vuelva_su_estacion() -> void:
+	# LO QUE SE PERDÍA (2026-09-14): la vereda de primavera no llegaba a la
+	# primavera siguiente. El sello ya impide andarla con la rejilla equivocada
+	# —eso es la regla—, pero además se borraban todas al rehacer la rejilla, así
+	# que lo aprendido no duraba una estación. Ahora duerme y vuelve.
+	var saber := BandKnowledge.new()
+	var primavera := _rejilla(1.25, 0.0)
+	saber.recordar_vereda("casa>vado", _camino(), primavera)
+	for estacion: Array in [[0.60, 0.0], [1.15, 0.0], [1.55, 0.2]]:
+		var otra := _rejilla(float(estacion[0]), float(estacion[1]))
+		assert_true(saber.vereda("casa>vado", otra) == null,
+			"con otra rejilla no se anda: caudal %.2f" % float(estacion[0]))
+	assert_true(saber.vereda("casa>vado", primavera) != null,
+		"y cuando vuelve la primavera, la vereda sigue ahí")
+
+
+func test_las_veredas_de_una_estacion_no_echan_a_las_de_las_otras() -> void:
+	# El tope se cuenta POR REJILLA —decisión del usuario del 2026-09-14—: si
+	# fuera uno solo para todas, una estación muy andada se comería las demás
+	# antes de que su estación volviera.
+	var saber := BandKnowledge.new()
+	var primavera := _rejilla(1.25, 0.0)
+	var invierno := _rejilla(1.55, 0.2)
+	saber.recordar_vereda("casa>vado", _camino(), primavera)
+	for i in range(BandKnowledge.VEREDAS_QUE_SE_RECUERDAN + 10):
+		saber.recordar_vereda("invierno>%d" % i, _camino(), invierno)
+	assert_true(saber.vereda("casa>vado", primavera) != null,
+		"la de primavera sigue guardada tras un invierno entero de caminos")
+	assert_true(saber.vereda("invierno>%d" % (BandKnowledge.VEREDAS_QUE_SE_RECUERDAN + 5),
+		invierno) != null, "y las últimas del invierno, también")
+	assert_true(saber.vereda("invierno>0", invierno) == null,
+		"pero el invierno sí olvida las suyas más viejas")

@@ -59,12 +59,19 @@ func _init(settlement: SettlementSim) -> void:
 	sim = settlement
 
 
-## Muere alguien: se pregunta cómo se le despide.
-func al_morir(nombre: String, donde: Vector3) -> void:
+## Muere alguien: se cuenta cómo, quién era, y se pregunta cómo se le despide.
+##
+## La tarjeta decía «Ha muerto Anda · La banda tiene que decidir qué se hace con
+## el cuerpo», y la causa se quedaba en la crónica. Queja del usuario del
+## 2026-09-13: «debe ser un acontecimiento que le importe al jugador, con una
+## pequeña historia, no un mensaje robótico». Ver [relato].
+func al_morir(muerto: Inhabitant, causa: String) -> void:
+	var nombre := muerto.given_name
+	var donde := muerto.position
 	var momento := Moment.new()
 	momento.kind = Moment.Kind.PERCANCE
-	momento.title = "Ha muerto %s" % nombre
-	momento.text = "La banda tiene que decidir qué se hace con el cuerpo."
+	momento.title = "Muere %s" % nombre
+	momento.text = relato(muerto, causa)
 	momento.where = donde
 	momento.has_place = true
 	for despedida: int in [Despedida.DEJAR, Despedida.CUBRIR, Despedida.ENTERRAR]:
@@ -73,6 +80,81 @@ func al_morir(nombre: String, donde: Vector3) -> void:
 			func() -> void: despedir(nombre, donde, cual),
 			coste_escrito(cual), lo_que_falta(cual)))
 	sim.raise_moment(momento)
+
+
+## La pequeña historia de quien se va: cómo murió, quién era y a quién deja.
+##
+## Sale de lo que la partida ya sabe de esa persona —edad, oficio, lo que trajo
+## al abrigo, con quién trabajaba— y no de frases al azar: una necrológica que
+## dijera lo mismo de cualquiera sería otra vez el mensaje robótico.
+func relato(muerto: Inhabitant, causa: String) -> String:
+	var ella := muerto.sex == Inhabitant.Sex.MUJER
+	var partes: Array[String] = [causa, ""]
+
+	var oficio := Profession.job_name(muerto.job as Profession.Job).to_lower()
+	partes.append("%s tenía %d años y vivía de %s." % [
+		muerto.given_name, muerto.age_years, oficio])
+
+	var jornadas := 0.0
+	var mejor_kind := -1
+	var mejor := 0.0
+	for fila: Dictionary in muerto.work_summary():
+		jornadas += float(fila["hours"]) / SettlementSim.HORAS_UTILES
+		var traido: Dictionary = fila["gained"]
+		for kind: int in traido:
+			if float(traido[kind]) > mejor:
+				mejor = float(traido[kind])
+				mejor_kind = kind
+	if mejor_kind >= 0 and mejor >= 1.0:
+		partes.append("En %d jornadas de trabajo trajo al abrigo %.0f de %s%s." % [
+			int(jornadas), mejor,
+			Materia.material_name(mejor_kind as Materia.Kind).to_lower(),
+			", más que nadie en la banda" if _nadie_trajo_mas(muerto, mejor_kind, mejor)
+				else ""])
+	elif jornadas >= 1.0:
+		partes.append("Dejó %d jornadas de trabajo en esta banda." % int(jornadas))
+
+	var cercano := _quien_lo_llora(muerto)
+	if cercano != null:
+		partes.append("%s, que trabajaba a su lado, %s llora." % [
+			cercano.given_name, "la" if ella else "lo"])
+	elif sim.people.size() > 0:
+		partes.append("La banda se queda con %d bocas y un hueco junto al fuego."
+			% sim.people.size())
+
+	partes.append("")
+	partes.append("Hay que decidir qué se hace con el cuerpo.")
+	return "\n".join(partes)
+
+
+## Si nadie de los que quedan ha traído más de esto.
+func _nadie_trajo_mas(muerto: Inhabitant, kind: int, cuanto: float) -> bool:
+	for otro: Inhabitant in sim.people:
+		if otro == muerto:
+			continue
+		var suyo := 0.0
+		for fila: Dictionary in otro.work_summary():
+			suyo += float((fila["gained"] as Dictionary).get(kind, 0.0))
+		if suyo >= cuanto:
+			return false
+	return sim.people.size() > 0
+
+
+## Quien más horas ha echado en el mismo oficio, de los que quedan.
+func _quien_lo_llora(muerto: Inhabitant) -> Inhabitant:
+	var mejor: Inhabitant = null
+	var mejor_horas := -1.0
+	for otro: Inhabitant in sim.people:
+		if otro == muerto:
+			continue
+		var horas := 0.0 if otro.job != muerto.job else 1.0
+		for fila: Dictionary in otro.work_summary():
+			if Profession.task_job(int(fila["task"])) == muerto.job:
+				horas += float(fila["hours"])
+		if horas > mejor_horas:
+			mejor_horas = horas
+			mejor = otro
+	return mejor
 
 
 static func etiqueta(despedida: Despedida) -> String:

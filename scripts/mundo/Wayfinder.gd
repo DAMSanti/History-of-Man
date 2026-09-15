@@ -39,12 +39,14 @@ const MAX_NODES := 40000
 ## en un valle son metros de diferencia, no otro rumbo.
 const HEURISTIC_PUSH := 4.0
 
-## Nodos que costó la última búsqueda.
+## Nodos que costó la última búsqueda, **para las sondas y las pruebas**.
 ##
-## Lo mira quien reparte trabajo por fotograma: una búsqueda que encuentra el
-## camino enseguida cuesta cincuenta nodos, y una que fracasa se recorre la
-## comarca entera antes de rendirse. Contar «búsquedas» trataba a las dos
-## igual, y por eso un solo destino imposible se comía el fotograma.
+## Lo miraba también `Marcha` para el presupuesto de caminos del paso —una
+## búsqueda que encuentra el camino enseguida cuesta cincuenta nodos, y una que
+## fracasa se recorre la comarca entera—, y eso **decide partida**. Con varios
+## campamentos dando pasos a la vez, un estático así lo pisaría otro campamento:
+## desde el 2026-09-14 la búsqueda apunta sus nodos en el `nodos` que le pasa
+## quien la lanza, y esto queda sólo para mirar (SISTEMAS §23).
 static var last_nodes: int = 0
 
 ## Cuantas busquedas COMPLETAS se han lanzado en total.
@@ -65,9 +67,12 @@ static var busquedas: int = 0
 ## Vacío significa QUE NO HAY CAMINO, y quien llame tiene que hacer algo con
 ## eso. Devolver la recta al fallar era lo que mandaba a la gente a cruzar un
 ## río que no se cruza: «no hay por dónde» se traducía en «tira derecho».
+##
+## `nodos`, si se pasa con un elemento, sale con los nodos que costó ESTA
+## búsqueda en su primera casilla. Ver [last_nodes].
 static func find(grid: Navgrid, from_point: Vector3,
-		to_point: Vector3) -> PackedVector3Array:
-	last_nodes = 0
+		to_point: Vector3, nodos: Array = []) -> PackedVector3Array:
+	_apunta(nodos, 0)
 	busquedas += 1
 	Cronometro.tramo("A* (Wayfinder.find)")
 	var straight := PackedVector3Array([to_point])
@@ -203,7 +208,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 			continue
 		closed[current] = 1
 		if current == goal:
-			last_nodes = visited
+			_apunta(nodos, visited)
 			# Aparte lo de rehacer y recortar el camino, para saber si el A* se
 			# va en buscar o en quitar la escalera. Ver [_pull_string].
 			Cronometro.tramo("A*: rehacer y recortar")
@@ -297,7 +302,7 @@ static func find(grid: Navgrid, from_point: Vector3,
 	# un vacío que miente es de los fallos más caros de encontrar.
 	if visited >= MAX_NODES:
 		push_warning("Wayfinder: tope de %d nodos agotado. El camino puede existir y esto dira que no." % MAX_NODES)
-	last_nodes = visited
+	_apunta(nodos, visited)
 	Cronometro.cierra("A* (Wayfinder.find)")
 	return PackedVector3Array()
 
@@ -525,8 +530,12 @@ class _Heap extends RefCounted:
 ## El arbol es la otra mitad y la que de verdad quita trabajo: con el, el
 ## camino del abrigo a cualquier celda -y de cualquier celda al abrigo- sale
 ## tirando del hilo, sin buscar nada. Ver [camino_por_el_arbol].
+##
+## `ceder`, si se da, se llama con `await` cada pocos miles de celdas: al fundar, este
+## mapa es 1,6 s de un tirón y se hace detrás de la pantalla de carga (INTERFAZ §9).
+## Dentro de un paso de la partida se llama sin él, y va de un tirón como siempre.
 static func metros_desde(grid: Navgrid, origen: Vector3,
-		por_distancia: bool = false) -> Dictionary:
+		por_distancia: bool = false, ceder: Callable = Callable()) -> Dictionary:
 	var metros := PackedFloat64Array()
 	var arbol := PackedInt32Array()
 	if grid == null or not grid.is_ready():
@@ -562,11 +571,15 @@ static func metros_desde(grid: Navgrid, origen: Vector3,
 	var vados := grid.vado
 	var con_vados := vados.size() == costs.size()
 
+	var sacadas := 0
 	while not heap.is_empty():
 		var current := heap.pop()
 		if cerradas[current] == 1:
 			continue
 		cerradas[current] = 1
+		sacadas += 1
+		if ceder.is_valid() and sacadas % 4096 == 0:
+			await ceder.call()
 
 		var cx := current % wide
 		var cz := current / wide
@@ -682,3 +695,10 @@ static func camino_por_el_arbol(grid: Navgrid, arbol: PackedInt32Array,
 	else:
 		out.append(hasta)
 	return out
+
+
+## Los nodos de una búsqueda: a quien la lanzó, y al contador de mirar.
+static func _apunta(nodos: Array, cuantos: int) -> void:
+	last_nodes = cuantos
+	if not nodos.is_empty():
+		nodos[0] = cuantos

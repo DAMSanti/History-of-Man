@@ -312,8 +312,7 @@ func _tick_step(person: Inhabitant, index: int, hours: float,
 						# todos eran agua.
 						var delante := person.position + direction 							* Navgrid.CELL * 0.5
 						var estorba_el_agua := sim._terrain != null 							and sim._terrain.crossing_difficulty_at(delante) > Hydrography.ROZA_EL_AGUA
-						if estorba_el_agua and _navgrid().cerrar(delante):
-							forget_routes()
+						if estorba_el_agua and _cerrar_y_olvidar(delante):
 							sim._note(Chronicle.Kind.TIERRA,
 								"Por %s no se pasa: la banda lo tacha de sus "
 									% sim.parajes.place_name(delante,
@@ -1020,8 +1019,8 @@ var _recortes_del_arbol: Dictionary = {}
 ## tope y una ladera costaba mas que kilometros de rodeo. Ver
 ## [Navgrid.RIESGO_MAXIMO]. Con el tope puesto, esta pregunta se puede volver a
 ## hacer sobre el camino de verdad.
-func _rehacer_el_mapa_de_casa(grid: Navgrid) -> void:
-	var caminos := Wayfinder.metros_desde(grid, sim.home_position)
+func _rehacer_el_mapa_de_casa(grid: Navgrid, ceder: Callable = Callable()) -> void:
+	var caminos := await Wayfinder.metros_desde(grid, sim.home_position, false, ceder)
 	_arbol_desde_casa = caminos["arbol"]
 	# Arbol nuevo, recortes viejos que ya no valen. Ver [_recortes_del_arbol].
 	_recortes_del_arbol.clear()
@@ -1029,6 +1028,19 @@ func _rehacer_el_mapa_de_casa(grid: Navgrid) -> void:
 
 ## De que rejilla es ese mapa. Otra rejilla, otras distancias.
 var _mapa_de: Navgrid = null
+
+
+## Hace ya el mapa de distancias desde casa, cediendo a trozos. Es el mismo que haría
+## [alcanzable_desde_casa] la primera vez que se le pregunta —que es al asentarse—, sólo
+## que por adelantado y repartido detrás de la pantalla de carga. Ver [Querencia.asentarse].
+func preparar_el_mapa_de_casa(ceder: Callable) -> void:
+	if not sim.horno.sirven(sim.has_boat, sim.pasarelas.version):
+		await _rehacer_las_rejillas(ceder)
+	var grid := _navgrid()
+	if grid == null or not grid.is_ready() or _mapa_de == grid:
+		return
+	_mapa_de = grid
+	await _rehacer_el_mapa_de_casa(grid, ceder)
 
 
 ## Si ya se ha gastado lo que este cuadro consiente buscar.
@@ -1094,8 +1106,10 @@ func alcanzable_de_verdad(desde: Vector3, hasta: Vector3) -> bool:
 		ultima_traza = Traza.SIN_PRESUPUESTO
 		return false
 
-	var camino := Wayfinder.find(grid, desde, hasta)
-	sim._path_nodes_this_frame += Wayfinder.last_nodes
+	# Los nodos de ESTA búsqueda, no los del estático: ver [Wayfinder.last_nodes].
+	var nodos := [0]
+	var camino := Wayfinder.find(grid, desde, hasta, nodos)
+	sim._path_nodes_this_frame += int(nodos[0])
 	if camino.is_empty():
 		return false
 	return rodeo_aceptable(derecho, largo_de(desde, camino))
@@ -1371,8 +1385,9 @@ func _send_to(person: Inhabitant, destination: Vector3) -> void:
 			_apuntar_el_rodeo(person, destination)
 			return
 
-	var route := Wayfinder.find(_navgrid(), person.position, destination)
-	sim._path_nodes_this_frame += Wayfinder.last_nodes
+	var nodos := [0]
+	var route := Wayfinder.find(_navgrid(), person.position, destination, nodos)
+	sim._path_nodes_this_frame += int(nodos[0])
 
 	if not route.is_empty():
 		_remember_route(lane, route)
@@ -1431,40 +1446,12 @@ func _navgrid() -> Navgrid:
 	# seco- la banda planeaba rutas por vados que ya no existian. Ver
 	# [HornoDeRejillas], que amasa las otras tres mientras se juega.
 	if not sim.horno.sirven(sim.has_boat, sim.pasarelas.version):
-		var started := Time.get_ticks_msec()
-		sim.horno.encargar(sim._terrain, sim.has_boat, sim.pasarelas.celdas(),
-			GameState.season as Subsistence.Season, Temporada.CAUDAL,
-			Temporada.ENCHARCA)
-		sim._grid = sim.horno.de(GameState.season as Subsistence.Season)
-		sim.grid_build_ms = Time.get_ticks_msec() - started
-		# Los caminos de antes de la barca ya no son los mejores
-		forget_routes()
-
-		# Y la puerta de casa se anda SIEMPRE. Un abrigo se elige por ser
-		# habitable, asi que si la medicion dice que su entrada esta cerrada,
-		# la equivocada es la medicion: la banda entera quedaria en una celda
-		# que no existe y no se le podria trazar nada.
-		var freed := sim._grid.open_around_home(sim.home_position, sim._terrain)
-		if freed > 0:
-			print("Navegacion: %d celdas abiertas a la fuerza junto al abrigo"
-				% freed)
-
-		# Se dice en voz alta porque una rejilla mal medida NO se ve: la gente
-		# simplemente se queda en el campamento, y desde fuera parece que el
-		# sim.reparto de trabajo esta roto. Si «desde casa» sale bajo, el problema
-		# es este fichero y no el que se este mirando.
-		var home_cell := sim._grid.nearest_open(sim.home_position)
-		print("Navegacion: %d x %d celdas · transitable %.0f%% · zonas %d · %d ms"
-			% [sim._grid.wide, sim._grid.tall, sim._grid.open_fraction() * 100.0,
-				sim._grid.areas, sim.grid_build_ms])
-		if home_cell < 0:
-			push_warning("El campamento no tiene suelo pisable cerca: "
-				+ "nadie podra ir a ninguna parte.")
+		_rehacer_las_rejillas()
 
 	# Y AQUI ES DONDE CAMBIA LA ESTACION. Es una consulta a un diccionario, asi
 	# que se hace en cada llamada sin pensarlo: en cuanto el horno tiene lista
 	# la del trimestre nuevo, se pasa a ella.
-	var quiere := sim.horno.de(GameState.season as Subsistence.Season)
+	var quiere := sim.horno.de(sim.estacion as Subsistence.Season)
 	if quiere != null and quiere != sim._grid:
 		sim._grid = quiere
 		# Los caminos guardados son de la estacion pasada y puede que crucen
@@ -1474,9 +1461,53 @@ func _navgrid() -> Navgrid:
 		# una se mide por su cuenta y ninguna hereda el hueco de la anterior.
 		sim._grid.open_around_home(sim.home_position, sim._terrain)
 		print("Navegacion: caminos de %s · transitable %.0f%% · zonas %d" % [
-			Subsistence.season_name(GameState.season as Subsistence.Season),
+			Subsistence.season_name(sim.estacion as Subsistence.Season),
 			sim._grid.open_fraction() * 100.0, sim._grid.areas])
 	return sim._grid
+
+
+## Encarga las rejillas de las cuatro estaciones y deja puesta la de hoy.
+##
+## `ceder`, si se da, amasa la de hoy a trozos: es lo que hace [preparar_el_mapa_de_casa]
+## detrás de la pantalla de carga. Sin él, de un tirón, como siempre. La rejilla es la
+## misma: las mismas filas en el mismo orden.
+func _rehacer_las_rejillas(ceder: Callable = Callable()) -> void:
+	var started := Time.get_ticks_msec()
+	# CON LA VERSIÓN DE LAS PASARELAS. Sin ella el horno apuntaba la 0 y, en
+	# cuanto había una pasarela levantada, `sirven` decía que no en CADA
+	# consulta: la rejilla entera —un segundo— se rehacía cada vez que alguien
+	# pedía un camino, y la partida del usuario se quedó colgada en el día
+	# 350. Ver `TestWayfinder.test_con_una_pasarela_levantada_...`.
+	sim.horno.encargar(sim._terrain, sim.has_boat, sim.pasarelas.celdas(),
+		sim.estacion as Subsistence.Season, Temporada.CAUDAL,
+		Temporada.ENCHARCA, sim.pasarelas.version)
+	if ceder.is_valid():
+		await sim.horno.hornear(sim.estacion as Subsistence.Season, ceder)
+	sim._grid = sim.horno.de(sim.estacion as Subsistence.Season)
+	sim.grid_build_ms = Time.get_ticks_msec() - started
+	# Los caminos de antes de la barca ya no son los mejores
+	forget_routes()
+
+	# Y la puerta de casa se anda SIEMPRE. Un abrigo se elige por ser
+	# habitable, asi que si la medicion dice que su entrada esta cerrada,
+	# la equivocada es la medicion: la banda entera quedaria en una celda
+	# que no existe y no se le podria trazar nada.
+	var freed := sim._grid.open_around_home(sim.home_position, sim._terrain)
+	if freed > 0:
+		print("Navegacion: %d celdas abiertas a la fuerza junto al abrigo"
+			% freed)
+
+	# Se dice en voz alta porque una rejilla mal medida NO se ve: la gente
+	# simplemente se queda en el campamento, y desde fuera parece que el
+	# sim.reparto de trabajo esta roto. Si «desde casa» sale bajo, el problema
+	# es este fichero y no el que se este mirando.
+	var home_cell := sim._grid.nearest_open(sim.home_position)
+	print("Navegacion: %d x %d celdas · transitable %.0f%% · zonas %d · %d ms"
+		% [sim._grid.wide, sim._grid.tall, sim._grid.open_fraction() * 100.0,
+			sim._grid.areas, sim.grid_build_ms])
+	if home_cell < 0:
+		push_warning("El campamento no tiene suelo pisable cerca: "
+			+ "nadie podra ir a ninguna parte.")
 
 
 ## Si esta persona puede llegar a un punto DESDE DONDE ESTA.
@@ -1499,9 +1530,14 @@ func _remember_route(lane: String, route: PackedVector3Array) -> void:
 
 ## Se tiran los caminos guardados. Lo llama quien cambie el terreno o lo que
 ## se puede cruzar: un camino de antes del puente ya no es el mejor.
+## Lo que hay que rehacer cuando cambia por dónde se pasa.
+##
+## **Ya no olvida las veredas** (2026-09-14, SISTEMAS §18): el sello de [Vereda]
+## impide andar una de otra rejilla, así que la de primavera puede dormir el
+## invierno y volver a valer cuando vuelva su estación. Quien SÍ tiene que
+## tirarlas es quien cierra una celda a mano —eso cambia por dónde se pasa sin
+## tocar el río, y el sello no lo ve—: ver [_cerrar_y_olvidar].
 func forget_routes() -> void:
-	if sim.knowledge != null:
-		sim.knowledge.olvidar_veredas()
 	# Y SE AVISA DE QUE HAY QUE REPASAR EL MAPA.
 	#
 	# Cambiar por donde se pasa cambia qué sitios se pueden bautizar sin que
@@ -1511,6 +1547,21 @@ func forget_routes() -> void:
 	# correr a cada hora por si acaso. Ver [Parajes.revisar_el_mapa].
 	if sim.parajes != null:
 		sim.parajes.revisar_el_mapa = true
+
+
+## Cierra una celda de la rejilla y tira las veredas: el sello no ve este cambio
+## —el río es el mismo— y puede quedar alguna que cruce justo por ahí.
+##
+## Se tiran TODAS y no sólo las que pasan por la celda: es lo que se hacía y es
+## seguro. Afinarlo queda como deuda, dicho en SISTEMAS §18. Devuelve si la celda
+## estaba abierta.
+func _cerrar_y_olvidar(punto: Vector3) -> bool:
+	if not _navgrid().cerrar(punto):
+		return false
+	if sim.knowledge != null:
+		sim.knowledge.olvidar_veredas()
+	forget_routes()
+	return true
 
 
 ## Saca de la parálisis a quien lleve horas sin moverse.

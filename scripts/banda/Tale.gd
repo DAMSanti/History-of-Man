@@ -60,6 +60,18 @@ var task: int = -1
 var painted: bool = false
 var painted_day: int = 0
 
+## En qué cueva se pintó: el índice de la cueva en el catálogo del sitio, como
+## [Exploracion.cueva_de_la_banda]. -1 si no se ha pintado, o si se pintó antes
+## del 2026-09-15, cuando las pinturas no sabían de qué cueva eran: ésas se dan
+## por pintadas en la cueva de la banda (ver [Pinturas.fijar_lo_pintado_sin_cueva]).
+var cueva: int = -1
+
+## Dónde está en la pared: `{motivo, color, centro, lado, giro, espejo,
+## documentada}`, como lo devuelve [ParedDeLaCueva.colocar]. Vacío si todavía no se
+## ha colocado. **Se guarda y no se recalcula**: «la pintura tiene su sitio», y si
+## un día cambia cómo se mide el ajuste, lo ya pintado no se mueve (SISTEMAS §13).
+var sitio: Dictionary = {}
+
 
 ## Si esto se puede poner en la pared.
 ##
@@ -69,6 +81,42 @@ var painted_day: int = 0
 ## grandes, los hallazgos y lo que se aprende a hacer.
 func paintable() -> bool:
 	return task >= 0
+
+
+## Con qué figura va a la pared: una clave de [Motivos.FIGURAS], o vacío si no
+## tiene.
+##
+## **Decisión del usuario del 2026-09-15** (SISTEMAS §13): la caza mayor lleva su
+## animal, y lo que no es caza se pinta **con signos y manos**, que es lo que
+## acompaña a los animales en las cuevas cantábricas:
+##
+## - un hallazgo, con signos: la cumbre coronada con un escaleriforme —se sube—,
+##   cualquier otro con una serie de puntos;
+## - una técnica, con un signo según el oficio: claviformes lo que se caza o se
+##   pesca, bastoncillos lo del taller, tectiformes lo demás;
+## - un hito, la primera vez de algo importante, con una mano en negativo.
+##
+## Vacío es un fallo, no un relleno: la prueba recorre todo relato pintable y
+## exige que tenga figura.
+func motivo() -> String:
+	match kind:
+		Kind.CACERIA:
+			return subject if Motivos.FIGURAS.has(subject) else ""
+		Kind.HALLAZGO:
+			return "escaleriforme" if title.to_lower().contains("cumbre") else "puntos"
+		Kind.TECNICA:
+			if task < 0:
+				return "tectiforme"
+			match Profession.task_job(task):
+				Profession.Job.CAZA, Profession.Job.RIBERA:
+					return "claviforme"
+				Profession.Job.MANUFACTURA:
+					return "bastoncillos"
+				_:
+					return "tectiforme"
+		Kind.HITO:
+			return "mano"
+	return ""
 
 
 ## Cómo se cuenta la fecha, para la ficha de la pared.

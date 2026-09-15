@@ -30,7 +30,6 @@ enum Kind {
 	INICIO,     ## Se funda el asentamiento: el objetivo, y que se puede perder
 	VICTORIA,   ## Se cierra un año vivo y con la cueva pintada
 	DERROTA,    ## La banda entera se ha extinguido
-	EXPEDICION, ## Primavera: si se manda gente fuera del valle este año
 	ASCENSO,    ## Verano: si se sube a las cumbres ahora que no hiela
 	INVIERNO,   ## Invierno: el fuego a manos llenas o racionado
 	CUEVA,      ## Algo pasa dentro de una cueva que se está explorando
@@ -51,6 +50,11 @@ var has_place: bool = false
 ## Quién, cuando el momento va de una persona concreta. Es lo que hace que
 ## perder a alguien pese: un nombre, no una cifra.
 var who: Inhabitant = null
+
+## El campamento que lo levanta. Con varios, la tarjeta lleva su nombre y un aviso
+## de uno que no se mira va a la crónica: SISTEMAS §23, punto 7. Lo pone
+## [SettlementSim.raise_moment].
+var desde: SettlementSim = null
 
 ## Qué se puede decidir. Cada entrada:
 ##   {"label": String, "hint": String, "on_pick": Callable, "cuesta": Dictionary}

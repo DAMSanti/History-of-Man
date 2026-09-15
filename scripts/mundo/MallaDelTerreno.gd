@@ -27,7 +27,7 @@ func _init(generador: TerrainGenerator) -> void:
 
 
 ## Crea el mesh del terreno
-func _create_terrain_mesh() -> void:
+func _create_terrain_mesh(ceder: Callable = Callable()) -> void:
 	# Limpiar mesh anterior
 	if terreno._terrain_mesh:
 		terreno._terrain_mesh.queue_free()
@@ -35,10 +35,10 @@ func _create_terrain_mesh() -> void:
 		terreno._terrain_collision.queue_free()
 
 	if terreno._gen_cache != null:
-		_create_terrain_mesh_from_cache(terreno._gen_cache)
+		await _create_terrain_mesh_from_cache(terreno._gen_cache, ceder)
 		return
 
-	var arrays := _construir_arrays()
+	var arrays := await _construir_arrays(ceder)
 
 	# El paso vuelve a hacer falta aqui: es lo que dice si el recuadro es
 	# cuadrado, y de eso depende que haga falta colision de malla.
@@ -53,9 +53,13 @@ func _create_terrain_mesh() -> void:
 	if terreno.terrain_chunks <= 1:
 		terreno._terrain_mesh.mesh = single_mesh
 
+	if ceder.is_valid():
+		await ceder.call()
 	var tmat0 := Time.get_ticks_msec()
 	terreno._apply_terrain_material()
 	print("[TIMING]   material/texturas de terreno: %d ms" % (Time.get_ticks_msec() - tmat0))
+	if ceder.is_valid():
+		await ceder.call()
 
 	terreno.add_child(terreno._terrain_mesh)
 	_construir_simas()
@@ -63,7 +67,7 @@ func _create_terrain_mesh() -> void:
 	var chunk_meshes: Array[ArrayMesh] = []
 	if terreno.terrain_chunks > 1:
 		var tchunk0 := Time.get_ticks_msec()
-		chunk_meshes = _split_into_chunks(arrays)
+		chunk_meshes = await _split_into_chunks(arrays, ceder)
 		print("[TIMING]   _split_into_chunks: %d ms" % (Time.get_ticks_msec() - tchunk0))
 
 	# Crear colisión. Sale del campo de alturas, no de la malla, asi que el
@@ -72,7 +76,7 @@ func _create_terrain_mesh() -> void:
 	_create_collision(single_mesh)
 	print("[TIMING]   _create_collision: %d ms" % (Time.get_ticks_msec() - tcol0))
 
-	_save_generation_cache(single_mesh, chunk_meshes)
+	await _save_generation_cache(single_mesh, chunk_meshes, ceder)
 
 
 ## Los arrays de la malla: vertices, normales, tangentes, color, UV e indices.
@@ -82,7 +86,7 @@ func _create_terrain_mesh() -> void:
 ## por cara: en una malla de un millon de vertices eso eran unos 35 segundos.
 ## Aqui las normales salen analiticamente del campo de alturas, que ademas de
 ## rapido es exacto: no hay que recorrer las caras.
-func _construir_arrays() -> Array:
+func _construir_arrays(ceder: Callable = Callable()) -> Array:
 	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
 	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
 	var count := terreno.resolution * terreno.resolution
@@ -102,6 +106,8 @@ func _construir_arrays() -> Array:
 
 	var tvert0 := Time.get_ticks_msec()
 	for z in range(terreno.resolution):
+		if ceder.is_valid() and z % 16 == 0:
+			await ceder.call()
 		var row := z * terreno.resolution
 		var zu := maxi(z - 1, 0) * terreno.resolution
 		var zd := mini(z + 1, terreno.resolution - 1) * terreno.resolution
@@ -181,6 +187,8 @@ func _construir_arrays() -> Array:
 	indices.resize((terreno.resolution - 1) * (terreno.resolution - 1) * 6)
 	var i := 0
 	for z in range(terreno.resolution - 1):
+		if ceder.is_valid() and z % 32 == 0:
+			await ceder.call()
 		for x in range(terreno.resolution - 1):
 			if _en_el_ruedo_de_una_sima(simas,
 					Vector2((float(x) + 0.5) * step_x, (float(z) + 0.5) * step_z)):
@@ -536,7 +544,8 @@ func _construir_simas() -> void:
 
 ## Reconstruye lo que deja `_create_terrain_mesh()`, pero desde una cache ya
 ## valida en vez de recalcularlo: sin bucle de vertices, sin generate_lods.
-func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache) -> void:
+func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache,
+		ceder: Callable = Callable()) -> void:
 	terreno._terrain_mesh = MeshInstance3D.new()
 	terreno._terrain_mesh.name = "TerrainMesh"
 	if terreno.terrain_chunks <= 1:
@@ -545,6 +554,8 @@ func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache) -> void:
 	var tmat0 := Time.get_ticks_msec()
 	terreno._apply_terrain_material()
 	print("[TIMING]   material/texturas de terreno: %d ms" % (Time.get_ticks_msec() - tmat0))
+	if ceder.is_valid():
+		await ceder.call()
 
 	terreno.add_child(terreno._terrain_mesh)
 
@@ -559,9 +570,13 @@ func _create_terrain_mesh_from_cache(cache: TerrainGenerationCache) -> void:
 		print("[TIMING]   trozos desde cache (%d): %d ms" % [
 			cache.chunk_meshes.size(), Time.get_ticks_msec() - tchunk0])
 
+	if ceder.is_valid():
+		await ceder.call()
 	# El embudo de cada sima se rehace siempre: es geometría de un puñado de
 	# triángulos y no merece guardarse.
 	_construir_simas()
+	if ceder.is_valid():
+		await ceder.call()
 
 	var tcol0 := Time.get_ticks_msec()
 	_create_collision(cache.single_mesh)
@@ -579,8 +594,17 @@ func _cache_base_path() -> String:
 		return ""
 	var src := terreno.heightmap.resource_path
 	if src.is_empty():
+		src = terreno.origen_de_la_cache
+	return ruta_de_la_cache(src, terreno.sufijo_de_la_cache, terreno.resolution)
+
+
+## Dónde se guarda la malla de un relieve. Aparte, para que quien monta el mapa sepa si la
+## hay ANTES de tener el terreno: la pantalla de carga reparte la barra con eso.
+static func ruta_de_la_cache(origen: String, sufijo: String, resolucion: int) -> String:
+	if origen.is_empty():
 		return ""
-	return "%s/%s_mesh_r%d.res" % [src.get_base_dir(), src.get_file().get_basename(), terreno.resolution]
+	return "%s/%s%s_mesh_r%d.res" % [origen.get_base_dir(), origen.get_file().get_basename(),
+		sufijo, resolucion]
 
 
 ## Huella de las entalladuras actuales, para invalidar la cache si cambian
@@ -636,7 +660,11 @@ func _load_generation_cache() -> TerrainGenerationCache:
 ## Guarda en disco lo que ha costado calcular, para no repetirlo la proxima
 ## vez que se cargue este mismo sitio. No hace nada si ya se cargo de cache
 ## -nada ha cambiado- ni si el terreno no tiene heightmap con ruta propia.
-func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMesh]) -> void:
+##
+## Con `ceder`, se guarda en un hilo y se espera cuadro a cuadro: la del mapa regional son
+## 106 MB y guardarla de un tirón era un cuadro de 1 s detrás de la pantalla de carga.
+func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMesh],
+		ceder: Callable = Callable()) -> void:
 	if terreno._gen_cache != null or not terreno.use_generation_cache:
 		return
 	var path := _cache_base_path()
@@ -669,7 +697,16 @@ func _save_generation_cache(single_mesh: ArrayMesh, chunk_meshes: Array[ArrayMes
 	cache.chunk_meshes = chunk_meshes
 
 	var t0 := Time.get_ticks_msec()
-	if ResourceSaver.save(cache, path) != OK:
+	var error := OK
+	if ceder.is_valid():
+		var hilo := Thread.new()
+		hilo.start(ResourceSaver.save.bind(cache, path))
+		while hilo.is_alive():
+			await (Engine.get_main_loop() as SceneTree).process_frame
+		error = hilo.wait_to_finish()
+	else:
+		error = ResourceSaver.save(cache, path)
+	if error != OK:
 		push_warning("No se pudo guardar la cache de generacion en " + path)
 	else:
 		print("[TIMING]   cache de generacion guardada (%s): %d ms" % [
@@ -780,7 +817,7 @@ static func _en_el_ruedo_de_una_sima(simas: Array[Dictionary], donde: Vector2) -
 ## bucles-, que es lo que evita que se abra una grieta entre cuadros: los
 ## vertices del limite son literalmente los mismos, con la misma cota y la
 ## misma normal.
-func _split_into_chunks(arrays: Array) -> Array[ArrayMesh]:
+func _split_into_chunks(arrays: Array, ceder: Callable = Callable()) -> Array[ArrayMesh]:
 	# El ruedo de las simas, también aquí: cada trozo rehace sus propios índices.
 	var simas := terreno.simas()
 	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
@@ -800,6 +837,8 @@ func _split_into_chunks(arrays: Array) -> Array[ArrayMesh]:
 
 	for cz in range(terreno.terrain_chunks):
 		for cx in range(terreno.terrain_chunks):
+			if ceder.is_valid():
+				await ceder.call()
 			var x0 := cx * per_chunk
 			var z0 := cz * per_chunk
 			var x1 := mini(x0 + per_chunk, terreno.resolution - 1)

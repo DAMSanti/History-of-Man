@@ -92,14 +92,14 @@ func test_no_se_manda_de_expedicion_a_un_tocado() -> void:
 	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
 	# Y el vivac, que la expedición también se lleva. Ver
 	# [Expedicion.hace_falta_para].
-	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
 	for i in range(4):
 		sim.people[i].hurt_days = 5
-	assert_false(sim.expedicion.mandar(3, 1000),
+	assert_false(sim.expedicion.mandar(3, 90.0),
 		"con sólo dos sanos no sale la expedición de tres")
 	sim.people[0].hurt_days = 0
-	assert_true(sim.expedicion.mandar(3, 1000),
+	assert_true(sim.expedicion.mandar(3, 90.0),
 		"y en cuanto se cura uno, ya son tres")
 	for person: Inhabitant in sim.people:
 		assert_false(person.esta_tocado() and sim.expedicion.fuera.has(person.id),

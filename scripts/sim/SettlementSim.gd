@@ -281,6 +281,29 @@ const TYPICAL_YIELD_FRACTION := 0.07
 ## sitio en el abrigo y la jornada se emplea en lo que falta.
 var limits: Dictionary = {}
 
+## Los topes con los que arranca una partida nueva, que el jugador cambia luego.
+##
+## **Decisión del usuario del 2026-09-13**: «es fundamental al empezar la partida
+## poner límites a los materiales en el almacén, porque si no en unos cuantos
+## días se llenan de morralla». Cincuenta de cada material, cien de leña y diez
+## de cada pieza. La comida no lleva: tiene el suyo, el de la despensa
+## (`food_cap`); ni el agua, que son odres llenos y no se recoge.
+const TOPE_DE_MATERIAL := 50.0
+const TOPE_DE_LENA := 100.0
+const TOPE_DE_UTILLAJE := 10
+
+
+func _poner_topes_de_partida() -> void:
+	limits.clear()
+	for kind: int in Materia.Kind.values():
+		var k := kind as Materia.Kind
+		if Materia.is_provision(k) or k == Materia.Kind.AGUA:
+			continue
+		limits[k] = TOPE_DE_LENA if k == Materia.Kind.LENA else TOPE_DE_MATERIAL
+	taller.tool_orders.clear()
+	for kind: int in Tool.Kind.values():
+		taller.set_tool_order(kind as Tool.Kind, TOPE_DE_UTILLAJE)
+
 
 ## Radio en el que un recolector bate el terreno buscando. Mas alla de esto ya
 ## no es prospectar el paraje, es cambiar de paraje.
@@ -475,6 +498,33 @@ var pinturas: Pinturas = Pinturas.new(self)
 ## Lo que se fabrica y lo que se gasta. Ver [Taller].
 var taller: Taller = Taller.new(self)
 
+## Lo que el jugador quiere primero: materiales, especies y piezas. Ver
+## [Prioridades] y SISTEMAS §22.
+##
+## No lleva referencia al simulador a propósito: es estado del jugador, no un
+## subsistema con paso. Se toca por los tres pasamanos de abajo y no a pelo,
+## porque cambiar un nivel de material obliga a reordenar los parajes.
+var prioridades: Prioridades = Prioridades.new()
+
+
+## Pone el nivel de un material y reordena los sitios conocidos.
+##
+## Lo segundo es la mitad del trabajo: la lista de parajes se puntúa una vez al
+## día -ver [Tajo._rank_known_spots]-, así que sin rehacerla aquí el cambio no
+## se notaría hasta la mañana siguiente y el jugador vería que su clic no hace
+## nada.
+func fijar_prioridad_material(kind: Materia.Kind, nivel: Prioridades.Nivel) -> void:
+	prioridades.fijar_material(kind, nivel)
+	tajo._rank_known_spots()
+
+
+func fijar_prioridad_especie(species: String, nivel: Prioridades.Nivel) -> void:
+	prioridades.fijar_especie(species, nivel)
+
+
+func fijar_prioridad_pieza(kind: Tool.Kind, nivel: Prioridades.Nivel) -> void:
+	prioridades.fijar_pieza(kind, nivel)
+
 ## Quien hay ahi fuera y que tal os llevais. Ver [Contacto].
 var contacto: Contacto = Contacto.new(self)
 
@@ -656,21 +706,14 @@ const STUCK_SLACK := 12.0
 ## de dos jornadas. No es la distancia a la que se va: es cuanto se lleva.
 const CAZA_LEJOS_M := 1800.0
 
-## Piezas que hace en una JORNADA COMPLETA cada especialidad del taller.
-##
-## Son cifras de jornada entera y perfecta, o sea que lo que sale de verdad es
-## bastante menos. Una azagaya lleva dias: hay que ranurar el asta, sacar la
-## punta, preparar el astil y ligarlo con tendon y resina.
 ## Hasta donde trabaja el taller antes de parar: la cobertura justa mas una
 ## reserva. Sin tope, un artesano acumula cientos de piezas inutiles.
+##
+## Aqui vivia ademas `CRAFT_PER_DAY`, las piezas por jornada de cada
+## especialidad. Se borro el 2026-09-14: el esfuerzo pasa a ser de la pieza y
+## esta en [Tool.HORAS_DE_TRABAJO]. Su comentario ya avisaba de que «una azagaya
+## lleva dias», pero la cifra era la misma para la azagaya y para el punzon.
 const RESERVA_UTILLAJE := 1.3
-
-const CRAFT_PER_DAY := {
-	Profession.Speciality.TALLA: 3.0,
-	Profession.Speciality.ASTA: 0.6,
-	Profession.Speciality.PELETERIA: 0.5,
-	Profession.Speciality.CORDELERIA: 1.2,
-}
 
 ## Que fabrica cada especialidad.
 const SPECIALITY_MAKES := {
@@ -848,7 +891,7 @@ static func frio_por_hora(grados: float) -> float:
 ## Los grados que hace donde está esta persona, ahora.
 func _grados_donde(person: Inhabitant) -> float:
 	var cota := _terrain.get_height_at(person.position) if _terrain != null else 0.0
-	return Termometro.grados(GameState.season as Subsistence.Season, hour, cota)
+	return Termometro.grados(estacion as Subsistence.Season, hour, cota)
 
 
 ## Una hora de sueño, en cuanto al frío. `con_fuego` es el hogar en la cueva o
@@ -889,6 +932,10 @@ const ABARROTADO_COLD_RISE := 1.5
 ## Piel de tienda por persona. NO se gasta: se lleva y se devuelve al abrigo,
 ## que es lo que se hace con una tienda. Lo que se pierde es la noche que no se
 ## llevó.
+##
+## **Piel CURTIDA** desde el 2026-09-13, decisión del usuario: la cruda se pudre
+## en doce días —en la mochila también— y se gastaba en tiendas mientras no se
+## curtía ninguna. La cruda queda para curtirla y para el trueque.
 const VIVAC_PIEL := 1.0
 
 ## Leña de hoguera por persona y NOCHE. Ésta sí arde.
@@ -944,14 +991,6 @@ func assign_all(activity: Subsistence.Activity) -> void:
 
 func set_job_count(job: Profession.Job, count: int) -> int:
 	return reparto.set_job_count(job, count)
-
-
-func set_speciality(job: Profession.Job, speciality: Profession.Speciality) -> void:
-	reparto.set_speciality(job, speciality)
-
-
-func speciality_counts(job: Profession.Job) -> Dictionary:
-	return reparto.speciality_counts(job)
 
 
 func job_counts() -> Dictionary:
@@ -1188,6 +1227,7 @@ func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: floa
 		for i in range(int(entry["cuantas"])):
 			toolkit.craft(int(entry["kind"]) as Tool.Kind,
 				int(entry["stuff"]) as Tool.Stuff, 0.5)
+	_poner_topes_de_partida()
 	# NI CESTOS NI ODRES. Se llega con el filo justo y con las manos: el cesto
 	# dobla lo que se trae de una jornada y el odre es lo que permite pasar el
 	# dia lejos del agua -ver `_hand_out_containers`-, o sea que regalarlos al
@@ -1344,9 +1384,22 @@ func nadie_trabaja() -> bool:
 	return true
 
 
-## Cuanto se le deja a la noche comerse de un fotograma, en milisegundos.
+## Cuántas horas de juego tiene que pasar la noche por cada segundo de reloj, con
+## la banda dormida, y lo más que se le deja comer de un fotograma.
 ##
-## NO ES UN MULTIPLICADOR DE VELOCIDAD, y la diferencia es el frente 4 entero.
+## **Diez horas en dos segundos, a cualquier velocidad**: decisión del usuario del
+## 2026-09-14, «no está pasando las noches rápido cuando todos se van a dormir».
+## Era un presupuesto fijo de 8 ms por cuadro —abajo, medido para no dar tirones—
+## y con ventana no se notaba: dibujar un cuadro cuesta más de 30 ms, y a la
+## resolución del usuario mucho más, así que 8 ms de pasos eran poco al lado. Con
+## `NocheCimaPasarelaProbe` y ventana a 1080p, x5: una hora de noche costaba
+## 450 ms de reloj contra 1 000 de día. Ahora se dan pasos hasta cubrir la noche
+## que le toca a este cuadro, con [MS_DE_NOCHE_TOPE] de techo: el fotograma malo
+## sigue acotado —el frente 4—, sólo que más arriba, y de noche no hay nada que
+## mirar.
+##
+## Sigue sin ser un multiplicador de `time_scale`, y la diferencia es el frente 4
+## entero:
 ##
 ## Acelerar subiendo `time_scale` cambiaria cuanta hora de juego avanza cada
 ## paso, y con ella el instante en que salta `hour_passed` y el tamaño del
@@ -1372,8 +1425,10 @@ func nadie_trabaja() -> bool:
 ## El ahorro se agota en 8: de ahi en adelante se compran uno o dos segundos y
 ## se paga en fotograma medio, y pasados los 24 en tirones. Por debajo, se
 ## pierde ahorro. Contra los 90 s de no saltarse la noche, **8 ms ahorra el
-## 31 % del reloj**.
-const MS_DE_NOCHE_POR_CUADRO := 8.0
+## 31 % del reloj**. Aquella medida era sin ventana y a VEL=5; con ventana, ver
+## arriba.
+const NOCHE_HORAS_POR_SEGUNDO := 5.0
+const MS_DE_NOCHE_TOPE := 60.0
 
 ## Si la noche se salta. Se apaga PARA MEDIR, no para jugar.
 ##
@@ -1389,7 +1444,111 @@ var noche_acelerada: bool = true
 var _pendiente := 0.0
 
 
+## Si alguien mira este campamento: si no, no se pintan los cuerpos.
+##
+## Pintar a cada persona en la multitud es vista y no partida —mueve una malla,
+## no un número—, pero se hacía dentro del tick: medido con el cepo, un 7 % de lo
+## que cuesta la gente, en campamentos que nadie ve (ESTADO §2). Verdadero por
+## defecto, que es como se comporta la escena de siempre.
+var se_mira: bool = true
+
+
+## Si los pasos los da un [RelojDeLaPartida] y no esta simulacion.
+##
+## Falso por defecto, que es como se comporta una simulacion sola —las pruebas,
+## las sondas de un mapa—: da sus pasos en su `_process`, como siempre.
+var dirigido: bool = false
+
+## La estación y el año de ESTE campamento.
+##
+## La fecha es de la partida y vive en `GameState`, pero **un campamento que lleva
+## el reloj de la partida lee y gira su copia**, y el reloj publica la del primero
+## en `GameState` entre pasos. Es lo que permitirá dar los pasos en paralelo: si
+## cada campamento girase la global, uno la leería mientras otro la cambia. Una
+## simulación suelta —las pruebas, las sondas, la escena de un mapa— lee la
+## global como siempre, y por eso nada cambia para ella. Ver [RelojDeLaPartida] y
+## SISTEMAS §23, «un hilo por campamento».
+var estacion: Subsistence.Season:
+	get:
+		return _estacion if dirigido else GameState.season
+var anyo: int:
+	get:
+		return _anyo if dirigido else GameState.year
+var _estacion: Subsistence.Season = Subsistence.Season.PRIMAVERA
+var _anyo: int = 1
+
+## Si este campamento gira también la fecha de la partida (`GameState`). Sólo uno:
+## el primero del reloj. Los demás giran su copia, que con la misma fecha es la
+## misma. Verdadero por defecto, que es lo que hace una simulación sola.
+var publica_la_fecha: bool = true
+
+
+## El nombre del campamento al que pertenece esta simulación —el de su sitio—.
+## Vacío en una simulación suelta. Lo pone [Campamento]; va en las decisiones y en
+## la crónica cuando hay varios campamentos (SISTEMAS §23, punto 7).
+var nombre_del_campamento: String = ""
+
+## El sitio de la comarca donde está este campamento: desde donde sale una
+## expedición. Lo pone quien monta el campamento —ver [Campamento]—.
+var sitio: Site = null
+
+
+## Lo que ha descubierto de la comarca este campamento y todavía no está en la
+## partida. Un campamento dirigido no escribe `GameState.discovered` a mitad de
+## paso —otro podría estar leyéndolo—: lo apunta aquí y el reloj lo junta entre
+## pasos. Ver [descubrir] y SISTEMAS §23, «un hilo por campamento».
+var descubrimientos: Array[Site] = []
+
+
+## Si este sitio está descubierto: en la partida, o apuntado aquí.
+func descubierto(site: Site) -> bool:
+	return GameState.is_discovered(site) or descubrimientos.has(site)
+
+
+## Descubre un sitio. Suelta, en la partida al momento, como siempre; dirigida,
+## en la cola, y el reloj lo pasa. Contando lo apuntado en [descubierto], una
+## expedición ve lo mismo que veía con un solo campamento.
+func descubrir(site: Site) -> void:
+	if dirigido:
+		if not descubrimientos.has(site):
+			descubrimientos.append(site)
+	else:
+		GameState.discover(site)
+
+
+## Lo que este campamento ha visto de la comarca y todavía no está en la niebla de
+## la partida, por lo mismo que [descubrimientos]: formas de
+## [GameState.levantar_niebla], que el reloj levanta entre pasos.
+var niebla_por_levantar: Array[Dictionary] = []
+
+
+## Levanta niebla. Suelta, al momento; dirigida, en la cola.
+func levantar_niebla(forma: Dictionary) -> void:
+	if dirigido:
+		niebla_por_levantar.append(forma)
+	else:
+		GameState.levantar_niebla(forma)
+
+
+func cuantos_descubiertos() -> int:
+	var cuantos := GameState.discovered.size()
+	for site: Site in descubrimientos:
+		if not GameState.is_discovered(site):
+			cuantos += 1
+	return cuantos
+
+
+func _init() -> void:
+	# Los parajes leen la estación de este campamento, no la global. Ver
+	# [Parajes.fecha].
+	parajes.fecha = self
+
+
 func _process(delta: float) -> void:
+	# Mientras se carga, nada: ni la partida ni el horno, que le quitaría el cuadro a la
+	# carga. El tiempo de esos cuadros se tira. Ver [RelojDeLaPartida._process].
+	if Carga.abierta():
+		return
 	# El horno amasa SIEMPRE, aunque el reloj este parado: si no, una partida en
 	# pausa no adelantaria trabajo y al reanudar seguiria faltando la rejilla
 	# del trimestre que viene. Cuatro milisegundos por cuadro, ver
@@ -1399,6 +1558,13 @@ func _process(delta: float) -> void:
 	Cronometro.tramo("horno de rejillas")
 	horno.amasar()
 	Cronometro.cierra("horno de rejillas")
+	# CON VARIOS CAMPAMENTOS LOS PASOS LOS DA EL RELOJ DE LA PARTIDA, a todos por
+	# igual: si cada simulacion los diera aqui por su cuenta, en cuanto una
+	# saltara la noche y otra no dejarian de estar en la misma hora. El horno si
+	# sigue aqui: amasar no cambia la partida. Ver [RelojDeLaPartida].
+	if dirigido:
+		Cronometro.cierra("simulacion (SettlementSim)")
+		return
 	if people.is_empty() or _terrain == null or time_scale <= 0.0:
 		Cronometro.cierra("simulacion (SettlementSim)")
 		return
@@ -1424,19 +1590,23 @@ func _process(delta: float) -> void:
 	# Y AQUI SE SALTA LA NOCHE.
 	#
 	# Con todos durmiendo no hay nada que mirar, asi que se siguen dando pasos
-	# -del MISMO tamaño, ver [MS_DE_NOCHE_POR_CUADRO]- hasta gastar el
-	# presupuesto del cuadro. Lo que avanza de mas no sale de `_pendiente`:
+	# -del MISMO tamaño- hasta cubrir la noche que le toca a este cuadro o gastar
+	# el tope, ver [NOCHE_HORAS_POR_SEGUNDO]. Lo que avanza de mas no sale de `_pendiente`:
 	# `_pendiente` es reloj real por simular y esto es reloj de juego regalado,
 	# que es en lo que consiste saltarse la noche.
 	#
 	# Se relee `nadie_trabaja` en cada vuelta porque alguien se despierta
 	# dentro de un paso -a las seis-, y desde ese paso ya no se acelera.
 	if noche_acelerada and nadie_trabaja():
-		var hasta := Time.get_ticks_usec() + int(MS_DE_NOCHE_POR_CUADRO * 1000.0)
+		var hasta := Time.get_ticks_usec() + int(MS_DE_NOCHE_TOPE * 1000.0)
 		var dia_al_entrar := day
+		# Lo que le toca a este cuadro, en horas, y lo que da cada paso.
+		var faltan := delta * NOCHE_HORAS_POR_SEGUNDO
+		var por_paso := PASO_FIJO * time_scale / seconds_per_day * 24.0
 		Cronometro.tramo("noche acelerada")
-		while time_scale > 0.0 and Time.get_ticks_usec() < hasta:
+		while time_scale > 0.0 and faltan > 0.0 and Time.get_ticks_usec() < hasta:
 			_advance(PASO_FIJO)
+			faltan -= por_paso
 			# EL CIERRE DE JORNADA CORTA EL CUADRO, y esto no es cosmetica: el
 			# peor fotograma de la partida ES la contabilidad de medianoche
 			# -medido, 113 ms de los que 42 son el cierre, ESTADO.md §2- y la
@@ -1722,7 +1892,7 @@ func _tick_person(person: Inhabitant, index: int, hours: float, delta: float) ->
 	_settle_at_home(person, delta)
 	Cronometro.cierra("gente: sitio en casa")
 
-	if _crowd and index < _bodies.size():
+	if se_mira and _crowd and index < _bodies.size():
 		Cronometro.tramo("gente: cuerpos (vista)")
 		_pintar_a(person, index)
 		Cronometro.cierra("gente: cuerpos (vista)")
@@ -2071,10 +2241,15 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 			if person.position.distance_to(person.target) < _radio_de_llegada(hours):
 				if person.job == Profession.Job.EXPLORACION \
 						and person.current_speciality == Profession.Speciality.ASCENSION \
-						and cumbres._is_on_peak(person):
+						and (person.cumbre_objetivo != Vector3.ZERO or cumbres._is_on_peak(person)):
 					# Llegar al pie de la cumbre no es coronarla: se
 					# INTENTA, y con poca pericia se falla. Ver [Ascent].
+					#
+					# Y el pie es SU DESTINO, no los 12 m del pico: la celda de
+					# la cumbre está cerrada por pendiente y el camino acaba una
+					# más abajo. Ver [Inhabitant.cumbre_objetivo].
 					cumbres._try_ascent(person)
+					person.cumbre_objetivo = Vector3.ZERO
 					marcha._send_to(person, home_position)
 					person.state = Inhabitant.State.VOLVIENDO
 					return
@@ -2130,7 +2305,7 @@ func _tick_daylight(person: Inhabitant, hours: float) -> void:
 			var found := 0.0
 			if field:
 				found = field.seasonal_abundance_at(
-					person.activity, person.position, GameState.season)
+					person.activity, person.position, estacion)
 
 			# Cuanto mas rico el paraje, antes se da con ello
 			var needed: float = lerpf(4.5, 1.0, clampf(found, 0.0, 1.0))
@@ -2340,8 +2515,10 @@ func _decide_the_day(person: Inhabitant, hours: float) -> void:
 			# exploracion normal, que es lo que hace quien se queda sin
 			# monte al que subir.
 			frontier = reconocimiento._scout_target(person)
+			person.cumbre_objetivo = Vector3.ZERO
 		else:
 			frontier = climb["pos"]
+			person.cumbre_objetivo = frontier
 
 		if at_home and person.fatigue > REST_BEFORE_EXPEDITION:
 			# Esperar a estar descansado antes de partir: salir ya
@@ -2422,7 +2599,35 @@ func _ultima_salida(person: Inhabitant) -> float:
 
 ## Levanta un momento: algo que hay que enseñar o decidir ahora. Ver [Moment].
 func raise_moment(moment: Moment) -> void:
+	moment.desde = self
+	# DENTRO DEL PASO DE UN CAMPAMENTO DIRIGIDO NO SALE: se guarda y el reloj la
+	# entrega en la barrera, al acabar la vuelta. Un jugador nunca contesta a
+	# mitad de paso —la tarjeta para el reloj y se contesta entre pasos—, y con
+	# varios campamentos la barra es una sola. Decisión del usuario del
+	# 2026-09-14, aunque cambie la partida de las sondas, que contestaban dentro
+	# del paso. Ver [RelojDeLaPartida] y SISTEMAS §23.
+	if dirigido and _en_paso:
+		momentos_pendientes.append(moment)
+		return
 	moment_raised.emit(moment)
+
+
+## Las decisiones que esperan a la barrera. Ver [raise_moment].
+var momentos_pendientes: Array[Moment] = []
+
+## Si esta simulación está dando un paso del reloj ahora mismo.
+var _en_paso: bool = false
+
+
+## Saca las decisiones guardadas, en el orden en que se levantaron. Lo llama el
+## reloj en la barrera.
+func entregar_momentos() -> void:
+	if momentos_pendientes.is_empty():
+		return
+	var lista := momentos_pendientes.duplicate()
+	momentos_pendientes.clear()
+	for moment: Moment in lista:
+		moment_raised.emit(moment)
 
 
 ## Dispara el momento inicial (objetivo, derrota posible, primera decisión).
@@ -2465,8 +2670,8 @@ var dia_de_la_decision: int = 0
 ## dan días distintos, que es lo que el criterio pide. Decisión del usuario del
 ## 2026-09-13.
 func _citar_la_decision() -> void:
-	dia_de_la_decision = dia_de_decidir(game_seed, GameState.year,
-		GameState.season as Subsistence.Season)
+	dia_de_la_decision = dia_de_decidir(game_seed, anyo,
+		estacion as Subsistence.Season)
 	# Si se entra en la estación ya pasado ese día -una partida que arranca a
 	# mitad, o un estado construido-, se decide en cuanto se pueda: mejor tarde
 	# que no tenerla.
@@ -2499,12 +2704,14 @@ func _revisar_la_decision() -> void:
 ## evitar. Las tres que no eran la berrea las eligió el usuario el 2026-09-12, y
 ## las tres salen de sistemas que ya existían.
 ##
+## **La primavera se quedó sin decisión el 2026-09-14**: la suya era mandar la
+## expedición, y desde que se manda cuando se quiere, hacia un rumbo, esa tarjeta
+## sobra (SISTEMAS §4). Consecuencia aceptada al escribir la spec.
+##
 ## Está en un solo sitio porque la preguntan dos: el cambio de estación y el
 ## arranque de la partida.
 func _decision_de_la_estacion() -> void:
-	match GameState.season:
-		Subsistence.Season.PRIMAVERA:
-			expedicion.proponer_la_salida()
+	match estacion:
 		Subsistence.Season.VERANO:
 			cumbres.proponer_la_subida()
 		Subsistence.Season.OTONO:
@@ -2543,6 +2750,19 @@ func _home_spot(person: Inhabitant, inside: bool) -> Vector3:
 	var centre := home_inside if inside else home_forecourt
 	if centre == Vector3.ZERO:
 		centre = home_position
+	# AL CORRO DEL FUEGO, si hay hogar levantado y queda sitio en los troncos.
+	# Es lo que pidió el usuario el 2026-09-13: que la banda se junte alrededor
+	# de la hoguera —ociosos, comiendo, al hogar o tallando en el abrigo— en vez
+	# de repartirse por la campa. Los que no cogen sitio siguen como siempre.
+	# Ver [CorroDelHogar].
+	if not inside and camp_built.get(CampProjects.Kind.HOGAR, false) \
+			and home_forecourt != Vector3.ZERO:
+		var asiento := CorroDelHogar.asiento_de(home_forecourt, people.find(person))
+		if asiento != Vector3.ZERO:
+			if _terrain:
+				asiento.y = _terrain.get_height_at(asiento)
+			return asiento
+
 	var spread := CAVE_SPREAD if inside else FORECOURT_SPREAD
 	var angle := TAU * fmod(float(person.id) * 0.618, 1.0)
 	var reach := spread * (0.35 + fmod(float(person.id) * 0.37, 0.65))
@@ -2972,7 +3192,16 @@ func _work_candidates(person: Inhabitant) -> Array[Vector3]:
 	var search := tajo._search_target(person)
 	if search != Vector3.ZERO and not out.has(search):
 		out.append(search)
-	return out
+
+	# Y NADA EN DESCANSO, sea del paso que sea. Los sitios conocidos y el de
+	# reserva entraban aquí sin mirarlo: si el mejor sitio sano no tenía camino,
+	# el pescador acababa en el tramo que descansaba y lo vaciaba hasta cero.
+	# Queja del usuario del 2026-09-13, «siguen esquilmando parajes de pesca en
+	# apenas unos meses». Ver `TestParajes.test_ningun_sitio_candidato_...`.
+	var sanos: Array[Vector3] = []
+	sanos.assign(out.filter(func(donde: Vector3) -> bool:
+		return not _is_resting(person.activity, donde)))
+	return sanos
 
 
 ## Parajes conocidos por actividad, ya puntuados y ordenados. Se rehace una vez
@@ -3007,7 +3236,7 @@ const SHORE_FORAGE_FACTOR := 0.45
 func _note(kind: Chronicle.Kind, text: String, weight: int = 1) -> void:
 	if chronicle == null:
 		return
-	chronicle.record(day, GameState.season as int, GameState.year,
+	chronicle.record(day, estacion as int, anyo,
 		kind, text, weight)
 
 
@@ -3090,6 +3319,16 @@ func doing_now(person: Inhabitant) -> Dictionary:
 		}
 
 	if person.state != Inhabitant.State.TRABAJANDO:
+		return {}
+
+	# EL ARTESANO QUE NO ESTA TALLANDO NO LLEVA CHAPA. `crafting_now` devuelve
+	# vacio fuera de las horas de taller, y de aqui para abajo solo quedan
+	# barras de gente que trae cosas del monte: sin este corte, el artesano
+	# seguia de largo hasta la ultima rama y se le pintaba encima la barra de
+	# «lo que llevas en el cesto», que para el es siempre cero. Se veia como una
+	# barra a cero desde la cena hasta el dia siguiente -queja del usuario del
+	# 2026-09-14-, y no era su progreso puesto a cero: era otra barra.
+	if person.job == Profession.Job.MANUFACTURA:
 		return {}
 
 	# El cazador: lo que dice la chapa es la FASE, que es lo que se quiere
@@ -3242,12 +3481,12 @@ func _knowledge_factor(person: Inhabitant) -> float:
 	if knowledge == null or field == null:
 		return 1.0
 	var believed := knowledge.believed_abundance(
-		field, person.activity, person.position, GameState.season)
+		field, person.activity, person.position, estacion)
 	var real := field.seasonal_abundance_at(
-		person.activity, person.position, GameState.season)
+		person.activity, person.position, estacion)
 	if real <= 0.001:
 		return 1.0
-	return (believed / real) * knowledge.efficiency(person.activity, GameState.season)
+	return (believed / real) * knowledge.efficiency(person.activity, estacion)
 
 
 ## Apunta el cierre del dia de cada material.
@@ -3323,11 +3562,11 @@ func _end_of_day() -> void:
 	barbecho.revisar()
 	# Y el paisaje se mueve: la cota de nieve baja, las vegas se encharcan y el
 	# rio crece o baja. No es pintura -frena y cierra vados-. Ver [Temporada].
-	temporada.nuevo_dia(GameState.season as Subsistence.Season)
+	temporada.nuevo_dia(estacion as Subsistence.Season)
 	# Y la fauna cria, con techo. Sin esto la caza solo resta y el valle se
 	# vacia; con crecimiento sin techo, no se vacia nunca.
 	if poblaciones != null:
-		poblaciones.nuevo_dia(GameState.season as Subsistence.Season)
+		poblaciones.nuevo_dia(estacion as Subsistence.Season)
 	despensa._report_spoilage()
 	hogar._burn_hearth()
 
@@ -3454,7 +3693,7 @@ func _practica_del_dia() -> void:
 		if knowledge != null and person.actividad_de_hoy >= 0:
 			knowledge.record_season(
 				person.actividad_de_hoy as Subsistence.Activity,
-				GameState.season as Subsistence.Season)
+				estacion as Subsistence.Season)
 		person.oficio_de_hoy = -1
 		person.actividad_de_hoy = -1
 
@@ -3611,17 +3850,32 @@ func _note_daily_state() -> void:
 ## granular, aqui, y otra agregada, alla-. Este metodo solo gira la fecha.
 func _advance_local_season() -> void:
 	season_day = 0
-	GameState.season = ((GameState.season + 1) % 4) as Subsistence.Season
-	if GameState.season == Subsistence.Season.PRIMAVERA:
-		GameState.year += 1
+	# La fecha la gira cada campamento EN SU COPIA si lo lleva el reloj de la
+	# partida, y en la global si va solo. Ver [estacion].
+	var nueva := ((estacion + 1) % 4) as Subsistence.Season
+	var otro_anyo := anyo + 1 if nueva == Subsistence.Season.PRIMAVERA else anyo
+	if dirigido:
+		_estacion = nueva
+		_anyo = otro_anyo
+	# Y la global la gira quien la publica —el primer campamento del reloj— o la
+	# simulación suelta, EN ESTE MISMO INSTANTE y no entre pasos: así quien la lea
+	# dentro del paso —la firma en `paso_cerrado`, la huella de un paraje— ve lo
+	# mismo que veía con un solo campamento. Ver [publica_la_fecha].
+	if publica_la_fecha or not dirigido:
+		GameState.season = nueva
+		GameState.year = otro_anyo
+	if estacion == Subsistence.Season.PRIMAVERA:
 		relevo.cumplir_anyos()
 		relevo.revisar_vejez()
 		relevo.evaluar_nacimiento()
 		partida.evaluar_victoria()
 	# El trueque no se propone aquí: se trata cuando el jugador abre la ventana.
 	# Ver [Intercambio] y [PanelTrueque].
-	GameState.last_report = "Empieza %s, año %d." % [
-		Subsistence.season_name(GameState.season), GameState.year]
+	# El parte de la partida lo da quien publica su fecha: con varios campamentos
+	# escribirían todos la misma cadena a la vez. Ver [publica_la_fecha].
+	if publica_la_fecha or not dirigido:
+		GameState.last_report = "Empieza %s, año %d." % [
+			Subsistence.season_name(estacion), anyo]
 	_note(Chronicle.Kind.TIERRA, _season_line(), 2)
 
 	# Lo que hay en cada paraje conocido se rehace para la estación nueva:
@@ -3630,16 +3884,20 @@ func _advance_local_season() -> void:
 	# estación no se notaba en QUÉ hay que ir a buscar, solo en el
 	# multiplicador de rendimiento. Ver [Paraje.fill_contents].
 	if field:
+		# Y en primavera, antes de rehacerlo, el remonte: el río se repuebla.
+		# Ver [ResourceField.remonte].
+		if estacion == Subsistence.Season.PRIMAVERA:
+			field.remonte()
 		for paraje: Paraje in parajes.list:
-			paraje.fill_contents(field, GameState.season)
+			paraje.fill_contents(field, estacion)
 
-	season_changed.emit(GameState.season, GameState.year)
+	season_changed.emit(estacion, anyo)
 
-	if GameState.season == Subsistence.Season.PRIMAVERA:
+	if estacion == Subsistence.Season.PRIMAVERA:
 		hogar.fin_del_invierno()
 	# Y la crecida de la estación que entra puede llevarse una pasarela. Va
 	# aquí, con el caudal de la estación nueva, que es el que la arrastra.
-	pasarelas.revisar_riada(float(Temporada.CAUDAL.get(GameState.season, 1.0)))
+	pasarelas.revisar_riada(float(Temporada.CAUDAL.get(estacion, 1.0)))
 	_citar_la_decision()
 
 
@@ -3759,10 +4017,10 @@ func _acabar_la_berrea() -> void:
 ## No es adorno: cada frase avisa de lo que va a cambiar en los rendimientos,
 ## que es informacion que hoy solo esta en una tabla de multiplicadores.
 func _season_line() -> String:
-	match GameState.season:
+	match estacion:
 		Subsistence.Season.PRIMAVERA:
 			return "Entra la primavera del año %d. Sube el rio y remonta el " \
-				% GameState.year + "pescado."
+				% anyo + "pescado."
 		Subsistence.Season.VERANO:
 			return "Entra el verano. Los dias son largos y se puede ir lejos."
 		Subsistence.Season.OTONO:
@@ -3812,6 +4070,72 @@ func vestido_coverage() -> float:
 	return clampf(float(toolkit.count(Tool.Kind.VESTIDO)) / float(pop), 0.0, 1.0)
 
 
+## Alguien se va de este campamento vivo: de viaje a otro. Ver [Viaje].
+##
+## Es la otra puerta de salida de `people`, y va aparte de [_person_dies] porque
+## no es morir: no hay crónica de muerte, ni sepultura, ni derrota si no queda
+## nadie —un campamento vacío queda abandonado y conserva lo suyo, SISTEMAS §23—.
+## **Y se lleva su cuerpo de la multitud**: `_bodies` y `_headings` van por
+## índice con `people`, así que quitar a alguien sin quitar su cuerpo descuadra a
+## todos los que vienen detrás. (`_person_dies` no lo hace, y es deuda anterior.)
+func despedir(person: Inhabitant) -> void:
+	var idx := people.find(person)
+	if idx < 0:
+		return
+	if _crowd != null and idx < _bodies.size():
+		_crowd.update(_bodies[idx], person.position + Vector3(0.0, -1000.0, 0.0),
+			_headings[idx], person.state, person.age_group)
+		_bodies.remove_at(idx)
+		_headings.remove_at(idx)
+	people.remove_at(idx)
+	# Una cacería no sigue con quien se ha ido del valle.
+	for hunt: Hunt in caceria.hunts:
+		hunt.crew.erase(person)
+	var vivas: Array[Hunt] = []
+	for hunt: Hunt in caceria.hunts:
+		if not hunt.crew.is_empty():
+			vivas.append(hunt)
+	caceria.hunts = vivas
+	person.has_task = false
+	person.route = PackedVector3Array()
+	person.route_step = 0
+
+
+## Alguien llega a este campamento: de un viaje. Ver [Viaje.llegar_a].
+##
+## **Con un id nuevo**: los ids son de cada campamento —cero, uno, dos…— y dos
+## bandas que se juntan chocarían, y hay cosas que van por id (quién está de
+## expedición, a quién se le dio por imposible un sitio). Descarga lo que trae en
+## el almacén, se pone en la campa y, si alguien mira, tiene cuerpo.
+func recibir(person: Inhabitant) -> void:
+	person.id = relevo.id_libre()
+	var angle := _rng.randf() * TAU
+	var radius := _rng.randf_range(4.0, 22.0)
+	var casa := home_forecourt if home_forecourt != Vector3.ZERO else home_position
+	person.position = casa + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+	if _terrain != null:
+		person.position.y = _terrain.get_height_at(person.position)
+	person.target = person.position
+	person.state = Inhabitant.State.OCIOSO
+	person.has_task = false
+	person.route = PackedVector3Array()
+	person.route_step = 0
+	person.unreachable = Vector3.ZERO
+	person.expedicion_hasta = -1
+	person.expedicion_andando = false
+	person.work_centre = home_position
+	for kind: int in person.load:
+		store.add(kind as Materia.Kind, float(person.load[kind]))
+	person.load.clear()
+	person.carrying = 0.0
+	people.append(person)
+	if _crowd != null:
+		var slot := _crowd.add_person()
+		_bodies.append(slot)
+		_headings.append(angle)
+		_crowd.update(slot, person.position, angle, person.state, person.age_group)
+
+
 ## El único sitio por el que alguien deja la partida para siempre.
 ##
 ## Hambre, frío, vejez y percance grave son cuatro caminos hasta aquí, y
@@ -3836,7 +4160,7 @@ func _person_dies(person: Inhabitant, texto: String) -> void:
 		partida.declarar_derrota(texto)
 		return
 	# Y queda despedirlo: se pregunta cómo. Ver [Sepulturas].
-	sepulturas.al_morir(person.given_name, person.position)
+	sepulturas.al_morir(person, texto)
 
 
 ## Cuantos estan en cada estado, para la interfaz
@@ -3871,7 +4195,7 @@ func _freeze_veins() -> void:
 			if field.abundance_cell(act, x, z) <= 0.001:
 				continue
 			var kind := Parajes._kind_for(act, field.cell_center(x, z),
-				GameState.season as Subsistence.Season)
+				estacion as Subsistence.Season)
 			if not Materia.renews(kind):
 				field.freeze(act, x, z)
 
@@ -3910,7 +4234,7 @@ func rest_paraje(paraje: Paraje) -> void:
 ## Solo se anota cuando CAMBIA o cuando lleva ya varios dias: un diario que
 ## dice «hoy nublado» todas las jornadas deja de leerse a la tercera.
 func _roll_weather() -> void:
-	var changed := weather.advance(_rng, GameState.season)
+	var changed := weather.advance(_rng, estacion)
 	if changed:
 		var heavy := weather.kind == Weather.Kind.TEMPORAL 			or weather.kind == Weather.Kind.NIEVE
 		_note(Chronicle.Kind.TIERRA, weather.tell(), 1 if heavy else 0)
@@ -3998,7 +4322,7 @@ func _watch_the_quarry_pass(person: Inhabitant) -> void:
 		return
 
 	var blocked := Hunting.out_of_reach(speciality, person.work_centre,
-		GameState.season as Subsistence.Season, toolkit)
+		estacion as Subsistence.Season, toolkit)
 	if blocked.is_empty():
 		return
 
@@ -4091,8 +4415,10 @@ var food_cap: float = 0.0
 func _ajustar_despensa() -> void:
 	if store == null:
 		return
+	# Los odres VACÍOS: uno lleno de agua no guarda comida. Ver
+	# [Despensa.odres_vacios].
 	store.capacidad_comida = store.capacidad_de_comida(
-		toolkit.count(Tool.Kind.CESTO), toolkit.count(Tool.Kind.ODRE))
+		toolkit.count(Tool.Kind.CESTO), int(floor(despensa.odres_vacios())))
 
 
 ## Hasta donde tiene que bajar la despensa para volver a salir a por comida,
@@ -4473,7 +4799,7 @@ func _quarry_bonus(person: Inhabitant, centre: Vector3) -> float:
 	# no es un sitio de caza mayor flojo: es ninguno, y la cuadrilla tiene que
 	# irse a donde haya algo que de verdad pueda cobrar.
 	var here := Hunting.rations_at(speciality, centre,
-		GameState.season as Subsistence.Season, techs, toolkit)
+		estacion as Subsistence.Season, techs, toolkit)
 	return clampf(here / Trampas.CAZA_DE_REFERENCIA, 0.15, 4.0)
 
 

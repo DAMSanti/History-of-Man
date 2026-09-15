@@ -25,6 +25,7 @@ var _sitios: SiteSet = null
 var _antes_descubierto: Dictionary = {}
 var _antes_empezada := false
 var _antes_casa: Site = null
+var _antes_niebla: NieblaRegional = null
 
 
 func suite_name() -> String:
@@ -43,19 +44,23 @@ func _guardar_el_estado() -> void:
 	_antes_descubierto = GameState.discovered.duplicate()
 	_antes_empezada = GameState.started
 	_antes_casa = GameState.home
+	_antes_niebla = GameState.niebla
 
 
 func _devolver_el_estado() -> void:
 	GameState.discovered = _antes_descubierto
 	GameState.started = _antes_empezada
 	GameState.home = _antes_casa
+	GameState.niebla = _antes_niebla
 
 
 # ------------------------------------------------------- lo que se mide --
 
-func test_al_empezar_solo_se_conoce_la_cueva() -> void:
-	# EL CRITERIO DEL FRENTE 5: «el jugador no ve los 862 de golpe». Está
-	# cumplido, y de sobra: se ve UNO.
+func test_al_empezar_solo_se_conoce_el_recuadro_de_la_cueva() -> void:
+	# EL CRITERIO DEL FRENTE 5: «el jugador no ve los 862 de golpe». Hasta el
+	# 2026-09-14 se veía UNO, la cueva; desde la niebla del mapa regional
+	# (SISTEMAS §4) se ven los sitios del recuadro del primer campamento, que es
+	# lo que la banda tiene a la vista. Siguen siendo un puñado.
 	var conjunto := _conjunto()
 	assert_true(conjunto != null, "los emplazamientos horneados se cargan")
 	if conjunto == null:
@@ -64,11 +69,21 @@ func test_al_empezar_solo_se_conoce_la_cueva() -> void:
 	_guardar_el_estado()
 	GameState.begin(conjunto)
 	var conocidos := GameState.discovered.size()
-	var casa_conocida := GameState.home != null
+	var casa_conocida := GameState.home != null and GameState.is_discovered(GameState.home)
+	var medio := float(Expedition.local_size_m) * 0.5
+	var fuera_del_recuadro := 0
+	for id: Variant in GameState.discovered:
+		for s: Site in conjunto.sites:
+			if s.id == int(id) and s != GameState.home:
+				var x := (s.lon - GameState.home.lon) * Viaje.METROS_POR_GRADO 					* cos(deg_to_rad(GameState.home.lat))
+				var z := (s.lat - GameState.home.lat) * Viaje.METROS_POR_GRADO
+				if absf(x) > medio or absf(z) > medio:
+					fuera_del_recuadro += 1
 	_devolver_el_estado()
 
-	assert_eq(conocidos, 1, "al empezar se conoce un solo emplazamiento")
-	assert_true(casa_conocida, "y es la cueva en la que se instala la banda")
+	assert_true(casa_conocida, "se conoce la cueva en la que se instala la banda")
+	assert_eq(fuera_del_recuadro, 0, "y nada de fuera de su recuadro")
+	assert_lt(float(conocidos), 20.0, "un puñado, no los 862: %d" % conocidos)
 
 
 func test_los_862_NO_son_los_de_esta_epoca() -> void:
@@ -157,8 +172,10 @@ func test_descubrir_el_mismo_dos_veces_no_lo_cuenta_dos_veces() -> void:
 			break
 	if otro != null:
 		GameState.discover(otro)
+		var antes := GameState.discovered.size()
 		GameState.discover(otro)
+		assert_eq(GameState.discovered.size(), antes, "el segundo no suma")
 	var cuantos := GameState.discovered.size()
 	_devolver_el_estado()
 
-	assert_eq(cuantos, 2, "la cueva y el descubierto, no tres")
+	assert_gt(float(cuantos), 1.0, "los del recuadro y el descubierto")

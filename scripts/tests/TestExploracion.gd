@@ -217,3 +217,76 @@ func test_explorada_y_con_pared_se_pinta() -> void:
 	var sim := _que_sabria_pintar()
 	sim.exploracion._sabido[1] = {"explorada": true, "pintable": true}
 	assert_eq(sim.pinturas.painting_blocked_by(), "", "ahora sí")
+
+
+# --------------------- lo que cuenta quien entró (depurar, 2026-09-13) --
+#
+# Petición del usuario: «una vez que se explora la cueva, desaparece el botón,
+# da una descripción detallada de la cueva y el testimonio de quien la exploró
+# contando su experiencia».
+
+## Recorre la visita entera eligiendo siempre una opción que no mate: lo que se
+## prueba es el testimonio, no la suerte.
+func _visita_entera(sim: SettlementSim, cueva: int) -> void:
+	var citados := _escuchar(sim)
+	sim.exploracion.mandar(cueva)
+	var vueltas := 0
+	while not citados.is_empty() and vueltas < 10:
+		vueltas += 1
+		var momento: Moment = citados.pop_back()
+		var elegida := 0
+		for id: String in Repertorio.SITUACIONES:
+			var ficha: Dictionary = Repertorio.SITUACIONES[id]
+			if String(ficha["texto"]) != momento.text:
+				continue
+			var opciones: Array = ficha["opciones"]
+			for i in range(opciones.size()):
+				if int((opciones[i] as Dictionary)["efecto"]) != int(Repertorio.Efecto.PELIGRO):
+					elegida = i
+					break
+		((momento.options[elegida] as Dictionary)["on_pick"] as Callable).call()
+	sim.exploracion.nueva_jornada()
+
+
+func test_al_salir_queda_el_testimonio_de_quien_entro() -> void:
+	var sim := _sim()
+	sim.people[0].given_name = "Ilse"
+	_visita_entera(sim, 1)
+	assert_true(sim.exploracion.explorada(1), "la cueva queda explorada")
+	var testimonio := sim.exploracion.testimonio(1)
+	assert_true(testimonio.contains("Ilse"), "dice quién entró: %s" % testimonio)
+	assert_gt(float(testimonio.length()), 120.0,
+		"y cuenta algo más que una línea: %s" % testimonio)
+
+
+func test_la_cueva_explorada_se_describe() -> void:
+	var sim := _sim()
+	_visita_entera(sim, 1)
+	var descripcion := sim.exploracion.descripcion(1)
+	assert_gt(float(descripcion.length()), 80.0, "una descripción de verdad: %s" % descripcion)
+	assert_true(descripcion.contains("pintar"),
+		"que dice si tiene pared para pintar: %s" % descripcion)
+
+
+func test_explorada_ya_no_ofrece_explorar() -> void:
+	var acciones := PanelSitios._actions_for(Site.Feature.ABRIGO, false, true)
+	for accion: Array in acciones:
+		assert_false(String(accion[0]) == "explorar", "el botón de explorar desaparece")
+	var sin_explorar := PanelSitios._actions_for(Site.Feature.ABRIGO, false, false)
+	var hay := false
+	for accion: Array in sin_explorar:
+		hay = hay or String(accion[0]) == "explorar"
+	assert_true(hay, "y sin explorar, sigue")
+
+
+func test_cada_opcion_tiene_su_frase_de_testimonio() -> void:
+	# Las decisiones y lo que se cuenta de ellas van en dos tablas —ver
+	# [Repertorio.TESTIMONIOS]—; ésta es la que impide que se desincronicen.
+	for id: String in Repertorio.SITUACIONES:
+		var opciones: Array = (Repertorio.SITUACIONES[id] as Dictionary)["opciones"]
+		assert_true(Repertorio.TESTIMONIOS.has(id), "%s tiene testimonio" % id)
+		assert_false(Repertorio.hay(id).is_empty(), "%s dice lo que hay" % id)
+		var frases: Array = (Repertorio.TESTIMONIOS.get(id, {}) as Dictionary).get("dice", [])
+		assert_eq(frases.size(), opciones.size(), "%s: una frase por opción" % id)
+	assert_eq(Repertorio.TESTIMONIOS.size(), Repertorio.SITUACIONES.size(),
+		"y no sobra ninguna")

@@ -154,6 +154,21 @@ func v_for_lat(lat: float) -> float:
 	return (DEMImporter.mercator_y(lat) - north) / (south - north)
 
 
+## La latitud que cae a una fracción `v` de la rejilla: el inverso de
+## [v_for_lat]. Por bisección, porque las filas Mercator no tienen un inverso
+## cerrado que merezca la pena escribir a mano; 48 pasos bajan del milímetro.
+func lat_for_v(v: float) -> float:
+	var norte := lat_north
+	var sur := lat_south
+	for _i in range(48):
+		var medio := (norte + sur) * 0.5
+		if v_for_lat(medio) < v:
+			norte = medio
+		else:
+			sur = medio
+	return (norte + sur) * 0.5
+
+
 ## Valor de la mascara de cauce en coordenadas normalizadas (0-1)
 func sample_river_mask(u: float, v: float) -> float:
 	if river_mask.is_empty():

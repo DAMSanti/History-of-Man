@@ -20,8 +20,9 @@ extends RefCounted
 ## La versión de estas reglas. Entra en la clave de la caché del terreno —ver
 ## [MallaDelTerreno._carvings_hash]—, que si no se cargaría la malla excavada con
 ## las reglas de antes: pasó al medir, con las bocas de la primera versión.
-## **Súbela si cambia dónde se considera buena una boca.**
-const REGLAS := 4
+## **Súbela si cambia dónde se considera buena una boca.** La 5 trae la campa y
+## su explanada (2026-09-14).
+const REGLAS := 5
 
 ## Metros entre un anillo de búsqueda y el siguiente, y entre dos puntos del
 ## mismo anillo. Diez es una decisión: menos que la entalladura de una boca
@@ -53,6 +54,19 @@ const VENTANA_MINIMA := 40.0
 ## orientar la boca, por la misma razón —a escala de vértice manda el ruido—.
 const CATA_DE_PENDIENTE := 22.0
 
+## A cuánto de la boca, ladera abajo, cae la campa: donde se hace el fuego, se
+## plantan las obras y se junta la banda. Es la de siempre, `mouth_radius * 1,6`
+## de [CaveMouth.forecourt_point], y va aquí porque ahora la decide el terreno.
+const CAMPA := 11.2
+
+## El radio de la explanada que se allana en la campa, en metros: cabe el corro
+## del fuego con sus troncos y el secadero encima. Decisión, no medida.
+const EXPLANADA := 5.0
+
+## Hasta dónde de la boca se busca una campa seca si la de ladera abajo cae en el
+## agua. Más lejos ya no es la campa de ESA cueva.
+const CAMPA_MAS_LEJOS := 24.0
+
 
 ## Coloca las entalladuras pedidas. Devuelve copias con `position` ya válida,
 ## `desde` (lo que pedía el catálogo) y `movida_m`.
@@ -76,6 +90,10 @@ static func colocar(terrain: TerrainGenerator, pedidas: Array[Dictionary],
 		boca["position"] = queda
 		boca["desde"] = desde
 		boca["movida_m"] = Vector2(queda.x - desde.x, queda.z - desde.z).length()
+		# Y su campa, EN SECO, con la explanada que el terreno allanará. Ver
+		# [campa_de].
+		boca["campa"] = campa_de(terrain, queda)
+		boca["explanada"] = EXPLANADA
 		colocadas.append(boca)
 	return colocadas
 
@@ -134,6 +152,60 @@ static func punto_bueno(terrain: TerrainGenerator, grid: Navgrid, punto: Vector3
 				mejor = candidato
 		anillo += PASO
 	return mejor
+
+
+## Dónde va la campa de una boca: ladera abajo a [CAMPA], y si ahí la explanada
+## toca el agua, el punto seco más cercano a ése dentro de [CAMPA_MAS_LEJOS].
+##
+## Petición del usuario del 2026-09-14: «que las obras del hogar no se puedan hacer
+## en el río; si hace falta aplanar una zona contigua a las cuevas, se hará».
+## Ladera abajo de una cueva junto al río ES el río, y la campa se decidía así, sin
+## mirar: la hoguera, el secadero y los troncos acababan en el agua. Allanar lo
+## hace el terreno al excavar —[TerrainGenerator._apply_carvings]—; aquí sólo se
+## elige un suelo seco donde allanar.
+##
+## La orientación es la de [CaveMouth.build], con la misma cata: si la campa y la
+## boca miraran a sitios distintos, el paraviento quedaría de lado.
+static func campa_de(terrain: TerrainGenerator, boca: Vector3) -> Vector3:
+	var d := CATA_DE_PENDIENTE
+	var este := terrain.get_height_at(boca + Vector3(d, 0.0, 0.0))
+	var oeste := terrain.get_height_at(boca - Vector3(d, 0.0, 0.0))
+	var sur := terrain.get_height_at(boca + Vector3(0.0, 0.0, d))
+	var norte := terrain.get_height_at(boca - Vector3(0.0, 0.0, d))
+	var abajo := Vector2(oeste - este, norte - sur)
+	if abajo.length() < 0.01:
+		abajo = Vector2(0.0, 1.0)
+	abajo = abajo.normalized()
+	var preferida := boca + Vector3(abajo.x, 0.0, abajo.y) * CAMPA
+	if _explanada_seca(terrain, preferida):
+		return preferida
+	var mejor := preferida
+	var menor := INF
+	var radio := EXPLANADA + 3.0
+	while radio <= CAMPA_MAS_LEJOS:
+		for i in range(24):
+			var angulo := TAU * float(i) / 24.0
+			var punto := boca + Vector3(cos(angulo), 0.0, sin(angulo)) * radio
+			if not _explanada_seca(terrain, punto):
+				continue
+			var lejos := Vector2(punto.x - preferida.x, punto.z - preferida.z).length()
+			if lejos < menor:
+				menor = lejos
+				mejor = punto
+		radio += 2.0
+	return mejor
+
+
+## Si una explanada de [EXPLANADA] metros en este punto queda toda en seco.
+static func _explanada_seca(terrain: TerrainGenerator, punto: Vector3) -> bool:
+	if terrain.crossing_difficulty_at(punto) > 0.0:
+		return false
+	for i in range(12):
+		var angulo := TAU * float(i) / 12.0
+		if terrain.crossing_difficulty_at(punto + Vector3(cos(angulo), 0.0,
+				sin(angulo)) * EXPLANADA) > 0.0:
+			return false
+	return true
 
 
 ## Cuánto cae el terreno alrededor de un punto, en metros por metro.

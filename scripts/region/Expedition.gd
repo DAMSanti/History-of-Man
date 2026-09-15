@@ -28,6 +28,11 @@ static var era: Site.Era = Site.Era.PALEOLITICO
 const REGION_SCENE := "res://scenes/region_map.tscn"
 const LOCAL_SCENE := "res://scenes/demo_main.tscn"
 
+## La primera pantalla del juego, y adonde se vuelve al salir de una partida.
+## Desde el 2026-09-13: antes se arrancaba en el mapa regional. Ver
+## `docs/INTERFAZ.md` §7 y [MenuPrincipal].
+const MENU_SCENE := "res://scenes/menu_principal.tscn"
+
 
 ## Si lo que se va a montar es una partida GUARDADA y no una fundación nueva.
 ##
@@ -36,12 +41,19 @@ const LOCAL_SCENE := "res://scenes/demo_main.tscn"
 ## nuevo en el mismo emplazamiento es una partida distinta. Ver [Guardado].
 static var retomando: bool = false
 
+## Si lo que se va a montar es una VISITA: un mapa que no es el de la banda, sin
+## gente, sin guardar y con el reloj parado. Decisión del usuario del 2026-09-14,
+## «no debe traer a mi banda, sólo cargar y mostrarme el mapa». Lo pone el mapa
+## regional; ver [Guardado.sitio_de_la_banda].
+static var visita: bool = false
+
 
 static func is_active() -> bool:
 	return site != null and not heightmap_path.is_empty()
 
 
 static func clear() -> void:
+	visita = false
 	site = null
 	heightmap_path = ""
 	region_offset = Vector2.ZERO

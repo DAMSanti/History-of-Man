@@ -25,14 +25,22 @@ extends RefCounted
 
 ## Sube cuando lo guardado deja de poder leerse. Un fichero de otra versión no
 ## se carga: se dice y se empieza de nuevo, que es lo que la spec acepta.
-const VERSION := 1
+const VERSION := 2
 
-## **UN ESTADO POR MAPA**, no uno por partida. Decidido por el usuario el
-## 2026-09-13 al perder su partida: salió al mapa regional, eligió su sitio,
-## pulsó F y se le fundó una nueva encima. «El jugador puede tener acceso a
-## TODAS las zonas, todas deben guardar su estado: salir al mapa regional,
-## visitar cualquier mapa, volver al suyo, y que todo siga igual.» Entrar en un
-## mapa ya visitado lo retoma; entrar en uno nuevo no toca a los demás.
+## Las versiones que se siguen abriendo. La 1 es la de una sola banda: su
+## fichero es igual campo a campo, y lo que la 2 añade —más campamentos y la
+## cabecera de la partida, [PARTIDA]— sencillamente no está.
+const VERSIONES_QUE_SE_LEEN: Array[int] = [1, 2]
+
+## La cabecera de la partida: la fecha de todos y los grupos de camino, que no
+## son de ningún mapa. SISTEMAS §23, tarea 12.
+const PARTIDA := "partida.sav"
+
+## **UN ESTADO, EL DEL MAPA DE LA BANDA.** El 2026-09-13 el usuario perdió su
+## partida —salió al mapa regional, eligió su sitio, pulsó F y se le fundó una
+## nueva encima— y se decidió un estado por mapa: «todas deben guardar su
+## estado». El 2026-09-14 cambió: entrar en otro mapa no trae a la banda, es una
+## VISITA, y una visita no tiene estado que guardar. Ver [sitio_de_la_banda].
 ##
 ## Esto es el ESTADO DE LOS MAPAS, que se mantiene solo durante la partida. El
 ## GUARDADO DE PARTIDA —para cerrar el juego y seguir otro día cuando se quiera—
@@ -56,16 +64,33 @@ static func ruta_de(sitio: int) -> String:
 	return carpeta.path_join("sitio_%d.sav" % sitio)
 
 
-## Dónde se apunta cuál fue el último mapa jugado, para el botón de volver.
-static func _ultimo() -> String:
-	return carpeta.path_join("ultimo.txt")
-
-
 ## Guarda la partida. Devuelve el error, o vacío si ha ido bien.
+##
+## Con varios campamentos guarda también **los demás y la cabecera de la
+## partida**: guardar es guardar la partida, no el mapa que se mira —si no, un
+## campamento que no se mira volvería de un autoguardado de hace días—.
 static func guardar(sim: SettlementSim, fauna: WildlifeHerds = null,
 		cuevas: Array = []) -> String:
 	if sim == null:
 		return "no hay partida que guardar"
+	var sitio := _sitio_de_la_partida()
+	if sitio < 0:
+		return "no se sabe qué mapa se está jugando"
+	# UN MAPA DE VISITA NO SE GUARDA. Ver [sitio_de_la_banda]. Uno con campamento
+	# sí, aunque no sea el primero.
+	var banda := sitio_de_la_banda()
+	if banda >= 0 and sitio != banda and Campamentos.de_sitio(sitio) == null:
+		return "es un mapa de visita: la banda está en el mapa %d" % banda
+	var fallo := _escribir(sim, fauna, cuevas, sitio, Expedition.heightmap_path,
+		Expedition.region_offset)
+	if not fallo.is_empty():
+		return fallo
+	return _guardar_los_demas(sim)
+
+
+## Un campamento a su fichero, `sitio_<n>.sav`.
+static func _escribir(sim: SettlementSim, fauna: WildlifeHerds, cuevas: Array,
+		sitio: int, relieve: String, recuadro: Vector2) -> String:
 	var foto := Instantanea.tomar(sim, fauna, cuevas)
 	if not foto.errores.is_empty():
 		# Un `Callable` en el estado, por ejemplo: lo guardado no sería la
@@ -79,14 +104,17 @@ static func guardar(sim: SettlementSim, fauna: WildlifeHerds = null,
 		# y a la capa local se puede llegar sin pasar por ahí -una sonda, una
 		# escena montada a mano-. Guardar -1 dejaba la partida imposible de
 		# retomar sin decir por qué.
-		"sitio": _sitio_de_la_partida(),
+		"sitio": sitio,
 		"descubierto": GameState.discovered.keys(),
+		# Lo que se ha visto de la comarca, que como lo descubierto es de la
+		# partida y no del mapa: se suma al cargar. Ver [NieblaRegional].
+		"niebla": GameState.niebla.a_datos() if GameState.niebla != null else {},
 		"era": int(GameState.era),
 		"cota_del_mar": GameState.sea_level_m,
 		"poblacion": sim.population(),
 		"comida": sim.store.food_rations(),
-		"relieve": Expedition.heightmap_path,
-		"recuadro": Expedition.region_offset,
+		"relieve": relieve,
+		"recuadro": recuadro,
 		"lado": Expedition.local_size_m,
 		"semilla": sim.game_seed,
 		"jornada": sim.day,
@@ -99,22 +127,130 @@ static func guardar(sim: SettlementSim, fauna: WildlifeHerds = null,
 		"pintada": sim.paintings.size() >= SettlementSim.CUEVA_PINTADA_MINIMO,
 		"estacion": int(GameState.season),
 		"anyo": GameState.year,
+		# El filtro de alfileres del jugador. Ver [GameState.marcadores_visibles].
+		"marcadores": GameState.marcadores_visibles.duplicate(),
+		# En qué orden daba sus pasos: el primero publica la fecha, y la barrera
+		# junta en ese orden. Retomar en otro orden sería otra partida.
+		"orden": _orden_de(sim),
 	}
-	var sitio := _sitio_de_la_partida()
-	if sitio < 0:
-		return "no se sabe qué mapa se está jugando"
+	return _a_fichero(ruta_de(sitio), datos)
+
+
+static func _a_fichero(ruta: String, datos: Dictionary) -> String:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(carpeta))
-	var ruta := ruta_de(sitio)
 	var fichero := FileAccess.open(ruta, FileAccess.WRITE)
 	if fichero == null:
 		return "no se puede escribir en %s" % ruta
 	fichero.store_var(datos, true)
 	fichero.close()
-	var ultimo := FileAccess.open(_ultimo(), FileAccess.WRITE)
-	if ultimo != null:
-		ultimo.store_string(str(sitio))
-		ultimo.close()
 	return ""
+
+
+static func _orden_de(sim: SettlementSim) -> int:
+	for i in range(Campamentos.vivos.size()):
+		if Campamentos.vivos[i].sim == sim:
+			return i
+	return 0
+
+
+## Los campamentos que no son el de la escena, y la cabecera de la partida. Sin
+## reloj de la partida no hay más que un campamento y no se escribe nada.
+static func _guardar_los_demas(escena: SettlementSim) -> String:
+	if Campamentos.reloj == null or not is_instance_valid(Campamentos.reloj):
+		return ""
+	for campamento: Campamento in Campamentos.vivos:
+		if campamento.sim == null or campamento.sim == escena:
+			continue
+		var fallo := _escribir(campamento.sim, campamento.herds, campamento.caves,
+			campamento.sitio.id, campamento.relieve, campamento.recuadro)
+		if not fallo.is_empty():
+			return fallo
+	var viajes: Array = []
+	for viaje: Viaje in Campamentos.viajes:
+		var datos := viaje.a_datos()
+		if datos.is_empty():
+			return "un grupo de camino a %s no se puede recorrer" % viaje.hasta_nombre
+		viajes.append(datos)
+	var reloj := Campamentos.reloj
+	return _a_fichero(carpeta.path_join(PARTIDA), {
+		"version": VERSION,
+		"dia": reloj.dia,
+		"hora": reloj.hora,
+		"dia_de_estacion": reloj.dia_de_estacion,
+		"estacion": int(GameState.season),
+		"anyo": GameState.year,
+		"viajes": viajes,
+	})
+
+
+## La cabecera de la partida, o vacío si no la hay: una partida de un campamento,
+## o de antes de la versión 2.
+static func leer_la_partida() -> Dictionary:
+	var ruta := carpeta.path_join(PARTIDA)
+	if not FileAccess.file_exists(ruta):
+		return {}
+	var fichero := FileAccess.open(ruta, FileAccess.READ)
+	if fichero == null:
+		return {}
+	var datos: Variant = fichero.get_var(true)
+	fichero.close()
+	if not (datos is Dictionary) or int((datos as Dictionary).get("version", -1)) != VERSION:
+		return {}
+	return datos
+
+
+## Monta y vuelca los campamentos guardados que no son el de la escena, sin
+## mirarlos, y los grupos que iban de camino. Devuelve los errores.
+##
+## Va DESPUÉS de dar de alta el de la escena: el primero de la lista publica la
+## fecha, y se respeta el orden en que se guardaron —ver `orden`—. Un fichero de
+## la versión 1 no se monta aquí: aquella partida tenía una sola banda, la de la
+## escena, y los demás mapas eran visitas o bandas sueltas de antes.
+static func retomar_los_demas(arbol: SceneTree, sitios: SiteSet,
+		escena: int) -> Array[String]:
+	var errores: Array[String] = []
+	var guardados: Array[Dictionary] = []
+	for cabecera: Dictionary in cabeceras():
+		var id := int(cabecera.get("sitio", -1))
+		if int(cabecera.get("version", 1)) < 2 or id == escena \
+				or Campamentos.de_sitio(id) != null:
+			continue
+		guardados.append(cabecera)
+	guardados.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("orden", 0)) < int(b.get("orden", 0)))
+	for cabecera: Dictionary in guardados:
+		var id := int(cabecera.get("sitio", -1))
+		var sitio: Site = null
+		for s: Site in sitios.sites:
+			if s.id == id:
+				sitio = s
+		var campamento := Campamento.montar(arbol, sitio,
+			int(cabecera.get("poblacion", 0)), float(cabecera.get("comida", 0.0)))
+		if campamento == null:
+			errores.append("el campamento del sitio %d no se puede montar" % id)
+			continue
+		errores.append_array(volcar(leer(id), campamento.sim, campamento.herds,
+			campamento.caves))
+		campamento.mirar_las_cumbres()
+		Campamentos.alta(arbol, campamento)
+		Campamentos.dejar_de_mirar(campamento)
+	var partida := leer_la_partida()
+	if partida.is_empty():
+		return errores
+	for datos: Dictionary in (partida.get("viajes", []) as Array):
+		var viaje := Viaje.de_datos(datos)
+		if viaje == null:
+			errores.append("un grupo de camino no se puede leer")
+			continue
+		Campamentos.viajes.append(viaje)
+	# LA FECHA DE LA PARTIDA, la guardada: si el primer campamento se quedó vacío,
+	# la suya es la del día en que se fue todo el mundo.
+	if Campamentos.reloj != null and is_instance_valid(Campamentos.reloj):
+		Campamentos.reloj.dia = int(partida.get("dia", Campamentos.reloj.dia))
+		Campamentos.reloj.hora = float(partida.get("hora", Campamentos.reloj.hora))
+		Campamentos.reloj.dia_de_estacion = int(partida.get("dia_de_estacion",
+			Campamentos.reloj.dia_de_estacion))
+	return errores
 
 
 ## Qué emplazamiento se está jugando: el del traspaso, y si no el de la banda.
@@ -124,31 +260,43 @@ static func _sitio_de_la_partida() -> int:
 	return GameState.home.id if GameState.home != null else -1
 
 
-## Si ese mapa tiene estado guardado. Sin sitio, el último que se jugó.
+## EL MAPA DONDE VIVE LA BANDA, o -1 si todavía no hay ninguno.
+##
+## **La banda vive en UN mapa**, el primero: decisión del usuario del 2026-09-14,
+## «cuando voy al mapa regional y entro en otro mapa, no debe traer a mi banda,
+## sólo cargar y mostrarme el mapa; sólo asienta la banda en el primer mapa al
+## principio del juego». Hasta entonces entrar en un mapa sin estado fundaba una
+## banda nueva ahí, y la partida acababa con tres. Los demás mapas se VISITAN y no
+## se guardan —ver [guardar]—. Migrar a la gente a otro mapa pide un sistema que
+## no existe todavía.
+##
+## No se apunta en ningún fichero: con las visitas sin guardar, el único mapa con
+## estado ES el de la banda. Para las partidas de antes, que tienen banda en
+## varios, es el que lleva más jornadas —el que se fundó primero y se jugó—.
+static func sitio_de_la_banda() -> int:
+	var mejor := -1
+	var mas := -1
+	for cabecera: Dictionary in cabeceras():
+		var jornada := int(cabecera.get("jornada", 0))
+		if jornada > mas:
+			mas = jornada
+			mejor = int(cabecera.get("sitio", -1))
+	return mejor
+
+
+## Si ese mapa tiene estado guardado. Sin sitio, el de la banda.
 static func hay_partida(sitio: int = -1) -> bool:
 	return not leer(sitio).is_empty()
 
 
-## El último mapa que se jugó, o -1 si ninguno.
-static func ultimo_sitio() -> int:
-	if not FileAccess.file_exists(_ultimo()):
-		return -1
-	var fichero := FileAccess.open(_ultimo(), FileAccess.READ)
-	if fichero == null:
-		return -1
-	var texto := fichero.get_as_text().strip_edges()
-	fichero.close()
-	return int(texto) if texto.is_valid_int() else -1
-
-
 ## El estado guardado de un mapa, o vacío si no hay o no se puede leer. Sin
-## sitio, el del último que se jugó.
+## sitio, el de la banda.
 ##
 ## **Una versión distinta devuelve vacío**: un fichero de otra versión del juego
 ## no promete cargar, y cargarlo a medias sería peor que no cargarlo.
 static func leer(sitio: int = -1) -> Dictionary:
 	if sitio < 0:
-		sitio = ultimo_sitio()
+		sitio = sitio_de_la_banda()
 	if sitio < 0:
 		return {}
 	var ruta := ruta_de(sitio)
@@ -162,7 +310,7 @@ static func leer(sitio: int = -1) -> Dictionary:
 	if not (datos is Dictionary):
 		return {}
 	var guardado: Dictionary = datos
-	if int(guardado.get("version", -1)) != VERSION:
+	if not VERSIONES_QUE_SE_LEEN.has(int(guardado.get("version", -1))):
 		return {}
 	return guardado
 
@@ -188,7 +336,27 @@ static func preparar_la_escena(guardado: Dictionary, sitios: SiteSet) -> bool:
 	# la expedición del mapa B descubrió después de guardar A.
 	for id: Variant in (guardado.get("descubierto", []) as Array):
 		GameState.discovered[int(id)] = true
+	# LA NIEBLA, igual: se suma. Un guardado de antes del 2026-09-14 no la trae, y
+	# entonces se ve lo que la partida ya tuviera.
+	var niebla: Dictionary = guardado.get("niebla", {})
+	if not niebla.is_empty():
+		GameState.la_niebla().sumar_datos(niebla)
+	else:
+		# UN GUARDADO DE ANTES DE LA NIEBLA trae sitios descubiertos y ninguna
+		# niebla: sin esto, al abrirlo quedaban todos tapados. Se levanta el
+		# recuadro de cada uno, que es lo que la banda conocería de ellos.
+		# Decisión de compatibilidad del 2026-09-14.
+		for site: Site in sitios.sites:
+			if GameState.is_discovered(site):
+				GameState.levantar_niebla({"forma": "recuadro", "lon": site.lon,
+					"lat": site.lat, "lado": float(Expedition.local_size_m)}, sitios)
 	GameState.started = true
+	# Un guardado de antes del 2026-09-14 no lo trae: se deja lo que hubiera.
+	if guardado.has("marcadores"):
+		GameState.marcadores_visibles.clear()
+		var marcadores: Dictionary = guardado["marcadores"]
+		for familia: Variant in marcadores:
+			GameState.marcadores_visibles[int(familia)] = bool(marcadores[familia])
 	Expedition.site = sitio
 	Expedition.heightmap_path = String(guardado.get("relieve", ""))
 	Expedition.region_offset = guardado.get("recuadro", Vector2.ZERO) as Vector2

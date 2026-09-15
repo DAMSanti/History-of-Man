@@ -25,6 +25,12 @@ signal tech_selected(tech: TechTree.Tech)
 ## «Pesquera de piea» y «Nasa de mimbr» recortadas a media palabra. Medido en
 ## la captura, no calculado.
 const NODE := Vector2(168.0, 46.0)
+
+## El rojo con el que el aviso escribe lo que le falta a una técnica. Va en
+## hexadecimal y fijo, no `UISkin.ALARM`: el aviso emergente se pinta sobre el
+## fondo oscuro de Godot y no sobre la piel de la era, y el hematites de la piel
+## no se lee ahí.
+const ROJO_DEL_AVISO := "#ff6b57"
 const GAP := Vector2(16.0, 30.0)
 
 ## Grosor y cabeza de las flechas.
@@ -114,7 +120,7 @@ func _depth_in(tech: TechTree.Tech, branch: Array) -> int:
 ## sube según el avance y eso no es una caja de estilo, es una figura a medio
 ## pintar.
 func _node_box(tech: TechTree.Tech) -> Control:
-	var frame := PanelContainer.new()
+	var frame := CasillaTecnica.new()
 	frame.position = _at[tech]
 	frame.custom_minimum_size = NODE
 	frame.size = NODE
@@ -227,7 +233,7 @@ func _tooltip(tech: TechTree.Tech) -> String:
 			var frena := _tech.causa(tech)
 			linea += ", ya hechas"
 			if not frena.is_empty() and frena != "lista":
-				linea += "; falta: %s" % frena
+				linea += "; falta: %s" % _en_rojo(frena)
 		lines.append(linea + ".")
 
 	var cost := TechTree.learning_cost(tech)
@@ -254,14 +260,22 @@ func _tooltip(tech: TechTree.Tech) -> String:
 		if _tech.freno(tech) == TechTree.Freno.MATERIAL:
 			var falta := _tech.missing_for(tech)
 			var que := ", ".join(falta) if not falta.is_empty() else "material"
-			lines.append("PARADA: el progreso no sube hasta que haya %s." % que)
+			lines.append(_en_rojo("PARADA: el progreso no sube hasta que haya %s." % que))
 
+	# Lo que ya se tiene, en tinta; lo que falta, en rojo. Petición del usuario
+	# del 2026-09-13: «en el tooltip, marcando en rojo, qué le falta».
 	var needs: Array = entry["needs"]
 	if not needs.is_empty():
 		var before: Array[String] = []
 		for need: int in needs:
-			before.append(TechTree.tech_name(need as TechTree.Tech))
+			var nombre := TechTree.tech_name(need as TechTree.Tech)
+			before.append(nombre if _tech.has(need as TechTree.Tech) else _en_rojo(nombre))
 		lines.append("Cuelga de: %s." % ", ".join(before))
+	var obra := TechTree.needs_camp(tech)
+	if obra >= 0:
+		var levantada: bool = _tech.camp_built.get(obra, false)
+		var cual := CampProjects.project_name(obra as CampProjects.Kind).to_lower()
+		lines.append("Pide: %s levantado." % (cual if levantada else _en_rojo(cual)))
 
 	# Y la causa, la misma que dice la casilla. Aquí había una segunda lista de
 	# «ahora mismo falta» sacada de `missing_for`, que repetía la línea de
@@ -269,8 +283,15 @@ func _tooltip(tech: TechTree.Tech) -> String:
 	var causa := _tech.causa(tech)
 	if not causa.is_empty():
 		lines.append("")
-		lines.append("Ahora mismo: %s." % causa)
+		var frena := TechTree.frena_un_requisito(_tech.freno(tech))
+		lines.append("Ahora mismo: %s." % (_en_rojo(causa) if frena else causa))
 	return "\n".join(lines)
+
+
+## Un trozo del aviso en rojo. El aviso es BBCode —ver [CasillaTecnica]—, así
+## que los corchetes del texto se escapan para que no se lean como etiquetas.
+static func _en_rojo(texto: String) -> String:
+	return "[color=%s]%s[/color]" % [ROJO_DEL_AVISO, texto.replace("[", "[lb]")]
 
 
 ## Las correas del árbol y las casillas. Van DETRÁS del texto porque se dibujan
@@ -321,13 +342,14 @@ func _casilla(tech: TechTree.Tech) -> void:
 	draw_rect(caja, UISkin.OCHRE.darkened(0.25) if alcanzable
 		else UISkin.INK_FAINT.darkened(0.35), false, 1.0)
 
-	# Y la que está PARADA, en hematites y con doble filete.
+	# Y la que no sube por un REQUISITO, en hematites y con doble filete: la
+	# técnica previa, la obra o el material. Hasta el 2026-09-13 sólo la del
+	# material; lo pidió el usuario para las tres.
 	#
-	# Parada es sólo la que no sube aunque se practique —falta material—, no
-	# la que va despacio: si se marcara también la de las jornadas se
+	# La que va despacio NO: si se marcara también la de las jornadas se
 	# marcarían casi todas y la señal no diría nada. Es la diferencia entre
-	# «trae asta» y «pon gente en el taller». Ver [TechTree.Freno].
-	if _tech.freno(tech) == TechTree.Freno.MATERIAL:
+	# «trae asta» y «pon gente en el taller». Ver [TechTree.frena_un_requisito].
+	if TechTree.frena_un_requisito(_tech.freno(tech)):
 		draw_rect(caja, UISkin.ALARM, false, 1.5)
 		draw_rect(caja.grow(-2.5), UISkin.ALARM.darkened(0.45), false, 1.0)
 

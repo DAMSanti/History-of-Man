@@ -498,6 +498,7 @@ func _food_cap_row(body: VBoxContainer) -> void:
 ## además con qué se hace, quién la saca y cómo está de filo, que es lo que
 ## decide si hay que ponerse a tallar hoy o se puede esperar.
 func show_tool(kind: Tool.Kind) -> void:
+	ui.recordar("utensilio", show_tool.bind(kind))
 	var body := ui._window("utensilio", Tool.kind_name(kind))
 	ui._clear(body)
 	if ui.sim == null:
@@ -572,6 +573,7 @@ func show_tool(kind: Tool.Kind) -> void:
 ## una no hay que hacer nada y en la otra hay que mandar gente al monte antes
 ## de que sea tarde. La curva lo dice de un vistazo y el número no.
 func show_material(kind: Materia.Kind) -> void:
+	ui.recordar("material", show_material.bind(kind))
 	var body := ui._window("material", Materia.material_name(kind))
 	ui._clear(body)
 	if ui.sim == null:
@@ -885,6 +887,41 @@ func _goal_buttons(row: HBoxContainer, on_less: Callable, on_more: Callable,
 	row.add_child(clear)
 
 
+## La marca de prioridad de la fila: alta, normal, baja o nunca.
+##
+## Va AL LADO DE LA META, en la misma fila, porque es donde el jugador ya está
+## mirando qué tiene y cuánto quiere —INTERFAZ §4—. Un clic pasa al nivel
+## siguiente; el nivel se lee sin abrir nada, con el ocre de siempre para lo
+## alto y apagado para lo que no se recoge.
+func _priority_button(row: HBoxContainer, kind: Materia.Kind) -> void:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(GameUI.COL_BUTTON + 26, 20)
+	button.add_theme_font_size_override("font_size", 11)
+	_pintar_prioridad(button, kind)
+	button.pressed.connect(func() -> void:
+		ui.sim.fijar_prioridad_material(kind,
+			Prioridades.siguiente(ui.sim.prioridades.de_material(kind)))
+		show_store())
+	row.add_child(button)
+	# Atado al estado y no pintado una vez: cambiar el nivel por código -o
+	# desde otra ventana- tiene que verse aquí sin cerrar nada.
+	ui._bind(button, func() -> void: _pintar_prioridad(button, kind))
+
+
+func _pintar_prioridad(button: Button, kind: Materia.Kind) -> void:
+	var nivel := ui.sim.prioridades.de_material(kind)
+	button.text = Prioridades.nombre(nivel)
+	button.tooltip_text = "Qué se recoge antes cuando no cabe todo, y adónde " \
+		+ "se va a trabajar. Un clic pasa al nivel siguiente."
+	var tinta := UISkin.INK_SOFT
+	match nivel:
+		Prioridades.Nivel.ALTA:
+			tinta = UISkin.OCHRE
+		Prioridades.Nivel.BAJA, Prioridades.Nivel.NUNCA:
+			tinta = UISkin.INK_FAINT
+	button.add_theme_color_override("font_color", tinta)
+
+
 ## Una fila de material: lo que hay, lo que piden las obras y el utillaje, y
 ## el tope que haya puesto el jugador.
 ## De qué está hecha una pieza, con sus cantidades. Es lo que hay que tener
@@ -1002,6 +1039,11 @@ func _material_row(body: VBoxContainer, kind: Materia.Kind,
 			show_store(),
 		has_goal)
 
+	# Y la prioridad, sólo en lo que de verdad se recoge: priorizar la carne
+	# seca no significa nada, porque no se recoge, se hace. Ver SISTEMAS §22.
+	if ui.sim.tajo.se_recoge(kind):
+		_priority_button(row, kind)
+
 	# Peso y volumen van al tooltip y no a la fila. Son la cifra que decide si
 	# cabe en el abrigo, pero se consultan de tarde en tarde, y metidos en
 	# línea empujaban la fila fuera de la ventana.
@@ -1037,9 +1079,18 @@ func _tool_row(body: VBoxContainer, kind: Tool.Kind,
 	var have_tint := UISkin.coverage_color(
 		float(have) / maxf(float(needed), 0.001)) if needed > 0 else UISkin.INK
 
+	# El odre, VACÍO. Los llenos ya salen como Agua, y contarlos en las dos filas
+	# era contarlos dos veces: queja del usuario del 2026-09-13. La cobertura
+	# sigue midiéndose con todos, que es lo que dice si hay odres para la banda.
+	var have_text := "%d" % have
+	var name_text := Tool.kind_name(kind)
+	if kind == Tool.Kind.ODRE:
+		have_text = "%d" % int(floor(ui.sim.despensa.odres_vacios()))
+		name_text = "Odre vacío"
+
 	var row := _ledger_row(body, MateriaIcon.for_tool(kind),
-		Tool.kind_name(kind),
-		"%d" % have, have_tint,
+		name_text,
+		have_text, have_tint,
 		"%.1f" % broken if broken < 10.0 else "%.0f" % broken,
 		"%d" % order if has_order else "—",
 		UISkin.OCHRE if has_order else UISkin.INK_FAINT, index,
@@ -1076,6 +1127,10 @@ func _tool_row(body: VBoxContainer, kind: Tool.Kind,
 		"No hay ninguna." if have == 0
 			else "Filo medio al %.0f%%." % (condition * 100.0),
 		_how_and_what_for(kind)]
+	if kind == Tool.Kind.ODRE and have > 0:
+		row.get_parent().tooltip_text += "\n\nHechos %d: %d vacíos en el abrigo, %.0f llenos (en Agua) y %d fuera con quien sale." % [
+			have, int(floor(ui.sim.despensa.odres_vacios())),
+			ui.sim.store.amount(Materia.Kind.AGUA), ui.sim.despensa.odres_fuera()]
 
 
 func _autonomy_text(days: float) -> String:

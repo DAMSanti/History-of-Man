@@ -406,7 +406,7 @@ func motivo_del_frio(peak: Dictionary) -> String:
 		return ""
 	var cima: Vector3 = peak["pos"]
 	var cota := sim._terrain.get_height_at(cima) if sim._terrain != null else cima.y
-	var grados := Termometro.grados(GameState.season as Subsistence.Season, 3.0, cota)
+	var grados := Termometro.grados(sim.estacion as Subsistence.Season, 3.0, cota)
 	if SettlementSim.frio_por_hora(grados) <= 0.0:
 		return ""
 	if sim.toolkit.count(Tool.Kind.VESTIDO) >= MIN_CLIMBING_PARTY:
@@ -563,9 +563,22 @@ func _is_on_peak(person: Inhabitant) -> bool:
 
 
 func _do_ascent(person: Inhabitant) -> void:
+	var vistos: Array[String] = []
 	if sim.knowledge:
 		sim.knowledge.see_from(person.position, ASCENT_SIGHT_RANGE)
 		_reveal_from_summit(person.position)
+		# Y lo que se ve se bautiza YA, todo junto, para contarlo en un solo
+		# aviso. Ver [Reconocimiento.bautizar_desde_la_cumbre].
+		vistos = sim.reconocimiento.bautizar_desde_la_cumbre(person.position,
+			ASCENT_SIGHT_RANGE)
+	# Y EN EL MAPA REGIONAL, lo mismo que se ve, aunque salga del recuadro
+	# (SISTEMAS §4): un círculo del mismo alcance. Por la barrera si la lleva el
+	# reloj. Ver [SettlementSim.levantar_niebla].
+	if sim._terrain != null:
+		var geo := sim._terrain.world_to_geo(person.position)
+		if geo != Vector2.INF:
+			sim.levantar_niebla({"forma": "circulo", "lon": geo.x, "lat": geo.y,
+				"radio": ASCENT_SIGHT_RANGE})
 	ascents += 1
 	person.fatigue = clampf(person.fatigue + 15.0, 0.0, 100.0)
 
@@ -610,8 +623,31 @@ func _do_ascent(person: Inhabitant) -> void:
 	sim.tell_tale(Tale.discovery("Cumbre coronada",
 		"%s ha coronado el alto %s. Desde arriba se lee de una vez medio valle: "
 			% [person.given_name, where]
-		+ "dónde abunda la caza, por dónde va el agua y qué queda por explorar.",
+		+ "dónde abunda la caza, por dónde va el agua y qué queda por explorar."
+		+ frase_de_lo_visto(vistos),
 		person.position, sim.day, person.current_task()))
+
+
+## Lo que la cumbre ha dejado con nombre, dicho en UNA frase. Vacío si nada.
+static func frase_de_lo_visto(nombres: Array[String]) -> String:
+	if nombres.is_empty():
+		return ""
+	if nombres.size() == 1:
+		return " Se ha descubierto un paraje: %s." % nombres[0]
+	# Los primeros cinco con nombre y el resto contado: una tarjeta con veinte
+	# nombres seguidos no se lee, y los tiene todos la ventana de parajes.
+	var enteros := mini(nombres.size(), NOMBRES_EN_LA_TARJETA)
+	var lista := ", ".join(PackedStringArray(nombres.slice(0, enteros - 1)))
+	if nombres.size() > enteros:
+		lista += ", %s y %d más" % [nombres[enteros - 1], nombres.size() - enteros]
+	else:
+		lista += " y " + nombres[enteros - 1]
+	return " Se han descubierto %d parajes: %s." % [nombres.size(), lista]
+
+
+## Cuántos nombres se escriben en la tarjeta de la cumbre. Decisión de lectura,
+## no de partida.
+const NOMBRES_EN_LA_TARJETA := 5
 
 
 ## Que tan clara tiene que verse una celda desde el pico para que coronar

@@ -104,7 +104,7 @@ func test_el_vivac_se_cobra_una_vez_por_noche() -> void:
 	# marca del dia la hoguera se llevaria la lena entera en un suspiro.
 	var sim := SettlementSim.new()
 	var person := _fuera(sim)
-	person.add_load(Materia.Kind.PIEL, 1.0)
+	person.add_load(Materia.Kind.PIEL_CURTIDA, 1.0)
 	person.add_load(Materia.Kind.LENA, 8.0)
 
 	for _i in range(50):
@@ -119,10 +119,10 @@ func test_la_piel_no_se_gasta_pero_hace_falta() -> void:
 	# llevo.
 	var sim := SettlementSim.new()
 	var person := _fuera(sim)
-	person.add_load(Materia.Kind.PIEL, 1.0)
+	person.add_load(Materia.Kind.PIEL_CURTIDA, 1.0)
 	person.add_load(Materia.Kind.LENA, 4.0)
 	sim.despensa._bivouac(person)
-	assert_eq(person.load.get(Materia.Kind.PIEL, 0.0), 1.0,
+	assert_eq(person.load.get(Materia.Kind.PIEL_CURTIDA, 0.0), 1.0,
 		"la piel vuelve al abrigo con quien la llevo")
 
 
@@ -136,7 +136,7 @@ func test_sin_nada_encima_se_duerme_a_la_intemperie() -> void:
 func test_falta_solo_la_hoguera() -> void:
 	var sim := SettlementSim.new()
 	var person := _fuera(sim)
-	person.add_load(Materia.Kind.PIEL, 1.0)
+	person.add_load(Materia.Kind.PIEL_CURTIDA, 1.0)
 	sim.despensa._bivouac(person)
 	assert_eq(person.bivouac_lack, 1, "tienda si, hoguera no")
 

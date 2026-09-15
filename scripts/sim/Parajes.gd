@@ -35,6 +35,20 @@ const WORTH_NAMING := 0.18
 ## uno al otro, no un número de metros suelto.
 const MERGE_RANGE := 320.0
 
+## Quién sabe en qué estación está este campamento: su simulación.
+##
+## Hasta el 2026-09-14 se leía `GameState.season`, que es la de la partida. Con
+## varios campamentos, uno que da su paso tiene que leer SU fecha y no la global,
+## que otro podría estar girando (SISTEMAS §23, «un hilo por campamento»). Sin
+## simulación —las pruebas que montan los parajes sueltos— se lee la global como
+## siempre. No se guarda: la pone la simulación al crearse (`Instantanea.FUERA`).
+var fecha: Object = null
+
+## La estación de este campamento. Ver [fecha].
+var estacion: Subsistence.Season:
+	get:
+		return fecha.estacion if fecha != null else GameState.season
+
 var list: Array[Paraje] = []
 var _by_id: Dictionary = {}
 
@@ -81,7 +95,7 @@ func add(paraje: Paraje) -> bool:
 
 ## Un nombre que no esté cogido.
 ##
-## El nombre sale de la celda por un hash, y con quince palabras de lugar los
+## El nombre sale de la celda por un hash, y con pocas palabras de lugar los
 ## choques son inevitables: salían dos «cantizal de la vega» y el jugador no
 ## podía distinguirlos, que es justo lo contrario de para lo que sirve
 ## bautizar un sitio. Al chocar se prueba la siguiente palabra.
@@ -96,7 +110,7 @@ func _free_name(paraje: Paraje) -> String:
 		if not taken.has(candidate):
 			return candidate
 
-	# Con las quince agotadas -mucho paraje del mismo material- se numera. Feo,
+	# Con las sesenta agotadas -mucho paraje del mismo material- se numera. Feo,
 	# pero un nombre repetido es peor que un número.
 	var base := Paraje.build_name(paraje.cell_x, paraje.cell_z, paraje.kind)
 	var n := 2
@@ -587,7 +601,7 @@ func bautizar(field: ResourceField, activity: Subsistence.Activity,
 	if terrain:
 		punto.y = terrain.get_height_at(punto)
 
-	var kind := _kind_for(activity, punto, GameState.season)
+	var kind := _kind_for(activity, punto, estacion)
 	var paraje := Paraje.create(x, z, activity, kind, punto, day)
 	# El suelo de debajo, que decide QUE puede haber aqui. Ver
 	# `Parajes.material_fits`.
@@ -596,7 +610,7 @@ func bautizar(field: ResourceField, activity: Subsistence.Activity,
 	# Se rellena lo que hay ahi al bautizarlo, aunque casi todo quede como
 	# incognita: la lista de lo que FALTA por saber es la que le da sentido a
 	# volver.
-	paraje.fill_contents(field, GameState.season)
+	paraje.fill_contents(field, estacion)
 
 	# Y el nombre lo pone lo que MAS ABUNDA, no lo que tocaba por actividad: un
 	# sitio con cuatro veces mas raiz que avellana es un raizal aunque se
@@ -682,8 +696,7 @@ func prune_exhausted(field: ResourceField) -> Array[Dictionary]:
 			var centre := field.cell_center(cell.x, cell.y)
 			if not paraje.contains(centre):
 				continue
-			if _kind_for(act, centre,
-					GameState.season as Subsistence.Season) != spent:
+			if _kind_for(act, centre, estacion) != spent:
 				continue
 			field.dry_cell(act, cell.x, cell.y)
 
@@ -1154,26 +1167,62 @@ const RUMBOS := [
 ## Por orden: si cae encima de un paraje, ese paraje. Si hay uno cerca, se
 ## nombra respecto a el. Y si no hay nada conocido, el rumbo y la distancia,
 ## que es exactamente lo que sabria decir alguien que no ha estado.
+##
+## **El MÁS CERCANO**, no el primero de la lista a menos de [MERGE_RANGE]: con
+## trescientos veinte metros de alcance caben varios, y una nasa calada en el río
+## salía «en la veta de ocre» porque la veta se bautizó antes. Queja del usuario
+## del 2026-09-14, en la ventana de técnicas.
 func place_name(point: Vector3, home: Vector3) -> String:
-	for paraje: Paraje in list:
-		var flat := Vector2(point.x - paraje.position.x, point.z - paraje.position.z)
-		if flat.length() < MERGE_RANGE:
-			return paraje.name_text
+	return _nombre_del_punto(point, home, list)
 
-	var closest: Paraje = null
-	var closest_distance := 700.0
-	for paraje: Paraje in list:
-		var flat := Vector2(point.x - paraje.position.x, point.z - paraje.position.z)
-		var distance := flat.length()
-		if distance < closest_distance:
-			closest_distance = distance
-			closest = paraje
 
-	if closest != null:
-		return "%s de %s" % [bearing(closest.position, point), closest.name_text]
+## Como [place_name], pero para lo que está EN EL AGUA —una nasa, un cesto de
+## remojo—: se nombra por el paraje de pesca o marisqueo más cercano, si hay
+## alguno al alcance. Una nasa no se cala en una veta de ocre aunque la veta
+## quede más cerca de la orilla que el remanso.
+func place_name_en_el_agua(point: Vector3, home: Vector3) -> String:
+	var de_agua: Array[Paraje] = []
+	for paraje: Paraje in list:
+		if paraje.serves(Subsistence.Activity.PESCA) \
+				or paraje.serves(Subsistence.Activity.MARISQUEO):
+			de_agua.append(paraje)
+	var cerca := _mas_cercano(point, de_agua)
+	if cerca != null and _plano(point, cerca.position) < MERGE_RANGE:
+		return cerca.name_text
+	# SIN PARAJE DE AGUA AL ALCANCE, LA ORILLA, y nunca un paraje de tierra. Hasta el
+	# 2026-09-14 caía en [place_name], que nombra por el paraje más cercano de
+	# cualquier clase: la ventana de técnicas ponía nasas en «la veta de ocre». La
+	# nasa se cala donde pesca el pescador, junto al agua —decisión del usuario:
+	# «donde pesca, pero bien nombrada»—.
+	var away := Vector2(point.x - home.x, point.z - home.z).length()
+	return "la orilla %s del abrigo, a %d m" % [bearing(home, point), int(away)]
+
+
+func _nombre_del_punto(point: Vector3, home: Vector3, candidatos: Array[Paraje]) -> String:
+	var encima := _mas_cercano(point, candidatos)
+	if encima != null and _plano(point, encima.position) < MERGE_RANGE:
+		return encima.name_text
+
+	if encima != null and _plano(point, encima.position) < 700.0:
+		return "%s de %s" % [bearing(encima.position, point), encima.name_text]
 
 	var away := Vector2(point.x - home.x, point.z - home.z).length()
 	return "%s del abrigo, a %d m" % [bearing(home, point), int(away)]
+
+
+static func _mas_cercano(point: Vector3, candidatos: Array[Paraje]) -> Paraje:
+	var mejor: Paraje = null
+	var menor := INF
+	for paraje: Paraje in candidatos:
+		var lejos := _plano(point, paraje.position)
+		if lejos < menor:
+			menor = lejos
+			mejor = paraje
+	return mejor
+
+
+static func _plano(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 ## El rumbo de un punto respecto a otro, dicho con nombre de viento.

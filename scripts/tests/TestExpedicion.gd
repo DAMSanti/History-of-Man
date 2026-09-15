@@ -11,16 +11,28 @@ func suite_name() -> String:
 	return "Expedicion"
 
 
-var _antes_descubierto: Dictionary = {}
+var _antes: Array = []
 
 
 ## `GameState` es estático: lo que se toque aquí se devuelve.
 func _guardar() -> void:
-	_antes_descubierto = GameState.discovered.duplicate()
+	_antes = [GameState.discovered.duplicate(), GameState.niebla, GameState.home]
 
 
 func _devolver() -> void:
-	GameState.discovered = _antes_descubierto
+	GameState.discovered = _antes[0]
+	GameState.niebla = _antes[1]
+	GameState.home = _antes[2]
+
+
+## Un sitio lejos de la comarca, donde el pasillo no encuentra nada: las pruebas
+## de coste no deben descubrir ni tocar la niebla de la partida.
+func _en_ninguna_parte() -> Site:
+	var s := Site.new()
+	s.id = 99999
+	s.lon = 0.0
+	s.lat = 0.0
+	return s
 
 
 ## Una banda de adultos en casa, con despensa de sobra.
@@ -31,7 +43,7 @@ func _sim(gente: int = 8, comida: float = 400.0) -> SettlementSim:
 	sim.store.add(Materia.Kind.CARNE_SECA, comida)
 	# Y el vivac: desde la tanda 3 una expedición se lleva tienda y hoguera.
 	# Ver [Expedicion.hace_falta_para].
-	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
 	for i in range(gente):
 		var p := Inhabitant.new()
@@ -39,36 +51,41 @@ func _sim(gente: int = 8, comida: float = 400.0) -> SettlementSim:
 		p.age_group = Inhabitant.Age.ADULTO
 		sim.people.append(p)
 	sim.day = 10
+	sim.sitio = _en_ninguna_parte()
 	return sim
 
 
-## Una comarca a la que se puede IR de verdad: con abrigo y sobre el mar, que es
-## lo que `Site.is_usable_in` pide para contar como destino. La de abajo vale
-## para `mandar`, que recibe el id ya elegido, pero no para la tarjeta, que
-## tiene que encontrar adónde.
-func _comarca_a_la_que_ir() -> SiteSet:
-	var conjunto := SiteSet.new()
-	for i in range(3):
-		var s := Site.new()
-		s.id = 3000 + i
-		s.lon = float(i) * 0.1
-		s.inside_region = true
-		s.has_shelter = true
-		s.elevation = 50.0
-		conjunto.sites.append(s)
-	return conjunto
+## Un sitio de la comarca con otro a unos kilómetros, y el rumbo hacia él: un
+## pasillo en el que seguro hay algo. Se busca y no se escribe, que los ids
+## cambian en cada horneado.
+func _salida_con_algo() -> Dictionary:
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	for desde: Site in comarca.available_in(-120.0, Site.Era.PALEOLITICO):
+		for hasta: Site in comarca.available_in(-120.0, Site.Era.PALEOLITICO):
+			var x := (hasta.lon - desde.lon) * Viaje.METROS_POR_GRADO * cos(deg_to_rad(desde.lat))
+			var z := (hasta.lat - desde.lat) * Viaje.METROS_POR_GRADO
+			var lejos := sqrt(x * x + z * z)
+			if lejos > 3000.0 and lejos < 12000.0:
+				return {"desde": desde, "rumbo": rad_to_deg(atan2(x, z)), "hasta": hasta}
+	return {}
 
 
-## Una comarca de mentira: cinco emplazamientos en fila, cada vez más lejos.
-func _comarca() -> SiteSet:
-	var conjunto := SiteSet.new()
-	for i in range(6):
-		var s := Site.new()
-		s.id = 1000 + i
-		s.lon = float(i) * 0.1
-		s.lat = 0.0
-		conjunto.sites.append(s)
-	return conjunto
+## Los sitios que caen en el pasillo de una salida, sin el de salida.
+func _del_pasillo(sim: SettlementSim, rumbo: float, dias: int) -> Array[Site]:
+	var pasillo := sim.expedicion.pasillo_hacia(rumbo, dias)
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var dentro: Array[Site] = []
+	for s: Site in comarca.sites:
+		if s.id != sim.sitio.id and pasillo.contiene(s.lon, s.lat):
+			dentro.append(s)
+	return dentro
+
+
+## Un sitio de la salida, medido desde el origen.
+func _lejos_de(desde: Site, s: Site) -> float:
+	var x := (s.lon - desde.lon) * Viaje.METROS_POR_GRADO * cos(deg_to_rad(desde.lat))
+	var z := (s.lat - desde.lat) * Viaje.METROS_POR_GRADO
+	return sqrt(x * x + z * z)
 
 
 # --------------------------------------------------------- lo que cuesta --
@@ -76,7 +93,7 @@ func _comarca() -> SiteSet:
 func test_salir_saca_la_comida_de_la_despensa() -> void:
 	var sim := _sim()
 	var antes := sim.store.food_rations()
-	assert_true(sim.expedicion.mandar(3, 1000), "sale")
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale")
 	assert_lt(sim.store.food_rations(), antes, "y se lleva comida que no vuelve")
 
 
@@ -85,15 +102,15 @@ func test_se_lleva_la_comida_de_todo_el_viaje() -> void:
 	# jornada—: tres personas doce jornadas son setenta y dos raciones.
 	var sim := _sim()
 	var antes := sim.store.food_rations()
-	sim.expedicion.mandar(3, 1000)
+	sim.expedicion.mandar(3, 90.0)
 	assert_near(antes - sim.store.food_rations(),
-		3.0 * float(Expedicion.JORNADAS_FUERA) * 2.0, 0.5,
+		3.0 * float(Expedicion.JORNADAS_PROPUESTAS) * 2.0, 0.5,
 		"las raciones de todo el viaje, en la cuenta de siempre")
 
 
 func test_quien_sale_no_trabaja_mientras_esta_fuera() -> void:
 	var sim := _sim()
-	sim.expedicion.mandar(3, 1000)
+	sim.expedicion.mandar(3, 90.0)
 	var fuera := 0
 	for p: Inhabitant in sim.people:
 		if p.esta_de_expedicion(sim.day):
@@ -104,110 +121,97 @@ func test_quien_sale_no_trabaja_mientras_esta_fuera() -> void:
 func test_las_jornadas_persona_se_cuentan() -> void:
 	# ES LA CIFRA QUE EL FRENTE PIDE CONTAR: esas jornadas no se recolectan.
 	var sim := _sim()
-	sim.expedicion.mandar(3, 1000)
-	assert_eq(sim.expedicion.jornadas_persona, 3 * Expedicion.JORNADAS_FUERA,
+	sim.expedicion.mandar(3, 90.0)
+	assert_eq(sim.expedicion.jornadas_persona, 3 * Expedicion.JORNADAS_PROPUESTAS,
 		"treinta y seis jornadas-persona")
 
 
 func test_la_que_vuelve_sin_nada_cuesta_igual() -> void:
-	# EL CRITERIO QUE MÁS FÁCIL SERÍA SALTARSE. Una expedición a un sitio donde
-	# no hay nada que descubrir se ha comido las mismas jornadas y la misma
-	# comida: el coste es haber salido, no haber acertado.
-	var con_mapa := _sim()
-	var sin_mapa := _sim()
-	con_mapa.expedicion.sitios = _comarca()
-	# `sin_mapa` no tiene comarca: no puede descubrir nada.
-	var antes_con := con_mapa.store.food_rations()
-	var antes_sin := sin_mapa.store.food_rations()
+	# EL CRITERIO QUE MÁS FÁCIL SERÍA SALTARSE. Una expedición hacia donde no hay
+	# nada que descubrir se ha comido las mismas jornadas y la misma comida: el
+	# coste es haber salido, no haber acertado.
+	var salida := _salida_con_algo()
+	var con_algo := _sim()
+	con_algo.sitio = salida["desde"]
+	var sin_nada := _sim()
+	var antes_con := con_algo.store.food_rations()
+	var antes_sin := sin_nada.store.food_rations()
 	_guardar()
-	var salio_con := con_mapa.expedicion.mandar(3, 1000)
-	var salio_sin := sin_mapa.expedicion.mandar(3, 1000)
+	var salio_con := con_algo.expedicion.mandar(3, float(salida["rumbo"]))
+	var salio_sin := sin_nada.expedicion.mandar(3, 90.0)
 	_devolver()
 	# Sin esto la prueba pasaría aunque NINGUNA saliera: cero jornadas contra
 	# cero jornadas también son «iguales».
 	assert_true(salio_con and salio_sin, "las dos salen de verdad")
-	assert_gt(float(sin_mapa.expedicion.jornadas_persona), 0.0,
+	assert_gt(float(sin_nada.expedicion.jornadas_persona), 0.0,
 		"y la que no descubre nada también gasta jornadas")
-	assert_eq(sin_mapa.expedicion.jornadas_persona,
-		con_mapa.expedicion.jornadas_persona, "las mismas jornadas")
-	assert_near(antes_sin - sin_mapa.store.food_rations(),
-		antes_con - con_mapa.store.food_rations(), 0.01, "la misma comida")
+	assert_eq(sin_nada.expedicion.jornadas_persona,
+		con_algo.expedicion.jornadas_persona, "las mismas jornadas")
+	assert_near(antes_sin - sin_nada.store.food_rations(),
+		antes_con - con_algo.store.food_rations(), 0.01, "la misma comida")
+
+
+func test_las_jornadas_las_elige_el_jugador_y_cuestan_lo_suyo() -> void:
+	var cortas := _sim()
+	var largas := _sim()
+	var antes := cortas.store.food_rations()
+	assert_true(cortas.expedicion.mandar(3, 90.0, 4), "sale para cuatro jornadas")
+	assert_true(largas.expedicion.mandar(3, 90.0, 20), "y otra para veinte")
+	assert_near(antes - cortas.store.food_rations(), 3.0 * 4.0 * 2.0, 0.5,
+		"cuatro jornadas, las raciones de cuatro")
+	assert_eq(largas.expedicion.vuelve_el_dia, largas.day + 20, "y vuelven cuando toca")
+	assert_eq(largas.expedicion.jornadas_persona, 60, "tres por veinte")
+
+
+func test_solo_se_eligen_las_jornadas_que_se_pueden() -> void:
+	var sim := _sim()
+	assert_false(sim.expedicion.mandar(3, 90.0, 13), "impares no")
+	assert_false(sim.expedicion.mandar(3, 90.0, 30), "ni más de veinticuatro")
+	assert_false(sim.expedicion.en_marcha(), "y no sale nadie")
+
+
+func test_se_sale_en_cualquier_estacion() -> void:
+	# El criterio: mandarla no depende de la estación. Se prueba en invierno.
+	var sim := _sim()
+	var antes := GameState.season
+	GameState.season = Subsistence.Season.INVIERNO
+	var salio := sim.expedicion.mandar(3, 180.0)
+	GameState.season = antes
+	assert_true(salio, "en invierno sale")
 
 
 # ------------------------------------------------------ cuándo no se sale --
 
 # ------------------------------------------- a quién se manda (tanda 3) --
 
-func test_la_tarjeta_propone_a_los_que_pueden_ir() -> void:
+func test_pueden_ir_los_adultos_sin_tocar() -> void:
 	var sim := _sim(5)
 	sim.people[0].hurt_days = 3
 	sim.people[1].age_group = Inhabitant.Age.NINO
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
-	var salidas := []
-	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
-	_guardar()
-	sim.expedicion.proponer_la_salida()
-	_devolver()
-	assert_eq(salidas.size(), 1, "sale la tarjeta")
-	var m: Moment = salidas[0]
-	assert_false(m.candidatos.has(0), "el tocado no está en la lista")
-	assert_false(m.candidatos.has(1), "el niño tampoco")
-	assert_eq(m.candidatos.size(), 3, "y sí los tres que pueden")
-	assert_eq(m.elegidos.size(), Expedicion.MINIMO_PARA_SALIR,
-		"con los del mínimo ya marcados, para que decir que sí sea un clic")
+	assert_false(sim.expedicion.puede_ir(sim.people[0]), "el tocado no")
+	assert_false(sim.expedicion.puede_ir(sim.people[1]), "el niño tampoco")
+	assert_true(sim.expedicion.puede_ir(sim.people[2]), "un adulto sano, sí")
 
 
-func test_con_menos_del_minimo_no_se_puede_confirmar() -> void:
+func test_con_menos_del_minimo_no_se_manda() -> void:
 	var sim := _sim(5)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
-	var salidas := []
-	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
-	_guardar()
-	sim.expedicion.proponer_la_salida()
-	_devolver()
-	var m: Moment = salidas[0]
-	m.marcar(m.elegidos[0], false)
-	assert_false(m.hay_bastantes(), "con dos no hay bastantes")
-	assert_true(String(m.options[1].get("bloqueo", "")).contains("hacen falta"),
-		"y el botón lo dice: %s" % str(m.options[1].get("bloqueo", "")))
+	var dos: Array[int] = [2, 3]
+	assert_false(sim.expedicion.mandar_a(dos, 90.0), "con dos no sale")
 
 
 func test_salen_los_elegidos_y_nadie_mas() -> void:
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
-	var salidas := []
-	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
-	_guardar()
-	sim.expedicion.proponer_la_salida()
-	var m: Moment = salidas[0]
-	# Se cambia la elección: fuera el primero, dentro el último.
-	m.marcar(m.elegidos[0], false)
-	m.marcar(m.candidatos[m.candidatos.size() - 1], true)
-	var querido := m.elegidos.duplicate()
-	(m.options[1]["on_pick"] as Callable).call()
-	_devolver()
-	assert_true(sim.expedicion.en_marcha(), "sale la expedición")
-	assert_eq(sim.expedicion.fuera.size(), querido.size(), "salen los que se marcaron")
-	for id: int in querido:
+	var elegidos: Array[int] = [1, 4, 5]
+	assert_true(sim.expedicion.mandar_a(elegidos, 90.0), "sale la expedición")
+	assert_eq(sim.expedicion.fuera.size(), 3, "salen los que se marcaron")
+	for id: int in elegidos:
 		assert_true(sim.expedicion.fuera.has(id), "y son ellos: falta el %d" % id)
 
 
-func test_el_coste_se_rehace_con_los_que_van() -> void:
-	# Cuatro cuestan más que tres, y la tarjeta lo dice antes de elegir.
+func test_el_coste_crece_con_los_que_van() -> void:
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
-	var salidas := []
-	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
-	_guardar()
-	sim.expedicion.proponer_la_salida()
-	_devolver()
-	var m: Moment = salidas[0]
-	var con_tres: Dictionary = m.options[1]["cuesta"]
-	var tres := float(con_tres.get("despensa", 0.0))
-	for id: int in m.candidatos:
-		m.marcar(id, true)
-	var con_todos: Dictionary = m.options[1]["cuesta"]
-	assert_lt(float(con_todos.get("despensa", 0.0)), tres,
+	assert_lt(float(sim.expedicion.hace_falta_para(3)["raciones"]),
+		float(sim.expedicion.hace_falta_para(4)["raciones"]),
 		"cuantos más van, más raciones se llevan")
 
 
@@ -215,15 +219,15 @@ func test_sin_pieles_no_se_sale() -> void:
 	# La tienda es la mitad de dormir fuera doce noches. Misma regla que la
 	# acampada de la cumbre, sin cifras nuevas.
 	var sim := _sim()
-	sim.store.take(Materia.Kind.PIEL, 10.0)
-	assert_false(sim.expedicion.mandar(3, 1000), "sin tienda no se sale")
+	sim.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	assert_false(sim.expedicion.mandar(3, 90.0), "sin tienda no se sale")
 	assert_false(sim.expedicion.en_marcha(), "y no queda nadie fuera")
 
 
 func test_sin_lena_no_se_sale() -> void:
 	var sim := _sim()
 	sim.store.take(Materia.Kind.LENA, 200.0)
-	assert_false(sim.expedicion.mandar(3, 1000), "sin hoguera no se sale")
+	assert_false(sim.expedicion.mandar(3, 90.0), "sin hoguera no se sale")
 
 
 func test_lo_que_se_lleva_es_lo_que_dice_la_regla() -> void:
@@ -231,42 +235,35 @@ func test_lo_que_se_lleva_es_lo_que_dice_la_regla() -> void:
 	# leña. Las pieles vuelven; la leña y la comida, no.
 	var sim := _sim()
 	var lena_antes := sim.store.amount(Materia.Kind.LENA)
-	var piel_antes := sim.store.amount(Materia.Kind.PIEL)
+	var piel_antes := sim.store.amount(Materia.Kind.PIEL_CURTIDA)
 	var comida_antes := sim.store.food_rations()
-	assert_true(sim.expedicion.mandar(3, 1000), "sale")
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale")
 	assert_near(lena_antes - sim.store.amount(Materia.Kind.LENA), 39.0, 0.001,
 		"se lleva la leña de doce noches y una de margen")
-	assert_near(piel_antes - sim.store.amount(Materia.Kind.PIEL), 3.0, 0.001,
+	assert_near(piel_antes - sim.store.amount(Materia.Kind.PIEL_CURTIDA), 3.0, 0.001,
 		"y una piel de tienda por cabeza")
 	assert_near(comida_antes - sim.store.food_rations(), 72.0, 0.5,
 		"y las raciones de siempre")
-	sim.day += Expedicion.JORNADAS_FUERA
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
-	assert_near(sim.store.amount(Materia.Kind.PIEL), piel_antes, 0.001,
+	assert_near(sim.store.amount(Materia.Kind.PIEL_CURTIDA), piel_antes, 0.001,
 		"y al volver, las pieles vuelven enteras")
 
 
-func test_la_tarjeta_dice_lo_que_falta_y_no_deja_mandarla() -> void:
+func test_lo_que_falta_se_dice() -> void:
 	var sim := _sim()
-	sim.store.take(Materia.Kind.PIEL, 10.0)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
-	var salidas := []
-	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
-	_guardar()
-	sim.expedicion.proponer_la_salida()
-	_devolver()
-	assert_eq(salidas.size(), 1, "la tarjeta sale igual")
-	if salidas.size() == 1:
-		var opcion: Dictionary = (salidas[0] as Moment).options[1]
-		assert_true(String(opcion.get("bloqueo", "")).contains("pieles"),
-			"y dice que faltan pieles: %s" % str(opcion.get("bloqueo", "")))
+	sim.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	var falta := sim.expedicion.lo_que_falta(3)
+	assert_eq(falta.size(), 1, "falta una cosa")
+	if falta.size() == 1:
+		assert_true(falta[0].contains("pieles"), "y son las pieles: %s" % falta[0])
 
 
 func test_sin_comida_no_se_sale() -> void:
 	# Salir sin comida no es una decisión difícil: es mandar a tres personas a
 	# morirse. Y no se deja a nadie a medio salir.
 	var sim := _sim(8, 5.0)
-	assert_false(sim.expedicion.mandar(3, 1000), "no sale")
+	assert_false(sim.expedicion.mandar(3, 90.0), "no sale")
 	assert_near(sim.store.amount(Materia.Kind.LENA), 200.0, 0.001,
 		"ni se lleva la leña")
 	assert_false(sim.expedicion.en_marcha(), "y no queda nadie fuera")
@@ -280,14 +277,14 @@ func test_sin_comida_no_se_sale() -> void:
 
 func test_sola_no_se_sale() -> void:
 	var sim := _sim()
-	assert_false(sim.expedicion.mandar(Expedicion.MINIMO_PARA_SALIR - 1, 1000),
+	assert_false(sim.expedicion.mandar(Expedicion.MINIMO_PARA_SALIR - 1, 90.0),
 		"con menos del mínimo no se sale")
 
 
 func test_no_hay_dos_expediciones_a_la_vez() -> void:
 	var sim := _sim(10)
-	assert_true(sim.expedicion.mandar(3, 1000), "sale la primera")
-	assert_false(sim.expedicion.mandar(3, 1001), "la segunda espera")
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale la primera")
+	assert_false(sim.expedicion.mandar(3, 270.0), "la segunda espera")
 
 
 func test_ni_ninos_ni_ancianos_salen_de_expedicion() -> void:
@@ -299,15 +296,15 @@ func test_ni_ninos_ni_ancianos_salen_de_expedicion() -> void:
 		p.id = i
 		p.age_group = Inhabitant.Age.NINO if i < 2 else Inhabitant.Age.ANCIANO
 		sim.people.append(p)
-	assert_false(sim.expedicion.mandar(3, 1000), "sin adultos no hay expedición")
+	assert_false(sim.expedicion.mandar(3, 90.0), "sin adultos no hay expedición")
 
 
 # ------------------------------------------------------------ al volver --
 
 func test_vuelven_en_su_jornada_y_no_antes() -> void:
 	var sim := _sim()
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA - 1
+	sim.expedicion.mandar(3, 90.0)
+	sim.day += Expedicion.JORNADAS_PROPUESTAS - 1
 	sim.expedicion.nuevo_dia()
 	assert_true(sim.expedicion.en_marcha(), "la víspera siguen fuera")
 	sim.day += 1
@@ -319,43 +316,86 @@ func test_vuelven_en_su_jornada_y_no_antes() -> void:
 		assert_false(p.esta_de_expedicion(sim.day), "todos en casa")
 
 
-func test_al_volver_levanta_la_niebla() -> void:
-	# LO QUE FALTABA: nadie llamaba a `GameState.discover` desde la partida.
+func test_al_volver_descubre_todo_lo_del_pasillo_y_nada_mas() -> void:
+	# LO QUE LA SPEC PIDE: sólo y todos los sitios del pasillo recorrido. Antes
+	# se descubría el destino y sus cuatro vecinos.
+	var salida := _salida_con_algo()
+	assert_false(salida.is_empty(), "hay una salida con algo a la vista")
 	var sim := _sim()
-	sim.expedicion.sitios = _comarca()
+	sim.sitio = salida["desde"]
 	_guardar()
+	GameState.niebla = NieblaRegional.de_la_comarca()
+	GameState.discovered = {sim.sitio.id: true}
+	var esperados := _del_pasillo(sim, float(salida["rumbo"]), 12)
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
 	var antes := GameState.discovered.size()
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA
+	var vista_antes := GameState.niebla.cuantas()
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
-	var despues := GameState.discovered.size()
+	var sobran := 0
+	for id: Variant in GameState.discovered:
+		var es_esperado := int(id) == sim.sitio.id
+		for s: Site in esperados:
+			es_esperado = es_esperado or s.id == int(id)
+		if not es_esperado:
+			sobran += 1
+	var faltan := 0
+	for s: Site in esperados:
+		if not GameState.is_discovered(s):
+			faltan += 1
+	var nuevos := GameState.discovered.size() - antes
+	var vista := GameState.niebla.cuantas() - vista_antes
+	var recorrida := GameState.niebla.cuantas(NieblaRegional.RECORRIDA)
 	_devolver()
-	assert_eq(despues - antes, Expedicion.SE_DESCUBREN,
-		"se descubren los que se ven desde allí")
-	assert_eq(sim.expedicion.descubiertos, Expedicion.SE_DESCUBREN,
-		"y quedan contados")
+	assert_gt(float(esperados.size()), 0.0, "el pasillo tiene algo: %d" % esperados.size())
+	assert_eq(faltan, 0, "se descubren todos los del pasillo")
+	assert_eq(sobran, 0, "y ninguno de fuera")
+	assert_eq(sim.expedicion.descubiertos, nuevos, "y quedan contados")
+	assert_gt(float(vista), 0.0, "levanta la niebla")
+	assert_gt(float(recorrida), 0.0, "y deja el pasillo recorrido")
 
 
 func test_lo_ya_conocido_no_se_vuelve_a_contar() -> void:
 	# Importa para el cierre de la fase: «puntos regionales nuevos» no se puede
-	# inflar mandando la misma expedición al mismo sitio.
+	# inflar mandando la misma expedición por el mismo sitio.
+	var salida := _salida_con_algo()
 	var sim := _sim()
-	sim.expedicion.sitios = _comarca()
+	sim.sitio = salida["desde"]
 	_guardar()
-	for vuelta in range(2):
-		sim.expedicion.mandar(3, 1000)
-		sim.day += Expedicion.JORNADAS_FUERA
-		sim.expedicion.nuevo_dia()
-	var total := sim.expedicion.descubiertos
+	GameState.niebla = NieblaRegional.de_la_comarca()
+	GameState.discovered = {sim.sitio.id: true}
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
+	sim.expedicion.nuevo_dia()
+	var primera := sim.expedicion.descubiertos
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
+	sim.expedicion.nuevo_dia()
+	var segunda := sim.expedicion.descubiertos - primera
 	_devolver()
-	assert_lt(float(total), float(Expedicion.SE_DESCUBREN * 2),
-		"la segunda vuelta al mismo sitio descubre menos que la primera")
+	assert_gt(float(primera), 0.0, "la primera descubre")
+	assert_eq(segunda, 0, "la segunda por el mismo pasillo, nada")
+
+
+func test_rumbos_opuestos_descubren_cosas_distintas() -> void:
+	var salida := _salida_con_algo()
+	var sim := _sim()
+	sim.sitio = salida["desde"]
+	var uno := _del_pasillo(sim, float(salida["rumbo"]), 12)
+	var otro := _del_pasillo(sim, float(salida["rumbo"]) + 180.0, 12)
+	var comunes := 0
+	for s: Site in uno:
+		# Lo que está a menos de un medio ancho de casa lo ven los dos.
+		if otro.has(s) and _lejos_de(sim.sitio, s) > Pasillo.MEDIO_ANCHO_M:
+			comunes += 1
+	assert_gt(float(uno.size()), 0.0, "hacia un lado hay algo")
+	assert_eq(comunes, 0, "y lo de un lado no lo ve quien va al otro")
 
 
 func test_mandarla_cuenta_para_cerrar_la_fase() -> void:
 	var sim := _sim()
 	assert_false(sim.expedicion.mandada_alguna_vez, "al principio, no")
-	sim.expedicion.mandar(3, 1000)
+	sim.expedicion.mandar(3, 90.0)
 	assert_true(sim.expedicion.mandada_alguna_vez, "en cuanto sale, sí")
 
 
@@ -364,65 +404,81 @@ func test_mandarla_cuenta_para_cerrar_la_fase() -> void:
 func test_alcanzar_un_sitio_con_gente_deja_contacto() -> void:
 	# EL PROPÓSITO DE LA EXPEDICIÓN: no busca terreno, busca gente con la que
 	# tratar. Ver docs/SISTEMAS.md §4.
+	var salida := _salida_con_algo()
 	var sim := _sim()
-	sim.contacto.ocupados[1000] = true
+	sim.sitio = salida["desde"]
 	_guardar()
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA
+	var dentro := _del_pasillo(sim, float(salida["rumbo"]), 12)
+	var con_gente: Site = dentro[0]
+	sim.contacto.ocupados[con_gente.id] = true
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
 	_devolver()
-	assert_true(sim.contacto.se_conocen(1000), "se vuelve conociendo a esa gente")
+	assert_true(sim.contacto.se_conocen(con_gente.id), "se vuelve conociendo a esa gente")
 
 
-func test_la_primera_expedicion_siempre_encuentra_gente() -> void:
-	# Decidido por el usuario el 2026-09-13: con el sorteo a secas, dos años
-	# de partida acabaron sin conocer a nadie y sin un solo trato.
+func test_la_primera_expedicion_encuentra_gente_en_lo_mas_lejano() -> void:
+	# Decidido por el usuario el 2026-09-13 —la primera siempre encuentra gente—
+	# y el 2026-09-14 dónde: en el sitio del pasillo más lejano del campamento.
+	var salida := _salida_con_algo()
 	var sim := _sim()
+	sim.sitio = salida["desde"]
 	_guardar()
-	assert_false(sim.contacto.hay_gente_en(1000), "el sitio estaba vacío")
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA
+	var dentro := _del_pasillo(sim, float(salida["rumbo"]), 12)
+	var lejano: Site = dentro[0]
+	for s: Site in dentro:
+		if _lejos_de(sim.sitio, s) > _lejos_de(sim.sitio, lejano):
+			lejano = s
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
 	_devolver()
-	assert_true(sim.contacto.se_conocen(1000), "y aun así la primera vuelve conociendo a alguien")
+	assert_true(sim.contacto.se_conocen(lejano.id), "conoce a la gente del más lejano")
 	assert_eq(sim.contacto.conocidos(), 1, "a esa gente y a nadie más")
 
 
 func test_un_sitio_vacio_no_deja_contacto() -> void:
-	# La otra mitad, y sin ella la de arriba no prueba nada: si cualquier
-	# expedición dejara contacto, «hay alguien al final» no significaría nada.
-	# Desde la SEGUNDA: la primera siempre encuentra gente.
+	# La otra mitad, y sin ella la de arriba no prueba nada. Desde la SEGUNDA:
+	# la primera siempre encuentra gente. La segunda, por un pasillo vaciado.
+	var salida := _salida_con_algo()
 	var sim := _sim()
+	sim.sitio = salida["desde"]
 	_guardar()
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
-	assert_eq(sim.contacto.conocidos(), 1, "la primera dejó contacto, como debe")
-	assert_true(sim.expedicion.mandar(3, 1001), "sale la segunda")
-	sim.day += Expedicion.JORNADAS_FUERA
+	var primera := sim.contacto.conocidos()
+	for s: Site in _del_pasillo(sim, float(salida["rumbo"]), 12):
+		sim.contacto.ocupados.erase(s.id)
+	sim.contacto.trato.clear()
+	var salio := sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
 	_devolver()
-	assert_false(sim.contacto.se_conocen(1001), "donde no vive nadie no se conoce a nadie")
-	assert_eq(sim.contacto.conocidos(), 1, "y la cuenta no sube")
+	assert_eq(primera, 1, "la primera dejó contacto, como debe")
+	assert_true(salio, "sale la segunda")
+	assert_eq(sim.contacto.conocidos(), 0, "donde no vive nadie no se conoce a nadie")
 
 
 func test_el_contacto_sigue_ahi_una_estacion_despues() -> void:
 	# EL CRITERIO LITERAL DEL FRENTE 5: «el contacto sigue ahí una estación
-	# después». Es lo que el trueque va a usar, y el trueque no se hace el
-	# mismo día que se vuelve.
+	# después». Es lo que el trueque va a usar.
+	var salida := _salida_con_algo()
 	var sim := _sim()
-	sim.contacto.ocupados[1000] = true
+	sim.sitio = salida["desde"]
 	_guardar()
-	sim.expedicion.mandar(3, 1000)
-	sim.day += Expedicion.JORNADAS_FUERA
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
-	# Una estación entera de jornadas cerradas.
+	var conocidos := sim.contacto.conocidos()
 	for dia in range(Subsistence.DAYS_PER_SEASON):
 		sim.day += 1
 		sim.expedicion.nuevo_dia()
 	_devolver()
-	assert_true(sim.contacto.se_conocen(1000),
-		"cuarenta y cinco jornadas después, os seguís conociendo")
+	assert_eq(conocidos, 1, "vuelve conociendo a alguien")
+	assert_eq(sim.contacto.conocidos(), 1,
+		"y cuarenta y cinco jornadas después, os seguís conociendo")
 
 
 # -------------------------------- que se les vea irse y volver (tanda 3) --
@@ -431,9 +487,8 @@ func test_salen_andando_hacia_el_borde() -> void:
 	# No se desvanecen en la cueva: salen andando, y hasta que llegan al borde
 	# siguen en el mapa. Ver [Expedicion.andar].
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	assert_true(sim.expedicion.mandar(3, 3000), "sale")
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale")
 	_devolver()
 	var andando := 0
 	for person: Inhabitant in sim.people:
@@ -445,9 +500,8 @@ func test_salen_andando_hacia_el_borde() -> void:
 
 func test_al_llegar_al_borde_dejan_de_estar_en_el_mapa() -> void:
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	sim.expedicion.mandar(3, 3000)
+	sim.expedicion.mandar(3, 90.0)
 	_devolver()
 	var quien: Inhabitant = sim.people[0]
 	# Se le pone en la puerta del valle: es el estado que interesa, y llegar
@@ -460,11 +514,10 @@ func test_al_llegar_al_borde_dejan_de_estar_en_el_mapa() -> void:
 
 func test_vuelven_por_donde_salieron() -> void:
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	sim.expedicion.mandar(3, 3000)
+	sim.expedicion.mandar(3, 90.0)
 	var puerta := sim.expedicion.salida
-	sim.day += Expedicion.JORNADAS_FUERA
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
 	_devolver()
 	for person: Inhabitant in sim.people:
@@ -475,9 +528,8 @@ func test_vuelven_por_donde_salieron() -> void:
 
 func test_la_puerta_del_valle_esta_en_el_borde() -> void:
 	var sim := _sim(6)
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	var puerta := sim.expedicion.puerta_del_valle(3000)
+	var puerta := sim.expedicion.puerta_del_valle(90.0)
 	_devolver()
 	# Sin terreno montado no hay borde que buscar: se sale por casa, que es lo
 	# honesto en una prueba sin mapa. Lo que se comprueba aquí es que no
@@ -492,9 +544,8 @@ func test_por_donde_pasa_despeja_el_mapa() -> void:
 	var sim := _sim(6)
 	sim.knowledge = BandKnowledge.new()
 	sim.knowledge.setup(64, 64, Vector2(4096.0, 4096.0))
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	sim.expedicion.mandar(3, 3000)
+	sim.expedicion.mandar(3, 90.0)
 	_devolver()
 	var antes := sim.knowledge.explored_fraction()
 	var quien: Inhabitant = sim.people[0]
@@ -511,9 +562,8 @@ func test_quien_ya_esta_fuera_no_despeja_nada() -> void:
 	var sim := _sim(6)
 	sim.knowledge = BandKnowledge.new()
 	sim.knowledge.setup(64, 64, Vector2(4096.0, 4096.0))
-	sim.expedicion.sitios = _comarca_a_la_que_ir()
 	_guardar()
-	sim.expedicion.mandar(3, 3000)
+	sim.expedicion.mandar(3, 90.0)
 	_devolver()
 	var quien: Inhabitant = sim.people[0]
 	quien.expedicion_andando = false
@@ -522,3 +572,14 @@ func test_quien_ya_esta_fuera_no_despeja_nada() -> void:
 	sim.expedicion.andar(quien, 0, 1.0, 0.05)
 	assert_near(sim.knowledge.explored_fraction(), antes, 0.0001,
 		"quien ya salió del valle no descubre nada de él")
+
+
+func test_la_tienda_es_de_piel_curtida() -> void:
+	# Decisión del usuario del 2026-09-13: «todo debería usar piel curtida». Una
+	# tienda de pellejo sin curar se pudre en la mochila a los doce días, que es
+	# justo lo que dura la expedición.
+	var sim := _sim()
+	sim.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	sim.store.add(Materia.Kind.PIEL, 10.0)
+	assert_false(sim.expedicion.mandar(3, 90.0), "con piel cruda no hay tienda")
+	assert_eq(sim.store.amount(Materia.Kind.PIEL), 10.0, "y la cruda no se toca")

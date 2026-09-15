@@ -1,10 +1,11 @@
 extends SceneTree
 ## Rehace el recuadro local de un emplazamiento: relieve, cauces y contorno.
 ##
-## Reutiliza LA MISMA tuberia que usa la partida -`RegionMap._found_settlement`-
-## en vez de copiarla: el recuadro pasa por importacion, borrado de obra humana,
-## erosion e hidrografia, y cualquiera de esos pasos que se quedara aqui a medias
-## daria un valle distinto del que ve el jugador.
+## Reutiliza LA MISMA tuberia que usa la partida -[PreparaValle], la de fundar
+## desde el mapa regional y la de migrar desde la ficha de un campamento- en vez
+## de copiarla: el recuadro pasa por importacion, borrado de obra humana, erosion
+## e hidrografia, y cualquiera de esos pasos que se quedara aqui a medias daria un
+## valle distinto del que ve el jugador.
 ##
 ## `data/dem/local/` no se versiona -se rehace solo- pero hasta ahora solo se
 ## rehacia fundando el asentamiento a mano desde el mapa regional.
@@ -31,20 +32,11 @@ func _init() -> void:
 		print("no existe el emplazamiento %d" % id); quit(1); return
 
 	print("rehaciendo %s (id %d)" % [sitio.display_name(), id])
-	change_scene_to_file("res://scenes/region_map.tscn")
-	for i in range(90):
-		await process_frame
-
-	var mapa := current_scene
-	if mapa == null or not ("_selected" in mapa):
-		print("la capa regional no arranco"); quit(1); return
-
-	mapa.set("_selected", sitio)
+	var preparador := PreparaValle.new()
 	# Sin red, Overpass no responde y el borrado de obra humana se queda
 	# colgado en el tiempo de espera: se apaga a proposito.
-	if "remove_human_works" in mapa:
-		mapa.set("remove_human_works", false)
-	await mapa._found_settlement()
+	preparador.remove_human_works = false
+	await preparador.preparar(self, sitio)
 
 	for i in range(30):
 		await process_frame

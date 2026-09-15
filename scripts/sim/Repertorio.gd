@@ -362,6 +362,269 @@ const SITUACIONES := {
 }
 
 
+## Lo que queda de cada situación cuando se sale: `hay`, lo que la cueva tiene
+## —para la descripción de la ficha—, y `dice`, lo que cuenta quien entró según
+## lo que eligió, una frase por opción y en el mismo orden.
+##
+## Petición del usuario del 2026-09-13: «una vez explorada, una descripción
+## detallada de la cueva y el testimonio de quien la exploró contando su
+## experiencia». Va aparte de [SITUACIONES] para que la tabla de las decisiones
+## siga leyéndose de un vistazo; `TestExploracion` comprueba que las dos cuadran
+## situación por situación y opción por opción.
+##
+## Una `@` es la vocal del género de quien habla: `quiet@` sale «quieta» o
+## «quieto». Ver [dice].
+const TESTIMONIOS := {
+	"ruido_en_lo_oscuro": {
+		"hay": "Al fondo, donde no llega la luz, hay algo vivo que respira.",
+		"dice": [
+			"Oí algo respirar al fondo y seguí hacia el ruido, que es lo que no se hace.",
+			"Oí algo respirar al fondo y tiré piedras a lo oscuro, a ver qué salía.",
+			"Oí algo respirar al fondo y prendí fuego allí mismo, con lo que llevaba.",
+		],
+	},
+	"el_oso_de_frente": {
+		"hay": "Es cueva de oso: tiene su cama al fondo de la galería.",
+		"dice": [
+			"Era un oso, y cuando lo vi entero ya lo tenía encima. Le planté la lanza.",
+			"Era un oso, y cuando lo vi entero ya lo tenía encima. Me tiré a un lado y salí como pude.",
+		],
+	},
+	"el_oso_hacia_la_boca": {
+		"hay": "Un oso la usa de paso, entre el fondo y la boca.",
+		"dice": [
+			"El oso se levantó y vino hacia la entrada, y yo estaba en medio. Le hice frente.",
+			"El oso se levantó y vino hacia la entrada. Me metí en una grieta y lo dejé pasar a un palmo.",
+			"El oso se levantó y vino hacia la entrada. Salí corriendo delante de él.",
+		],
+	},
+	"el_humo_lo_espanta": {
+		"hay": "La galería tira bien del humo: un fuego dentro la limpia entera.",
+		"dice": [
+			"El humo sacó de estampida a algo grande, y seguí adentro con la lámpara.",
+			"El humo sacó de estampida a algo grande, y aproveché para salir.",
+		],
+	},
+	"sima_en_el_suelo": {
+		"hay": "El suelo se abre en una sima honda, de las que no se ve el fondo.",
+		"dice": [
+			"El suelo se abría en un pozo negro. Lo bordeé pegado a la pared, sin mirar abajo.",
+			"El suelo se abría en un pozo negro, y bajé con la cuerda.",
+			"El suelo se abría en un pozo negro. Tiré una piedra, tardó en sonar, y me volví.",
+		],
+	},
+	"el_fondo_de_la_sima": {
+		"hay": "En el fondo de la sima hay huesos de animales que cayeron y no salieron.",
+		"dice": [
+			"Abajo había huesos de bichos que cayeron y no salieron. Cargué con lo que servía.",
+			"Abajo había huesos de bichos que cayeron y no salieron. Subí sin tocar nada.",
+		],
+	},
+	"paso_estrecho": {
+		"hay": "La galería se cierra en un paso por el que sólo se entra de lado.",
+		"dice": [
+			"La galería se cerraba hasta un paso de lado, y pasé a oscuras, con la lámpara detrás.",
+			"La galería se cerraba hasta un paso de lado, y lo agrandé a golpes.",
+			"La galería se cerraba hasta un paso de lado, y ahí lo dejé.",
+		],
+	},
+	"la_sala_de_detras": {
+		"hay": "Detrás hay una sala alta y seca, con la pared lisa.",
+		"dice": [
+			"Detrás se abría una sala alta y seca, con la pared lisa, y la miré entera.",
+			"Detrás se abría una sala alta y seca. Marqué el paso para volver y salí.",
+		],
+	},
+	"agua_que_corre": {
+		"hay": "Por el suelo corre un hilo de agua que se mete bajo la roca.",
+		"dice": [
+			"Se oía agua corriendo por el suelo, y la seguí.",
+			"Se oía agua corriendo por el suelo. Bebí y seguí a lo mío.",
+		],
+	},
+	"el_sifon": {
+		"hay": "El agua cierra la galería en un sifón; al otro lado suena a sala grande.",
+		"dice": [
+			"El agua llenaba la galería de pared a pared, y crucé buceando hacia el eco.",
+			"El agua llenaba la galería de pared a pared. Hay que volver cuando baje.",
+		],
+	},
+	"murcielagos": {
+		"hay": "El techo de una sala está cubierto de murciélagos.",
+		"dice": [
+			"El techo entero se movía de murciélagos, y pasé por debajo muy despacio.",
+			"El techo entero se movía de murciélagos, y los espanté con la lámpara.",
+			"El techo entero se movía de murciélagos, y cacé unos cuantos.",
+		],
+	},
+	"la_lampara_apagada": {
+		"hay": "Hay corrientes de aire que apagan una lámpara sin avisar.",
+		"dice": [
+			"Se me apagó la lámpara y me quedé quiet@, escuchando por dónde entraba el aire.",
+			"Se me apagó la lámpara y busqué la salida a tientas, a golpes contra la roca.",
+		],
+	},
+	"huellas_de_gente": {
+		"hay": "En el barro hay pisadas de gente que no es de la banda.",
+		"dice": [
+			"En el barro había pisadas que no eran nuestras, y las seguí.",
+			"En el barro había pisadas que no eran nuestras. Las borré y salí.",
+		],
+	},
+	"el_hogar_apagado": {
+		"hay": "Hay un hogar viejo de otra gente, con lascas de un sílex de fuera.",
+		"dice": [
+			"Encontré un corro de piedras con ceniza vieja y lascas de otro sílex. Me las traje.",
+			"Encontré un corro de piedras con ceniza vieja y lascas de otro sílex. Dejé algo a cambio.",
+		],
+	},
+	"pinturas_viejas": {
+		"hay": "En la pared hay manos en negativo, de gente de hace mucho.",
+		"dice": [
+			"En la pared había manos sopladas, de hace mucho, y me senté a mirarlas.",
+			"En la pared había manos sopladas, de hace mucho. No las toqué y salí.",
+		],
+	},
+	"osamenta_de_oso": {
+		"hay": "En mitad del paso hay un cráneo de oso enorme.",
+		"dice": [
+			"En mitad del paso había un cráneo de oso enorme, y me lo traje.",
+			"En mitad del paso había un cráneo de oso enorme. Lo dejé mirando a la boca.",
+		],
+	},
+	"zarpazos_en_la_pared": {
+		"hay": "La pared está rayada de zarpazos recientes, a la altura del pecho.",
+		"dice": [
+			"La pared estaba arañada a la altura del pecho, y fui a buscar la osera.",
+			"La pared estaba arañada a la altura del pecho. Salí: se vuelve en verano.",
+		],
+	},
+	"aire_que_sopla": {
+		"hay": "De una grieta sale aire frío: la cueva sigue mucho más allá.",
+		"dice": [
+			"De una grieta salía aire frío, y la abrí.",
+			"De una grieta salía aire frío. Lo apunté para otro día.",
+		],
+	},
+	"barro_hasta_la_rodilla": {
+		"hay": "Una galería de barro hasta la rodilla.",
+		"dice": [
+			"El suelo se volvió barro hasta la rodilla y seguí de rodillas.",
+			"El suelo se volvió barro hasta la rodilla y di la vuelta.",
+		],
+	},
+	"bloque_suelto": {
+		"hay": "Del techo cuelga un bloque partido que no aguanta mucho.",
+		"dice": [
+			"Del techo colgaba un bloque partido, y pasé por debajo deprisa.",
+			"Del techo colgaba un bloque partido, y lo tiré con la pértiga.",
+			"Del techo colgaba un bloque partido, y busqué otro camino.",
+		],
+	},
+	"columna_de_piedra": {
+		"hay": "Una columna de piedra une suelo y techo, y suena como un tambor.",
+		"dice": [
+			"Una columna de piedra sonaba como un tambor al golpearla. La toqué y escuché.",
+			"Una columna de piedra sonaba como un tambor al golpearla. Rompí un trozo.",
+		],
+	},
+	"charca_ciega": {
+		"hay": "Hay una charca quieta y oscura en mitad de la galería.",
+		"dice": [
+			"Una charca quieta me devolvía la lámpara como un ojo, y la vadeé.",
+			"Una charca quieta me devolvía la lámpara como un ojo. La rodeé por la cornisa.",
+			"Una charca quieta me devolvía la lámpara como un ojo. Bebí y me volví.",
+		],
+	},
+	"eco_que_contesta": {
+		"hay": "El eco contesta tarde y desde otro sitio: hay salas que no se ven.",
+		"dice": [
+			"Grité y la cueva contestó desde otro sitio, y fui hacia allí.",
+			"Grité y la cueva contestó desde otro sitio. Me callé.",
+		],
+	},
+	"lobos_en_el_vestibulo": {
+		"hay": "Los lobos crían en el vestíbulo.",
+		"dice": [
+			"En la entrada había una camada de lobos, y salí despacio.",
+			"En la entrada había una camada de lobos, y cogí un cachorro.",
+			"En la entrada había una camada de lobos, e hice fuego en la boca.",
+		],
+	},
+	"nido_de_vencejos": {
+		"hay": "En la bóveda del vestíbulo crían vencejos.",
+		"dice": [
+			"En la bóveda había nidos al alcance de la pértiga, y cogí huevos.",
+			"En la bóveda había nidos al alcance de la pértiga. Los dejé criar.",
+		],
+	},
+	"silex_en_la_pared": {
+		"hay": "En la caliza asoman riñones de sílex negro, del bueno.",
+		"dice": [
+			"En la pared asomaba sílex negro del bueno, y saqué lo que pude a golpes.",
+			"En la pared asomaba sílex negro del bueno. Marqué el sitio.",
+		],
+	},
+	"ocre_en_el_suelo": {
+		"hay": "Una veta de ocre rojo mancha el suelo.",
+		"dice": [
+			"El suelo era ocre rojo, de mancharse las manos, y cargué un saco.",
+			"El suelo era ocre rojo, de mancharse las manos, y probé la pared con un dedo.",
+		],
+	},
+	"cornisa_sobre_el_vacio": {
+		"hay": "La galería sigue por una cornisa de un palmo sobre el vacío.",
+		"dice": [
+			"La galería seguía por una cornisa de un palmo sobre el vacío, y la crucé.",
+			"La galería seguía por una cornisa de un palmo sobre el vacío. Tendí la cuerda y pasé agarrad@.",
+			"La galería seguía por una cornisa de un palmo sobre el vacío, y me volví.",
+		],
+	},
+	"hielo_en_la_galeria": {
+		"hay": "Hay una galería helada donde el invierno no se va nunca.",
+		"dice": [
+			"Había una galería helada, y dejé carne guardada allí.",
+			"Había una galería helada, y la crucé con cuidado.",
+		],
+	},
+	"la_lampara_titubea": {
+		"hay": "Hay un tramo de aire malo, donde la llama se pone azul.",
+		"dice": [
+			"La llama se encogió y se puso azul, y salí enseguida.",
+			"La llama se encogió y se puso azul, y aguanté un poco más.",
+		],
+	},
+	"pisadas_de_oso_viejas": {
+		"hay": "En el barro seco quedan huellas de oso de otros años.",
+		"dice": [
+			"En el barro seco había huellas de oso del tamaño de una cabeza, y seguí adentro.",
+			"En el barro seco había huellas de oso del tamaño de una cabeza. Las medí y salí.",
+		],
+	},
+	"grieta_que_llora": {
+		"hay": "Una grieta gotea sin parar sobre una colada de piedra blanca.",
+		"dice": [
+			"Una grieta goteaba sobre una colada blanca, y la rompí para pasar.",
+			"Una grieta goteaba sobre una colada blanca, y recogí agua limpia.",
+		],
+	},
+	"sala_de_los_ecos": {
+		"hay": "Tiene una sala redonda donde cada ruido vuelve tres veces.",
+		"dice": [
+			"Llegué a una sala donde cada ruido volvía tres veces, y me la aprendí para contarla.",
+			"Llegué a una sala donde cada ruido volvía tres veces, y miré la pared del fondo.",
+		],
+	},
+	"el_paso_se_cierra": {
+		"hay": "El techo del camino de vuelta se desprende: es terreno flojo.",
+		"dice": [
+			"Detrás de mí cayó tierra y se estrechó la vuelta, y cavé con las manos.",
+			"Detrás de mí cayó tierra y se estrechó la vuelta, y busqué otra salida.",
+		],
+	},
+}
+
+
 ## Cuántas situaciones hay en total, y cuántas pueden abrir una visita.
 static func cuantas() -> int:
 	return SITUACIONES.size()
@@ -400,6 +663,20 @@ static func visita_de(semilla: int, cueva: int, no_empezar_con: String = "") -> 
 		if not visita.has(cual):
 			visita.append(cual)
 	return visita
+
+
+## Lo que cuenta quien eligió esa opción, con su género. Vacío si no está.
+static func dice(situacion: String, opcion: int, mujer: bool) -> String:
+	var ficha: Dictionary = TESTIMONIOS.get(situacion, {})
+	var frases: Array = ficha.get("dice", [])
+	if opcion < 0 or opcion >= frases.size():
+		return ""
+	return String(frases[opcion]).replace("@", "a" if mujer else "o")
+
+
+## Lo que tiene la cueva por esa situación, dicho para la ficha.
+static func hay(situacion: String) -> String:
+	return String((TESTIMONIOS.get(situacion, {}) as Dictionary).get("hay", ""))
 
 
 ## La situación a la que lleva una opción, o vacío si ahí se acaba.

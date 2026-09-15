@@ -62,7 +62,7 @@ const INFO := {
 		# tensadas sobre un armazón. No depende del hogar -es un cierre, no
 		# una fuente de calor-, igual que el lavadero.
 		"labor_days": 2.0,
-		"materials": {Materia.Kind.PIEL: 4.0, Materia.Kind.LENA: 3.0},
+		"materials": {Materia.Kind.PIEL_CURTIDA: 4.0, Materia.Kind.LENA: 3.0},
 		"requires": -1,
 	},
 }

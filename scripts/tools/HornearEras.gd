@@ -37,7 +37,13 @@ func _init() -> void:
 	eras.height = relieve.height
 	for cota: float in cotas:
 		var t0 := Time.get_ticks_msec()
-		var mascara := frontera.build_playable_mask(relieve, cota)
+		# CADA ÉPOCA, CON SU MAR: el relieve de la plataforma depende de dónde está
+		# la costa —ver [RelieveDeLaPlataforma]—, así que se aplica por época sobre
+		# una copia. Con la máscara de esa cota sale el mismo territorio que dibuja
+		# el mapa regional cuando se juega esa época.
+		var de_la_epoca := relieve.duplicate() as HeightmapData
+		RelieveDeLaPlataforma.aplicar(de_la_epoca, cota)
+		var mascara := frontera.build_playable_mask(de_la_epoca, cota)
 		var bytes := PackedByteArray()
 		bytes.resize(mascara.size())
 		var dentro := 0

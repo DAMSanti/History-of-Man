@@ -1278,7 +1278,7 @@ func test_asentarse_sin_campo_no_revienta() -> void:
 	# `setup`, que va ANTES de poblar el campo- y sembraba cero parajes sin
 	# decir nada. Que devuelva cero es correcto; que reviente, no.
 	var sim := SettlementSim.new()
-	assert_eq(Querencia.new(sim).asentarse(), 0,
+	assert_eq(await Querencia.new(sim).asentarse(), 0,
 		"sin campo de recursos no se siembra nada y no pasa nada")
 
 
@@ -1677,3 +1677,197 @@ func test_con_el_tramo_lleno_no_descansa() -> void:
 	var paraje: Paraje = montaje["paraje"]
 	sim.barbecho.revisar()
 	assert_false(paraje.resting, "lleno, se sigue pescando")
+
+
+# ------------------ la pesca en descanso no se pesca (depurar, 2026-09-13) --
+#
+# Segunda queja: «siguen esquilmando parajes de pesca en apenas unos meses». La
+# regla del descanso estaba, y saltaba; lo que no hacía era IMPEDIR pescar. La
+# lista de sitios adonde mandar a alguien —`SettlementSim._work_candidates`—
+# añadía detrás del mejor TODOS los sitios conocidos del oficio y el de reserva
+# de la fundación sin mirar si descansaban: si el bueno no tenía camino, el
+# pescador acababa en el tramo en descanso, y allí `Tajo` le sacaba los peces
+# a la celda más rica a 80 m hasta dejarla a cero.
+
+func _pescador(sim: SettlementSim, donde: Vector3) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var person := Inhabitant.create(0, donde, rng)
+	person.activity = Subsistence.Activity.PESCA
+	sim.people = [person]
+	return person
+
+
+func test_ningun_sitio_candidato_cae_en_un_tramo_en_descanso() -> void:
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	paraje.resting = true
+	sim._known_spots[Subsistence.Activity.PESCA] = [
+		{"pos": paraje.position, "score": 1.0}]
+	sim.work_sites[Subsistence.Activity.PESCA] = paraje.position
+	var person := _pescador(sim, Vector3.ZERO)
+	assert_true(sim._is_resting(Subsistence.Activity.PESCA, paraje.position),
+		"el tramo está en descanso")
+	var candidatos := sim._work_candidates(person)
+	for donde: Vector3 in candidatos:
+		assert_false(sim._is_resting(Subsistence.Activity.PESCA, donde),
+			"%s está en el tramo que descansa" % str(donde))
+	# Y una al final: si la lista reventara a medias, esta no sumaría y el total
+	# de comprobaciones lo delataría.
+	assert_true(candidatos.size() >= 0, "la lista se ha hecho entera")
+
+
+func test_en_un_tramo_en_descanso_no_se_saca_nada() -> void:
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	var person := _pescador(sim, paraje.position)
+	assert_true(sim.tajo.celda_trabajada(person) >= 0,
+		"con el tramo abierto, se pesca")
+	paraje.resting = true
+	assert_eq(sim.tajo.celda_trabajada(person), -1,
+		"en descanso no hay celda que trabajar, llegue quien llegue")
+
+
+func test_la_pesca_descansa_al_treinta_y_vuelve_al_noventa() -> void:
+	# Petición del usuario: «si hay menos del 30 % de peces, no deben volver a
+	# pescar hasta que se recupere al menos el 90 %».
+	var montaje := _rio_con_paraje()
+	var sim: SettlementSim = montaje["sim"]
+	var paraje: Paraje = montaje["paraje"]
+	var field: ResourceField = montaje["field"]
+	for x in range(8):
+		_vaciar_la_celda(field, x, 4, 0.28)
+	sim.barbecho.revisar()
+	assert_true(paraje.resting, "al 28 % la pesca descansa")
+	for x in range(8):
+		_vaciar_la_celda(field, x, 4, 0.85)
+	sim.barbecho.revisar()
+	assert_true(paraje.resting, "al 85 % sigue descansando")
+	for x in range(8):
+		_vaciar_la_celda(field, x, 4, 0.91)
+	sim.barbecho.revisar()
+	assert_false(paraje.resting, "al 91 % se vuelve a pescar")
+
+
+func test_lo_que_no_es_pesca_sigue_con_sus_umbrales() -> void:
+	assert_eq(Barbecho.esquilmado(Subsistence.Activity.RECOLECCION), Barbecho.ESQUILMADO,
+		"la recolección descansa donde siempre")
+	assert_eq(Barbecho.repuesto(Subsistence.Activity.RECOLECCION), Barbecho.REPUESTO,
+		"y vuelve donde siempre")
+
+
+# --- el nombre de un punto: el sitio más cercano, y de agua si es del agua --
+#
+# Queja del usuario del 2026-09-14: la ventana de técnicas ponía nasas en «la
+# veta de ocre», «la veta de sílex» o «el raizal del paso». Las nasas estaban en
+# el río; lo que fallaba era el nombre: `place_name` devolvía el PRIMER paraje de
+# la lista a menos de [Parajes.MERGE_RANGE], no el más cercano.
+
+func test_un_punto_se_llama_como_el_paraje_mas_cercano_y_no_el_primero() -> void:
+	var registro := Parajes.new()
+	var lejos := _paraje(10, 10)
+	var cerca := _paraje(12, 10, Materia.Kind.PIEDRA, Subsistence.Activity.MATERIA_PRIMA)
+	registro.add(lejos)
+	registro.add(cerca)
+	var punto := cerca.position + Vector3(5.0, 0.0, 0.0)
+	assert_eq(registro.place_name(punto, Vector3.ZERO), cerca.name_text,
+		"a cinco metros de uno y a ciento treinta del otro, es el primero")
+
+
+func test_lo_que_esta_en_el_agua_se_nombra_por_el_paraje_de_agua() -> void:
+	var registro := Parajes.new()
+	var veta := _paraje(10, 10, Materia.Kind.OCRE, Subsistence.Activity.MATERIA_PRIMA)
+	var remanso := _paraje(13, 10, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	registro.add(veta)
+	registro.add(remanso)
+	var nasa := veta.position + Vector3(20.0, 0.0, 0.0)
+	assert_eq(registro.place_name_en_el_agua(nasa, Vector3.ZERO), remanso.name_text,
+		"una nasa no se cala en una veta de ocre: es del remanso")
+
+
+# --- nombres de sobra -------------------------------------------------------
+#
+# «Llega un punto en que empieza a nombrarlos (2), (3)…» (2026-09-14). Con quince
+# palabras de lugar, el decimosexto avellanar ya salía numerado.
+
+func test_sesenta_parajes_del_mismo_material_no_se_numeran() -> void:
+	var registro := Parajes.new()
+	for i in range(60):
+		registro.add(_paraje(i * 3, (i * 7) % 50))
+	for paraje: Paraje in registro.list:
+		assert_false(paraje.name_text.contains("("),
+			"sin números: %s" % paraje.name_text)
+
+
+# --- el remonte de primavera --------------------------------------------------
+#
+# «Los peces desaparecen en verano y no vuelven en todo el año» (2026-09-14). Un
+# remanso vaciado en primavera baja del umbral, la ficha deja de listar el pescado
+# —queda la piedra de la orilla— y con el rebrote común tardaba unas 130 jornadas
+# en volver al 90 % del barbecho. Decisión del usuario: el río se repuebla de
+# golpe con el remonte de cada primavera.
+
+func _rio_esquilmado() -> ResourceField:
+	var field := ResourceField.new()
+	field.setup(8, 8, Vector2(512.0, 512.0))
+	field.set_abundance(Subsistence.Activity.PESCA, 4, 4, 1.0)
+	field.spread(Subsistence.Activity.PESCA, 2)
+	for i in range(64):
+		field.take_from_cell(Subsistence.Activity.PESCA, i, 10.0)
+	return field
+
+
+func test_el_remonte_repuebla_el_rio() -> void:
+	var field := _rio_esquilmado()
+	assert_lt(field.stock_fraction(Subsistence.Activity.PESCA, 4, 4), 0.05,
+		"el remanso está vacío")
+	field.remonte()
+	assert_near(field.stock_fraction(Subsistence.Activity.PESCA, 4, 4), 1.0, 0.001,
+		"y con la subida de primavera vuelve entero")
+
+
+func test_la_primavera_trae_el_remonte() -> void:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.field = _rio_esquilmado()
+	var estacion := GameState.season
+	var anyo := GameState.year
+	GameState.season = Subsistence.Season.INVIERNO
+	sim._advance_local_season()
+	var repoblado := sim.field.stock_fraction(Subsistence.Activity.PESCA, 4, 4)
+	GameState.season = estacion
+	GameState.year = anyo
+	assert_near(repoblado, 1.0, 0.001, "al entrar la primavera el río está repoblado")
+
+
+func test_un_remanso_esquilmado_sigue_diciendo_que_es_de_pescado() -> void:
+	# Lo que vio el usuario: «el paraje está con peces, al rato el marcador se
+	# apaga y cuando miro el paraje sólo tiene cuarcita». La ficha tiene que
+	# decir que el remanso está esquilmado, no callarse lo que lo nombra.
+	var field := _rio_esquilmado()
+	var remanso := Paraje.create(4, 4, Subsistence.Activity.PESCA,
+		Materia.Kind.PESCADO, field.cell_center(4, 4), 1)
+	remanso.ford = 0.8  # en el agua: en seco no hay pescado que listar
+	remanso.fill_contents(field, Subsistence.Season.VERANO)
+	assert_true(remanso.contents.has(int(Materia.Kind.PESCADO)),
+		"el pescado sigue en la ficha, aunque quede poco")
+
+
+func test_lo_que_esta_en_el_agua_no_se_nombra_por_un_paraje_de_tierra() -> void:
+	# Queja del usuario del 2026-09-14: la ventana de técnicas ponía nasas en «la
+	# veta de ocre». La nasa estaba en el agua; lo que la nombraba era el paraje
+	# más cercano de cualquier clase cuando no había uno de pesca al alcance.
+	var parajes := Parajes.new()
+	var veta := _paraje(3, 3, Materia.Kind.OCRE, Subsistence.Activity.MATERIA_PRIMA)
+	parajes.list.append(veta)
+	var nasa := veta.position + Vector3(20.0, 0.0, 0.0)
+	var nombre := parajes.place_name_en_el_agua(nasa, Vector3.ZERO)
+	assert_false(nombre.contains(veta.name_text),
+		"no se nombra por la veta: «%s»" % nombre)
+	assert_true(nombre.contains("orilla"), "sino por la orilla: «%s»" % nombre)
+	var pesca := _paraje(4, 3, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	parajes.list.append(pesca)
+	assert_eq(parajes.place_name_en_el_agua(nasa, Vector3.ZERO), pesca.name_text,
+		"y con un paraje de pesca al alcance, por él")

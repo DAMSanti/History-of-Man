@@ -183,6 +183,54 @@ número. Pero conviene mirarlo: si el siguiente tema cerrado ya se distingue
    falsas, y ahora el comprobador dice **cero** de verdad. Si vuelve a subir, es
    real.
 
+   **Y desde el 2026-09-14 mira también el caso contrario**: que la fachada
+   pase la pelota a un método que **ya no existe** en la clase de detrás. El
+   comprobador armaba su lista con los métodos que existen, así que uno borrado
+   no estaba en ella y no había nada que mirar. Así se coló borrar
+   `PanelTrabajos._materials_of` —iba pegado, sin línea en blanco, al
+   `_speciality_picker` muerto que se quitaba—: compiló, la suite siguió verde, y
+   la ventana de Territorio reventó al abrirla con partida avanzada. Se comprobó
+   que el comprobador nuevo lo caza provocándolo a propósito.
+
+   **Y buscaba mal los ficheros**: colgaba la clase de la carpeta de su fachada,
+   y `Minimapa` vive en `scripts/vista/` con su fachada en `scripts/`. La ruta no
+   existía, y **no se miró una sola llamada de Minimapa** desde que se sacó.
+   Ahora busca el fichero por su nombre. La lección, para cualquier
+   comprobador: **uno que dice cero sin haber mirado nada es indistinguible de
+   uno que dice cero con razón**; hay que provocarle el fallo alguna vez.
+
+   > *Y leía mal los finales de línea* (2026-09-15): el separador de su `split` era
+   > un salto de línea escrito dentro de la cadena, y el propio fichero del
+   > comprobador estaba en CRLF. Al pasar `Marcha.gd` a LF, sus variables dejaron de
+   > verse y salieron **cinco huérfanas falsas**. Ahora el comprobador quita los
+   > retornos de carro al leer.
+
+### 3.1. Repartir un trabajo largo entre cuadros (2026-09-15)
+
+Lo que monta una escena detrás de la pantalla de carga (INTERFAZ §9) se reparte en
+trozos para que ningún cuadro pase de medio segundo. Tres reglas, las tres
+aprendidas midiendo:
+
+1. **Un `ceder` opcional, no una dependencia.** Quien no sabe nada de pantallas
+   —la simulación, el relieve, los caminos— recibe `ceder: Callable = Callable()` y
+   hace `if ceder.is_valid(): await ceder.call()` en sus bucles. Sin él va de un tirón,
+   como siempre; con él cede. **Una sola implementación**: el Dijkstra de
+   `Wayfinder.metros_desde`, la rejilla de `HornoDeRejillas.hornear` o
+   `Querencia.asentarse` son los mismos dentro de un paso de la partida que al
+   montar. La vista y la interfaz, que sí conocen la pantalla, llaman a
+   `Carga.ceder` directamente.
+2. **Una función con `await` es una corrutina, y su valor se pide con `await`.** GDScript
+   no deja usar el resultado sin él (error de análisis), y sí deja llamarla como
+   sentencia: sin `ceder` no se suspende y termina en el acto. Por eso los caminos de
+   dentro de un paso no tuvieron que cambiar.
+3. **Se busca con la sonda, no leyendo.** `CargaProbe` apunta la etapa de cada cuadro
+   largo, y los culpables no fueron los que parecían: el cuadro de 1,7 s de «despertar
+   a la banda» no era el Dijkstra sino **la rejilla de paso de la estación**, que se
+   construía entera la primera vez que alguien preguntaba un camino; el primer cuadro
+   de la carga era **leer la partida antes de abrir la pantalla**; y los recursos
+   visibles eran **un `load` de 431 MB**, que se resuelve con
+   `ResourceLoader.load_threaded_request` (`Carga.cargar`), no troceando.
+
 ---
 
 ## 4. Estilo de código
@@ -379,6 +427,49 @@ Tres cosas más que cuestan tiempo si se olvidan:
   compilación de asignar una propiedad que no existe: `sim.wildlife = herds`
   estuvo meses sin conectar la fauna a la caza, y la caza se resolvía por una
   tabla vieja sin que se notara.
+- **Un getter que se lee a sí mismo no da error: devuelve el valor de respaldo**
+  (2026-09-14). `var estacion: get: return ... else estacion` —la sustitución
+  automática había cambiado `GameState.season` por el nombre de la propia
+  propiedad— compila, no se cuelga y devuelve siempre el valor inicial. Salió
+  como 19 pruebas en rojo con «primavera» donde tocaba otoño. **Tras un
+  `re.sub` sobre un fichero, se miran los getters que haya.**
+- **En la suite no hay árbol de escena.** `RunTests` corre las pruebas en el
+  `_init` de su `SceneTree`, y ahí `Engine.get_main_loop()` es nulo: lo que
+  necesite la raíz —colgar nodos, cambiar de escena— va a una sonda. Una prueba
+  que lo intenta revienta antes de su primer `assert` y **cuenta como pasada**:
+  lo delata que el total de comprobaciones no sube.
+- **Una firma se coteja con el MISMO instrumento en los dos lados**
+  (2026-09-14). La línea base salió de `TironAnualProbe` y la corrida nueva de
+  una sonda escrita para el trabajo: se separaban en la jornada 2, con la leña
+  a cero y nueve raciones de diferencia, y parecía una regresión del código.
+  Repetida con la misma sonda a ambos lados, `Cotejo` dijo «en el resumen:
+  nada». Dos sondas no arrancan la partida igual aunque las dos fijen la
+  semilla; la semilla iguala el azar, no el instrumento.
+  **El motivo exacto salió después, al volver a pasar** (SISTEMAS §23, el mismo
+  día): `TironAnualProbe` pone a trabajar a la banda con `assign_default_jobs`
+  —la partida de verdad arranca sin repartir— y **toma la firma en
+  `paso_cerrado`**, no en `day_passed`. Una sonda que no haga las dos cosas
+  juega otra partida desde la jornada 2. Quien escriba una sonda para cotejar
+  contra `TironAnualProbe`, que copie ese arranque, no que lo imagine.
+- **Y añadir un objeto al estado mueve la firma sin cambiar la partida.**
+  `Instantanea` codifica cada objeto como `[OBJETO, índice de registro]`, así
+  que colgar uno nuevo de `SettlementSim` renumera a todos los demás: en el
+  cotejo salen decenas de campos «distintos» que son punteros, no estado. Lo
+  que hay que mirar entonces es **el resumen** —los valores de la partida— y
+  si los campos del detalle que difieren son todos objetos.
+- **Una sonda que cambia de escena espera a `montado`, y a que la escena sea
+  OTRA** (2026-09-15, INTERFAZ §9). Con la pantalla de carga las escenas se
+  montan en varios cuadros, y la cámara y la interfaz existen desde el
+  primero: esperarlas mide la mitad. Y como la escena nueva se lee en un hilo
+  (`Carga.cambiar_de_escena`), la de antes sigue unos cuadros diciendo
+  `montado`: `TransitoProbe` midió así una ida de 20 ms. Ver `TransitoProbe._montar`.
+  Y en `_init` de una sonda el árbol no es todavía el bucle principal:
+  `Carga.cargar` necesita un `await process_frame` antes.
+- **Un viaje en frío se prepara, no se supone.** Las dos cachés del viaje —la
+  malla regional en disco y la siembra del bosque en memoria— hacen que el
+  segundo viaje no mida lo mismo que el primero. `TransitoProbe` borra la malla
+  regional antes de empezar y suelta la siembra guardada antes de la primera
+  vuelta; si se compara con una cifra de antes, el primer viaje es el que vale.
 
 ---
 

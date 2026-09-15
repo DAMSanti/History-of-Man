@@ -41,7 +41,7 @@ func _burn_hearth() -> void:
 		return
 
 	var wanted := SettlementSim.HEARTH_WOOD_PER_DAY
-	if GameState.season == Subsistence.Season.INVIERNO:
+	if sim.estacion == Subsistence.Season.INVIERNO:
 		wanted *= SettlementSim.HEARTH_WINTER_FACTOR
 	# Racionado se quema la mitad, que es lo que cuesta un fuego una noche sí y
 	# otra no. Ver [racionado].
@@ -227,6 +227,21 @@ func _tend_camp(person: Inhabitant, hours: float) -> void:
 	if sim.camp_queue < 0 and not sim.camp_built.get(CampProjects.Kind.HOGAR, false):
 		queue_project(CampProjects.Kind.HOGAR)
 
+	# EL FUEGO, LO PRIMERO DE TODO, obra en cola incluida. Iba detrás de la obra,
+	# y la obra se quedaba la jornada entera aunque le faltara material: quien
+	# llevaba el hogar ni lo cuidaba —se apagaba esa noche con la leña en la
+	# cueva— ni lo prendía mientras la obra siguiera en cola, que podían ser
+	# días. Queja del usuario del 2026-09-13; ver
+	# `TestCampProjects.test_con_una_obra_parada_...`.
+	#
+	# Prender se lleva la faena; mantenerlo no: echar un leño es un momento, y
+	# lo demás de aquí se hace al lado del fuego.
+	if sim.camp_built.get(CampProjects.Kind.HOGAR, false) and not sim.hearth_lit:
+		_relight_hearth(person, fraction)
+		if not sim.hearth_lit:
+			return
+	sim._hearth_tended = sim._hearth_tended or sim.hearth_lit
+
 	if sim.camp_queue >= 0 and not sim.camp_built.get(sim.camp_queue, false):
 		# El nombre se coge ANTES de trabajar: la jornada que termina la obra
 		# vacía la cola -`_work_on_project` deja `camp_queue` en -1- y pedir
@@ -237,15 +252,6 @@ func _tend_camp(person: Inhabitant, hours: float) -> void:
 		_work_on_project(person, fraction)
 		person.log_deed(person.current_task(), "levantando %s" % doing, false)
 		return
-
-	# Prender otra vez es lo primero, por delante del secadero: sin brasas no se
-	# ahuma nada, así que ponerse al secadero con el fuego apagado sería una
-	# jornada tirada.
-	if sim.camp_built.get(CampProjects.Kind.HOGAR, false) and not sim.hearth_lit:
-		_relight_hearth(person, fraction)
-		return
-
-	sim._hearth_tended = sim._hearth_tended or sim.hearth_lit
 
 	# Sin agua a mano -el abrigo no está junto al río de verdad, ver
 	# [_home_by_water]-, llenar odres deja de ser gratis: hace falta una
@@ -500,6 +506,13 @@ func _smoke_the_larder() -> void:
 	_dry_meat(supervision, SettlementSim.AHUMADO_BONUS)
 
 
+## Lo que [_home_by_water] recuerda, y de qué: -1 es «sin mirar». Es caché de una
+## consulta que no cambia la partida, y por eso no se guarda (`Instantanea.FUERA`).
+var _casa_junto_al_agua: int = -1
+var _casa_mirada_en: Vector3 = Vector3.ZERO
+var _casa_mirada_sobre: int = 0
+var _casa_mirada_con_caudal: Variant = null
+
 ## Si el abrigo está de verdad junto al agua -no "hay un río en el valle",
 ## sino que se puede llenar un odre sin alejarse-. De eso depende que llenar
 ## odres (y beber en casa, ver [Despensa._drink_and_thirst]) sea gratis o
@@ -512,7 +525,23 @@ func _home_by_water() -> bool:
 	# a probar esto.
 	if sim._terrain == null:
 		return true
-	return sim.tajo._water_beside(sim.home_position)
+	# SE RECUERDA MIENTRAS NO CAMBIE LO QUE LO DECIDE: dónde está la casa, qué
+	# relieve y cuánta agua lleva el río. Se preguntaba en cada tick y por cada
+	# persona que estuviera en el abrigo, y en una cueva lejos del agua son
+	# dieciséis muestras del relieve que fallan todas: medido con el cepo en el
+	# sitio 14, el agua costaba por tick cinco veces la del 56 (ESTADO §2). La
+	# respuesta es la misma, así que la partida también.
+	var caudal: Variant = sim._terrain.get("caudal")
+	var cambio: bool = _casa_junto_al_agua < 0 \
+		or _casa_mirada_en != sim.home_position \
+		or _casa_mirada_sobre != sim._terrain.get_instance_id() \
+		or _casa_mirada_con_caudal != caudal
+	if cambio:
+		_casa_mirada_en = sim.home_position
+		_casa_mirada_sobre = sim._terrain.get_instance_id()
+		_casa_mirada_con_caudal = caudal
+		_casa_junto_al_agua = 1 if sim.tajo._water_beside(sim.home_position) else 0
+	return _casa_junto_al_agua == 1
 
 
 ## Cuántos odres se llenan por jornada y por persona de hogar, a rendimiento
@@ -530,8 +559,7 @@ const ODRES_LLENADOS_POR_DIA := 4.0
 func _fill_waterskins() -> void:
 	if not _home_by_water():
 		return
-	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
-		- sim.store.amount(Materia.Kind.AGUA)
+	var vacios := float(sim.despensa.odres_vacios())
 	if vacios <= 0.0:
 		return
 
@@ -569,8 +597,7 @@ func _fill_waterskins() -> void:
 func _fetch_water(person: Inhabitant) -> bool:
 	if _home_by_water():
 		return false
-	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
-		- sim.store.amount(Materia.Kind.AGUA)
+	var vacios := float(sim.despensa.odres_vacios())
 	if vacios <= 0.0:
 		return false
 
@@ -588,8 +615,7 @@ func _fetch_water(person: Inhabitant) -> bool:
 ## acarreo de uno dé de sí y vuelve; `_deliver` cierra la salida al entrar
 ## por la boca del abrigo, igual que con cualquier otro viaje.
 func _arrive_at_water(person: Inhabitant) -> void:
-	var vacios := float(sim.toolkit.count(Tool.Kind.ODRE)) \
-		- sim.store.amount(Materia.Kind.AGUA)
+	var vacios := float(sim.despensa.odres_vacios())
 	var llenados := minf(vacios, ODRES_LLENADOS_POR_DIA * person.effectiveness())
 	if llenados > 0.0:
 		sim.store.add(Materia.Kind.AGUA, llenados)

@@ -650,7 +650,7 @@ func test_el_arbol_dice_cual_de_las_tres_puertas_esta_cerrada() -> void:
 	assert_eq(tree.freno(TechTree.Tech.NUCLEO), TechTree.Freno.JORNADAS,
 		"el nucleo esta al alcance y solo le faltan jornadas")
 	var dice := tree.causa(TechTree.Tech.NUCLEO)
-	assert_true(dice.contains("45") and dice.contains("manufactura"),
+	assert_true(dice.contains("15") and dice.contains("manufactura"),
 		"y dice cuantas y de que oficio, que es lo que decide a quien mover: "
 		+ dice)
 

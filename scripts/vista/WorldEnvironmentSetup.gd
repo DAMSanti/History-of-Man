@@ -219,6 +219,34 @@ func _ready() -> void:
 	_setup_sky()
 	_setup_lighting()
 	_connect_time_manager()
+	# LA CONFIGURACIÓN MANDA sobre los `@export` de la escena: lo que se montó con
+	# sus valores de siempre se pone ya como lo eligió el jugador. Ver
+	# [Configuracion] e INTERFAZ §8.
+	add_to_group(Configuracion.GRUPO)
+	aplicar_configuracion()
+
+
+## Los ajustes de gráficos que son del entorno: oclusión, niebla volumétrica,
+## sombras del sol y de la luna, y los pasos de las nubes. En caliente.
+func aplicar_configuracion() -> void:
+	var g := Configuracion.graficos
+	var oclusion := int(g["oclusion"])
+	enable_ssao = oclusion >= Configuracion.Oclusion.SSAO
+	enable_ssil = oclusion >= Configuracion.Oclusion.SSAO_Y_SSIL
+	if _environment != null:
+		_environment.ssao_enabled = enable_ssao
+		_environment.ssil_enabled = enable_ssil
+	set_volumetric_fog_enabled(bool(g["niebla"]))
+	var sombras := Configuracion.sombras()
+	var cortes := DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if int(sombras["cortes"]) >= 4 \
+		else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	for luz: DirectionalLight3D in [_directional_light, _moon_light]:
+		if luz == null:
+			continue
+		luz.shadow_enabled = bool(sombras["activas"])
+		luz.directional_shadow_mode = cortes
+	if _sky_material != null:
+		_sky_material.set_shader_parameter("pasos_de_nube", int(g["nubes"]))
 
 
 func _setup_environment() -> void:
@@ -525,6 +553,40 @@ func nubes_por_el_tiempo(kind: int) -> void:
 		_sky_material.set_shader_parameter("nubes", _nubosidad)
 
 
+## Cuánto ha corrido el viento, con EL RELOJ DE LA PARTIDA.
+##
+## Iba con el reloj de pared, a propósito —«la nube es vista, no partida»—, y el
+## usuario lo quiso al revés el 2026-09-14: «las nubes deben quedar paradas si el
+## tiempo está parado; a x5, cinco veces más rápido; a x1, velocidad normal», y
+## también en la noche acelerada. «Velocidad normal» es la de antes a x1: un
+## segundo de nube por cada segundo que la partida avanzaría a x1, o sea la hora
+## de juego pasada a segundos con `seconds_per_day`.
+##
+## Se cuenta aquí y no en el shader porque el shader no sabe la hora de la
+## partida, y sumar `TIME` con un multiplicador no pararía nunca las nubes.
+## Sin simulación —el mapa regional—, quietas.
+func _mover_las_nubes() -> void:
+	var sim := _find_sim()
+	if sim == null or not ("day" in sim):
+		return
+	var segundos := (float(sim.day) * 24.0 + float(sim.hour)) / 24.0 \
+		* float(sim.seconds_per_day)
+	# Envuelto muy lejos: el ruido del shader ya no pierde precisión hasta el
+	# millón —el hash no usa seno—, y a esa cifra se llega en miles de jornadas.
+	_sky_material.set_shader_parameter("viento_recorrido",
+		fmod(segundos * VIENTO * VIENTO_A_RUIDO, 1.0e6))
+
+
+## De metros de viento a unidades del ruido de las nubes. Es el 40 que usaba el
+## shader con `TIME`, y se deja igual para que a x1 corran como corrían.
+const VIENTO_A_RUIDO := 40.0
+
+## Lo que corre el viento de las nubes. Es el `viento` por defecto del shader; se
+## lee de aquí y no del material porque `get_shader_parameter` devuelve nulo
+## mientras nadie lo haya fijado.
+const VIENTO := 0.012
+
+
 ## Cuánto tapan hoy. Se guarda porque el color del cielo depende de ello: un
 ## cielo despejado es azul y uno de temporal es gris.
 var _nubosidad: float = 0.45
@@ -542,6 +604,7 @@ func _pintar_el_cielo(latitude: float, day: float, hour: float,
 	var noche := 1.0 - smoothstep(-8.0, 2.0, sun_above)
 	_sky_material.set_shader_parameter("noche", noche)
 	_sky_material.set_shader_parameter("hacia_el_sol", to_sun)
+	_mover_las_nubes()
 
 	# EL EJE SOBRE EL QUE GIRA EL CIELO: el polo celeste está a la altura de la
 	# latitud y mirando al norte, que en este mundo es -Z -ver

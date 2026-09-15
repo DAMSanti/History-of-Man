@@ -1,122 +1,116 @@
 extends SceneTree
-## Tres bocas de cueva, de cerca y de lejos. Frente 21 de EPOCA_01 §10.1, tanda
-## 4: «capturas con ventana de tres bocas: se ven como cuevas a la distancia de
-## gestión».
+## Lo que se ve al entrar en una cueva, y lo que cuesta entrar. SISTEMAS §13.
 ##
-## Con ventana: con `--headless` no hay imagen.
+## **Con ventana**: con `--headless` no hay imagen que capturar, y los shaders sólo
+## fallan de verdad con un dispositivo de render.
+##
 ##   godot --path . --script res://scripts/tests/CuevaCaptura.gd
 ##
-## `DISTANCIA` cambia la toma de lejos (45 m por defecto) y `SUFIJO` el nombre de
-## las capturas, para guardar el antes y el después.
+## Tres paredes, a 1920×1080: la de una banda con cinco pinturas, Covalanas y El
+## Castillo. Deja las capturas en `user://capturas/cueva_*.png` y dice lo que tardó
+## en montarse cada una, que la spec pide por debajo de 2 s.
 
-const SITE_ID := 56
-const MAR_PALEOLITICO := -120.0
+const SALIDA := "user://capturas"
 
 
 func _init() -> void:
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	Engine.max_fps = 0
-	# Una sonda no escribe en los mapas del jugador. Ver [Guardado.carpeta].
-	Guardado.carpeta = "user://sondas/mapas"
-	var demo := await _arrancar()
-	if demo == null:
-		quit()
-		return
-	var sim: SettlementSim = demo.sim
-	var ui: GameUI = demo.ui
-	if sim == null or ui == null:
-		print("sin simulacion")
-		quit()
-		return
-	sim.time_scale = 0.0
-	for id: String in (ui._windows as Dictionary).keys():
-		(ui._windows[id] as Control).visible = false
-	ui.visible = false
+	# EN VENTANA antes de dar el tamaño: a pantalla completa `window_set_size` no
+	# hace nada y la captura sale a 3651×2054. Ver `NieblaCaptura`.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(Vector2i(1920, 1080))
+	root.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+	DirAccess.make_dir_recursive_absolute(SALIDA)
+	await process_frame
 
-	var cuevas: Array = demo._caves
-	print("bocas en el mapa: %d" % cuevas.size())
-	if cuevas.is_empty():
-		quit()
-		return
-
-	# La de casa primero, y luego las dos más lejanas: que salgan laderas
-	# distintas y no tres veces la misma.
-	var casa: CaveMouth = demo._cave_at(sim.home_position)
-	var otras := cuevas.duplicate()
-	otras.erase(casa)
-	otras.sort_custom(func(a: CaveMouth, b: CaveMouth) -> bool:
-		return a.pick_position().distance_to(sim.home_position) \
-			> b.pick_position().distance_to(sim.home_position))
-	var elegidas: Array = []
-	if casa != null:
-		elegidas.append(casa)
-	for cueva: CaveMouth in otras:
-		if elegidas.size() >= 3:
-			break
-		elegidas.append(cueva)
-
-	var distancia := 45.0
-	if not OS.get_environment("DISTANCIA").is_empty():
-		distancia = float(OS.get_environment("DISTANCIA"))
-	var sufijo := OS.get_environment("SUFIJO")
-
-	# CÁMARA PROPIA, y no la del juego: la órbita tiene distancia mínima y no
-	# baja de unos cien metros, donde una boca de 3 a 6 m son cuatro píxeles y no
-	# se puede juzgar el modelo. Interesan las dos cosas: de cerca, cómo es; de
-	# lejos, si se distingue.
-	var ojo := Camera3D.new()
-	demo.add_child(ojo)
-	ojo.current = true
-
-	for i in range(elegidas.size()):
-		var cueva: CaveMouth = elegidas[i]
-		cueva.discover()
-		var frente := cueva.facing()
-		var mirada := cueva.pick_position()
-		# Dos tomas por cueva y no cuatro: cada captura pesa doce megas y llenaron
-		# el disco del usuario dos veces el 2026-09-13.
-		for vista: Array in [["ladeada", 24.0, 12.0, 55.0], ["alto", 14.0, 30.0, 20.0]]:
-			var lejos: float = vista[1]
-			var rumbo := frente.rotated(Vector3.UP, deg_to_rad(float(vista[3])))
-			ojo.global_position = mirada + rumbo * lejos + Vector3(0.0, float(vista[2]), 0.0)
-			ojo.look_at(mirada, Vector3.UP)
-			for f in range(30):
-				sim.hour = 12.0
-				await process_frame
-			var shot := get_root().get_texture().get_image()
-			var nombre := "user://cueva_%d_%s%s.png" % [i, String(vista[0]), sufijo]
-			if shot != null:
-				shot.save_png(nombre)
-				print("captura en %s" % ProjectSettings.globalize_path(nombre))
-			else:
-				print("sin captura: ¿se ha lanzado con --headless?")
+	var casos: Array = [
+		["banda", -1, 5],
+		["covalanas", 5, 0],
+		["el_castillo", 1, 0],
+	]
+	var peor := 0.0
+	var gpu_peor := 0.0
+	for caso: Array in casos:
+		var sim := _sim(int(caso[1]), int(caso[2]))
+		var capa := CanvasLayer.new()
+		root.add_child(capa)
+		var sala := SalaDeLaCueva.new()
+		var t := Time.get_ticks_usec()
+		capa.add_child(sala)
+		sala.montar(sim, 0, "Prueba: %s" % caso[0])
+		for _i in range(3):
+			await process_frame
+		var ms := (Time.get_ticks_usec() - t) / 1000.0
+		peor = maxf(peor, ms)
+		for _i in range(20):
+			await process_frame
+		# LO QUE CUESTA MIRARLA, como `GpuProfile`: la ventana y el `SubViewport` de
+		# la sala, sumados, con la cámara quieta y la lámpara parpadeando.
+		var gpu := await _gpu_de(sala)
+		gpu_peor = maxf(gpu_peor, gpu)
+		print("  %-12s GPU: %.2f ms por cuadro" % [caso[0], gpu])
+		var imagen := root.get_texture().get_image()
+		var ruta := "%s/cueva_%s.png" % [SALIDA, caso[0]]
+		imagen.save_png(ruta)
+		sala.imagen_de_pinturas.save_png("%s/cueva_%s_pinturas.png" % [SALIDA, caso[0]])
+		print("  %-12s %d figuras · montar y primer cuadro: %.0f ms · %s" % [caso[0],
+			sala.figuras_dibujadas, ms, ProjectSettings.globalize_path(ruta)])
+		var t_salir := Time.get_ticks_usec()
+		sala.cerrar()
+		await process_frame
+		print("  %-12s salir: %.0f ms" % [caso[0], (Time.get_ticks_usec() - t_salir) / 1000.0])
+		capa.queue_free()
+		sim.free()
+		await process_frame
+	print("")
+	print("entrar, el peor: %.0f ms (la spec pide menos de 2000)" % peor)
+	print("GPU, la peor sala: %.2f ms (el valle en Medio, 18,1 ms en este equipo; GRAFICOS §7)" % gpu_peor)
+	print("TODO BIEN" if peor < 2000.0 else "NO CUMPLE")
 	quit()
 
 
-## Lo que deja el mapa regional al entrar. Ver [RegionMap._enter_local].
-func _arrancar() -> Node:
-	var local: HeightmapData = load("res://data/dem/local/site_%d.res" % SITE_ID)
-	var sites: SiteSet = load("res://data/sites/cantabria_sites.res")
-	if local == null or sites == null:
-		print("faltan los datos de relieve")
-		return null
-	var site: Site = null
-	for s: Site in sites.sites:
-		if s.id == SITE_ID:
-			site = s
-	var size_m := local.get_world_size_meters()
-	var half := float(Expedition.local_size_m) * 0.5
-	Expedition.site = site
-	Expedition.heightmap_path = "res://data/dem/local/site_%d.res" % SITE_ID
-	Expedition.sea_level_m = MAR_PALEOLITICO
-	Expedition.era = Site.Era.PALEOLITICO
-	Expedition.retomando = false
-	Expedition.region_offset = Vector2(
-		clampf(local.u_for_lon(site.lon) * size_m.x - half, 0.0,
-			maxf(size_m.x - half * 2.0, 0.0)),
-		clampf(local.v_for_lat(site.lat) * size_m.y - half, 0.0,
-			maxf(size_m.y - half * 2.0, 0.0)))
-	change_scene_to_file("res://scenes/demo_main.tscn")
-	for i in range(120):
+## Una simulación mínima con una cueva: la de una cueva con arte del catálogo
+## (`arte` es su índice en [ArteDeLosDeAntes.CUEVAS]) o una sin arte con
+## `pintadas` relatos de la banda en la pared.
+func _sim(arte: int, pintadas: int) -> SettlementSim:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.game_seed = 20260915
+	if arte >= 0:
+		var cueva: Dictionary = ArteDeLosDeAntes.CUEVAS[arte]
+		sim.pinturas.elementos = [{"name": cueva["nombre"], "lat": cueva["lat"],
+			"lon": cueva["lon"]}]
+	else:
+		sim.pinturas.elementos = [{"name": "la cueva de la banda", "lat": 0.0, "lon": 0.0}]
+	sim.exploracion._sabido[0] = {"explorada": true, "pintable": true}
+	sim.exploracion.cueva_de_la_banda = 0
+	var especies := ["ciervo", "caballo", "uro", "jabali", "ciervo"]
+	for i in range(pintadas):
+		var tale := Tale.hunt("Ana", especies[i % especies.size()], "el vado", 3, true, i,
+			Profession.task_id(Profession.Job.CAZA, Profession.Speciality.CAZA_MAYOR))
+		tale.painted = true
+		tale.cueva = 0
+		sim.paintings.append(tale)
+	var mano := Tale.new()
+	mano.kind = Tale.Kind.HITO
+	mano.task = 0
+	if pintadas > 0:
+		mano.painted = true
+		mano.cueva = 0
+		sim.paintings.append(mano)
+	return sim
+
+
+## Tiempo de GPU medio por cuadro de la ventana más el de la sala, en 120 cuadros.
+func _gpu_de(sala: SalaDeLaCueva) -> float:
+	var ventana := root.get_viewport_rid()
+	var vista := sala._vista.get_viewport_rid()
+	RenderingServer.viewport_set_measure_render_time(ventana, true)
+	RenderingServer.viewport_set_measure_render_time(vista, true)
+	for _i in range(30):
 		await process_frame
-	return current_scene
+	var suma := 0.0
+	for _i in range(120):
+		await process_frame
+		suma += RenderingServer.viewport_get_measured_render_time_gpu(ventana) 			+ RenderingServer.viewport_get_measured_render_time_gpu(vista)
+	return suma / 120.0
+

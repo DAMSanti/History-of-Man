@@ -266,9 +266,13 @@ const CATALOGUE := {
 	},
 	Kind.GRASA: {
 		"name": "Grasa", "unit": "porción", "kg": 0.9, "litros": 1.0,
-		"dias": 120, "kcal": 8100,
-		"prot": 2.0,
-		"desc": "Combustible de lámpara y el alimento más denso que hay.",
+		# SIN CALORÍAS PARA LA BANDA, aunque las tenga: decisión del usuario del
+		# 2026-09-13, «no quiero que se coman la grasa, quiero que la utilicen
+		# solo como material». Es la lámpara, el curtido y el aglutinante de la
+		# pintura, y comida no le quedaba para ninguna de las tres: con la grasa
+		# en la despensa no se curtía ni una piel.
+		"dias": 120, "kcal": 0.0,
+		"desc": "Combustible de lámpara, curtido y aglutinante de la pintura.",
 	},
 	Kind.OCRE: {
 		"name": "Ocre", "unit": "nódulo", "kg": 1.1, "litros": 0.4,

@@ -50,6 +50,11 @@ enum Tech {
 ## acumular; el OFICIO que la practica sale de la rama —ver [BRANCHES] y
 ## [job_of]— y no se escribe aquí, para que la pestaña en la que sale y lo que
 ## la hace subir no puedan discrepar.
+##
+## Las jornadas de la manufactura (núcleo 15, laminar 45, aguja 90) y de la
+## escalera de pesca (60, 120, 180, 240, 300) son **decisión del usuario del
+## 2026-09-13**: eran 45/110/190 y 60/180/320/560/850, y no llegaban en la
+## partida. No son una medida.
 const CATALOGUE := {
 	Tech.LASCA: {
 		"name": "Talla sobre lasca",
@@ -62,14 +67,14 @@ const CATALOGUE := {
 		"desc": "Se prepara el nódulo antes de extraer, de modo que la lasca sale "
 			+ "con la forma buscada. Es el salto técnico del Musteriense: menos "
 			+ "desperdicio de sílex y filos repetibles.",
-		"needs": [Tech.LASCA], "days": 45,
+		"needs": [Tech.LASCA], "days": 15,
 	},
 	Tech.HOJA: {
 		"name": "Talla laminar",
 		"desc": "Hojas largas y estrechas desde un núcleo prismático. Multiplica "
 			+ "los metros de filo por kilo de sílex, que en un valle sin sílex "
 			+ "bueno es la diferencia entre tener herramientas o no.",
-		"needs": [Tech.NUCLEO], "days": 110,
+		"needs": [Tech.NUCLEO], "days": 45,
 	},
 	Tech.LAZO: {
 		"name": "Lazo de fibra",
@@ -133,7 +138,7 @@ const CATALOGUE := {
 		"desc": "La cestería de la banda trenzada en embudo. Se cala por la "
 			+ "tarde y se levanta por la mañana: pesca mientras la banda "
 			+ "está en otra cosa.",
-		"needs": [Tech.PESQUERA], "days": 180,
+		"needs": [Tech.PESQUERA], "days": 120,
 	},
 	Tech.ANZUELO: {
 		"name": "Anzuelo de hueso",
@@ -142,7 +147,7 @@ const CATALOGUE := {
 			+ "traga y se le cruza dentro. Pide hueso ranurado con buril, "
 			+ "cordel y cebo.",
 		"needs": [Tech.NASA, Tech.NUCLEO],
-		"days": 320,
+		"days": 180,
 	},
 	Tech.ARPON: {
 		"name": "Arpón de asta",
@@ -151,14 +156,14 @@ const CATALOGUE := {
 			+ "hace unos quince mil años— y lo que convierte el remonte de una "
 			+ "suerte estacional en una cosecha previsible.",
 		"needs": [Tech.RED, Tech.HOJA],
-		"days": 850,
+		"days": 300,
 	},
 	Tech.RED: {
 		"name": "Red de fibra",
 		"desc": "Hay impronta de red trenzada en Pavlov de hace veintinueve mil "
 			+ "años: es más vieja que el arpón, no un adelanto. Se hace cuando "
 			+ "sobra cordel y hay manos para calarla, y pide las dos cosas.",
-		"needs": [Tech.ANZUELO], "days": 560,
+		"needs": [Tech.ANZUELO], "days": 240,
 	},
 	Tech.PASARELA: {
 		"name": "Pasarela de troncos",
@@ -179,7 +184,7 @@ const CATALOGUE := {
 		"name": "Aguja de hueso",
 		"desc": "Ropa cosida y ajustada en vez de piel echada por encima. Es lo "
 			+ "que permite trabajar fuera en pleno invierno.",
-		"needs": [Tech.HOJA], "days": 190,
+		"needs": [Tech.HOJA], "days": 90,
 	},
 }
 
@@ -497,6 +502,17 @@ func freno(tech: Tech) -> Freno:
 ## Cadena vacia si no hay nada que decir. Va aqui y no en la ventana porque es
 ## la misma frase que necesitan la casilla, el aviso emergente y la leyenda, y
 ## escrita tres veces se separa a la primera.
+## Si este freno es un REQUISITO —algo que hay que tener antes—, y no sólo que
+## vaya lento.
+##
+## Es lo que va en rojo en el árbol. Hasta el 2026-09-13 sólo iba la parada por
+## material; el usuario lo pidió para todo lo que no se arregla con más
+## jornadas: la técnica previa y la obra también. La que va lenta se arregla
+## poniendo gente, y en rojo estaría medio árbol.
+static func frena_un_requisito(que: Freno) -> bool:
+	return que == Freno.PRERREQUISITO or que == Freno.OBRA or que == Freno.MATERIAL
+
+
 func causa(tech: Tech) -> String:
 	match freno(tech):
 		Freno.PRERREQUISITO:

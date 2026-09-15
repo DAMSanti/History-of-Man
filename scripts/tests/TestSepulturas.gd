@@ -101,3 +101,41 @@ func test_la_tumba_queda_apuntada_y_a_quien_se_deja_no() -> void:
 	sim.sepulturas.despedir("Beru", Vector3(9, 0, 9), Sepulturas.Despedida.CUBRIR)
 	assert_eq(sim.sepulturas.tumbas.size(), 1, "cubrirlo, sí")
 	assert_eq(sim.sepulturas.tumbas[0]["donde"], Vector3(9, 0, 9), "donde murió")
+
+
+# -------------------- la muerte se cuenta (depurar, 2026-09-13) --
+#
+# Queja del usuario: «cuando alguien muere debe decirme cómo murió; debe ser un
+# acontecimiento que le importe al jugador, con una pequeña historia, no un
+# mensaje robótico de "alguien ha muerto"». La tarjeta decía «Ha muerto Anda ·
+# La banda tiene que decidir qué se hace con el cuerpo», y la causa se quedaba
+# en la crónica.
+
+func _muere_anda(sim: SettlementSim) -> Moment:
+	var anda: Inhabitant = sim.people[0]
+	anda.age_years = 34
+	anda.job = Profession.Job.CAZA
+	anda.log_hours(Profession.Job.CAZA, 900.0)
+	anda.log_gain(Profession.Job.CAZA, Materia.Kind.CARNE, 420.0)
+	var citados: Array = []
+	sim.moment_raised.connect(func(m: Moment) -> void: citados.append(m))
+	sim._person_dies(anda, "Anda murió en una caída en el Cantizal: no volvió del monte.")
+	assert_eq(citados.size(), 1, "sale la tarjeta")
+	return citados[0] if citados.size() == 1 else Moment.new()
+
+
+func test_la_tarjeta_dice_como_murio() -> void:
+	var momento := _muere_anda(_sim())
+	assert_true(momento.text.contains("caída en el Cantizal"),
+		"la causa va en la tarjeta: %s" % momento.text)
+
+
+func test_la_tarjeta_cuenta_un_trozo_de_su_vida() -> void:
+	var momento := _muere_anda(_sim())
+	assert_true(momento.text.contains("34"), "su edad: %s" % momento.text)
+	assert_true(momento.text.to_lower().contains(
+		Profession.job_name(Profession.Job.CAZA).to_lower()),
+		"de qué vivía: %s" % momento.text)
+	assert_true(momento.text.contains("Beru") or momento.text.contains("Caro"),
+		"y a quién deja: %s" % momento.text)
+	assert_eq(momento.options.size(), 3, "y debajo, las despedidas de siempre")

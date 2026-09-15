@@ -85,8 +85,10 @@ func revisar_vejez() -> void:
 			continue
 		if sim._rng.randf() < riesgo:
 			sim._person_dies(person,
-				"%s murió de vieja, a los %d años."
-					% [person.given_name, person.age_years])
+				"%s murió de %s, a los %d años, durmiendo junto a los suyos."
+					% [person.given_name,
+						"vieja" if person.sex == Inhabitant.Sex.MUJER else "viejo",
+						person.age_years])
 
 
 ## --- El frío mata, aparte del hambre ---------------------------------------
@@ -139,8 +141,9 @@ func revisar_frio() -> void:
 
 		if person.cold_sick_days >= _cold_death_days(person):
 			sim._person_dies(person,
-				"%s murió de frío: demasiadas noches en un abrigo sin fuego."
-					% person.given_name)
+				"%s murió de frío tras %d días sin llegar a entrar en calor: "
+					% [person.given_name, person.cold_sick_days]
+				+ "demasiadas noches en un abrigo sin fuego.")
 
 
 ## --- El hambre mata, aparte del frío ----------------------------------------
@@ -186,8 +189,9 @@ func revisar_hambre() -> void:
 
 		if person.hunger_sick_days >= _hunger_death_days(person):
 			sim._person_dies(person,
-				"%s murió de hambre: demasiado tiempo sin comer lo suyo."
-					% person.given_name)
+				"%s murió de hambre tras %d días comiendo menos de lo que "
+					% [person.given_name, person.hunger_sick_days]
+				+ "necesitaba, cada vez más débil.")
 
 
 ## --- Nacimientos: un parto por año bueno ------------------------------------

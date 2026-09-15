@@ -14,10 +14,26 @@ extends RefCounted
 ## Palabras de sitio. La segunda mitad del nombre sale de aquí, y no es
 ## decoración: «el recodo» y «la vaguada» son sitios distintos y el jugador se
 ## acuerda de cuál es cuál.
+##
+## **Sesenta desde el 2026-09-14.** Eran quince, y con quince el decimosexto
+## avellanar ya salía numerado —«(2)», «(3)»—, que es lo que vio el usuario. Las
+## nuevas son voces de la toponimia menor de Cantabria —braña, cueto, jou, sel,
+## llosa, mies, sedo, lastra— y del relieve, y ninguna nombra algo que la banda
+## levante o que ya sea un material: un «del abrigo» o un «de la fuente» se
+## leerían como otra cosa.
 const LUGARES := [
 	"del recodo", "de arriba", "del vado", "de la solana", "de la umbría",
 	"del alto", "de abajo", "del hondo", "de la peña", "del regato",
 	"de la boca", "del paso", "de la loma", "del cortado", "de la vega",
+	"de la braña", "del collado", "del cueto", "de la hoz", "de la canal",
+	"del jou", "de la sel", "de la llosa", "de la mies", "del pozo",
+	"de la lastra", "del llano", "del sedo", "de la cuesta", "del portillo",
+	"de la hondonada", "del torcal", "de la cárcava", "del rellano", "de la garganta",
+	"de la cerrada", "del picón", "del teso", "de la lomba", "del cantil",
+	"de la ribera", "del meandro", "del peñasco", "de la risca", "de la collada",
+	"del cotero", "de la vaguada", "del raso", "del salto", "de la poza",
+	"del estrecho", "de la muela", "del espolón", "de la cresta", "del arenal",
+	"de las lastras", "del resbaladero", "de la revuelta", "del hombro", "del escalón",
 ]
 
 ## Cómo se llama el sitio según lo que da. Cada actividad tiene su palabra: un
@@ -340,6 +356,20 @@ func fill_contents(field: ResourceField, season: Subsistence.Season) -> void:
 				"abundancia": amount * Parajes.DE_PASO,
 				"sabido": rest == kind or previously_known.has(int(rest)),
 			}
+
+	# LO QUE NOMBRA EL SITIO NO SE CALLA POR ESTAR ESQUILMADO. Por debajo del
+	# umbral la actividad se saltaba entera, y un remanso vaciado se quedaba con
+	# la piedra de la orilla por toda ficha: «el paraje está con peces, al rato
+	# el marcador se apaga y cuando miro sólo tiene cuarcita» —queja del usuario
+	# del 2026-09-14—. Sigue en la lista con lo que quede, que la fila de la
+	# ficha pregunta en vivo y dice cuánto: es un remanso esquilmado, no un
+	# cantizal. Lo que está fuera de temporada sí se calla: eso no está.
+	if not fresh.has(int(kind)) and Parajes.in_season(kind, season) \
+			and Parajes.material_fits(kind, ford):
+		fresh[int(kind)] = {
+			"abundancia": field.seasonal_abundance_at(activity, position, season),
+			"sabido": true,
+		}
 
 	# Siempre hay algo que se lleva quien pasa por allí, aunque el sitio no sea
 	# de eso: leña del suelo y fibra de las matas. Salen como incógnita, salvo

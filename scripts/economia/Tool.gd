@@ -173,6 +173,55 @@ static func stuff_name(stuff_value: Stuff) -> String:
 	return STUFF_NAMES[stuff_value]
 
 
+## Horas de trabajo que pide cada pieza, con un artesano de rendimiento 1.
+##
+## **El esfuerzo es de la PIEZA, no del oficio** (2026-09-14). Hasta ese día la
+## velocidad era una sola cifra por especialidad —`SettlementSim.CRAFT_PER_DAY`—
+## y todas las piezas de un oficio costaban igual. Con 11 horas útiles al día
+## (`SettlementSim.HORAS_UTILES`) eso salía así:
+##
+## - un **punzón** de hueso, 18,3 horas: casi dos jornadas para una esquirla
+##   apuntada. Queja del usuario: «tarda mucho en fabricar las cosas, diría que
+##   varios días de trabajo en hacer un simple punzón»;
+## - y una **red**, 9,2 horas, con sus 9,0 de fibra. La pieza más cara de la
+##   banda salía **en la mitad de tiempo que el punzón**. El orden estaba
+##   invertido, no sólo la escala.
+##
+## Las horas de abajo son órdenes de magnitud de arqueología experimental —lo
+## que cuesta la operación, no un número de balanceo—: lo caro de una aguja es
+## perforarle el ojo, lo caro de un arpón es sacarle los dientes uno a uno, y una
+## red son semanas de tarde. Se revisaron y se aceptaron con el usuario antes de
+## aplicarlas. Si alguna hay que mover, se mueve **ésta** y no la velocidad del
+## oficio, que ahora sólo mide destreza.
+const HORAS_DE_TRABAJO := {
+	# Piedra: de un golpe bien dado a un canto ahuecado a picotazos.
+	Kind.LASCA: 0.25,
+	Kind.RAEDERA: 0.5,
+	Kind.BURIL: 0.5,
+	Kind.PUNTA: 1.5,
+	Kind.LAMPARA: 5.0,
+	# Hueso y asta. El punzón es lo más barato que se hace con buril; el arpón,
+	# lo más caro, por los dientes.
+	Kind.PUNZON: 1.0,
+	Kind.ANZUELO: 2.0,
+	Kind.AGUJA: 3.0,
+	Kind.AZAGAYA: 6.0,
+	Kind.ARPON: 12.0,
+	# Fibra. La red es la pieza más cara de la banda y ahora lo parece.
+	Kind.CUERDA: 3.0,
+	Kind.CESTO: 8.0,
+	Kind.NASA: 12.0,
+	Kind.RED: 45.0,
+	# Piel, ya curtida: el curtido se cobra aparte, en `Taller._curar_piel`.
+	Kind.ODRE: 8.0,
+	Kind.VESTIDO: 30.0,
+}
+
+## Lo que pide una pieza, en horas. Una sin tabla cuesta una jornada útil.
+static func horas_de_trabajo(kind_value: Kind) -> float:
+	return float(HORAS_DE_TRABAJO.get(kind_value, 11.0))
+
+
 ## Qué material hace falta para fabricar cada tipo, y cuánto.
 ##
 ## Es la receta: sin la materia prima no hay pieza, y por eso la manufactura

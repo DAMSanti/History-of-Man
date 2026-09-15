@@ -40,6 +40,23 @@ const ESQUILMADO := 0.20
 ## y volvería a entrar. Eso no es descansar, es una puerta batiente.
 const REPUESTO := 0.55
 
+## Los de la PESCA, que van aparte. Decisión del usuario del 2026-09-13: «si hay
+## menos del 30 % de peces no deben volver a pescar hasta que se recupere al
+## menos el 90 %». Un río se vacía antes que un avellanar —los peces se cogen
+## del tramo, no de la mancha— y tarda más en llenarse.
+const PESCA_ESQUILMADA := 0.30
+const PESCA_REPUESTA := 0.90
+
+
+## Por debajo de cuánto descansa un paraje de este oficio.
+static func esquilmado(activity: Subsistence.Activity) -> float:
+	return PESCA_ESQUILMADA if activity == Subsistence.Activity.PESCA else ESQUILMADO
+
+
+## Y hasta cuánto tiene que reponerse para volver.
+static func repuesto(activity: Subsistence.Activity) -> float:
+	return PESCA_REPUESTA if activity == Subsistence.Activity.PESCA else REPUESTO
+
 ## Con qué radio se mira lo que queda. El mismo que usa el reparto de tajos
 ## para puntuar un sitio, o el barbecho y la elección dirían cosas distintas
 ## del mismo paraje.
@@ -76,9 +93,9 @@ func revisar() -> void:
 			continue
 		var queda := cuanto_queda(paraje)
 		if paraje.resting:
-			if queda >= REPUESTO:
+			if queda >= repuesto(paraje.activity):
 				_devolver(paraje, queda)
-		elif queda < ESQUILMADO:
+		elif queda < esquilmado(paraje.activity):
 			_descansar(paraje, queda)
 
 
@@ -135,7 +152,7 @@ func sin_sitio(activity: Subsistence.Activity) -> bool:
 		var donde: Vector3 = spot["pos"]
 		if sim._is_resting(activity, donde):
 			continue
-		if sim.field.stock_fraction_around(activity, donde, RADIO) >= ESQUILMADO:
+		if sim.field.stock_fraction_around(activity, donde, RADIO) >= esquilmado(activity):
 			return false
 	return true
 
@@ -178,7 +195,7 @@ func donde_buscar(activity: Subsistence.Activity, desde: Vector3) -> Vector3:
 			if lejos > tope:
 				continue
 			var queda := sim.field.stock_fraction_around(activity, centre, RADIO)
-			if queda < REPUESTO:
+			if queda < repuesto(activity):
 				continue
 			if sim._is_resting(activity, centre):
 				continue

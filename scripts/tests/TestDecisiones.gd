@@ -211,21 +211,8 @@ func _banda_completa() -> SettlementSim:
 	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
 	# Tienda y hoguera: sin ellas la expedición de la tanda 3 no sale, y la
 	# tarjeta saldría con la opción apagada. Ver [Expedicion.hace_falta_para].
-	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
-	var comarca := SiteSet.new()
-	for i in range(4):
-		var s := Site.new()
-		s.id = 2000 + i
-		s.lon = float(i) * 0.1
-		s.inside_region = true
-		# Con abrigo y por encima del mar: en el Paleolítico sólo cuenta como
-		# sitio al que ir el que tiene abrigo —`Site.is_usable_in`—, que es por
-		# qué de los 869 emplazamientos son 72.
-		s.has_shelter = true
-		s.elevation = 50.0
-		comarca.sites.append(s)
-	sim.expedicion.sitios = comarca
 	return sim
 
 
@@ -253,18 +240,21 @@ func test_en_verano_sale_la_de_las_cumbres() -> void:
 		assert_true(m.la_eleccion_importa(), "y elegir cambia cifras")
 
 
-func test_en_primavera_sale_la_de_la_expedicion() -> void:
+func test_en_primavera_no_sale_ninguna() -> void:
+	# LA PRIMAVERA SE QUEDÓ SIN DECISIÓN el 2026-09-14: la suya era mandar la
+	# expedición, y ahora se manda cuando se quiere (SISTEMAS §4).
 	var sim := _banda_completa()
-	var m := _de_tipo(_tarjetas_al_entrar_en(sim, Subsistence.Season.PRIMAVERA),
-		Moment.Kind.EXPEDICION)
-	assert_true(m != null, "primavera: ¿se sale del valle?")
-	if m != null:
-		assert_true(m.la_eleccion_importa(), "y elegir cambia cifras")
+	var decisiones := 0
+	for m: Moment in _tarjetas_al_entrar_en(sim, Subsistence.Season.PRIMAVERA):
+		if m.la_eleccion_importa():
+			decisiones += 1
+	assert_eq(decisiones, 0, "primavera: nada que decidir")
 
 
-func test_en_un_ano_salen_las_cuatro() -> void:
-	# EL CRITERIO LITERAL DEL FRENTE 8: al menos cuatro al año que no se pueden
-	# evitar, una por estación.
+func test_en_un_ano_salen_las_tres() -> void:
+	# EL CRITERIO DEL FRENTE 8 pedía cuatro al año, una por estación. Desde el
+	# 2026-09-14 son tres: la de primavera se fue con la expedición hacia un
+	# rumbo, y la spec lo acepta como consecuencia.
 	var sim := _banda_completa()
 	var tipos := {}
 	for estacion in [Subsistence.Season.PRIMAVERA, Subsistence.Season.VERANO,
@@ -272,8 +262,7 @@ func test_en_un_ano_salen_las_cuatro() -> void:
 		for m: Moment in _tarjetas_al_entrar_en(sim, estacion):
 			if m.la_eleccion_importa():
 				tipos[m.kind] = true
-	for kind in [Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA,
-			Moment.Kind.INVIERNO]:
+	for kind in [Moment.Kind.ASCENSO, Moment.Kind.BERREA, Moment.Kind.INVIERNO]:
 		assert_true(tipos.has(kind), "la de %s sale en el año" % Moment.Kind.keys()[kind])
 
 
@@ -296,19 +285,6 @@ func test_un_tocado_no_sube() -> void:
 	var m := _de_tipo(_tarjetas_al_entrar_en(sim, Subsistence.Season.VERANO),
 		Moment.Kind.ASCENSO)
 	assert_true(m == null, "con toda la banda tocada no se propone subir a nadie")
-
-
-func test_mandar_la_expedicion_desde_la_tarjeta_la_manda() -> void:
-	# EL BOTÓN QUE LA EXPEDICIÓN NO TENÍA: hasta ahora sólo se mandaba desde
-	# código.
-	var sim := _banda_completa()
-	var m := _de_tipo(_tarjetas_al_entrar_en(sim, Subsistence.Season.PRIMAVERA),
-		Moment.Kind.EXPEDICION)
-	assert_true(m != null, "sale la tarjeta")
-	if m == null:
-		return
-	(m.options[1]["on_pick"] as Callable).call()
-	assert_true(sim.expedicion.en_marcha(), "y elegir «mandarla» la manda")
 
 
 func test_la_primera_opcion_de_cada_estacion_no_compromete() -> void:
@@ -360,16 +336,16 @@ func test_el_racionamiento_se_acaba_con_el_invierno() -> void:
 
 
 
-func test_al_empezar_la_partida_sale_la_decision_de_primavera() -> void:
-	# LO QUE DESTAPÓ LA PRUEBA DE HUMO. La partida empieza ya en primavera, y
-	# las decisiones de estación se citan al CAMBIAR de estación: la del primer
-	# año no salía, y la primera expedición esperaba al año 2.
+func test_al_empezar_la_partida_se_cita_la_decision_de_su_estacion() -> void:
+	# LO QUE DESTAPÓ LA PRUEBA DE HUMO. Las decisiones de estación se citan al
+	# CAMBIAR de estación: la de la estación en que empieza la partida no salía.
 	#
 	# Desde la tanda 3 no sale el primer día: se cita para el segundo mes, y
-	# aquí se dejan correr las jornadas de la estación hasta que salta.
+	# aquí se dejan correr las jornadas de la estación hasta que salta. Se prueba
+	# en verano: la primavera no tiene decisión desde el 2026-09-14.
 	var sim := _banda_completa()
 	var season_antes := GameState.season
-	GameState.season = Subsistence.Season.PRIMAVERA
+	GameState.season = Subsistence.Season.VERANO
 	var salidas := []
 	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
 	sim.iniciar_partida()
@@ -378,8 +354,8 @@ func test_al_empezar_la_partida_sale_la_decision_de_primavera() -> void:
 		sim.season_day += 1
 		sim._revisar_la_decision()
 	GameState.season = season_antes
-	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) != null,
-		"en la primera primavera ya se puede mandar la expedición")
+	assert_true(_de_tipo(salidas, Moment.Kind.ASCENSO) != null,
+		"en el primer verano ya sale la de las cumbres")
 
 
 func test_el_cierre_de_la_jornada_la_saca() -> void:
@@ -388,14 +364,14 @@ func test_el_cierre_de_la_jornada_la_saca() -> void:
 	# `_revisar_la_decision` a mano dejaría fuera justo eso.
 	var sim := _banda_completa()
 	var season_antes := GameState.season
-	GameState.season = Subsistence.Season.PRIMAVERA
+	GameState.season = Subsistence.Season.VERANO
 	var salidas := []
 	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
 	sim.season_day = SettlementSim.DECISION_PRIMER_DIA - 2
 	sim.dia_de_la_decision = SettlementSim.DECISION_PRIMER_DIA
 	sim._end_of_day()
 	GameState.season = season_antes
-	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) != null,
+	assert_true(_de_tipo(salidas, Moment.Kind.ASCENSO) != null,
 		"la jornada citada, al cerrarse, saca la tarjeta")
 	assert_eq(sim.dia_de_la_decision, 0, "y no se vuelve a sacar")
 
@@ -432,11 +408,11 @@ func test_semillas_distintas_dan_dias_distintos() -> void:
 
 
 func test_no_se_decide_el_primer_dia_de_la_estacion() -> void:
-	# Que es de lo que iba la queja: decidir la expedición de primavera sin
-	# haber vivido la primavera.
+	# Que es de lo que iba la queja: decidir sin haber vivido la estación. Era la
+	# expedición de primavera; desde que no hay, se mira la subida del verano.
 	var sim := _banda_completa()
 	var season_antes := GameState.season
-	GameState.season = Subsistence.Season.INVIERNO
+	GameState.season = Subsistence.Season.PRIMAVERA
 	var salidas := []
 	sim.moment_raised.connect(func(m: Moment) -> void: salidas.append(m))
 	sim._advance_local_season()
@@ -444,5 +420,5 @@ func test_no_se_decide_el_primer_dia_de_la_estacion() -> void:
 		sim.season_day += 1
 		sim._revisar_la_decision()
 	GameState.season = season_antes
-	assert_true(_de_tipo(salidas, Moment.Kind.EXPEDICION) == null,
+	assert_true(_de_tipo(salidas, Moment.Kind.ASCENSO) == null,
 		"en la primera quincena todavía no se decide")

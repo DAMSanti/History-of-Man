@@ -153,6 +153,16 @@ func skill_label(value: float) -> String:
 ## permitir.
 var speciality: int = Profession.Speciality.NINGUNA
 
+## La cumbre que ha salido a subir, o cero si no va a ninguna.
+##
+## Aparte del destino porque la marcha amarra el destino a la celda abierta más
+## cercana y la de una cumbre empinada está cerrada: el destino queda una celda
+## más abajo del pico. Llegar a ese destino ES llegar al pie de SU cumbre. Sin
+## esto, quien subía llegaba a más de 12 m del alto, no se daba por llegado a la
+## cumbre y se ponía a reconocer —queja del usuario del 2026-09-14—. Ver
+## [SettlementSim._tick_person], el estado YENDO.
+var cumbre_objetivo: Vector3 = Vector3.ZERO
+
 ## Un destino al que se ha comprobado que NO se puede llegar.
 ##
 ## Se guarda para no volver a intentarlo en bucle: sin esto, alguien al que se

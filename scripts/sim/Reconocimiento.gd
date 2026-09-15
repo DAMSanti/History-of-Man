@@ -515,6 +515,35 @@ func bautizar_lo_descubierto(centro: Vector3, radio: float) -> int:
 	return salieron
 
 
+## Bautiza DE UNA VEZ lo que se ve desde una cumbre, y devuelve los nombres.
+##
+## Sin tope y sin avisar paraje por paraje: petición del usuario del 2026-09-14,
+## «cuando se hace una cima no debe aparecer un mensaje por paraje, sino uno solo
+## diciendo se han descubierto X parajes». El tope de uno por vuelta
+## —[DE_UNA_VUELTA]— es para quien vuelve de batir el monte; desde arriba se
+## lee medio valle de golpe, y lo que se descubre de golpe se cuenta de golpe.
+## El aviso lo da [Cumbres._do_ascent], en la tarjeta de la cumbre.
+func bautizar_desde_la_cumbre(cima: Vector3, radio: float) -> Array[String]:
+	var nombres: Array[String] = []
+	if sim.field == null or sim.knowledge == null:
+		return nombres
+	# Lo que ya estaba esperando de antes no se cuela en la cuenta de la cumbre.
+	_contar_los_nuevos()
+	var grid := sim.marcha._navgrid()
+	var mismo_trozo := func(a: Vector3, b: Vector3) -> bool:
+		return grid.connected(a, b)
+	sim.parajes.refresh(sim.field, sim.knowledge, sim.day, [
+		Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+		Subsistence.Activity.MARISQUEO, Subsistence.Activity.RECOLECCION,
+		Subsistence.Activity.MATERIA_PRIMA], sim._terrain, mismo_trozo,
+		cima, radio, 0, _se_llega())
+	for paraje: Paraje in sim.parajes.just_found:
+		nombres.append(paraje.name_text)
+	_credit_new_ground(sim.parajes.just_found)
+	sim.parajes.just_found.clear()
+	return nombres
+
+
 ## Bautiza los sim.parajes que se hayan ganado un nombre y los cuenta.
 func _name_new_parajes() -> void:
 	if sim.field == null or sim.knowledge == null:
@@ -890,7 +919,7 @@ func _lo_que_se_coge_andando(donde: Vector3) -> int:
 	for actividad: int in [Subsistence.Activity.RECOLECCION,
 			Subsistence.Activity.MATERIA_PRIMA]:
 		var hay := sim.field.seasonal_abundance_at(
-			actividad as Subsistence.Activity, donde, GameState.season)
+			actividad as Subsistence.Activity, donde, sim.estacion)
 		if hay > cuanto:
 			cuanto = hay
 			mejor = actividad
@@ -1100,7 +1129,7 @@ func _finish_survey(person: Inhabitant) -> void:
 					Subsistence.Activity.MATERIA_PRIMA]:
 				var value := sim.field.seasonal_abundance_at(
 					activity as Subsistence.Activity, person.work_centre,
-					GameState.season)
+					sim.estacion)
 				if value > 0.45:
 					found.append(Subsistence.activity_name(
 						activity as Subsistence.Activity).to_lower())

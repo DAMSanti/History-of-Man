@@ -91,15 +91,26 @@ func test_el_paso_fijo_no_se_toca_al_acelerar() -> void:
 		"el paso de la simulación es el de siempre")
 
 
-func test_la_noche_tiene_presupuesto_y_no_velocidad() -> void:
-	# Es lo que acota el fotograma malo por construcción, que es el frente 4.
-	assert_gt(SettlementSim.MS_DE_NOCHE_POR_CUADRO, 0.0,
-		"la noche avanza algo")
-	assert_lt(SettlementSim.MS_DE_NOCHE_POR_CUADRO, 16.7,
-		"pero nunca un fotograma entero de 60 Hz")
-	# Y el valor está medido, no elegido: el ahorro se agota en 8 ms —de ahí
-	# en adelante se compran uno o dos segundos por cuatro jornadas y se paga
-	# en fotograma medio, y pasados los 24, en tirones—. Ver ESTADO.md §2.
+func test_la_noche_tiene_un_objetivo_y_un_tope() -> void:
+	# Hasta el 2026-09-14 era un presupuesto fijo de 8 ms por cuadro, medido para
+	# no dar tirones. Con ventana, y más a la resolución del usuario, 8 ms eran
+	# nada al lado de lo que cuesta dibujar: «no está pasando las noches rápido»,
+	# y la medida le dio la razón —una noche a x5, 4,5 s contra 10 s de día—.
+	# Decisión del usuario: unos 2 s por noche, a cualquier velocidad.
+	assert_near(10.0 / SettlementSim.NOCHE_HORAS_POR_SEGUNDO, 2.0, 0.01,
+		"diez horas de noche, dos segundos")
+	assert_lt(SettlementSim.MS_DE_NOCHE_TOPE, 100.0,
+		"y un cuadro de noche nunca se come una décima de segundo")
+
+
+func test_a_x1_la_noche_tambien_va_deprisa() -> void:
+	# «A cualquier velocidad»: a x1 hacen falta cinco veces más pasos por hora
+	# que a x5, y aun así un segundo de reloj tiene que dar casi cinco horas.
+	var sim := _sim_andando()
+	sim.time_scale = 1.0
+	var horas := _horas_en(sim, 1.0).size()
+	assert_gt(float(horas), 3.5,
+		"un segundo de reloj con la banda dormida a x1: %d horas" % horas)
 
 
 func test_con_una_decision_levantada_el_reloj_no_corre() -> void:

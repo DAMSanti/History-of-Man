@@ -78,8 +78,11 @@ func encargar(terrain: TerrainGenerator, has_boat: bool, pasarelas: Array,
 	if terrain == null:
 		return
 
-	# La de hoy, entera y ahora: sin ella no hay partida.
-	_rejillas[int(hoy)] = Navgrid.from_terrain(terrain, has_boat, _pasarelas,
+	# La de hoy, preparada y SIN AMASAR: la termina [de] cuando se pide —que es enseguida,
+	# y es lo mismo que hacía `Navgrid.from_terrain` aquí— o [hornear] a trozos detrás de
+	# la pantalla de carga. Hecha aquí de un tirón era un segundo y medio de cuadro al
+	# fundar (INTERFAZ §9).
+	_rejillas[int(hoy)] = Navgrid.preparar(terrain, has_boat, _pasarelas,
 		float(caudales.get(hoy, 1.0)), float(encharques.get(hoy, 0.0)),
 		_pasarelas_version)
 
@@ -133,6 +136,18 @@ func de(season: Subsistence.Season) -> Navgrid:
 		pedida.amasar(_terrain, pedida.tall)
 	_cola.erase(int(season))
 	return pedida
+
+
+## Termina la rejilla de una estación a trozos, llamando a `ceder` entre trozo y trozo.
+## Da la misma rejilla que [de]: las mismas filas en el mismo orden.
+func hornear(season: Subsistence.Season, ceder: Callable) -> void:
+	var grid: Navgrid = _rejillas.get(int(season))
+	if grid == null:
+		return
+	while not grid.horneada():
+		grid.amasar(_terrain, 4)
+		await ceder.call()
+	_cola.erase(int(season))
 
 
 ## Si las que hay valen para este utillaje. Barca y puente cambian por dónde se

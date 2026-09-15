@@ -53,3 +53,19 @@ func test_pintar_no_se_apaga_desde_la_ventana() -> void:
 	sim.store = Storehouse.new()
 	assert_eq(PanelSitios.por_que_no("pintar", {"cueva": 2}, sim), "",
 		"pintar lo dice su propia tarjeta")
+
+
+func _tiene(acciones: Array, id: String) -> bool:
+	return id in _ids(acciones)
+
+
+func test_pintar_solo_en_cueva_explorada_y_con_pared() -> void:
+	# Petición del usuario del 2026-09-14: «la opción de pintar la pared del
+	# fondo sólo aparece en las cuevas exploradas» —y con pared pintable, que es
+	# lo que la exploración averigua—. Salía en todas, sin mirar nada.
+	assert_false(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, false, false),
+		"pintar"), "sin explorar no se sabe si hay pared")
+	assert_false(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, false),
+		"pintar"), "explorada y sin zona pintable, tampoco")
+	assert_true(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, true),
+		"pintar"), "explorada y con pared, sí")

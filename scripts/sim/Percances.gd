@@ -64,7 +64,7 @@ func _check_mishaps() -> void:
 		# Dormir mal a la intemperie no es sólo cansancio: es la noche de la
 		# que se vuelve con un tobillo o no se vuelve con la carga. Ver
 		# `_bivouac`.
-		risk *= pow(SettlementSim.VIVAC_RIESGO, float(person.bivouac_lack))
+		risk *= Calculo.potencia(SettlementSim.VIVAC_RIESGO, float(person.bivouac_lack))
 		# A un campamento con perro no lo sorprenden de noche, y a uno con la
 		# manada en contra lo rondan. Ver [ElLobo.riesgo_de_vivac].
 		if sim.lobo != null:
@@ -180,7 +180,7 @@ func _check_hunting_risk(person: Inhabitant, speciality: Profession.Speciality,
 		return
 
 	var risk := Hunting.risk_at(speciality, person.work_centre,
-		GameState.season as Subsistence.Season, sim.taller.hunters_in(speciality), sim.toolkit)
+		sim.estacion as Subsistence.Season, sim.taller.hunters_in(speciality), sim.toolkit)
 	if risk <= 0.0:
 		return
 	risk *= fraction
@@ -189,7 +189,7 @@ func _check_hunting_risk(person: Inhabitant, speciality: Profession.Speciality,
 
 	var porte := Hunting.porte_of(speciality)
 	var species := Fauna.huntable_at(person.work_centre,
-		GameState.season as Subsistence.Season, porte as Fauna.Porte, sim.toolkit)
+		sim.estacion as Subsistence.Season, porte as Fauna.Porte, sim.toolkit)
 	var name := Fauna.species_name(species[sim._rng.randi() % species.size()]) \
 		if not species.is_empty() else "la pieza"
 

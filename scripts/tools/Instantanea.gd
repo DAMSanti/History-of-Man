@@ -54,6 +54,48 @@ const FUERA := {
 	"_pendiente": true,
 	# La velocidad la pone quien juega, o la sonda.
 	"time_scale": true,
+	# Quién da los pasos a esta simulación —ella misma o el reloj de la
+	# partida— y si es la que gira la fecha. Es cómo se lleva el reloj, no lo que
+	# pasa: con ellas dentro, un campamento mirado y el mismo sin mirar darían
+	# firmas distintas siempre, que es justo lo que §23 pide que no pase. Ver
+	# [RelojDeLaPartida].
+	"dirigido": true,
+	"publica_la_fecha": true,
+	# La copia de la fecha de un campamento dirigido: se toma de `GameState` al
+	# dirigirlo, que sí se guarda. Ver [SettlementSim.estacion].
+	"_estacion": true,
+	"_anyo": true,
+	# Y las propiedades que LEEN la fecha —de la copia o de `GameState`—: no son
+	# estado sino una lectura, y la fecha ya va en las estáticas. Con ellas dentro
+	# la firma de un campamento dirigido cambiaba de forma sin cambiar la partida.
+	"SettlementSim.estacion": true,
+	# El sitio del campamento: lo pone quien lo monta, y es un recurso horneado.
+	"SettlementSim.sitio": true,
+	# Las paredes montadas: caché que se rehace de los relatos y la semilla. Ver
+	# [Pinturas.pared_de].
+	"Pinturas._paredes": true,
+	"SettlementSim.anyo": true,
+	"Parajes.estacion": true,
+	# Quién sabe la estación de los parajes: la simulación, que ya es raíz.
+	"Parajes.fecha": true,
+	# Lo descubierto que espera a la barrera: se vacía al final de cada paso, así
+	# que en `paso_cerrado` va siempre vacío salvo a mitad de la vuelta del reloj.
+	"descubrimientos": true,
+	"niebla_por_levantar": true,
+	# Las decisiones que esperan a la barrera, y si se está dentro de un paso: lo
+	# mismo, se vacían al acabar la vuelta del reloj.
+	"momentos_pendientes": true,
+	# El nombre del campamento: lo pone quien lo monta, y es el de su sitio.
+	"nombre_del_campamento": true,
+	"_en_paso": true,
+	# Si alguien mira el campamento: decide si se pintan los cuerpos, que es vista.
+	"se_mira": true,
+	# Lo que `Hogar._home_by_water` recuerda: caché de una consulta que devuelve
+	# lo mismo, rehecha en cuanto cambia la casa, el relieve o el caudal.
+	"_casa_junto_al_agua": true,
+	"_casa_mirada_en": true,
+	"_casa_mirada_sobre": true,
+	"_casa_mirada_con_caudal": true,
 	# Si la noche se salta. Es ritmo de reloj, no partida: acelerar da MAS
 	# pasos del mismo tamaño, no pasos distintos, asi que la sucesion de
 	# estados es la misma con el interruptor puesto o quitado. Y tiene que

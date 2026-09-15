@@ -160,6 +160,7 @@ func _process(delta: float) -> void:
 		if bounds_max.x > bounds_min.x:
 			target_position.x = clampf(target_position.x, bounds_min.x, bounds_max.x)
 			target_position.z = clampf(target_position.z, bounds_min.y, bounds_max.y)
+		_apoyar_el_centro()
 		_update_camera()
 
 
@@ -241,7 +242,43 @@ func _update_camera() -> void:
 ## Establece la posición objetivo de la cámara
 func set_target(pos: Vector3) -> void:
 	target_position = pos
+	_apoyar_el_centro()
 	_update_camera()
+
+
+## Deja el punto de órbita EN EL SUELO que se está mirando.
+##
+## Es el arreglo de dos quejas que eran la misma (2026-09-13): «el zoom se
+## vuelve más sensible cuanto más zoom haces» y «quiero orbitar siempre el punto
+## central de la pantalla».
+##
+## El objetivo vivía a cota CERO —nivel del mar— mientras el valle está a
+## cientos de metros, así que `orbit_distance` no era la distancia a lo que se
+## veía sino a un punto enterrado bajo el monte. De cerca, la cámara quedaba a
+## veinte metros del suelo y a cuatrocientos del objetivo: cada muesca movía un
+## 4,5 % de esos cuatrocientos, o sea el encuadre entero. Y al girar, la esfera
+## tenía el centro bajo tierra, así que el terreno se iba de la pantalla en vez
+## de girar sobre sí mismo.
+##
+## Apoyando el centro en el terreno, la distancia de órbita ES la distancia a lo
+## que se mira: la muesca vale lo que enseña y el giro es sobre el punto del
+## centro de la pantalla, que es lo que se pidió.
+func _apoyar_el_centro() -> void:
+	if height_probe.is_valid():
+		target_position.y = height_probe.call(target_position)
+
+
+## A cuánto se pone la cámara para enseñar algo que se ha pinchado en una
+## ventana —una persona, una obra—: cerca, pero con su alrededor a la vista.
+##
+## Era `min_distance * 1,6` en cada ventana, y funcionaba mientras el tope
+## estaba en 55 m. Con la cámara bajando hasta el suelo (2026-09-14) eso dejaba
+## la cara de la persona llenando la pantalla, así que tiene suelo propio.
+const CERCA_PARA_MIRAR := 80.0
+
+
+func distancia_para_mirar() -> float:
+	return maxf(min_distance * 1.6, CERCA_PARA_MIRAR)
 
 
 ## Establece la distancia de órbita

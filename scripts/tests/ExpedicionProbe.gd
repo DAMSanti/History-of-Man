@@ -22,7 +22,8 @@ func _init() -> void:
 	var sim: SettlementSim = demo.sim
 	sim.time_scale = 0.0
 
-	print("comarca cargada: %s" % ("SI" if sim.expedicion.sitios != null else "NO"))
+	print("sale desde: %s" % (sim.expedicion.origen().display_name()
+		if sim.expedicion.origen() != null else "NINGUNA PARTE"))
 	print("emplazamientos con gente: %d" % sim.contacto.ocupados.size())
 	print("conocidos al empezar: %d" % GameState.discovered.size())
 
@@ -31,7 +32,15 @@ func _init() -> void:
 		quit(1)
 		return
 
+	# HACIA UN SITIO CON GENTE, por su rumbo: desde el 2026-09-14 se sale hacia un
+	# rumbo y no a un sitio (SISTEMAS §4).
 	var destino: int = sim.contacto.ocupados.keys()[0]
+	var hacia := 0.0
+	for s: Site in (load("res://data/sites/cantabria_sites.res") as SiteSet).sites:
+		if s.id == destino and sim.expedicion.origen() != null:
+			var desde := sim.expedicion.origen()
+			hacia = rad_to_deg(atan2((s.lon - desde.lon) * cos(deg_to_rad(desde.lat)),
+				s.lat - desde.lat))
 	# EL ZURRÓN, puesto a mano. Desde la tanda 3 una expedición se lleva también
 	# tienda y hoguera —3 pieles y 39 de leña con tres personas, ver
 	# [Expedicion.hace_falta_para]— y al empezar la partida la banda no tiene ni
@@ -42,7 +51,7 @@ func _init() -> void:
 	sim.store.add(Materia.Kind.LENA, 120.0)
 	sim.store.add(Materia.Kind.CARNE_SECA, 120.0)
 	var comida_antes := sim.store.food_rations()
-	var salio := sim.expedicion.mandar(3, destino)
+	var salio := sim.expedicion.mandar(3, hacia)
 	print("sale hacia %d: %s · raciones que se lleva: %.1f" % [
 		destino, "SI" if salio else "NO", comida_antes - sim.store.food_rations()])
 	if not salio:

@@ -102,3 +102,50 @@ func test_el_terreno_excava_donde_queda_la_boca() -> void:
 	assert_lt(queda.z, FakeTerrain.RIVER_Z, "lo que se excava es lo colocado")
 	assert_eq(terreno.carvings[0]["position"], Vector3(500.0, 0.0, 1700.0),
 		"y lo pedido no se toca: de ahí sale la clave de la caché")
+
+
+# --- la campa de la cueva, en seco (2026-09-14) ------------------------------
+#
+# Petición del usuario: «que las obras del hogar —la hoguera, el paraviento, los
+# bancos, el secadero— no se puedan hacer en el río; si hace falta aplanar una
+# zona contigua a las cuevas un poco para ponerlos, se hará». La campa caía
+# cuesta abajo de la boca, que junto a un río es hacia el agua.
+
+func test_la_campa_de_una_boca_junto_al_rio_queda_en_seco() -> void:
+	var terreno := FakeTerrain.new()
+	# A doce metros de la orilla: ladera abajo es el río.
+	var boca := Vector3(500.0, 0.0, FakeTerrain.RIVER_Z - FakeTerrain.RIVER_HALF - 12.0)
+	var campa := Bocas.campa_de(terreno, boca)
+	for i in range(16):
+		var angulo := TAU * float(i) / 16.0
+		var borde := campa + Vector3(cos(angulo), 0.0, sin(angulo)) * Bocas.EXPLANADA
+		assert_false(FakeTerrain.in_river(borde),
+			"ni el borde de la explanada toca el agua: %s" % str(borde))
+	var lejos := Vector2(campa.x - boca.x, campa.z - boca.z).length()
+	assert_lt(lejos, Bocas.CAMPA_MAS_LEJOS + 0.01, "y sigue junto a la boca: %.1f m" % lejos)
+
+
+func test_colocar_deja_la_campa_y_su_explanada_en_la_entalladura() -> void:
+	var boca := _colocar(Vector3(700.0, 0.0, 700.0))
+	assert_true(boca.has("campa"), "la boca sabe dónde está su campa")
+	assert_eq(float(boca.get("explanada", 0.0)), Bocas.EXPLANADA,
+		"y el terreno sabe qué allanar")
+
+
+func test_el_terreno_allana_la_explanada() -> void:
+	var terreno := TerrainGenerator.new()
+	terreno.terrain_size = Vector2i(200, 200)
+	terreno.resolution = 101
+	terreno._height_map = PackedFloat32Array()
+	terreno._height_map.resize(101 * 101)
+	# Una cuesta de un metro por cada dos.
+	for z in range(101):
+		for x in range(101):
+			terreno._height_map[z * 101 + x] = float(x) * 1.0
+	var campa := Vector3(100.0, 0.0, 100.0)
+	terreno.carvings_colocadas.assign([{"position": Vector3(100.0, 0.0, 20.0),
+		"radius": 0.0, "depth": 0.0, "campa": campa, "explanada": 5.0}])
+	terreno._apply_carvings()
+	var centro := terreno._height_map[50 * 101 + 50]
+	var al_lado := terreno._height_map[50 * 101 + 51]
+	assert_near(al_lado, centro, 0.01, "dentro de la explanada no hay cuesta")

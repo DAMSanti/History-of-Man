@@ -40,6 +40,7 @@ enum Glyph {
 	CORTEZA,    ## Lámina curvada
 	CESTA,      ## Trapecio con trenzado
 	CUMBRE,     ## Pico con nieve: no es un material, es un sitio al que subir
+	CUEVA,      ## Boca de cueva: el hueco oscuro bajo la visera de roca
 	ODRE,       ## Zurrón con cuello atado
 	AGUJA,      ## Espiga fina con ojo
 	PUNZON,     ## Espiga maciza
@@ -648,6 +649,15 @@ func _draw() -> void:
 			_line(Vector2(0.84, 0.26), Vector2(0.78, 0.10), s, dark, 0.05)
 			_circle(Vector2(0.44, 0.50), 0.035, s, dark)
 			_circle(Vector2(0.56, 0.50), 0.035, s, dark)
+		Glyph.CUEVA:
+			# La visera de roca y el hueco negro debajo. Lo que la hace leerse
+			# como cueva y no como puerta es que el hueco NO llega a los lados:
+			# la roca lo rodea por arriba y por los costados.
+			_poly([Vector2(0.06, 0.86), Vector2(0.16, 0.42), Vector2(0.38, 0.20),
+				Vector2(0.64, 0.20), Vector2(0.86, 0.44), Vector2(0.94, 0.86)],
+				s, tint)
+			_poly([Vector2(0.30, 0.86), Vector2(0.34, 0.56), Vector2(0.50, 0.44),
+				Vector2(0.66, 0.56), Vector2(0.70, 0.86)], s, dark)
 		Glyph.CUMBRE:
 			# Dos crestas y el nevero de arriba. La segunda cresta, más baja y
 			# detrás, es lo que lo hace leerse como monte y no como triángulo

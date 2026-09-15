@@ -1056,6 +1056,12 @@ func test_no_sale_de_expedicion_si_esta_muy_cansado() -> void:
 	sim.store.add(Materia.Kind.CARNE_SECA, 50.0)
 	sim.time_scale = 1.0
 	sim.hour = 8.0
+	# SIN SALTARSE LA NOCHE, como `_sim_con_reloj`. Con la única persona ociosa
+	# «no trabaja nadie», y a las ocho de la mañana se disparaba la noche
+	# acelerada, que da pasos hasta gastar 60 ms DE RELOJ: con el equipo libre
+	# llegaba a las nueve de la noche y la persona se ponía a cenar, con el equipo
+	# cargado no. La prueba pasaba o fallaba según la máquina (2026-09-14).
+	sim.noche_acelerada = false
 
 	var person := Inhabitant.create(0, sim.home_position, sim._rng)
 	person.position = sim.home_position
@@ -1694,3 +1700,81 @@ func test_una_batida_a_medio_camino_no_resuelve_nada() -> void:
 	sim.reconocimiento._finish_survey(batidor)
 	assert_true(lejos.has_unknowns(),
 		"no se ha batido lo que no se ha pisado")
+
+
+# --- coronar trae UN aviso con los parajes, no uno por paraje ---------------
+#
+# Petición del usuario del 2026-09-14: «cuando se hace una cima no debe aparecer
+# un mensaje por paraje, sino un solo mensaje diciendo se han descubierto X
+# parajes». Lo que se ve desde arriba se bautiza de una vez y se cuenta en la
+# misma tarjeta de la cumbre.
+
+func test_coronar_cuenta_los_parajes_en_un_solo_aviso() -> void:
+	var sim := _sim_on_fake()
+	sim.chronicle = Chronicle.new()
+	sim.field = ResourceField.new()
+	sim.field.setup(32, 32, Vector2(2048.0, 2048.0))
+	sim.knowledge = BandKnowledge.new()
+	sim.knowledge.setup(32, 32, Vector2(2048.0, 2048.0))
+	# Tres avellanares separados, todos a la vista de la cumbre y lejos del río.
+	for celda: Vector2i in [Vector2i(12, 8), Vector2i(20, 8), Vector2i(16, 14)]:
+		sim.field.set_abundance(Subsistence.Activity.RECOLECCION, celda.x, celda.y, 1.0)
+	sim.field.spread(Subsistence.Activity.RECOLECCION, 1)
+
+	var cima := Vector3(1024.0, 200.0, 700.0)
+	var person := Inhabitant.create(0, cima, sim._rng)
+	person.position = cima
+	sim.people = [person]
+	var avisos := [0]
+	sim.moment_raised.connect(func(_m: Moment) -> void: avisos[0] += 1)
+
+	sim.cumbres._do_ascent(person)
+
+	var nacidos := sim.parajes.list.size()
+	assert_gt(float(nacidos), 1.0, "desde arriba se ve más de un sitio con nombre")
+	assert_true(avisos[0] <= 1, "y se avisa UNA vez, no %d" % avisos[0])
+	var por_paraje := 0
+	var resumen := false
+	for entrada: Dictionary in sim.chronicle.entries:
+		var texto := String(entrada.get("text", ""))
+		if texto.contains("le ha puesto nombre"):
+			por_paraje += 1
+		if texto.contains("%d parajes" % nacidos):
+			resumen = true
+	assert_eq(por_paraje, 0, "ni una línea de crónica por paraje")
+	assert_true(resumen, "sino una que dice cuántos: %d" % nacidos)
+
+
+# --- quien sube llega a SU cumbre aunque el camino acabe más abajo ----------
+#
+# Queja del usuario del 2026-09-14: «las cimas no se están haciendo bien, se
+# queda explorando en lugar de hacer la subida, coronar y terminar». La marcha
+# amarra el destino a la celda abierta más cercana —[Marcha._send_to]— y la celda
+# de una cumbre empinada está cerrada: el camino acaba a una celda del pico, más
+# lejos de los 12 m de `Cumbres._is_on_peak`, y al llegar la persona caía en la
+# rama del explorador —reconocer y bautizar—.
+
+func test_llegar_al_destino_de_la_subida_es_intentar_coronar() -> void:
+	var sim := _sim_on_fake()
+	sim.store = Storehouse.new()
+	sim.chronicle = Chronicle.new()
+	sim.time_scale = 1.0
+	sim.hour = 12.0
+	var person := Inhabitant.create(0, Vector3.ZERO, sim._rng)
+	person.position = sim.home_position + Vector3(300.0, 0.0, 0.0)
+	person.position.y = sim._terrain.get_height_at(person.position)
+	person.job = Profession.Job.EXPLORACION
+	person.current_speciality = Profession.Speciality.ASCENSION
+	person.has_task = true
+	# La cumbre, a una celda de rejilla de donde se ha podido llegar.
+	person.cumbre_objetivo = person.position + Vector3(Navgrid.CELL, 0.0, 0.0)
+	person.target = person.position
+	person.state = Inhabitant.State.YENDO
+	sim.people = [person]
+
+	sim._tick_person(person, 0, 0.5, 0.5)
+	assert_false(person.state == Inhabitant.State.RECONOCIENDO,
+		"quien sube no se pone a reconocer al pie de la cumbre")
+	assert_eq(person.state, Inhabitant.State.VOLVIENDO,
+		"intenta la cumbre y emprende la vuelta")
+	assert_eq(person.cumbre_objetivo, Vector3.ZERO, "y la subida queda cerrada")

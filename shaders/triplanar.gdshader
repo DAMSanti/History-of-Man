@@ -44,6 +44,12 @@ uniform float rock_max_height : hint_range(0.0, 1.0) = 0.75;
 uniform float snow_min_height : hint_range(0.0, 1.0) = 0.7;
 uniform float sand_max_height : hint_range(0.0, 1.0) = 0.2;
 uniform float max_world_height : hint_range(1.0, 500.0) = 50.0;
+// Desde qué cota se cuentan las bandas, en unidades de mundo. Cero en el valle,
+// y el MAR DE LA ÉPOCA en el mapa regional: con el mar a -120 m, todo lo que
+// asoma entre -120 y 0 normalizaba por debajo de cero, se recortaba y caía
+// entero en la banda de orilla —arena y limo—. Era la costa marrón que vio el
+// usuario el 2026-09-14.
+uniform float cota_base = 0.0;
 
 group_uniforms slope_settings;
 uniform float slope_threshold : hint_range(0.0, 1.0) = 0.7;
@@ -109,6 +115,24 @@ uniform sampler2D region_mask_tex : hint_default_white, filter_linear, repeat_di
 uniform vec2 region_world_size = vec2(1.0, 1.0);
 uniform float outside_desaturation : hint_range(0.0, 1.0) = 0.85;
 uniform float outside_dim : hint_range(0.0, 1.0) = 0.45;
+
+group_uniforms fog;
+// LA NIEBLA DEL MAPA REGIONAL (SISTEMAS §4, GRAFICOS §3): lo que nadie ha visto
+// se tapa con una calima clara —«no se sabe», no «no existe»—, dejando un trazo
+// tenue donde la tierra toca el mar de la época para no perder la orientación.
+// Ni relieve, ni ríos, ni color: bajo la niebla la luz tampoco dibuja laderas.
+// En el valle está apagada.
+uniform bool use_fog = false;
+// Blanca donde se ha visto. Una celda por celda del relieve regional.
+uniform sampler2D fog_tex : hint_default_white, filter_linear, repeat_disable;
+uniform vec2 fog_world_size = vec2(1.0, 1.0);
+uniform vec3 fog_color : source_color = vec3(0.80, 0.79, 0.74);
+uniform vec3 fog_coast_color : source_color = vec3(0.58, 0.57, 0.53);
+// La cota del mar de la época, en unidades del mundo: donde va el trazo.
+uniform float fog_sea_height = 0.0;
+// Cuánto se funde el borde entre lo visto y lo no visto, en unidades del mundo:
+// cinco muestras a esa distancia. Con el mapa a 100 m por unidad, 3 son 300 m.
+uniform float fog_blur = 3.0;
 
 group_uniforms rivers;
 // Color y acabado del agua de los cauces. Llega por COLOR.a desde la malla:
@@ -222,7 +246,8 @@ varying float vertex_height_normalized;
 void vertex() {
 	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	vertex_height_normalized = clamp(world_position.y / max_world_height, 0.0, 1.0);
+	vertex_height_normalized = clamp((world_position.y - cota_base)
+		/ max(max_world_height - cota_base, 0.001), 0.0, 1.0);
 }
 
 // Calcula los pesos para tri-planar mapping
@@ -855,6 +880,32 @@ void fragment() {
 		}
 	}
 
+	// La niebla, encima de todo lo que es mundo —agua y máscara de la época
+	// incluidas— y debajo del overlay de lectura, que en el regional no se usa.
+	float niebla = 0.0;
+	if (use_fog) {
+		vec2 fog_uv = world_position.xz / max(fog_world_size, vec2(0.001));
+		vec2 d = vec2(fog_blur) / max(fog_world_size, vec2(0.001));
+		float visto = texture(fog_tex, fog_uv).r * 2.0;
+		visto += texture(fog_tex, fog_uv + vec2(d.x, 0.0)).r;
+		visto += texture(fog_tex, fog_uv - vec2(d.x, 0.0)).r;
+		visto += texture(fog_tex, fog_uv + vec2(0.0, d.y)).r;
+		visto += texture(fog_tex, fog_uv - vec2(0.0, d.y)).r;
+		niebla = 1.0 - clamp(visto / 6.0, 0.0, 1.0);
+		if (niebla > 0.001) {
+			// El trazo de costa, del mismo grueso en pantalla sea la ladera
+			// empinada o llana: la anchura sale de cuánto cambia la cota de un
+			// píxel al siguiente.
+			float cerca = abs(world_position.y - fog_sea_height);
+			float grueso = fwidth(world_position.y) * 1.5 + 0.0001;
+			float costa = 1.0 - smoothstep(0.0, grueso, cerca);
+			vec3 calima = mix(fog_color, fog_coast_color, costa);
+			final_color = mix(final_color, calima, niebla);
+			final_roughness = mix(final_roughness, 1.0, niebla);
+			specular_out = mix(specular_out, 0.0, niebla);
+		}
+	}
+
 	// Overlay de informacion. Va al final, DESPUES del agua y de la mascara de
 	// region: es una capa de lectura del jugador, no un material del mundo, y
 	// tiene que verse igual sobre el rio que sobre la ladera.
@@ -883,13 +934,19 @@ void fragment() {
 	// sol. Con AO_LIGHT_AFFECT a cero la oclusion solo toca la luz indirecta,
 	// que es la unica que una grieta puede tapar.
 	if (use_orm) {
-		AO = mix(1.0, occlusion, ao_strength);
+		AO = mix(mix(1.0, occlusion, ao_strength), 1.0, niebla);
 		AO_LIGHT_AFFECT = 0.0;
 	}
 	if (use_normal_maps && length(final_normal) > 0.001) {
-		NORMAL_MAP = normalize(final_normal) * 0.5 + 0.5;
+		NORMAL_MAP = mix(normalize(final_normal) * 0.5 + 0.5, vec3(0.5, 0.5, 1.0), niebla);
 	}
 	ROUGHNESS = final_roughness;
 	METALLIC = 0.0;
 	SPECULAR = specular_out;
+	// Bajo la niebla la luz no dibuja el relieve: la normal mira al cielo y la
+	// calima sale lisa. Si no, las laderas se leían a través de ella.
+	if (niebla > 0.001) {
+		vec3 arriba = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+		NORMAL = normalize(mix(NORMAL, arriba, niebla));
+	}
 }

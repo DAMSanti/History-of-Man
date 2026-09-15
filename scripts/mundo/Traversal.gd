@@ -80,7 +80,9 @@ const MIN_SPEED := 0.15
 ##
 ## `slope` es la tangente con signo: positiva subiendo, negativa bajando.
 static func hiking_speed(slope: float) -> float:
-	return maxf(6.0 * exp(-3.5 * absf(slope + 0.05)), MIN_SPEED)
+	# Con la exponencial de [Calculo] y no con `exp`: la de la librería no da el
+	# mismo último bit en todos los hilos, y esto va en cada tick de cada persona.
+	return maxf(6.0 * Calculo.exponencial(-3.5 * absf(slope + 0.05)), MIN_SPEED)
 
 
 ## Factor por carga, de 0 (de vacío) a 1 (a plena carga).

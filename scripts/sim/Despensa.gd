@@ -73,7 +73,7 @@ func _expedition_days_for(person: Inhabitant, distance_m: float = -1.0) -> float
 ## escrito dentro de la primera y la segunda lo habría copiado: una regla
 ## escrita en dos sitios acaba diciendo dos cosas.
 const LO_QUE_AGUANTA_EL_VIAJE := [Materia.Kind.CARNE_SECA,
-	Materia.Kind.PESCADO_SECO, Materia.Kind.FRUTO_SECO, Materia.Kind.GRASA]
+	Materia.Kind.PESCADO_SECO, Materia.Kind.FRUTO_SECO]
 
 
 ## Saca raciones de la despensa para un viaje largo. Devuelve cuántas consiguió.
@@ -164,11 +164,11 @@ func _provision(person: Inhabitant, distance_m: float = -1.0) -> bool:
 ## percance. Ver `_bivouac`.
 func _pack_bivouac(person: Inhabitant, days: float) -> void:
 	var nights := maxf(ceil(days), 1.0) + SettlementSim.VIVAC_MARGEN_NOCHES
-	var piel := SettlementSim.VIVAC_PIEL - float(person.load.get(Materia.Kind.PIEL, 0.0))
+	var piel := SettlementSim.VIVAC_PIEL - float(person.load.get(Materia.Kind.PIEL_CURTIDA, 0.0))
 	if piel > 0.0:
-		var got := sim.store.take(Materia.Kind.PIEL, piel)
-		person.add_load(Materia.Kind.PIEL, got)
-		person.note_from_store(Materia.Kind.PIEL, got)
+		var got := sim.store.take(Materia.Kind.PIEL_CURTIDA, piel)
+		person.add_load(Materia.Kind.PIEL_CURTIDA, got)
+		person.note_from_store(Materia.Kind.PIEL_CURTIDA, got)
 	var lena := SettlementSim.VIVAC_LENA * nights - float(person.load.get(Materia.Kind.LENA, 0.0))
 	if lena > 0.0:
 		var got_wood := sim.store.take(Materia.Kind.LENA, lena)
@@ -186,7 +186,7 @@ func _bivouac(person: Inhabitant) -> void:
 		return
 	person.bivouac_day = sim.day
 	person.bivouac_lack = 0
-	person.bivouac_tent = float(person.load.get(Materia.Kind.PIEL, 0.0)) 		>= SettlementSim.VIVAC_PIEL
+	person.bivouac_tent = float(person.load.get(Materia.Kind.PIEL_CURTIDA, 0.0)) 		>= SettlementSim.VIVAC_PIEL
 	if not person.bivouac_tent:
 		person.bivouac_lack += 1
 	# La leña que se quema es la hoguera, y ahora se ve arder: ver
@@ -414,10 +414,38 @@ func winter_stock() -> Dictionary:
 func _sync_waterskins() -> void:
 	if sim.store == null or sim.toolkit == null:
 		return
-	var total := float(sim.toolkit.count(Tool.Kind.ODRE))
+	var en_casa := float(sim.toolkit.count(Tool.Kind.ODRE) - odres_fuera())
 	var llenos := sim.store.amount(Materia.Kind.AGUA)
-	if llenos > total:
-		sim.store.take(Materia.Kind.AGUA, llenos - total)
+	if llenos > en_casa:
+		# Se pierde, no se bebe: no cuenta como gastado.
+		sim.store.take(Materia.Kind.AGUA, llenos - maxf(en_casa, 0.0), false)
+
+
+## Cuántos odres hay VACÍOS en el abrigo: los hechos, menos los llenos, menos
+## los que lleva alguien encima.
+##
+## Una pregunta, un sitio. La contestaban por su cuenta el llenado en casa, la
+## salida a por agua, la vuelta de la orilla y la capacidad de la despensa, y
+## ninguna descontaba el odre que va fuera; la capacidad, además, contaba los
+## llenos como sitio para guardar comida. Queja del usuario del 2026-09-13: «un
+## odre lleno cuenta como lleno y como vacío».
+## En fracción y no en piezas enteras: llenar un odre lleva su rato —ver
+## [Hogar.ODRES_LLENADOS_POR_DIA]— y con la cuenta redondeada a piezas un odre
+## llenado a medias se quedaba a medias para siempre.
+func odres_vacios() -> float:
+	if sim.toolkit == null:
+		return 0.0
+	var llenos := sim.store.amount(Materia.Kind.AGUA) if sim.store != null else 0.0
+	return maxf(float(sim.toolkit.count(Tool.Kind.ODRE) - odres_fuera()) - llenos, 0.0)
+
+
+## Los odres que lleva alguien encima.
+func odres_fuera() -> int:
+	var n := 0
+	for person: Inhabitant in sim.people:
+		if person.has_waterskin:
+			n += 1
+	return n
 
 
 ## Reparte cesto y odre entre los que salen, de lo que hay HECHO.
@@ -429,6 +457,14 @@ func _sync_waterskins() -> void:
 ## mundo con odre- y el taller no servia para nada en este frente.
 func _hand_out_containers(person: Inhabitant) -> void:
 	person.has_basket = _take_container(person, Tool.Kind.CESTO)
+	# QUIEN YA LLEVA ODRE NO COGE OTRO. Los recipientes sólo se devuelven en
+	# `_deliver`, y quien sale a trabajar sin haber traído carga no pasa por
+	# ahí: se quedaba el odre puesto y a la salida siguiente sacaba otro lleno
+	# del almacén. Un odre por salida, bebiera o no —queja del usuario del
+	# 2026-09-14: 1 277 de agua gastada en 167 jornadas con la cueva junto al
+	# río—.
+	if person.has_waterskin:
+		return
 	person.has_waterskin = _take_waterskin(person)
 	# Se sale de casa con el odre lleno; sin odre, con lo que se lleva bebido.
 	person.water_left = SettlementSim.SED_HORAS_CON_ODRE if person.has_waterskin \
@@ -436,16 +472,30 @@ func _hand_out_containers(person: Inhabitant) -> void:
 	_sync_waterskins()
 
 
-## Da un odre LLENO a quien sale, si hay. A diferencia de [_take_container]
-## -que sólo PRESTA una pieza que no se gasta al llevarla-, un odre lleno SÍ
-## se gasta al salir: el agua que lleva es la que había en el almacén. Ver
-## [Hogar._fill_waterskins] para cómo se rellena, y [_deliver] para cómo
-## vuelve vacío.
-func _take_waterskin(person: Inhabitant) -> bool:
+## Da un odre LLENO a quien sale, si hay. El agua sale del almacén pero NO se
+## apunta como gastada: lo gastado es lo que se bebe de él, y eso se sabe al
+## volver —ver [_deliver] y [agua_en_el_odre]—. Apuntarlo al salir contaba como
+## consumida el agua de un odre que volvía sin tocar porque se había bebido del
+## río. Ver [Hogar._fill_waterskins] para cómo se rellena.
+func _take_waterskin(_person: Inhabitant) -> bool:
 	if sim.store.amount(Materia.Kind.AGUA) < 1.0:
 		return false
-	sim.store.take(Materia.Kind.AGUA, 1.0)
+	sim.store.take(Materia.Kind.AGUA, 1.0, false)
 	return true
+
+
+## Cuánto odre le queda a alguien, de 0 a 1.
+##
+## No hace falta llevarlo aparte: `water_left` son horas de agua, y con odre las
+## que pasan de lo que se lleva bebido —[SettlementSim.SED_HORAS_SIN_ODRE]— son
+## las del odre. Beber junto al río las repone —se rellena en la orilla—, así
+## que un odre que ha pasado el día en la ribera vuelve lleno.
+static func agua_en_el_odre(person: Inhabitant) -> float:
+	if not person.has_waterskin:
+		return 0.0
+	var del_odre := SettlementSim.SED_HORAS_CON_ODRE - SettlementSim.SED_HORAS_SIN_ODRE
+	return clampf((person.water_left - SettlementSim.SED_HORAS_SIN_ODRE)
+		/ maxf(del_odre, 0.001), 0.0, 1.0)
 
 
 ## Si queda una pieza de este tipo libre para esta persona.
@@ -482,7 +532,12 @@ const SORBO_EN_CASA_POR_HORA := 0.08
 ## la reserva que trajeron las salidas de hogar, no es gratis solo por
 ## estar dentro.
 func _drink_and_thirst(person: Inhabitant, hours: float) -> void:
-	if sim.tajo._water_beside(person.position):
+	# En la orilla, o EN CASA SI LA CUEVA ESTÁ JUNTO AL AGUA. Se miraba sólo la
+	# orilla de la persona, y quien estaba en la campa o dentro de la cueva
+	# —a más de veinte metros del cauce aunque la cueva diera al río— bebía del
+	# almacén. Bajar a beber desde la boca es cruzar la campa, no una salida.
+	if sim.tajo._water_beside(person.position) \
+			or (sim._at_shelter(person) and sim.hogar._home_by_water()):
 		person.water_left = SettlementSim.SED_HORAS_CON_ODRE if person.has_waterskin \
 			else SettlementSim.SED_HORAS_SIN_ODRE
 		return
@@ -552,10 +607,17 @@ func _deliver(person: Inhabitant) -> void:
 	# casa es quitarselos a quien sale manana: con dos cestos hechos y quince
 	# personas, los dos primeros que los cogieron no los soltaban nunca.
 	person.has_basket = false
+	# El odre vuelve con LO QUE NO SE HAYA BEBIDO, y lo bebido es lo único que
+	# se apunta como gastado. Volvía siempre vacío y el odre entero contaba
+	# como consumido al salir, aunque se hubiera pasado el día bebiendo del río.
+	# Lo que falta por llenar sigue siendo trabajo de hogar: ver
+	# [Hogar._fill_waterskins].
+	if person.has_waterskin:
+		var queda := agua_en_el_odre(person)
+		if queda > 0.0:
+			sim.store.add(Materia.Kind.AGUA, queda)
+		sim.store.apuntar_gasto(Materia.Kind.AGUA, 1.0 - queda)
 	person.has_waterskin = false
-	# El odre vuelve VACIO: el agua que llevaba se gastó al salir (ver
-	# [_take_waterskin]). Volver a llenarlo es trabajo de hogar, no un hecho
-	# de haber vuelto a la boca de la cueva. Ver [Hogar._fill_waterskins].
 	_sync_waterskins()
 	if rejected > 0.01:
 		sim.storage_full.emit(rejected)

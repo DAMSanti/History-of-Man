@@ -67,7 +67,7 @@ func _init() -> void:
 	# inclinacion, que es lo que trae CameraController por defecto. Aqui es
 	# donde el troceado tiene que notarse.
 	var home := Vector3(2048.0, 0.0, 2048.0)
-	var terrain_node: Node = _first(demo, "TerrainGenerator")
+	var terrain_node: Node = demo.terrain
 	if terrain_node and terrain_node.has_method("get_height_at"):
 		home.y = terrain_node.get_height_at(home)
 	print("--- camara de juego (orbita a 150, 30 grados) ---")
@@ -105,11 +105,11 @@ func _init() -> void:
 	var groups := {
 		"contorno": demo.get_node_or_null("Alrededores"),
 		"props de recurso": _first(demo, "ResourceProps"),
-		"terreno jugable": _first(demo, "TerrainGenerator"),
+		"terreno jugable": demo.terrain,
 	}
 	# Los dos a la vez: lo que quede es coste fijo, ni geometria ni shader
 	var both_a: Node = demo.get_node_or_null("Alrededores")
-	var both_b: Node = _first(demo, "TerrainGenerator")
+	var both_b: Node = demo.terrain
 	if both_a and both_b:
 		(both_a as Node3D).visible = false
 		(both_b as Node3D).visible = false

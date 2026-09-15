@@ -198,7 +198,7 @@ func hostil() -> bool:
 
 ## Apunta un lobo muerto. Cada uno cuesta más que el anterior. Ver [RENCOR].
 func matar() -> void:
-	trato += POR_MATAR * pow(RENCOR, float(muertos))
+	trato += POR_MATAR * Calculo.potencia(RENCOR, float(muertos))
 	muertos += 1
 	sin_matar = 0.0
 	_volver_a_empezar()

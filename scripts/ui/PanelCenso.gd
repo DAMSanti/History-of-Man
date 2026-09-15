@@ -331,14 +331,13 @@ func _looking_at() -> Vector3:
 ##
 ## Sólo si estaba lejos porque el zoom es del jugador: si ya está mirando de
 ## cerca, reencuadrarle en cada flecha le quita el encuadre que había elegido.
-## Y el tope de acercamiento es el de la cámara del juego —`min_distance`, ver
-## `OrbitalCamera.set_distance_limits`—, no un número puesto aquí: más cerca no
-## se puede ir, ni con este botón ni con la rueda.
+## Y a cuánto se acerca lo dice la cámara —[OrbitalCamera.distancia_para_mirar]—,
+## no un número puesto aquí: es la misma distancia para todas las ventanas.
 func _look_at_world(point: Vector3) -> void:
 	if ui.camera == null:
 		return
 	ui.camera.set_target(point)
-	var close_enough := ui.camera.min_distance * 1.6
+	var close_enough := ui.camera.distancia_para_mirar()
 	if ui.camera.orbit_distance > close_enough:
 		ui.camera.set_distance(close_enough)
 

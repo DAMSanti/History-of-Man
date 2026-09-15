@@ -331,6 +331,15 @@ var malla: MallaDelTerreno = MallaDelTerreno.new(self)
 ## buena. En juego siempre va encendido.
 @export var use_generation_cache: bool = true
 
+## De dónde sale el relieve, para la caché, cuando `heightmap` no tiene ruta propia: el
+## mapa regional trabaja sobre una COPIA con las lomas de la plataforma, y una copia no
+## tiene `resource_path`. Sin esto la caché no se buscaba nunca y cada viaje al regional
+## rehacía la malla entera, 24,6 s (ESTADO §2, INTERFAZ §9).
+var origen_de_la_cache := ""
+## Lo que se añade al nombre de la caché para distinguir dos relieves del mismo origen:
+## en el regional, el mar de la época y las lomas de la plataforma.
+var sufijo_de_la_cache := ""
+
 ## Manager del material del terreno (carga diferida)
 var _material_manager: RefCounted
 
@@ -343,6 +352,8 @@ var _regenerate_queued: bool = false
 
 func _ready() -> void:
 	_setup_noise()
+	# Los ajustes del relieve de la configuración, en caliente. Ver [Configuracion].
+	add_to_group(Configuracion.GRUPO)
 	# No generar automáticamente - se llama generate() desde el código que lo use
 	# if not Engine.is_editor_hint():
 	# 	generate()
@@ -436,7 +447,15 @@ func _update_noise_seeds() -> void:
 
 
 ## Genera el terreno completo
-func generate() -> void:
+## Si `generate` va ya por la malla y no por las alturas. Para quien enseña el avance:
+## la pantalla de carga cambia de etapa aquí (ver [RegionMap._ceder_al_generar]).
+var generando_la_malla := false
+
+
+## `ceder`, si se da, se llama con `await` entre los trozos largos: lo pasa quien genera
+## detrás de la pantalla de carga (INTERFAZ §9). Sin él, de un tirón, como siempre.
+func generate(ceder: Callable = Callable()) -> void:
+	generando_la_malla = false
 	var t0 := Time.get_ticks_msec()
 	_setup_noise()
 	print("[TIMING] TerrainGenerator._setup_noise: %d ms" % (Time.get_ticks_msec() - t0))
@@ -453,11 +472,15 @@ func generate() -> void:
 			Time.get_ticks_msec() - tcache, malla._cache_base_path()])
 
 	var t1 := Time.get_ticks_msec()
-	_generate_maps()
+	await _generate_maps(ceder)
 	print("[TIMING] TerrainGenerator._generate_maps: %d ms" % (Time.get_ticks_msec() - t1))
 
+	if ceder.is_valid():
+		await ceder.call()
 	var t2 := Time.get_ticks_msec()
-	malla._create_terrain_mesh()
+	generando_la_malla = true
+	await malla._create_terrain_mesh(ceder)
+	generando_la_malla = false
 	print("[TIMING] TerrainGenerator._create_terrain_mesh (total): %d ms" % (Time.get_ticks_msec() - t2))
 
 	var t3 := Time.get_ticks_msec()
@@ -469,7 +492,7 @@ func generate() -> void:
 
 
 ## Genera los mapas de ruido
-func _generate_maps() -> void:
+func _generate_maps(ceder: Callable = Callable()) -> void:
 	if _gen_cache != null:
 		_height_map = _gen_cache.height_map
 		_humidity_map = _gen_cache.humidity_map
@@ -508,6 +531,9 @@ func _generate_maps() -> void:
 
 	var tn0 := Time.get_ticks_msec()
 	for z in range(resolution):
+		# A trozos detrás de la pantalla de carga: el relieve regional en frío son 25 s.
+		if ceder.is_valid() and z % 8 == 0:
+			await ceder.call()
 		for x in range(resolution):
 			var world_x := x * step_x
 			var world_z := z * step_z
@@ -533,8 +559,10 @@ func _generate_maps() -> void:
 	print("[TIMING]   normalize_map x4: %d ms" % (Time.get_ticks_msec() - tnorm0))
 
 	var tcomp0 := Time.get_ticks_msec()
+	if ceder.is_valid():
+		await ceder.call()
 	if height_source == HeightSource.HEIGHTMAP and heightmap:
-		_compose_from_heightmap(base_map)
+		await _compose_from_heightmap(base_map, ceder)
 	else:
 		_compose_height_map(base_map, ridge_map)
 	print("[TIMING]   composicion de altura: %d ms" % (Time.get_ticks_msec() - tcomp0))
@@ -570,7 +598,7 @@ func _compose_height_map(base_map: PackedFloat32Array, ridge_map: PackedFloat32A
 
 ## Compone el heightmap a partir de elevacion real.
 ## El DEM aporta la forma grande y el ruido rellena el detalle entre muestras.
-func _compose_from_heightmap(base_map: PackedFloat32Array) -> void:
+func _compose_from_heightmap(base_map: PackedFloat32Array, ceder: Callable = Callable()) -> void:
 	# El paso de la malla va en unidades; el muestreo del DEM, en metros
 	var step_x := float(terrain_size.x) / float(resolution - 1)
 	var step_z := float(terrain_size.y) / float(resolution - 1)
@@ -579,6 +607,8 @@ func _compose_from_heightmap(base_map: PackedFloat32Array) -> void:
 	var top := maxf(heightmap.max_elevation - sea_level, 1.0)
 
 	for z in range(resolution):
+		if ceder.is_valid() and z % 4 == 0:
+			await ceder.call()
 		for x in range(resolution):
 			var idx := z * resolution + x
 			var elevation := heightmap.sample_meters(
@@ -676,7 +706,10 @@ func _apply_carvings() -> void:
 		var centre: Vector3 = cut.get("position", Vector3.ZERO)
 		var radius: float = cut.get("radius", 12.0)
 		var depth: float = cut.get("depth", 4.0)
+		# La explanada de la campa, DESPUÉS de la vaguada de la boca si la hay:
+		# ver [_allanar] y [Bocas.campa_de].
 		if radius <= 0.0:
+			_allanar(cut, step_x, step_z)
 			continue
 
 		var cx := int(centre.x / step_x)
@@ -694,7 +727,36 @@ func _apply_carvings() -> void:
 				# Perfil suave: hondo en el centro, a ras en el borde
 				var falloff := 1.0 - smoothstep(0.0, radius, dist)
 				_height_map[z * resolution + x] -= depth * falloff * falloff
+		_allanar(cut, step_x, step_z)
 
+
+## Allana la explanada de una campa: dentro de su 60 % queda a la cota de su
+## centro, y hasta el borde se funde con el monte. Decisión del usuario del
+## 2026-09-14 —«si hace falta aplanar una zona contigua a las cuevas, se hará»—:
+## la campa de una cueva en ladera no tenía un palmo llano donde encender el
+## fuego. Ver [Bocas.EXPLANADA].
+func _allanar(cut: Dictionary, step_x: float, step_z: float) -> void:
+	if not cut.has("campa"):
+		return
+	var campa: Vector3 = cut["campa"]
+	var radio: float = cut.get("explanada", 0.0)
+	if radio <= 0.0:
+		return
+	var cx := clampi(int(round(campa.x / step_x)), 0, resolution - 1)
+	var cz := clampi(int(round(campa.z / step_z)), 0, resolution - 1)
+	var cota := _height_map[cz * resolution + cx]
+	var span_x := int(ceil(radio / step_x))
+	var span_z := int(ceil(radio / step_z))
+	for z in range(maxi(cz - span_z, 0), mini(cz + span_z + 1, resolution)):
+		for x in range(maxi(cx - span_x, 0), mini(cx + span_x + 1, resolution)):
+			var dx := float(x) * step_x - campa.x
+			var dz := float(z) * step_z - campa.z
+			var dist := sqrt(dx * dx + dz * dz)
+			if dist > radio:
+				continue
+			var peso := 1.0 - smoothstep(radio * 0.6, radio, dist)
+			var i := z * resolution + x
+			_height_map[i] = lerpf(_height_map[i], cota, peso)
 
 ## Recalcula el rango real de altura tras generar
 func _update_height_range() -> void:
@@ -840,7 +902,7 @@ func sample_maps() -> Dictionary:
 		# para pasar de una posición del mundo a una coordenada de textura.
 		"extent": Vector2(float(terrain_size.x), float(terrain_size.y))
 			* meters_per_unit,
-		"origin": Vector2(global_position.x, global_position.z),
+		"origin": Vector2(_origen().x, _origen().z),
 		"height": _height_map,
 		"humidity": _humidity_map,
 		"geology": _geology_map,
@@ -861,8 +923,8 @@ func get_height_at(world_pos: Vector3) -> float:
 	# Fuera de los limites se usa el borde mas cercano. Devolver 0.0 creaba un
 	# acantilado falso en todo el perimetro: la pendiente se disparaba y el mapa
 	# se llenaba de piedra en los bordes ademas de bloquear la construccion.
-	var local_x := clampf(world_pos.x - global_position.x, 0.0, float(terrain_size.x))
-	var local_z := clampf(world_pos.z - global_position.z, 0.0, float(terrain_size.y))
+	var local_x := clampf(world_pos.x - _origen().x, 0.0, float(terrain_size.x))
+	var local_z := clampf(world_pos.z - _origen().z, 0.0, float(terrain_size.y))
 	
 	var step_x := float(terrain_size.x) / float(resolution - 1)
 	var step_z := float(terrain_size.y) / float(resolution - 1)
@@ -915,6 +977,24 @@ func geo_to_world(lon: float, lat: float) -> Vector3:
 	return Vector3(x, get_height_at(Vector3(x, 0.0, z)), z)
 
 
+## El inverso de [geo_to_world]: la longitud (`x`) y la latitud (`y`) de un punto
+## del mundo. Sin relieve real, `Vector2.INF`.
+##
+## Existe para lo que se ve desde el valle y cae fuera de él: la niebla del mapa
+## regional que levanta una cumbre (SISTEMAS §4). Sólo lee el relieve, así que se
+## puede llamar desde el paso de un campamento que no se mira.
+func world_to_geo(world_pos: Vector3) -> Vector2:
+	if heightmap == null:
+		return Vector2.INF
+	var size_m := heightmap.get_world_size_meters()
+	if size_m.x <= 0.0 or size_m.y <= 0.0:
+		return Vector2.INF
+	var u := (world_pos.x * meters_per_unit + heightmap_region_offset.x) / size_m.x
+	var v := (world_pos.z * meters_per_unit + heightmap_region_offset.y) / size_m.y
+	return Vector2(heightmap.lon_west + u * (heightmap.lon_east - heightmap.lon_west),
+		heightmap.lat_for_v(v))
+
+
 ## Cambia la mascara de region jugable sin regenerar nada
 func set_region_mask_texture(texture: Texture2D) -> void:
 	if _material_manager == null:
@@ -922,6 +1002,20 @@ func set_region_mask_texture(texture: Texture2D) -> void:
 	_material_manager.set_region_mask_texture(
 		texture, Vector2(float(terrain_size.x), float(terrain_size.y)))
 	_material_manager.set_region_mask_enabled(texture != null)
+
+
+## Pone la niebla del mapa regional. `sea_height` en unidades del mundo. Ver
+## [TerrainMaterialManager.set_fog].
+func set_fog_texture(texture: Texture2D, sea_height: float) -> void:
+	if _material_manager == null:
+		return
+	_material_manager.set_fog(texture,
+		Vector2(float(terrain_size.x), float(terrain_size.y)), sea_height)
+
+
+func aplicar_configuracion() -> void:
+	if _material_manager != null:
+		_material_manager.aplicar_configuracion()
 
 
 func get_terrain_material() -> ShaderMaterial:
@@ -1149,14 +1243,25 @@ func _apply_shader_height_setup() -> void:
 			#
 			# El techo de roca sube a 1.5 por lo mismo: con 0.97 la roca se
 			# apagaba justo donde entraba esa nieve fantasma.
+			_material_manager.set_cota_base(0.0)
 			_material_manager.set_height_bands(shore, 0.86, 0.74, 1.5, 2.0)
 		else:
+			# LAS BANDAS CUENTAN DESDE EL MAR DE LA ÉPOCA, no desde el de hoy.
+			# Con la cota del mar a -120 m el shader dividía la altura por el
+			# techo y recortaba a cero todo lo que quedaba por debajo del 0 de
+			# hoy: la plataforma emergida entera caía en la banda de orilla y
+			# salía marrón. Desde el 2026-09-14 la fracción se mide desde el mar,
+			# así que la playa es la franja de `shore_band_m` sobre el agua y lo
+			# que queda por encima es pradera, como en tierra.
+			var base := minf(_to_units(band_sea_level_m), 0.0)
+			var alto := maxf(top - base, 0.001)
+			_material_manager.set_cota_base(base)
 			_material_manager.set_height_bands(
-				clampf(_to_units(band_sea_level_m + shore_band_m) / top, 0.0, 1.0),
-				clampf(_to_units(band_sea_level_m + grass_top_m) / top, 0.0, 1.0),
-				clampf(_to_units(band_sea_level_m + rock_base_m) / top, 0.0, 1.0),
+				clampf((_to_units(band_sea_level_m + shore_band_m) - base) / alto, 0.0, 1.0),
+				clampf((_to_units(band_sea_level_m + grass_top_m) - base) / alto, 0.0, 1.0),
+				clampf((_to_units(band_sea_level_m + rock_base_m) - base) / alto, 0.0, 1.0),
 				0.93,
-				clampf(_to_units(band_sea_level_m + snow_base_m) / top, 0.0, 1.0))
+				clampf((_to_units(band_sea_level_m + snow_base_m) - base) / alto, 0.0, 1.0))
 	else:
 		_material_manager.set_max_world_height(max_height)
 
@@ -1218,8 +1323,8 @@ func _get_map_value_at(world_pos: Vector3, map: PackedFloat32Array) -> float:
 		return 0.0
 	
 	# Igual que get_height_at: recortar al borde en vez de devolver 0.0
-	var local_x := clampf(world_pos.x - global_position.x, 0.0, float(terrain_size.x))
-	var local_z := clampf(world_pos.z - global_position.z, 0.0, float(terrain_size.y))
+	var local_x := clampf(world_pos.x - _origen().x, 0.0, float(terrain_size.x))
+	var local_z := clampf(world_pos.z - _origen().z, 0.0, float(terrain_size.y))
 	
 	var step_x := float(terrain_size.x) / float(resolution - 1)
 	var step_z := float(terrain_size.y) / float(resolution - 1)
@@ -1261,7 +1366,7 @@ func get_vegetation_positions(min_humidity: float = 0.4, max_slope: float = 0.5,
 		while z < terrain_size.y:
 			var px := clampf(x + rng.randf() * step, 0.0, float(terrain_size.x))
 			var pz := clampf(z + rng.randf() * step, 0.0, float(terrain_size.y))
-			var world_pos := Vector3(px, 0, pz) + global_position
+			var world_pos := Vector3(px, 0, pz) + _origen()
 			var humidity := get_humidity_at(world_pos)
 			var slope := get_slope_at(world_pos)
 			
@@ -1271,7 +1376,7 @@ func get_vegetation_positions(min_humidity: float = 0.4, max_slope: float = 0.5,
 				# aplica el consumidor con sus propios umbrales
 				# (MultiMeshVegetation.min_height/max_height_normalized).
 				if h > _to_units(sea_level):
-					positions.append(Vector3(px, h, pz) + global_position)
+					positions.append(Vector3(px, h, pz) + _origen())
 			
 			z += step
 		x += step
@@ -1312,3 +1417,14 @@ func set_season_tint(estacional: Color) -> void:
 	if _material_manager == null:
 		return
 	_material_manager.set_season_tint(estacional)
+
+
+## Dónde empieza el relieve en el mundo.
+##
+## Dentro del árbol es `global_position`, lo de siempre. **Fuera del árbol**
+## —el relieve de un campamento que nadie mira, ver [Campamentos.dejar_de_mirar]—
+## `global_position` se queja en cada llamada y devuelve la transformación por
+## defecto: medido el 2026-09-14, 56 000 errores en dos jornadas. Ahí vale su
+## `position`, que es la misma porque un campamento no se mueve del origen.
+func _origen() -> Vector3:
+	return global_position if is_inside_tree() else position

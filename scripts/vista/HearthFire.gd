@@ -18,15 +18,20 @@ var _sim: SettlementSim
 
 func setup(sim: SettlementSim, terrain: TerrainGenerator, where: Vector3) -> void:
 	_sim = sim
-	var ground := where
-	if terrain != null:
-		ground.y = terrain.get_height_at(where)
-	global_position = ground
+	# Tendida con la cuesta: el corro de piedras mide 2,2 m de lado a lado, y
+	# derecho se enterraba por arriba (2026-09-13) y apoyado en lo alto volaba
+	# por abajo (2026-09-14). Ver [ObrasDelAbrigo.asentar].
+	colocar(terrain, where)
 
 	_fire = Bonfire.new()
 	add_child(_fire)
 	_fire.build(20260907, 1.0)
 	visible = false
+
+
+## Pone el hogar en `where`, tendido con la cuesta. Lo usa también el traslado.
+func colocar(terrain: TerrainGenerator, where: Vector3) -> void:
+	ObrasDelAbrigo.asentar(self, terrain, where, Bonfire.RING_RADIUS)
 
 
 func _process(_delta: float) -> void:

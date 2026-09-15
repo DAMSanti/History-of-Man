@@ -111,11 +111,20 @@ uniform float hoja : hint_range(0.0, 1.0) = 1.0;
 
 // De qué color es lo que queda cuando cae la hoja.
 //
-// Corteza mojada de abedul en invierno: ni negro ni blanco, un pardo grisáceo.
-// El abedul tira a claro y por eso no se va a marrón oscuro.
+// Lo pone `Forest` por especie —`rama` en COLOR_DE_ESPECIE—, medido en invierno contra la
+// foto de corteza: desde que la lámina se divide por su brillo, la hoja y la rama tienen
+// que estar en la misma escala, y el pardo fijo de antes se quedaba tan oscuro que la
+// poca hoja que queda en enero pintaba el árbol pelado de amarillo.
 uniform vec3 rama : source_color = vec3(0.42, 0.38, 0.34);
 
 uniform vec3 tint : source_color = vec3(1.0, 1.0, 1.0);
+// El brillo medio —luminancia lineal— de la celda de perfil y de la de copa. La lámina se
+// divide por él antes de teñir, y así `tint` es el color de la especie y no un
+// multiplicador: el atlas es muy oscuro —la celda del pino, 0,12 de media en sRGB—, el
+// tinte tenía que multiplicar ×30 y cualquier píxel claro se quemaba a verde neón. Los
+// pone `Forest` al cargar el atlas.
+uniform float brillo_perfil = 1.0;
+uniform float brillo_copa = 1.0;
 uniform float brightness : hint_range(0.2, 2.0) = 1.0;
 
 varying vec2 v_local;
@@ -247,7 +256,25 @@ void fragment() {
 	ALPHA_SCISSOR_THRESHOLD = 0.35;
 
 	// Y lo que aguanta vira a corteza, que es lo que se ve de un abedul pelado.
-	vec3 color = mix(cut.rgb * tint, rama, desnudo * 0.8);
+	// El color de la especie, sobre la textura casi en gris como en `arbol_3d` y dividida
+	// por su brillo medio: así el tinte es el color y no un multiplicador. Medido con
+	// `ArbolColorProbe`; ver Forest.COLOR_DE_ESPECIE.
+	//
+	// En la lámina ENTERA y no sólo en la copa. Se probó sólo en la copa, para que el
+	// tronco no tomara el color de la hoja, y como la lámina es oscura abajo la media
+	// obligaba a quemar la copa: dos tonos, copa blanca y pie negro.
+	float media = max(mix(brillo_perfil, brillo_copa, v_flat), 0.005);
+	vec3 gris = mix(vec3(dot(cut.rgb, vec3(0.2126, 0.7152, 0.0722))), cut.rgb, 0.3) / media;
+	// Con tope: un brillo del atlas diez veces la media no puede salir diez veces más claro.
+	gris = min(gris, vec3(2.5));
+	// Pelado, la lámina ENTERA vira a rama —el pie ya era corteza—, y sobre la textura como
+	// la hoja. Con `desnudo`, que sólo cuenta en la copa, el pie seguía del color de la
+	// hoja de otoño y un roble de enero medía naranja por mucho que se tocara `rama`.
+	// Con el CUADRADO de lo pelado: la hoja que cae ya agujerea la copa por el alfa, y con
+	// la mezcla lineal el abedul de octubre, a media hoja, quedaba lavado de blanco y no
+	// llegaba a su amarillo. Así en otoño entra un 20 % de rama y en enero un 90 %.
+	float pelado = 1.0 - hoja;
+	vec3 color = mix(gris * tint, gris * rama, pelado * pelado);
 	ALBEDO = color * brightness * v_lit;
 	// La luz que cruza la copa. Ver `leaf_wrap`: sin esto la tabla que queda de
 	// espaldas al sol se apaga del todo.

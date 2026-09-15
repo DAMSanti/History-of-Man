@@ -29,55 +29,6 @@ extends Node3D
 @export var boundary_path: String = "res://data/boundaries/cantabria.json"
 @export var eras_path: String = "res://data/sites/cantabria_eras.res"
 
-## Usar el MDT del IGN (5 m, LiDAR) para el mapa local en vez del relieve
-## global. Tarda mas en descargar pero es el mayor salto de calidad disponible,
-## y no cuesta un solo frame: la malla tiene los mismos vertices.
-@export var use_ign_elevation: bool = true
-
-## Borrar del relieve carreteras, pistas, vias de tren y canteras usando la
-## geometria de OpenStreetMap.
-##
-## El MDT del IGN es LiDAR: si hay una carretera de pueblo, esta TALLADA en la
-## malla con su desmonte y su terraplen. En un mapa que empieza en el
-## Paleolitico eso es un anacronismo, asi que se recorta y se reconstruye la
-## ladera de debajo. Ver [TerrainInpainter].
-@export var remove_human_works: bool = true
-
-## Gotas de erosion hidraulica sobre el recuadro local, y pasadas de erosion
-## termica despues. A cero se desactiva.
-##
-## 250.000 gotas sobre 900x900 celdas son unas 0,3 por celda, que suena poco
-## pero cada una recorre hasta 64 pasos: da del orden de 20 visitas por celda.
-## Se paga UNA vez, al bakear el emplazamiento.
-## APAGADA. Las carcavas que producia se leian como carreteras y terrazas
-## cortando la ladera: sobre un MDT que ya es dato medido, la erosion no
-## anadia relieve creible sino cicatrices que competian con el relieve real.
-## El codigo y sus pruebas se quedan -[Erosion]- por si mas adelante interesa
-## para terreno generado, que es donde de verdad hace falta.
-@export var erosion_drops: int = 0
-@export var erosion_thermal_passes: int = 8
-
-## Paso de la rejilla que se guarda para el contorno, en metros. El dato baja
-## del IGN a 5 m como el mapa jugable; esto es solo cuanto se conserva.
-##
-## Estuvo en 15 m con este argumento: la malla del contorno muestreaba cada
-## 32 m, asi que guardar mas fino era detalle que no se llegaba a dibujar. El
-## argumento era bueno y la conclusion se quedo vieja en cuanto la malla subio
-## a 513 vertices -8 m por vertice-: ahora el que limita es el DATO, y el
-## contorno se veia de plastilina al lado del recuadro.
-##
-## A 8 m son 1.500x1.500 muestras para los 12 km de lado. Es un fichero bastante
-## mas gordo y una descarga mas larga al fundar, y se paga una sola vez.
-##
-## No baja a 5 m porque con 8 m por vertice de malla no habria donde meterlo:
-## serian 2.400x2.400 -casi seis millones de cotas- solo para interpolar.
-@export var surround_meters: float = 8.0
-
-## Sello del proceso que genera el recuadro local. SUBIRLO cuando cambie algo
-## que afecte al relieve guardado -la fuente de cotas, el borrado de obra
-## humana, el umbral de cauce- para que los ficheros ya bakeados se rehagan
-## solos en vez de quedarse viejos sin avisar.
-const LOCAL_PIPELINE_VERSION := 9
 @export var border_color: Color = Color(1.0, 0.82, 0.25)
 ## Ancho de la cinta de frontera, en metros reales
 @export var border_width_m: float = 400.0
@@ -91,8 +42,13 @@ const LOCAL_PIPELINE_VERSION := 9
 @export var show_sites: bool = true
 
 @export_group("Bandas de material")
-## Cotas reales en metros donde cambia el material del terreno
-@export var shore_band_m: float = 30.0
+## Cotas reales en metros donde cambia el material del terreno, contadas desde
+## el mar de la época —ver [TerrainGenerator._apply_shader_height_setup]—.
+##
+## La playa, quince metros sobre el agua: decisión del usuario del 2026-09-14,
+## «playa fina y hierba» en la costa glacial. Eran treinta, y no se notaba porque
+## con el mar bajo toda la plataforma salía de arena de todos modos.
+@export var shore_band_m: float = 15.0
 @export var grass_top_m: float = 700.0
 @export var rock_base_m: float = 500.0
 @export var snow_base_m: float = 1900.0
@@ -113,7 +69,13 @@ var _visible_sites: Array[Site] = []
 var _selected: Site
 var _selection_marker: MeshInstance3D
 var _detail: Label
+
+## Los botones de entrar en las cuevas del sitio elegido. Ver [cuevas_para_entrar].
+var _entradas: VBoxContainer
 var _founding: bool = false
+
+## El menú de la partida, el que abre ESC. Ver [MenuDelJuego].
+var _menu_del_juego: MenuDelJuego
 ## Epoca en curso. Se arranca en el Paleolitico, donde solo son ocupables los
 ## emplazamientos con abrigo natural: no hay tecnica para construir vivienda.
 var _era: Site.Era = Site.Era.PALEOLITICO
@@ -124,6 +86,19 @@ var _eras: RegionEras
 var _era_index: int = -1
 ## Fronteras ya trazadas, por indice de epoca: trazar cuesta segundos
 var _border_cache: Dictionary = {}
+
+## La niebla que se pinta: la textura, la versión de [NieblaRegional] con la que se
+## hizo, y el material que comparten el mar y la frontera. Ver [_poner_la_niebla].
+var _niebla_tex: ImageTexture = null
+
+## Mandar una expedición desde aquí: si se está apuntando el rumbo, desde qué
+## campamento, la ficha y la flecha. Ver [FichaDeRumbo] y SISTEMAS §4.
+var _apuntando := false
+var _campamento_del_rumbo: Campamento = null
+var _ficha_de_rumbo: FichaDeRumbo = null
+var _flecha: FlechaDeRumbo = null
+var _niebla_version := -1
+var _bajo_la_niebla: Shader = preload("res://shaders/bajo_la_niebla.gdshader")
 
 ## Color por tipo de emplazamiento
 const KIND_COLORS := {
@@ -138,17 +113,75 @@ const KIND_ORDER := [
 ]
 
 
+## Las etapas del montaje EN FRÍO, con lo que cuesta cada una en milisegundos, medido
+## con `CargaProbe` con la pantalla puesta (ventana, 2026-09-15): leer el relieve 0,4 s;
+## el ruido y la composición de alturas, unos 11; los vértices, los índices y el troceado
+## de la malla, unos 7,5; la época 0,3; y los lugares con la frontera de la época, 0,7.
+## Son los pesos de la barra. Ver [Carga] e INTERFAZ §9.
+const ETAPAS := [
+	["Leyendo la costa y los montes", 400.0],
+	["Modelando las alturas", 11000.0],
+	["Tendiendo la comarca", 7500.0],
+	["Pintando la época", 300.0],
+	["Marcando los lugares", 700.0],
+]
+
+## Las mismas, CON LA MALLA EN CACHÉ, que es desde el segundo viaje a la misma época: la
+## malla ya no se modela ni se tiende, se lee. Medido igual, en la ida y en la nueva
+## partida: leer 340-445 ms, las alturas casi nada, la malla 330, la época 80-270 y los
+## lugares 510-770. A la primera se le suma lo que la pantalla lleva abierta antes de que
+## la escena exista —leerla, y guardar la partida al salir del valle—: 160-360 ms en la
+## ida y 860-1120 en la nueva, que con la carga entera en segundo y medio es media barra.
+## Pesa lo de la nueva partida, 1300: lo de detrás —alturas y malla, 130-200 ms— cabe en
+## un cuadro, así que la barra salta al acabar la primera, y con menos peso ese salto
+## caía en la nueva al 65-77 % de la carga. En la ida la primera dura la mitad y el salto
+## cae al 36-54 %.
+const ETAPAS_CON_CACHE := [
+	["Leyendo la costa y los montes", 1300.0],
+	["Modelando las alturas", 20.0],
+	["Tendiendo la comarca", 330.0],
+	["Pintando la época", 180.0],
+	["Marcando los lugares", 640.0],
+]
+
+## Si el mapa ya está en pie. Ver [DemoMain.montado].
+var montado := false
+signal se_monto
+
+
 func _ready() -> void:
 	var t_ready0 := Time.get_ticks_msec()
 	print("=== Capa regional ===")
+	# Con pantalla de carga se monta en varios cuadros y parado; sin ella, de un tirón.
+	# Ver [DemoMain._ready] e INTERFAZ §9.
+	var cargando := Carga.abierta()
+	if cargando:
+		process_mode = Node.PROCESS_MODE_DISABLED
 	var t_setup := Time.get_ticks_msec()
-	_setup_terrain()
+	# Las etapas, según esté la malla en caché: con ella la carga es de un segundo y medio
+	# y sin ella de veinte, y con los pesos del frío la barra no decía la verdad. Se mira
+	# antes de montar nada: declararlas dos veces dejaba el primer rato a cuenta de las
+	# del frío, y a media barra había pasado el 75 % de la carga.
+	if cargando:
+		var con_cache := ResourceLoader.exists(MallaDelTerreno.ruta_de_la_cache(heightmap_path,
+			sufijo_de_la_cache(GameState.sea_level_m if GameState.home != null else 0.0), resolution))
+		Carga.etapas(ETAPAS_CON_CACHE if con_cache else ETAPAS)
+		Carga.etapa(0)
+	await _setup_terrain()
 	print("[TIMING] _setup_terrain (carga heightmap regional): %d ms" % (Time.get_ticks_msec() - t_setup))
+	await Carga.ceder()
 	_setup_camera()
 	_setup_ui()
+	Carga.siguiente()
+	await Carga.ceder()
 
 	var t0 := Time.get_ticks_msec()
-	terrain.generate()
+	# La generación no sabe de etapas: las alturas y la malla van en una sola llamada. La
+	# barra avanza por tiempo dentro de cada una y cambia cuando el terreno dice que ya va
+	# por la malla. Cambiando por tiempo, a media barra había pasado el 70 % de la carga.
+	await terrain.generate(_ceder_al_generar if cargando else Callable())
+	Carga.etapa(3)
+	await Carga.ceder()
 
 	# Y AHORA las bandas de material y la mascara de la epoca. Las dos cosas
 	# hay que ponerlas DESPUES de generar, y por el mismo motivo de fondo:
@@ -165,17 +198,15 @@ func _ready() -> void:
 	terrain.refresh_material_bands(_sea_level_m)
 	print("Region generada en %.1f s" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	var t_eras := Time.get_ticks_msec()
-	_eras = load(eras_path) as RegionEras
+	_eras = await Carga.cargar(eras_path) as RegionEras
 	print("[TIMING] carga de eras_path: %d ms" % (Time.get_ticks_msec() - t_eras))
 
-	# La mascara VA AQUI y no dos lineas antes: `_eras` se carga en la linea
-	# de arriba, asi que llamando antes se llamaba con el objeto nulo y la
-	# funcion se salia sin hacer nada. La plataforma seguia con la frontera
-	# administrativa de hoy encima -que la deja fuera, porque hoy es fondo
-	# marino- y por eso salia gris.
-	var t_mask := Time.get_ticks_msec()
-	_apply_era_mask()
-	print("[TIMING] _apply_era_mask: %d ms" % (Time.get_ticks_msec() - t_mask))
+	# LA MÁSCARA DE LA ÉPOCA NO SE APLICA AQUÍ, sino en `_apply_era`, unas líneas más
+	# abajo y siempre: `_era_index` empieza en -1, así que allí se aplica sea cual sea la
+	# época. Aplicarla también aquí trazaba la frontera de la época por defecto —720 ms,
+	# medido con `CargaProbe`— para tirarla enseguida.
+	Carga.siguiente()
+	await Carga.ceder()
 	var t_sites := Time.get_ticks_msec()
 	_build_sites()
 	print("[TIMING] _build_sites (%d emplazamientos): %d ms" % [
@@ -183,18 +214,31 @@ func _ready() -> void:
 
 	if _site_set and not GameState.started:
 		GameState.begin(_site_set)
+	_poner_la_niebla()
+
+	# El menú de la partida, el que abre ESC. Aquí no hay simulación que parar:
+	# lo que se guarda es lo que ya está en la carpeta de trabajo.
+	_menu_del_juego = MenuDelJuego.new()
+	_menu_del_juego.name = "MenuDelJuego"
+	_menu_del_juego.visible = false
+	add_child(_menu_del_juego)
 	if GameState.home:
 		_era = GameState.era
 		# La cota del mar la fija la epoca, no el teclado
-		_apply_era(GameState.sea_level_m)
+		await _apply_era(GameState.sea_level_m, Carga.ceder)
 		_select_site(GameState.home)
 		camera.set_target(terrain.geo_to_world(GameState.home.lon, GameState.home.lat))
 		camera.set_distance(float(maxi(terrain.terrain_size.x, terrain.terrain_size.y)) * 0.12)
 	else:
-		_apply_era(0.0)
+		await _apply_era(0.0, Carga.ceder)
 
 	_update_info()
 	print("[TIMING] === RegionMap._ready() TOTAL: %d ms ===" % (Time.get_ticks_msec() - t_ready0))
+	montado = true
+	if cargando:
+		process_mode = Node.PROCESS_MODE_INHERIT
+		Carga.cerrar()
+	se_monto.emit()
 
 
 ## Actividades que la banda puede hacer esta estacion, en orden estable
@@ -258,12 +302,15 @@ func _resolve_season() -> void:
 
 ## Cambia el territorio a la cota del mar dada: mascara del terreno, frontera
 ## dibujada y emplazamientos disponibles.
-func _apply_era(sea_level_m: float) -> void:
+## `ceder` va al trazado de la frontera (ver [_trace_border]).
+func _apply_era(sea_level_m: float, ceder: Callable = Callable()) -> void:
 	_sea_level_m = sea_level_m
 
 	var water := terrain.get_node_or_null("Water") as MeshInstance3D
 	if water:
 		water.position.y = (sea_level_m / meters_per_unit) * vertical_exaggeration
+	# El trazo de costa de la niebla va con el mar de la época.
+	_poner_la_niebla(true)
 
 	# La arena va donde ROMPE EL MAR, y el mar rompia en otro sitio. Anclando
 	# la banda en la cota cero, toda la plataforma emergida -miles de
@@ -280,7 +327,7 @@ func _apply_era(sea_level_m: float) -> void:
 		var index := _eras.index_for(sea_level_m)
 		if index != _era_index:
 			_era_index = index
-			_apply_era_mask()
+			await _apply_era_mask(ceder)
 
 	_refresh_sites()
 	if _selected and not _selected.is_available(_sea_level_m):
@@ -291,8 +338,130 @@ func _apply_era(sea_level_m: float) -> void:
 	_update_info()
 
 
+## Pinta la niebla de la partida en el relieve, el mar y la frontera. Rehace la
+## textura sólo si la niebla ha cambiado desde la última vez, salvo que se pida.
+##
+## Antes de empezar partida no hay niebla: el mapa regional se ve entero, que es
+## como se elige dónde asentarse.
+func _poner_la_niebla(forzar: bool = false) -> void:
+	if terrain == null or not GameState.started:
+		return
+	var niebla := GameState.la_niebla()
+	if niebla.version != _niebla_version or _niebla_tex == null:
+		var imagen := niebla.imagen()
+		if _niebla_tex == null:
+			_niebla_tex = ImageTexture.create_from_image(imagen)
+		else:
+			_niebla_tex.update(imagen)
+		_niebla_version = niebla.version
+	elif not forzar:
+		return
+	var mar := (_sea_level_m / meters_per_unit) * vertical_exaggeration
+	terrain.set_fog_texture(_niebla_tex, mar)
+	var mundo := Vector2(float(terrain.terrain_size.x), float(terrain.terrain_size.y))
+	var water := terrain.get_node_or_null("Water") as MeshInstance3D
+	if water != null:
+		var agua := water.material_override as ShaderMaterial
+		if agua == null:
+			var antes := water.material_override as StandardMaterial3D
+			agua = ShaderMaterial.new()
+			agua.shader = _bajo_la_niebla
+			if antes != null:
+				agua.set_shader_parameter("albedo", antes.albedo_color)
+				agua.set_shader_parameter("metallic", antes.metallic)
+				agua.set_shader_parameter("roughness", antes.roughness)
+			water.material_override = agua
+		agua.set_shader_parameter("fog_tex", _niebla_tex)
+		agua.set_shader_parameter("fog_world_size", mundo)
+	for nodo: MeshInstance3D in _border_cache.values():
+		var frontera := nodo.material_override as ShaderMaterial
+		if frontera != null:
+			frontera.set_shader_parameter("fog_tex", _niebla_tex)
+			frontera.set_shader_parameter("fog_world_size", mundo)
+
+
+## Empieza a apuntar el rumbo de una expedición: desde el campamento seleccionado,
+## o desde el primero si el seleccionado no lo es. Sin campamentos vivos no hay
+## quien salga —se retoman al entrar en el mapa de la banda—.
+func _empezar_a_apuntar() -> void:
+	var desde: Campamento = null
+	if _selected != null:
+		desde = Campamentos.de_sitio(_selected.id)
+	if desde == null and not Campamentos.vivos.is_empty():
+		desde = Campamentos.vivos[0]
+	if desde == null or desde.sim == null:
+		_detail.text = ("No hay campamento en marcha desde el que salir. Entra en el "
+			+ "mapa de la banda y vuelve.")
+		return
+	_campamento_del_rumbo = desde
+	_apuntando = true
+	_detail.text = "Pincha en el mapa hacia dónde sale la expedición desde %s." % desde.nombre()
+
+
+## El rumbo hacia el punto pinchado, desde el campamento, y la ficha abierta.
+func _apuntar_a(pantalla: Vector2) -> void:
+	var desde := _campamento_del_rumbo
+	if desde == null or desde.sitio == null or camera == null:
+		return
+	# Contra el plano de la cota del campamento: para un rumbo basta, y el mapa
+	# regional no tiene colisión.
+	var casa := terrain.geo_to_world(desde.sitio.lon, desde.sitio.lat)
+	var origen := camera.project_ray_origin(pantalla)
+	var normal := camera.project_ray_normal(pantalla)
+	if absf(normal.y) < 0.0001:
+		return
+	var t := (casa.y - origen.y) / normal.y
+	if t <= 0.0:
+		return
+	var geo := terrain.world_to_geo(origen + normal * t)
+	var rumbo := rad_to_deg(atan2((geo.x - desde.sitio.lon) * cos(deg_to_rad(desde.sitio.lat)),
+		geo.y - desde.sitio.lat))
+	if _flecha == null:
+		_flecha = FlechaDeRumbo.new()
+		_flecha.name = "FlechaDeRumbo"
+		add_child(_flecha)
+	if _ficha_de_rumbo == null:
+		_ficha_de_rumbo = FichaDeRumbo.new()
+		_ficha_de_rumbo.name = "FichaDeRumbo"
+		_ficha_de_rumbo.cambiada.connect(func(recorrido: Pasillo) -> void:
+			if recorrido != null:
+				_flecha.trazar_pasillo(terrain, recorrido, 1.5))
+		_ficha_de_rumbo.cerrada.connect(_cerrar_el_rumbo)
+		get_node("UI").add_child(_ficha_de_rumbo)
+		_ficha_de_rumbo.abrir(desde.sim, rumbo, desde.nombre())
+	else:
+		_ficha_de_rumbo.apuntar(rumbo)
+
+
+func _cerrar_el_rumbo(mandada: bool) -> void:
+	_apuntando = false
+	if _ficha_de_rumbo != null:
+		_ficha_de_rumbo.queue_free()
+		_ficha_de_rumbo = null
+	if _flecha != null:
+		_flecha.queue_free()
+		_flecha = null
+	if mandada and _campamento_del_rumbo != null:
+		_detail.text = ("Sale la expedición desde %s. Lo que vean se sabrá cuando "
+			+ "vuelvan.") % _campamento_del_rumbo.nombre()
+	_campamento_del_rumbo = null
+
+
+## La niebla cambia sola con el mapa regional abierto: los campamentos siguen y
+## las expediciones vuelven. Se mira una vez por segundo si hay algo nuevo.
+func _process(_delta: float) -> void:
+	if Engine.get_process_frames() % 60 == 0:
+		_poner_la_niebla()
+		if GameState.niebla != null and GameState.niebla.version != _sitios_con_version:
+			_sitios_con_version = GameState.niebla.version
+			_refresh_sites()
+
+
+var _sitios_con_version := -1
+
+
 ## Muestra la frontera de una epoca, trazandola la primera vez
-func _show_border(index: int) -> void:
+func _show_border(index: int, ceder: Callable = Callable()) -> void:
 	for key: int in _border_cache.keys():
 		var node: MeshInstance3D = _border_cache[key]
 		node.visible = key == index
@@ -302,20 +471,23 @@ func _show_border(index: int) -> void:
 	if _eras == null or index < 0 or index >= _eras.masks.size():
 		return
 
-	var mesh := _trace_border(_eras.masks[index], _eras.width, _eras.height)
+	var mesh := await _trace_border(_eras.masks[index], _eras.width, _eras.height, ceder)
 	if mesh == null:
 		return
 
 	var node := MeshInstance3D.new()
 	node.name = "Frontera_%d" % index
 	node.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = border_color
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# Con el shader de la niebla, que la borra donde no se ha visto.
+	var material := ShaderMaterial.new()
+	material.shader = _bajo_la_niebla
+	material.set_shader_parameter("albedo", border_color)
+	material.set_shader_parameter("sin_luz", true)
+	material.set_shader_parameter("se_borra", true)
 	add_child(node)
 	node.material_override = material
 	_border_cache[index] = node
+	_poner_la_niebla(true)
 
 
 ## Carga los emplazamientos ya derivados y los dibuja como marcadores.
@@ -390,7 +562,7 @@ func _refresh_sites() -> void:
 	# gana explorando, no se regala.
 	_visible_sites = []
 	for site: Site in _site_set.available_in(_sea_level_m, _era):
-		if GameState.started and not GameState.is_discovered(site):
+		if GameState.started and not GameState.se_ve(site):
 			continue
 		_visible_sites.append(site)
 	var visible_sites := _visible_sites
@@ -425,7 +597,9 @@ func _refresh_sites() -> void:
 ## Del contorno REAL y no del poligono administrativo, porque el area jugable
 ## crece sobre la plataforma que emerge en cada epoca. Cinta y no linea porque
 ## Godot no engorda las lineas 3D y a esta escala se perderia.
-func _trace_border(mask: PackedByteArray, w: int, h: int) -> ArrayMesh:
+## `ceder`, si se da, se llama entre filas: trazar una frontera son 720 ms, y al montar
+## el mapa va detrás de la pantalla de carga (INTERFAZ §9).
+func _trace_border(mask: PackedByteArray, w: int, h: int, ceder: Callable = Callable()) -> ArrayMesh:
 	var sx := float(terrain.terrain_size.x) / float(w - 1)
 	var sz := float(terrain.terrain_size.y) / float(h - 1)
 	var half := (border_width_m / meters_per_unit) * 0.5
@@ -434,13 +608,15 @@ func _trace_border(mask: PackedByteArray, w: int, h: int) -> ArrayMesh:
 	# Suavizar la trama antes de trazar: la mascara vive en celdas de 111 m y
 	# seguir sus bordes al pie de la letra dibuja una escalera de pixeles. Un
 	# desenfoque y un nuevo umbral redondean esa escalera sin mover la silueta.
-	var soft := _smooth_mask(mask, w, h, 3)
+	var soft := await _smooth_mask(mask, w, h, 3, ceder)
 
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segments := 0
 
 	for z in range(h - 1):
+		if ceder.is_valid() and z % 16 == 0:
+			await ceder.call()
 		var row := z * w
 		for x in range(w - 1):
 			var here := soft[row + x] > 0.5
@@ -462,7 +638,8 @@ func _trace_border(mask: PackedByteArray, w: int, h: int) -> ArrayMesh:
 
 
 ## Desenfoque de caja sobre la mascara, para quitar la escalera de trama
-func _smooth_mask(mask: PackedByteArray, w: int, h: int, radius: int) -> PackedFloat32Array:
+func _smooth_mask(mask: PackedByteArray, w: int, h: int, radius: int,
+		ceder: Callable = Callable()) -> PackedFloat32Array:
 	var tmp := PackedFloat32Array()
 	tmp.resize(w * h)
 	var out := PackedFloat32Array()
@@ -470,6 +647,8 @@ func _smooth_mask(mask: PackedByteArray, w: int, h: int, radius: int) -> PackedF
 	var window := float(radius * 2 + 1)
 
 	for z in range(h):
+		if ceder.is_valid() and z % 32 == 0:
+			await ceder.call()
 		var row := z * w
 		var acc := 0.0
 		for x in range(-radius, radius + 1):
@@ -480,6 +659,8 @@ func _smooth_mask(mask: PackedByteArray, w: int, h: int, radius: int) -> PackedF
 			acc += 1.0 if mask[row + clampi(x + radius + 1, 0, w - 1)] > 127 else 0.0
 
 	for x in range(w):
+		if ceder.is_valid() and x % 32 == 0:
+			await ceder.call()
 		var acc := 0.0
 		for z in range(-radius, radius + 1):
 			acc += tmp[clampi(z, 0, h - 1) * w + x]
@@ -564,6 +745,7 @@ func _select_site(site: Site) -> void:
 func _update_detail() -> void:
 	if _detail == null:
 		return
+	_poner_entradas()
 	if _selected == null:
 		_detail.text = "Click en el mapa para ver el
 emplazamiento mas cercano"
@@ -628,6 +810,36 @@ emplazamiento mas cercano"
 	lines.append("[F] entrar al mapa")
 	_detail.text = "
 ".join(lines)
+
+
+## Un botón por cueva explorada del campamento de este sitio, para entrar a mirar.
+## La lista es [Pinturas.cuevas_para_entrar].
+##
+## **Sólo si hay campamento vivo en el sitio**: lo explorado es de cada
+## campamento, y una visita desde aquí no lleva gente que explore. Por eso Altamira
+## sólo se ve por dentro si hay una banda allí que la haya recorrido (SISTEMAS §13,
+## plan técnico).
+func _poner_entradas() -> void:
+	if _entradas == null:
+		return
+	for hijo: Node in _entradas.get_children():
+		_entradas.remove_child(hijo)
+		hijo.queue_free()
+	if _selected == null:
+		return
+	var campamento := Campamentos.de_sitio(_selected.id)
+	if campamento == null or campamento.sim == null:
+		return
+	for entrada: Array in campamento.sim.pinturas.cuevas_para_entrar():
+		var cueva := int(entrada[0])
+		var nombre := String(entrada[1])
+		var boton := Button.new()
+		boton.text = "Entrar en %s" % nombre
+		boton.pressed.connect(func() -> void:
+			var sala := SalaDeLaCueva.new()
+			get_node("UI").add_child(sala)
+			sala.montar(campamento.sim, cueva, nombre))
+		_entradas.add_child(boton)
 
 
 ## Lo que se sabe de un sitio, para la ficha del mapa regional.
@@ -729,197 +941,39 @@ func _found_settlement() -> void:
 	if _selected == null or _founding:
 		return
 
-	# SI ESE MAPA YA TIENE ESTADO, SE ENTRA EN ÉL, no se funda encima. Es lo que
-	# le hizo perder la partida al usuario el 2026-09-13: salió al mapa
-	# regional, eligió su sitio, pulsó F y se le empezó una nueva. Ver
-	# [Guardado.CARPETA].
-	if Guardado.hay_partida(_selected.id):
+	# EL MAPA DE LA BANDA SE RETOMA; LOS DEMÁS SE VISITAN. Entrar en un mapa sin
+	# estado fundaba ahí otra banda —el usuario acabó con tres—, y el 2026-09-13
+	# pisaba la partida. Desde el 2026-09-14 la banda sólo se asienta en el primer
+	# mapa: «no debe traer a mi banda, sólo cargar y mostrarme el mapa». Ver
+	# [Guardado.sitio_de_la_banda].
+	# UN CAMPAMENTO VIVO SE MIRA: la partida lo lleva y no hay nada que leer de
+	# disco. SISTEMAS §23, punto 8.
+	var vivo := Campamentos.de_sitio(_selected.id)
+	if vivo != null:
+		_entrar_en_el_campamento(vivo)
+		return
+	var banda := Guardado.sitio_de_la_banda()
+	if banda == _selected.id:
 		_retomar_en(_selected.id)
 		return
+	Expedition.visita = banda >= 0 or not Campamentos.vivos.is_empty()
 
 	_founding = true
 
-	# El recuadro local es caro de montar -descarga del IGN, borrado de obra
-	# humana, drenaje- pero es SIEMPRE EL MISMO para un emplazamiento dado. Se
-	# guarda en disco la primera vez y a partir de ahi se lee, con lo que la
-	# segunda fundacion es instantanea. El sello de version invalida el fichero
-	# solo si cambia el proceso, sin tener que acordarse de borrarlo.
-	var cache_path := "res://data/dem/local/site_%d.res" % _selected.id
-	if ResourceLoader.exists(cache_path):
-		var cached: HeightmapData = load(cache_path)
-		if cached != null and cached.pipeline_version == LOCAL_PIPELINE_VERSION:
-			print("RegionMap: recuadro local leido de %s" % cache_path)
-			# El contorno tiene su propia resolucion y su propia vida: si se
-			# ha quedado mas basto de lo que ahora se pide, se rehace SOLO el.
-			# Subir el sello del recuadro para esto obligaria a volver a
-			# descargar el mapa jugable entero, que no ha cambiado en nada.
-			await _refresh_surround_if_coarse(cached)
-			_enter_local(cached)
-			return
-		print("RegionMap: %s es de una version anterior, se rehace" % cache_path)
-
-	_detail.text = "Descargando relieve de %s...
-(unos segundos)" % _selected.display_name()
-	# Dos frames para que el mensaje llegue a pintarse antes del bloqueo
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	# Margen justo sobre el recuadro jugable: cada decima de grado de mas son
-	# miles de muestras que hay que descargar y parsear.
-	var margin_m := float(Expedition.local_size_m) * 0.55
-	var half_lat := margin_m * IGNImporter.DEG_PER_METER_LAT
-	var half_lon := margin_m * IGNImporter.deg_per_meter_lon(_selected.lat)
-
-	# Primero el MDT del IGN: 5 m derivados de LiDAR frente a los 13,9 m de
-	# terrarium, que ademas da cotas en metros enteros. Es la diferencia entre
-	# relieve y una interpolacion suave.
-	var local: HeightmapData = null
-	if use_ign_elevation:
-		local = IGNImporter.new().import_area(
-			_selected.lat + half_lat, _selected.lat - half_lat,
-			_selected.lon - half_lon, _selected.lon + half_lon)
-
-	var importer := DEMImporter.new()
+	# La receta de preparar el valle vive en [PreparaValle]: la usa también la ficha
+	# de un campamento para migrar, y tiene que ser la misma.
+	var preparador := PreparaValle.new()
+	preparador.aviso.connect(func(texto: String) -> void: _detail.text = texto)
+	# Con la pantalla de carga: preparar un valle nuevo son decenas de segundos, y la
+	# carga del mapa que viene detrás sigue en la misma barra. INTERFAZ §9.
+	Carga.abrir(get_tree(), "Preparando %s" % _selected.display_name())
+	Carga.etapas(PreparaValle.ETAPAS)
+	preparador.etapa_cambiada.connect(Carga.etapa)
+	var local := await preparador.preparar(get_tree(), _selected, Carga.avanzar_por_tiempo)
 	if local == null:
-		# Reserva: fuera de Espana, o si el servicio del IGN no responde
-		_detail.text = "Sin MDT del IGN, usando relieve global..."
-		await get_tree().process_frame
-		local = importer.import_area(
-			_selected.lat + half_lat, _selected.lat - half_lat,
-			_selected.lon - half_lon, _selected.lon + half_lon, 13)
-		if local == null:
-			_detail.text = "No se pudo descargar el relieve.
-Comprueba la conexion."
-			_founding = false
-			return
-		# Los artefactos que corregimos eran de terrarium. El MDT es dato
-		# controlado y un umbral bajo se cargaria acantilados reales.
-		importer.despike(local)
-
-	# Quitar la obra humana ANTES de calcular los cauces: si se hace despues,
-	# el drenaje se ha calculado ya sobre una cuneta de carretera y sale un rio
-	# donde no lo hay.
-	if remove_human_works:
-		_detail.text = "Quitando carreteras y obra moderna del relieve..."
-		await get_tree().process_frame
-
-		var ways := OSMWays.new().fetch_area(
-			local.lat_north, local.lat_south, local.lon_west, local.lon_east)
-		if ways.is_empty():
-			# Overpass caido o recuadro sin nada: se sigue igual, esto es una
-			# mejora del paisaje, no un requisito para fundar
-			print("RegionMap: sin geometrias de OSM, el relieve se deja como esta")
-		else:
-			var mask := TerrainInpainter.build_mask(local, ways)
-			var repaired := TerrainInpainter.inpaint(local, mask)
-			print("RegionMap: %d vias/areas de OSM, %d celdas de relieve reconstruidas (%.1f%%)" % [
-				ways.size(), repaired,
-				100.0 * float(repaired) / maxf(float(local.width * local.height), 1.0)])
-
-	# Erosion: el MDT del IGN es fiel pero esta remuestreado a 5 m, y ese
-	# remuestreo se come las carcavas y los regueros, que a esa escala son
-	# justo lo que distingue una ladera de una rampa. Devolverselos con RUIDO
-	# daria bultos sin relacion entre si; devolverselos con el proceso que los
-	# produce da vaguadas que desembocan y conos de deyeccion al pie.
-	#
-	# Va DESPUES de quitar la obra humana -no tiene sentido erosionar un
-	# terraplen de carretera- y ANTES de los cauces, para que el agua de OSM se
-	# encaje sobre un relieve ya trabajado.
-	if erosion_drops > 0:
-		_detail.text = "Erosionando el relieve..."
-		await get_tree().process_frame
-
-		var t0 := Time.get_ticks_msec()
-		# A media resolucion: las formas de la erosion viven a escala de
-		# decenas de metros y salen igual sobre celdas de diez que de cinco,
-		# pero cuestan la cuarta parte. Medido sobre este mismo recuadro:
-		# 90 s a resolucion completa frente a 22 s asi, y con MAS efecto.
-		# 0.67 es la tangente de 34 grados, el talud de un canchal calizo.
-		Erosion.erode_coarse(local.elevations, local.width, local.height,
-			erosion_drops, erosion_thermal_passes,
-			local.meters_per_sample, 0.67, _selected.id, 2)
-
-		var lo := INF
-		var hi := -INF
-		for e in local.elevations:
-			lo = minf(lo, e)
-			hi = maxf(hi, e)
-		local.min_elevation = lo
-		local.max_elevation = hi
-		print("RegionMap: erosion de %d gotas en %d ms, cotas %.1f..%.1f" % [
-			erosion_drops, Time.get_ticks_msec() - t0, lo, hi])
-
-	# Los cauces salen de OSM, no del relieve. La acumulacion de drenaje D8
-	# funciona a escala regional, donde una cuenca grande se ve sola, pero
-	# sobre 4 km dejaba un 0,5% de celdas con valor medio 0,06: invisible. Y
-	# ademas no sabe cual de esos hilos es el Nansa.
-	var hidro := OSMWays.new().fetch_water(
-		local.lat_north, local.lat_south, local.lon_west, local.lon_east)
-	var canales: Array = hidro.get("channels", [])
-	var laminas: Array = hidro.get("bodies", [])
-
-	if canales.is_empty() and laminas.is_empty():
-		# Reserva: sin OSM se vuelve al drenaje deducido, que es poco pero es
-		# mejor que un recuadro completamente seco
-		print("RegionMap: sin hidrografia de OSM, se deduce del relieve")
-		importer.compute_river_mask(local, 20, 0.35)
-	else:
-		Hydrography.apply(local, canales, laminas)
-		var mojadas := 0
-		for v in local.river_mask:
-			if v > 0.01:
-				mojadas += 1
-		print("RegionMap: %d cauces y %d laminas de OSM, %.2f%% del recuadro con agua" % [
-			canales.size(), laminas.size(),
-			100.0 * float(mojadas) / maxf(float(local.width * local.height), 1.0)])
-
-	# --- relieve de las casillas de alrededor -----------------------------
-	# Mismo sistema que el mapa jugable: MDT05 del IGN, LiDAR. El MDT regional
-	# que se usaba antes da 111 m por muestra, o sea 37 puntos por casilla de
-	# 4 km, y de ahi salian lomas lisas sin nada que se pareciera a un valle.
-	#
-	# Se pide el bloque de 3x3 casillas en UNA sola peticion -unos 12 km de
-	# lado, medido: 19 s y 79 MB- y se guarda a 15 m por muestra. El dato es
-	# el mismo MDT05; lo que cambia es cuanto se guarda, y 15 m sobra porque
-	# la malla del contorno muestrea cada 32 m.
-	_detail.text = "Descargando el relieve de alrededor...\nMDT del IGN, unos segundos."
-	await get_tree().process_frame
-
-	var surround_path := "res://data/dem/local/site_%d_surround.res" % _selected.id
-	var span_lat := local.lat_north - local.lat_south
-	var span_lon := local.lon_east - local.lon_west
-	var t_sur := Time.get_ticks_msec()
-	var surround: HeightmapData = null
-	if use_ign_elevation:
-		surround = IGNImporter.new().import_area(
-			local.lat_north + span_lat, local.lat_south - span_lat,
-			local.lon_west - span_lon, local.lon_east + span_lon,
-			surround_meters)
-
-	if surround == null:
-		# Reserva: fuera de Espana o si el IGN no responde
-		surround = importer.import_area(
-			local.lat_north + span_lat, local.lat_south - span_lat,
-			local.lon_west - span_lon, local.lon_east + span_lon, 13)
-		if surround != null:
-			importer.despike(surround)
-
-	if surround != null:
-		_apply_surround_water(surround)
-		surround.pipeline_version = LOCAL_PIPELINE_VERSION
-		ResourceSaver.save(surround, surround_path)
-		print("RegionMap: contorno bakeado en %d ms, %d x %d a %.1f m (%s)" % [
-			Time.get_ticks_msec() - t_sur, surround.width, surround.height,
-			surround.meters_per_sample, surround.source])
-	else:
-		print("RegionMap: sin contorno propio, se usara el MDT regional")
-
-	local.pipeline_version = LOCAL_PIPELINE_VERSION
-	DirAccess.make_dir_recursive_absolute(
-		ProjectSettings.globalize_path("res://data/dem/local"))
-	ResourceSaver.save(local, cache_path)
-	print("RegionMap: recuadro local bakeado en %s" % cache_path)
-
+		_founding = false
+		Carga.cerrar()
+		return
 	_enter_local(local)
 
 
@@ -943,16 +997,32 @@ func _enter_local(local: HeightmapData) -> void:
 		clampf(v * size_m.y - half, 0.0, maxf(size_m.y - half * 2.0, 0.0)))
 
 	print("Entrando en %s (%.4f, %.4f)" % [_selected.display_name(), _selected.lat, _selected.lon])
-	get_tree().change_scene_to_file(Expedition.LOCAL_SCENE)
+	Carga.abrir(get_tree(), "Entrando en %s" % _selected.display_name())
+	Carga.cambiar_de_escena(get_tree(), Expedition.LOCAL_SCENE)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed 			and event.button_index == MOUSE_BUTTON_LEFT:
-		_select_site(_pick_site(event.position))
+		# APUNTANDO, el clic es un rumbo y no una selección.
+		if _apuntando:
+			_apuntar_a(event.position)
+		else:
+			_select_site(_pick_site(event.position))
 		get_viewport().set_input_as_handled()
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
+			KEY_ESCAPE:
+				# El mismo menú que en el valle: guardar, cargar y salir
+				# también desde aquí, que es la otra pantalla de una partida.
+				# Ver [MenuDelJuego] y `docs/INTERFAZ.md` §7.
+				if _menu_del_juego == null:
+					return
+				if _menu_del_juego.esta_abierto():
+					_menu_del_juego.cerrar()
+				else:
+					_menu_del_juego.abrir()
+				get_viewport().set_input_as_handled()
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 				_assign_party(event.keycode - KEY_1)
 			KEY_0:
@@ -962,6 +1032,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_resolve_season()
 			KEY_F:
 				_found_settlement()
+			KEY_R:
+				_empezar_a_apuntar()
 			KEY_E:
 				_era = ((_era + 1) % (Site.Era.HISTORICA + 1)) as Site.Era
 				_refresh_sites()
@@ -970,11 +1042,36 @@ func _unhandled_input(event: InputEvent) -> void:
 				_update_info()
 
 
+## Lo que distingue la malla regional de una época de la de otra, para su caché.
+static func sufijo_de_la_cache(mar: float) -> String:
+	return "_mar%d_lomas%x" % [roundi(mar), RelieveDeLaPlataforma.huella() & 0xffffff]
+
+
+## Lo que se pasa como `ceder` al generar: mueve la barra por tiempo, y cambia de las
+## alturas a la malla cuando el terreno empieza la malla.
+func _ceder_al_generar() -> void:
+	if terrain.generando_la_malla and Carga.texto() == String(ETAPAS[1][0]):
+		Carga.siguiente()
+	await Carga.ceder_y_avanzar()
+
+
 func _setup_terrain() -> void:
-	var data := load(heightmap_path) as HeightmapData
+	var data := await Carga.cargar(heightmap_path) as HeightmapData
 	if data == null:
 		push_error("RegionMap: no se pudo cargar " + heightmap_path)
 		return
+	# Una copia con lomas y cerros sobre la plataforma: el fondo del relieve sale
+	# liso. La misma que hornea las máscaras. Ver [RelieveDeLaPlataforma].
+	data = data.duplicate() as HeightmapData
+	# CON EL MAR QUE ESTE MAPA VA A DIBUJAR, que es el de la partida si la hay y el
+	# de hoy si no: el relieve entra sólo donde ya hay tierra con ese mar, así que
+	# la costa no se mueve. Sin partida —una sonda, el mapa abierto a secas— el mar
+	# está a cero y la plataforma sigue siendo fondo marino; aplicarle el relieve
+	# del Paleolítico la sacaba entera del agua (visto en `RegionCaptura`,
+	# 2026-09-14). Cambiar de época con la tecla E no rehace el relieve: el de la
+	# plataforma es el de la época con la que se montó el mapa.
+	RelieveDeLaPlataforma.aplicar(data,
+		GameState.sea_level_m if GameState.home != null else 0.0)
 
 	print("Relieve: ", data.describe())
 
@@ -982,6 +1079,12 @@ func _setup_terrain() -> void:
 	terrain.name = "RegionTerrain"
 	terrain.height_source = TerrainGenerator.HeightSource.HEIGHTMAP
 	terrain.heightmap = data
+	# LA CACHÉ, POR EL RELIEVE DE ORIGEN Y NO POR LA COPIA: la copia no tiene ruta y la
+	# malla se rehacía en cada viaje. Con el mar y las lomas en el nombre, porque las
+	# dos cambian la copia. INTERFAZ §9, tarea 7.
+	terrain.origen_de_la_cache = heightmap_path
+	terrain.sufijo_de_la_cache = sufijo_de_la_cache(
+		GameState.sea_level_m if GameState.home != null else 0.0)
 	terrain.meters_per_unit = meters_per_unit
 	terrain.vertical_exaggeration = vertical_exaggeration
 	terrain.resolution = resolution
@@ -1093,12 +1196,18 @@ func _setup_ui() -> void:
 	desplaza.custom_minimum_size = Vector2(ANCHO_DE_LA_FICHA, 0)
 	desplaza.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail_panel.add_child(desplaza)
+	var columna := VBoxContainer.new()
+	desplaza.add_child(columna)
 	_detail = Label.new()
 	_detail.text = "Click en un emplazamiento para verlo"
 	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail.custom_minimum_size = Vector2(ANCHO_DE_LA_FICHA - 16, 0)
 	_detail.add_theme_font_size_override("font_size", LETRA)
-	desplaza.add_child(_detail)
+	columna.add_child(_detail)
+	# Debajo de la ficha, entrar en las cuevas que ha explorado el campamento de ese
+	# sitio. Ver [cuevas_para_entrar].
+	_entradas = VBoxContainer.new()
+	columna.add_child(_entradas)
 
 	# El detalle de la banda vive en el mapa LOCAL, que es donde esta la gente.
 	# Aqui solo se resume: esta capa es de estrategia.
@@ -1124,12 +1233,13 @@ func _setup_ui() -> void:
 	add_child(overlay)
 
 
-## El botón de retomar la partida guardada, si la hay.
+## El botón de volver al valle donde está la banda, si hay alguno.
 ##
-## No sale si no hay nada que retomar, y no sale nunca como «cargar partida» de
-## menú: hay UN guardado, es automático, y lo que se ofrece es volver al
-## asentamiento donde se dejó la banda. Ver [Guardado] y EPOCA_01 §10.1,
-## tanda 3, frente 15.
+## **No es «cargar partida»**, y desde que existe el menú principal —2026-09-13,
+## INTERFAZ §7— hay que distinguirlo bien: cargar una partida es abrir otra
+## historia, y esto es entrar en un valle de LA PARTIDA QUE SE ESTÁ JUGANDO,
+## donde la banda se quedó. Ver [Guardado], [Partidas] y EPOCA_01 §10.1, tanda
+## 3, frente 15.
 func _boton_de_retomar(canvas: CanvasLayer) -> void:
 	var guardado := Guardado.leer()
 	if guardado.is_empty():
@@ -1143,7 +1253,10 @@ func _boton_de_retomar(canvas: CanvasLayer) -> void:
 	var caja := VBoxContainer.new()
 	margin.add_child(caja)
 	var boton := Button.new()
-	boton.text = "Volver con la banda (jornada %d)" % int(guardado.get("jornada", 0))
+	boton.text = "Entrar donde está la banda (jornada %d)" \
+		% int(guardado.get("jornada", 0))
+	boton.tooltip_text = ("Vuelve al valle donde se quedó la banda de esta "
+		+ "partida. Para abrir otra partida, ESC → Cargar.")
 	boton.pressed.connect(_retomar)
 	caja.add_child(boton)
 
@@ -1156,30 +1269,49 @@ func _boton_de_retomar(canvas: CanvasLayer) -> void:
 					nombres[site.id] = site.display_name()
 	var estado := Label.new()
 	estado.text = "\n".join(panel_de_la_banda(Guardado.cabeceras(),
-		Guardado.ultimo_sitio(), nombres))
+		Guardado.sitio_de_la_banda(), nombres))
 	estado.add_theme_font_size_override("font_size", LETRA)
 	caja.add_child(estado)
 
 
 ## Retoma el último mapa jugado. Es lo que hace el botón.
 func _retomar() -> void:
-	_retomar_en(Guardado.ultimo_sitio())
+	_retomar_en(Guardado.sitio_de_la_banda())
+
+
+## Entra en un campamento que la partida lleva viva: el traspaso, del campamento.
+## La escena lo adopta en vez de montarlo. Ver [DemoMain._montar_el_campamento].
+func _entrar_en_el_campamento(campamento: Campamento) -> void:
+	if _founding:
+		return
+	_founding = true
+	Campamentos.traspaso_de(campamento)
+	print("RegionMap: se entra en el campamento de %s" % campamento.nombre())
+	Carga.abrir(get_tree(), "Volviendo a %s" % campamento.nombre())
+	Carga.cambiar_de_escena(get_tree(), Expedition.LOCAL_SCENE)
 
 
 ## Entra en un mapa con estado guardado: deja el traspaso como estaba y entra.
 func _retomar_en(sitio: int) -> void:
 	if _founding or sitio < 0:
 		return
-	var guardado := Guardado.leer(sitio)
-	if guardado.is_empty() or _site_set == null:
-		return
-	if not Guardado.preparar_la_escena(guardado, _site_set):
-		print("RegionMap: la partida guardada apunta a un emplazamiento que no está")
-		return
 	_founding = true
+	# La pantalla antes que leer lo guardado, que también es del cuadro del clic. Ver
+	# [MenuPrincipal._cargar].
+	Carga.abrir(get_tree(), "Volviendo al valle")
+	await get_tree().process_frame
+	Expedition.visita = false
+	var guardado := Guardado.leer(sitio)
+	if guardado.is_empty() or _site_set == null \
+			or not Guardado.preparar_la_escena(guardado, _site_set):
+		if not guardado.is_empty():
+			print("RegionMap: la partida guardada apunta a un emplazamiento que no está")
+		_founding = false
+		Carga.cerrar()
+		return
 	Expedition.retomando = true
 	print("RegionMap: se retoma la partida en %s" % Expedition.site.display_name())
-	get_tree().change_scene_to_file(Expedition.LOCAL_SCENE)
+	Carga.cambiar_de_escena(get_tree(), Expedition.LOCAL_SCENE)
 
 
 ## Leyenda de tipos de emplazamiento, con el recuento de la epoca en curso
@@ -1288,90 +1420,9 @@ func _update_info() -> void:
 		"",
 		"click       seleccionar emplazamiento",
 		"F           entrar al mapa seleccionado",
+		"R           mandar una expedición hacia un rumbo",
 		"WASD mover · click derecho rotar · rueda zoom · F3 rendimiento",
 	])
-
-
-## Pone al dia el contorno: la resolucion del relieve y los cauces.
-##
-## Son DOS cosas independientes y con precios muy distintos. Rehacer el MDT es
-## una descarga larga; traer la hidrografia de OSM es corta. Si se comprueban
-## juntas, un contorno que solo le falta el agua paga la descarga entera del
-## relieve para nada, y peor: si el IGN falla, se queda tambien sin rios.
-func _refresh_surround_if_coarse(local: HeightmapData) -> void:
-	if local == null:
-		return
-
-	var path := "res://data/dem/local/site_%d_surround.res" % _selected.id
-	if not ResourceLoader.exists(path):
-		return
-
-	var surround: HeightmapData = load(path)
-	if surround == null:
-		return
-
-	# Con un 10% de margen: no merece la pena una descarga de minutos por una
-	# diferencia de decimales
-	var coarse := surround.meters_per_sample > surround_meters * 1.1
-	var dry := surround.river_mask.is_empty()
-	if not coarse and not dry:
-		return
-
-	if coarse and use_ign_elevation:
-		_detail.text = "Mejorando el relieve de alrededor...
-" 			+ "MDT del IGN a %.0f m para 12 km de lado: esto tarda." % surround_meters
-		await get_tree().process_frame
-		await get_tree().process_frame
-
-		var span_lat := local.lat_north - local.lat_south
-		var span_lon := local.lon_east - local.lon_west
-		var started := Time.get_ticks_msec()
-		var finer: HeightmapData = IGNImporter.new().import_area(
-			local.lat_north + span_lat, local.lat_south - span_lat,
-			local.lon_west - span_lon, local.lon_east + span_lon, surround_meters)
-
-		if finer != null:
-			surround = finer
-			dry = true  # el MDT nuevo viene seco: hay que volver a pintarle el agua
-			print("RegionMap: contorno rehecho en %d ms, %d x %d a %.1f m" % [
-				Time.get_ticks_msec() - started, surround.width, surround.height,
-				surround.meters_per_sample])
-		else:
-			print("RegionMap: el IGN no ha respondido, se queda el relieve que habia")
-
-	if dry:
-		_detail.text = "Trazando los rios de alrededor..."
-		await get_tree().process_frame
-		_apply_surround_water(surround)
-
-	surround.pipeline_version = LOCAL_PIPELINE_VERSION
-	ResourceSaver.save(surround, path)
-
-
-## Mete los cauces de OSM en el MDT del contorno.
-##
-## El agua tiene que CONTINUAR fuera del recuadro. Sin esto el Nansa llegaba
-## al borde y se cortaba en seco contra la casilla de al lado, que es lo que
-## mas delata que el mapa se acaba ahi: un rio que se acaba en una raya recta
-## no existe en ninguna parte.
-##
-## Es la misma llamada que se hace para el recuadro jugable, sobre el bloque
-## de 3x3. Si Overpass no responde, el contorno se queda seco y ya esta: es un
-## fallo feo pero no rompe nada.
-func _apply_surround_water(surround: HeightmapData) -> void:
-	var hidro := OSMWays.new().fetch_water(
-		surround.lat_north, surround.lat_south,
-		surround.lon_west, surround.lon_east)
-	var canales: Array = hidro.get("channels", [])
-	var laminas: Array = hidro.get("bodies", [])
-
-	if canales.is_empty() and laminas.is_empty():
-		print("RegionMap: sin hidrografia para el contorno, se queda seco")
-		return
-
-	Hydrography.apply(surround, canales, laminas)
-	print("RegionMap: %d cauces y %d laminas en el contorno"
-		% [canales.size(), laminas.size()])
 
 
 ## Pone la mascara del territorio de la epoca en curso.
@@ -1380,7 +1431,7 @@ func _apply_surround_water(surround: HeightmapData) -> void:
 ## al cambiar de epoca, y justo despues de generar el terreno. Generar monta el
 ## material desde cero y lo deja con la frontera administrativa de hoy, que
 ## deja fuera -y por tanto gris- toda la plataforma emergida.
-func _apply_era_mask() -> void:
+func _apply_era_mask(ceder: Callable = Callable()) -> void:
 	if terrain == null:
 		return
 	if _eras == null:
@@ -1391,7 +1442,7 @@ func _apply_era_mask() -> void:
 	var index := maxi(_era_index, 0)
 	var texture := _eras.mask_texture(index)
 	terrain.set_region_mask_texture(texture)
-	_show_border(index)
+	await _show_border(index, ceder)
 
 	# Se dice en voz alta porque una mascara que no cubre lo que deberia NO
 	# se ve como un fallo: se ve como que el terreno esta mal pintado, y uno

@@ -1191,3 +1191,23 @@ func test_el_suelo_es_de_un_kilometro() -> void:
 		"justo en el kilómetro, vale")
 	assert_false(sim.marcha.rodeo_aceptable(300.0, Marcha.SIEMPRE_SE_ANDA + 10.0),
 		"y pasado, vuelve a mandar la proporción: 1 010 m para 300 no compensa")
+
+
+# ----------------------- la rejilla con pasarelas (depurar, 2026-09-13) --
+#
+# Cuelgue del usuario en el día 350: la consola repetía «Navegacion: 103 x 103
+# celdas · 1004 ms» sin parar. `Marcha._navgrid` encargaba las rejillas SIN la
+# versión de las pasarelas, así que el horno las apuntaba como versión 0; con
+# una pasarela levantada, `sirven` decía que no en cada consulta y se rehacía
+# la rejilla entera —un segundo— cada vez que alguien pedía un camino.
+
+func test_con_una_pasarela_levantada_la_rejilla_no_se_rehace_en_cada_consulta() -> void:
+	var sim := SettlementSim.new()
+	sim._terrain = FakeTerrain.new()
+	sim.pasarelas.version = 1
+	var primera := sim.navgrid()
+	assert_true(primera != null, "hay rejilla")
+	assert_true(sim.horno.sirven(sim.has_boat, sim.pasarelas.version),
+		"el horno sabe que la tiene hecha con esta pasarela")
+	assert_true(sim.navgrid() == primera,
+		"y la segunda consulta devuelve la misma, sin volver a hornear")

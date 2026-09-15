@@ -29,17 +29,85 @@ func _init() -> void:
 	var malas := 0
 	for fachada: String in FACHADAS:
 		malas += _revisar(fachada, FACHADAS[fachada])
+		malas += _revisar_pasamanos(fachada, FACHADAS[fachada])
 	print("")
 	print("llamadas huerfanas: %d" % malas)
 	quit(1 if malas > 0 else 0)
 
 
-func _revisar(fachada: String, clases: Array) -> int:
-	# Con que NOMBRE guarda la fachada cada clase: `var nasas_line: Nasas`, no
-	# «nasas». Adivinarlo del nombre de la clase daba falsos positivos.
+## El otro fallo, y el que se escapaba: la fachada llama a un metodo que YA NO
+## EXISTE en la clase de detras.
+##
+## [_revisar] mira que una llamada vaya por el campo bueno, pero arma su lista
+## con los metodos que EXISTEN; si el metodo desaparece, no hay nada que mirar y
+## la herramienta dice cero. Asi se colo el 2026-09-14 borrar
+## `PanelTrabajos._materials_of` -iba pegado, sin linea en blanco, al
+## `_speciality_picker` muerto que se estaba quitando-: compilaba, la suite
+## seguia verde, y la ventana de Territorio reventaba al abrirla porque
+## `GameUI._materials_of` seguia pasandole la pelota.
+##
+## Se mira SOLO dentro de la fachada, que es donde viven los pasamanos: buscar
+## `campo.metodo` por todo el repositorio daria falsos por los nombres comunes.
+func _revisar_pasamanos(fachada: String, clases: Array) -> int:
+	var campo := _campos(fachada, clases)
+	var malas := 0
+	for clase: String in campo:
+		var nombre_del_campo: String = campo[clase]
+		var fichero := _fichero_de(clase)
+		if fichero.is_empty():
+			print("  %s  no se encuentra el fichero de %s" % [fachada, clase])
+			malas += 1
+			continue
+		var suyos: Dictionary = {}
+		for nombre: String in _metodos(fichero):
+			suyos[nombre] = true
+		for nombre: String in _variables(fichero):
+			suyos[nombre] = true
+		var linea := 0
+		for fila: String in _leer(fachada).split("\n"):
+			linea += 1
+			if fila.strip_edges().begins_with("#"):
+				continue
+			for pedido: String in _pedidos_a(_sin_cadenas(fila), nombre_del_campo):
+				if suyos.has(pedido):
+					continue
+				print("  %s:%d  «%s.%s» no existe en %s" % [
+					fachada, linea, nombre_del_campo, pedido, clase])
+				malas += 1
+	return malas
+
+
+## Que se le pide a `campo` en esta linea: los nombres de `campo.loquesea`.
+func _pedidos_a(fila: String, campo: String) -> Array[String]:
+	var pedidos: Array[String] = []
+	var desde := 0
+	while true:
+		var i := fila.find(campo + ".", desde)
+		if i < 0:
+			break
+		desde = i + campo.length() + 1
+		# Que sea el campo entero y no el final de otro nombre: `_trabajos` si,
+		# `mis_trabajos` no.
+		if i > 0 and _de_nombre(fila[i - 1]):
+			continue
+		var j := desde
+		while j < fila.length() and _de_nombre(fila[j]):
+			j += 1
+		if j > desde:
+			pedidos.append(fila.substr(desde, j - desde))
+	return pedidos
+
+
+func _de_nombre(c: String) -> bool:
+	return c == "_" or (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") \
+		or (c >= "0" and c <= "9")
+
+
+## Con que NOMBRE guarda la fachada cada clase: `var nasas_line: Nasas`, no
+## «nasas». Adivinarlo del nombre de la clase daba falsos positivos.
+func _campos(fachada: String, clases: Array) -> Dictionary:
 	var campo: Dictionary = {}
-	for fila: String in _leer(fachada).split("
-"):
+	for fila: String in _leer(fachada).split("\n"):
 		if not fila.begins_with("var "):
 			continue
 		var partes := fila.trim_prefix("var ").split(":")
@@ -48,6 +116,11 @@ func _revisar(fachada: String, clases: Array) -> int:
 		var tipo := partes[1].strip_edges().split(" ")[0].split("=")[0].strip_edges()
 		if clases.has(tipo):
 			campo[tipo] = partes[0].strip_edges()
+	return campo
+
+
+func _revisar(fachada: String, clases: Array) -> int:
+	var campo := _campos(fachada, clases)
 
 	var mudados: Dictionary = {}
 	# De quién es cada nombre, para no llamar huérfana a una ESTÁTICA pedida por
@@ -56,7 +129,7 @@ func _revisar(fachada: String, clases: Array) -> int:
 	# 2026-09-13, con la tanda 3.
 	var dueno: Dictionary = {}
 	for clase: String in clases:
-		var ruta := fachada.get_base_dir().path_join(clase + ".gd")
+		var ruta := _fichero_de(clase)
 		for nombre: String in _metodos(ruta):
 			mudados[nombre] = campo.get(clase, clase.to_lower())
 			dueno[nombre] = clase
@@ -176,7 +249,10 @@ func _leer(ruta: String) -> String:
 	var f := FileAccess.open(ruta, FileAccess.READ)
 	if f == null:
 		return ""
-	var s := f.get_as_text()
+	# Sin retornos de carro: con ficheros en CRLF y en LF mezclados, un `split` por salto
+	# de línea dejaba un fichero entero en una sola línea y sus variables sin ver —cinco
+	# falsas huérfanas en `Marcha` el 2026-09-15, al pasarla a LF—.
+	var s := f.get_as_text().replace("", "")
 	f.close()
 	return s
 
@@ -185,6 +261,25 @@ func _scripts() -> Array[String]:
 	var out: Array[String] = []
 	_barrer("res://scripts", out)
 	return out
+
+
+## Donde vive de verdad el fichero de una clase.
+##
+## Se adivinaba colgandolo de la carpeta de la fachada
+## (`fachada.get_base_dir()/Clase.gd`), y eso es cierto para casi todas pero no
+## para [Minimapa], que esta en `scripts/vista/` mientras su fachada `DemoMain`
+## esta en `scripts/`. La ruta adivinada no existia, `_metodos` devolvia vacio y
+## la herramienta llevaba desde siempre **sin mirar una sola llamada de
+## Minimapa** diciendo cero. Visto el 2026-09-14 al anadir [_revisar_pasamanos],
+## que la delato con siete falsos positivos.
+func _fichero_de(clase: String) -> String:
+	if _donde.is_empty():
+		for ruta: String in _scripts():
+			_donde[ruta.get_file().trim_suffix(".gd")] = ruta
+	return String(_donde.get(clase, ""))
+
+
+var _donde: Dictionary = {}
 
 
 func _barrer(carpeta: String, out: Array[String]) -> void:

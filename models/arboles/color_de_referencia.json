@@ -1,0 +1,200 @@
+{
+ "pino.copa.verano": {
+  "lab": [
+   46.066558837890625,
+   -11.34182357788086,
+   19.276397705078125
+  ],
+  "fraccion_util": 0.7004315581611036,
+  "recorte": [
+   0.28,
+   0.08,
+   0.82,
+   0.52
+  ],
+  "titulo": "File:Pinus sylvestris Scots Pine at Stansted Mountfitchet, Essex, England 3.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Pinus_sylvestris_Scots_Pine_at_Stansted_Mountfitchet,_Essex,_England_3.jpg",
+  "licencia": "CC BY-SA 4.0",
+  "autor": "Acabashi"
+ },
+ "pino.corteza": {
+  "lab": [
+   41.68397903442383,
+   18.0335636138916,
+   18.940507888793945
+  ],
+  "fraccion_util": 0.9945386904761905,
+  "recorte": [
+   0.3,
+   0.15,
+   0.7,
+   0.85
+  ],
+  "titulo": "File:Pinus sylvestris bark 2012-05-18.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Pinus_sylvestris_bark_2012-05-18.jpg",
+  "licencia": "CC BY-SA 2.0",
+  "autor": "Rudolf Schäfer"
+ },
+ "abedul.copa.verano": {
+  "lab": [
+   52.57080078125,
+   -14.374211311340332,
+   32.51261520385742
+  ],
+  "fraccion_util": 0.8711037969393004,
+  "recorte": [
+   0.05,
+   0.05,
+   0.95,
+   0.95
+  ],
+  "titulo": "File:Efremov - 2025 - Betula pendula crown.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Efremov_-_2025_-_Betula_pendula_crown.jpg",
+  "licencia": "CC BY 4.0",
+  "autor": "Юрий Д.К."
+ },
+ "abedul.copa.otono": {
+  "lab": [
+   59.7450065612793,
+   2.218980550765991,
+   32.47529983520508
+  ],
+  "fraccion_util": 0.9798280423280423,
+  "recorte": [
+   0.45,
+   0.2,
+   0.8,
+   0.5
+  ],
+  "titulo": "File:Betula pendula (fall colors).jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Betula_pendula_(fall_colors).jpg",
+  "licencia": "CC BY-SA 3.0",
+  "autor": "Le.Loup.Gris"
+ },
+ "abedul.corteza": {
+  "lab": [
+   71.16382598876953,
+   0.28133976459503174,
+   0.121255062520504
+  ],
+  "fraccion_util": 0.99868805239899,
+  "recorte": [
+   0.2,
+   0.0,
+   0.8,
+   0.55
+  ],
+  "titulo": "File:Betula pendula bark TK 2023-04-16 1.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Betula_pendula_bark_TK_2023-04-16_1.jpg",
+  "licencia": "CC BY-SA 4.0",
+  "autor": "T. Kebert"
+ },
+ "roble.copa.verano": {
+  "lab": [
+   46.96436309814453,
+   -12.900047302246094,
+   31.954051971435547
+  ],
+  "fraccion_util": 0.8577060931899642,
+  "recorte": [
+   0.05,
+   0.3,
+   0.3,
+   0.55
+  ],
+  "titulo": "File:Pferdekopfeiche, Ivenack, NW view.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Pferdekopfeiche,_Ivenack,_NW_view.jpg",
+  "licencia": "CC BY-SA 4.0",
+  "autor": "Radomianin"
+ },
+ "roble.copa.otono": {
+  "lab": [
+   57.46279525756836,
+   8.295929908752441,
+   54.19683837890625
+  ],
+  "fraccion_util": 0.9981640625,
+  "recorte": [
+   0.0,
+   0.0,
+   1.0,
+   1.0
+  ],
+  "titulo": "File:Autumn English Oak (Quercus robur) leaves (26092351292).jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Autumn_English_Oak_(Quercus_robur)_leaves_(26092351292).jpg",
+  "licencia": "CC BY-SA 2.0",
+  "autor": "AnemoneProjectors (talk)"
+ },
+ "roble.corteza": {
+  "lab": [
+   43.04550552368164,
+   3.671241283416748,
+   10.32424259185791
+  ],
+  "fraccion_util": 0.8952229817708334,
+  "recorte": [
+   0.2,
+   0.1,
+   0.8,
+   0.9
+  ],
+  "titulo": "File:Oak tree Quercus robur bark at High Beach, Essex, England.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Oak_tree_Quercus_robur_bark_at_High_Beach,_Essex,_England.jpg",
+  "licencia": "CC BY-SA 4.0",
+  "autor": "Acabashi"
+ },
+ "avellano.copa.verano": {
+  "lab": [
+   48.90024185180664,
+   -27.52113151550293,
+   33.533729553222656
+  ],
+  "fraccion_util": 0.9481965625756476,
+  "recorte": [
+   0.1,
+   0.3,
+   0.95,
+   0.75
+  ],
+  "titulo": "File:Corylus avellana shrub.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Corylus_avellana_shrub.jpg",
+  "licencia": "CC BY-SA 3.0",
+  "autor": "MPF"
+ },
+ "avellano.copa.otono": {
+  "lab": [
+   49.108394622802734,
+   1.7518011331558228,
+   46.628971099853516
+  ],
+  "fraccion_util": 0.9972395833333333,
+  "recorte": [
+   0.0,
+   0.0,
+   1.0,
+   1.0
+  ],
+  "titulo": "File:20171114Corylus avellana2.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:20171114Corylus_avellana2.jpg",
+  "licencia": "CC0",
+  "autor": "AnRo0002"
+ },
+ "avellano.corteza": {
+  "lab": [
+   33.84817886352539,
+   2.9678492546081543,
+   3.993225336074829
+  ],
+  "fraccion_util": 0.9760945638020834,
+  "recorte": [
+   0.3,
+   0.1,
+   0.75,
+   0.9
+  ],
+  "titulo": "File:Corylus avellana bark.jpg",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Corylus_avellana_bark.jpg",
+  "licencia": "CC BY-SA 4.0",
+  "autor": "MurielBendel"
+ }
+}

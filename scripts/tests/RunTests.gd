@@ -20,6 +20,11 @@ func _init() -> void:
 		TestStorehouse.new(),
 		TestToolkit.new(),
 		TestTaller.new(),
+		TestPrioridades.new(),
+		TestColaDelTaller.new(),
+		TestReloj.new(),
+		TestCalculo.new(),
+		TestViaje.new(),
 		TestCampProjects.new(),
 		TestChronicle.new(),
 		TestJobPool.new(),
@@ -32,6 +37,10 @@ func _init() -> void:
 		TestNoche.new(),
 		TestTermometro.new(),
 		TestNiebla.new(),
+		TestNieblaRegional.new(),
+		TestConfiguracion.new(),
+		TestRepintado.new(),
+		TestCarga.new(),
 		TestContacto.new(),
 		TestExpedicion.new(),
 		TestPractica.new(),
@@ -39,6 +48,7 @@ func _init() -> void:
 		TestHerido.new(),
 		TestPasarela.new(),
 		TestGuardado.new(),
+		TestPartida.new(),
 		TestPanelTrabajos.new(),
 		TestAbrigo.new(),
 		TestBocas.new(),
@@ -47,6 +57,9 @@ func _init() -> void:
 		TestSepulturas.new(),
 		TestTruequeYRelaciones.new(),
 		TestFrontera.new(),
+		TestAlfiler.new(),
+		TestConchero.new(),
+		TestMinimapa.new(),
 		TestMapaRegional.new(),
 		TestTraslado.new(),
 		TestTextos.new(),
@@ -64,6 +77,7 @@ func _init() -> void:
 		TestLobo.new(),
 		TestCaceria.new(),
 		TestRelato.new(),
+		TestPared.new(),
 		TestIntercambio.new(),
 		TestInstantanea.new(),
 		(load("res://scripts/tests/TestTechMilestones.gd") as GDScript).new(),
@@ -74,7 +88,13 @@ func _init() -> void:
 	var checks := 0
 	var failures: Array[String] = []
 
+	# SOLO=Pared corre sólo esa suite, para iterar sin pagar las cinco minutos de
+	# la entera (2026-09-15). **El total que hace de suelo es siempre el de la suite
+	# entera, sin SOLO**: con el filtro, la cifra final no se compara con nada.
+	var solo := OS.get_environment("SOLO")
 	for suite: TestCase in suites:
+		if not solo.is_empty() and suite.suite_name() != solo:
+			continue
 		var result := suite.run()
 		passed += result[0]
 		failed += result[1]

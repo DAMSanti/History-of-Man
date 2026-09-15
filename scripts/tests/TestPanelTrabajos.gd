@@ -19,7 +19,7 @@ func _sim(cuantos: int = 6) -> SettlementSim:
 	sim.chronicle = Chronicle.new()
 	sim.store = Storehouse.new()
 	sim.store.add(Materia.Kind.CARNE_SECA, 400.0)
-	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
 	sim.day = 20
 	for i in range(cuantos):
@@ -39,7 +39,7 @@ func test_sin_nadie_fuera_la_lista_esta_vacia() -> void:
 
 func test_los_de_la_expedicion_salen_con_el_dia_de_vuelta() -> void:
 	var sim := _sim()
-	assert_true(sim.expedicion.mandar(3, 1000), "sale la expedición")
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale la expedición")
 	var fuera := PanelTrabajos.ausentes(sim)
 	assert_eq(fuera.size(), 3, "los tres que se fueron")
 	for uno: Dictionary in fuera:
@@ -62,7 +62,7 @@ func test_el_herido_sale_con_el_dia_en_que_se_cura() -> void:
 
 func test_quien_anda_hacia_el_borde_se_distingue_del_que_ya_esta_fuera() -> void:
 	var sim := _sim()
-	sim.expedicion.mandar(3, 1000)
+	sim.expedicion.mandar(3, 90.0)
 	var yendo: Dictionary = PanelTrabajos.ausentes(sim)[0]
 	assert_true(String(yendo["donde"]).contains("camino"),
 		"mientras anda, va de camino: %s" % str(yendo["donde"]))
@@ -107,3 +107,73 @@ func test_un_oficio_sin_rama_lo_dice() -> void:
 	sim.techs = TechTree.new()
 	var linea := PanelOficios.jornadas_de(sim, Profession.Job.HOGAR)
 	assert_true(linea.length() > 0, "algo dice")
+
+
+# --- lo que el usuario vio el 2026-09-14 ------------------------------------------
+
+func _textos(nodo: Node) -> Array[String]:
+	var salida: Array[String] = []
+	if nodo is Label:
+		salida.append((nodo as Label).text)
+	elif nodo is Button:
+		salida.append((nodo as Button).text)
+	for hijo: Node in nodo.get_children():
+		salida.append_array(_textos(hijo))
+	return salida
+
+
+func test_la_ventana_de_trabajos_ensena_las_prioridades_de_caza() -> void:
+	# «No veo dónde marcar las prioridades de caza»: las filas existían, pero
+	# dentro de una función a la que no llamaba nadie.
+	var sim := _sim()
+	var ui := GameUI.new()
+	ui.sim = sim
+	ui.show_jobs()
+	var textos := _textos(ui._windows["trabajos"])
+	var presas := 0
+	for species: String in Fauna.SPECIES:
+		for texto: String in textos:
+			if texto.begins_with(Fauna.species_name(species)):
+				presas += 1
+				break
+	ui.free()
+	sim.free()
+	assert_eq(presas, Fauna.SPECIES.size(), "una fila por especie, con su nivel")
+
+
+func test_limpiar_una_ventana_la_deja_vacia_en_el_momento() -> void:
+	# «Al añadir un trabajador aparece un segundo una línea arriba de la ventana»:
+	# al rehacerla, los hijos viejos seguían ahí hasta el final del fotograma y
+	# `_heading` ponía un separador delante del primer rótulo. Lo quitaba el
+	# repintado del segundo siguiente.
+	var ui := GameUI.new()
+	var body := VBoxContainer.new()
+	body.add_child(Label.new())
+	body.add_child(Label.new())
+	ui._clear(body)
+	var quedan := body.get_child_count()
+	ui._heading(body, "")
+	var separadores := 0
+	for hijo: Node in body.get_children():
+		if hijo is HSeparator:
+			separadores += 1
+	body.free()
+	ui.free()
+	assert_eq(quedan, 0, "limpia, no queda nadie")
+	assert_eq(separadores, 0, "y el primer rótulo no lleva separador encima")
+
+
+func test_cada_boton_de_la_barra_abre_su_ventana() -> void:
+	# «La ventana del taller no muestra nada»: el botón existía y `_toggle` no
+	# tenía su caso. Se prueban todos, que es lo que habría cazado ése.
+	var sim := _sim()
+	var ui := GameUI.new()
+	ui.sim = sim
+	var sin_ventana: Array[String] = []
+	for entrada: Array in GameUI.BOTONES_DE_LA_BARRA:
+		ui._toggle(String(entrada[0]))
+		if not ui._windows.has(String(entrada[0])):
+			sin_ventana.append(String(entrada[0]))
+	ui.free()
+	sim.free()
+	assert_eq(sin_ventana.size(), 0, "botones que no abren nada: %s" % str(sin_ventana))

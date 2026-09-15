@@ -68,3 +68,7 @@ models/people/
 # La fauna: los FBX/GLB de origen (CC0, Quaternius/gobkit) y la textura de
 # vertice horneada por scripts/tools/FaunaAtlas.gd. Mismo motivo.
 models/animals/
+
+# Generador de árboles (GRAFICOS §7.1): dependencias y geometría intermedia
+scripts/tools/arboles/node_modules/
+scripts/tools/arboles/salida/

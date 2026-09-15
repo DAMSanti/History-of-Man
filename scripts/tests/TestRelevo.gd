@@ -817,6 +817,10 @@ func test_revisar_vejez_con_muchos_ancianos_muere_alguno_pero_no_todos() -> void
 func test_revisar_vejez_forzado_muere_en_un_horizonte_razonable() -> void:
 	var people := _banda(1)
 	people[0].age_years = Relevo.OLD_AGE_RISK_MAX_AGE
+	# Mujer a propósito: desde el 2026-09-13 la crónica concuerda en género
+	# —«murió de vieja» o «de viejo»— y con una banda al azar esto salía cara o
+	# cruz.
+	people[0].sex = Inhabitant.Sex.MUJER
 	var sim := _sim(people)
 	sim._rng.seed = 3
 

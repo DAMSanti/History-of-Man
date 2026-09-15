@@ -1,0 +1,27 @@
+{
+ "pino": {
+  "hoja": "https://ambientcg.com/view?id=LeafSet019",
+  "corteza": "https://ambientcg.com/view?id=Bark014",
+  "licencia": "CC0 1.0"
+ },
+ "pino_joven": {
+  "hoja": "https://ambientcg.com/view?id=LeafSet019",
+  "corteza": "https://ambientcg.com/view?id=Bark014",
+  "licencia": "CC0 1.0"
+ },
+ "abedul": {
+  "hoja": "https://ambientcg.com/view?id=LeafSet004",
+  "corteza": "https://ambientcg.com/view?id=Bark009",
+  "licencia": "CC0 1.0"
+ },
+ "roble": {
+  "hoja": "https://ambientcg.com/view?id=LeafSet016",
+  "corteza": "https://ambientcg.com/view?id=Bark001",
+  "licencia": "CC0 1.0"
+ },
+ "avellano": {
+  "hoja": "https://ambientcg.com/view?id=LeafSet024",
+  "corteza": "https://ambientcg.com/view?id=Bark004",
+  "licencia": "CC0 1.0"
+ }
+}

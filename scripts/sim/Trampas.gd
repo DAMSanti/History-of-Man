@@ -86,7 +86,7 @@ func known_traps() -> Array[int]:
 ## Se mira que de verdad coja algo de lo que anda por este punto: poner un
 ## foso donde solo hay perdices es tirar seis de leña.
 func _trap_to_set(point: Vector3) -> int:
-	var here := Fauna.species_at(point, GameState.season as Subsistence.Season)
+	var here := Fauna.species_at(point, sim.estacion as Subsistence.Season)
 	var fallback := -1
 	for kind: int in known_traps():
 		if not sim.taller._can_afford(Trap.materials(kind as Trap.Kind)):
@@ -174,7 +174,7 @@ func _trapline(person: Inhabitant, hours: float) -> void:
 			var brought: Array[String] = []
 			for _i in range(pieces):
 				var species := trap.quarry_here(
-					GameState.season as Subsistence.Season, sim._rng)
+					sim.estacion as Subsistence.Season, sim._rng)
 				brought.append(Fauna.species_name(species).to_lower())
 				sim._butcher(person, species, 1.0)
 			person.log_deed(person.current_task(),

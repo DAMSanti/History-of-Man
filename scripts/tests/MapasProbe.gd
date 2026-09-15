@@ -53,7 +53,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	if terrain == null or not terrain.has_method("get_terrain_material"):
 		print("sin terreno"); quit(); return
 	var material: ShaderMaterial = terrain.get_terrain_material()
@@ -139,11 +139,3 @@ func _uncompressed(images: Array[Image]) -> Texture2DArray:
 	var array := Texture2DArray.new()
 	array.create_from_images(out)
 	return array
-
-
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
-	return null

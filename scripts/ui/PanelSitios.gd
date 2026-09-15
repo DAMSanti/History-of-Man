@@ -28,6 +28,8 @@ func _init(panel: GameUI) -> void:
 ## se sabe qué hay. Y la ficha nunca es un clic perdido, porque aunque no
 ## mandes nada te dice qué suelo es y si se puede llegar.
 func show_ground(world: Vector3, terrain: TerrainGenerator) -> void:
+	# Cómo rehacerla sola: ver [GameUI.recordar].
+	ui.recordar("terreno", show_ground.bind(world, terrain))
 	var body := ui._window("terreno", "El terreno")
 	ui._clear(body)
 	if ui.sim == null or terrain == null:
@@ -197,6 +199,7 @@ func show_paraje(paraje: Paraje) -> void:
 ## dureza y una pregunta —¿la intentamos?—, y hasta ahora esa pregunta la
 ## contestaba la banda sola sin que el jugador pudiera meterse.
 func show_peak(peak: Dictionary) -> void:
+	ui.recordar("cima", show_peak.bind(peak))
 	ui.shown_peak = peak
 	if ui.sim == null or peak.is_empty():
 		return
@@ -650,6 +653,7 @@ func _abundance_word(amount: float) -> String:
 ## ahí, porque saberlo y que exista son cosas distintas.
 func show_resource(kind: Materia.Kind, world: Vector3,
 		activity: Subsistence.Activity) -> void:
+	ui.recordar("recurso", show_resource.bind(kind, world, activity))
 	var body := ui._window("recurso", "Recurso")
 	ui._clear(body)
 
@@ -724,6 +728,9 @@ func show_resource(kind: Materia.Kind, world: Vector3,
 ## sitio al que mudarse. Ver [_actions_for].
 func show_feature(data: Dictionary, world: Vector3, home: Vector3,
 		de_la_banda: bool = false) -> void:
+	# Cómo rehacerla sola, con la cueva que es: tras explorarla, el botón se va
+	# y aparece lo que hay dentro sin cerrar la ficha. Ver [GameUI.recordar].
+	ui.recordar("lugar", show_feature.bind(data, world, home, de_la_banda))
 	var body := ui._window("lugar", "Lugar")
 	ui._clear(body)
 
@@ -772,11 +779,16 @@ func show_feature(data: Dictionary, world: Vector3, home: Vector3,
 	if data.has("cueva") and ui.sim != null:
 		var cueva := int(data["cueva"])
 		if ui.sim.exploracion.explorada(cueva):
-			ui._text(body, "Explorada. %s" % ("Tiene una pared donde se puede pintar."
-				if ui.sim.exploracion.pintable(cueva)
-				else "No tiene pared buena para pintar."), true)
+			ui._heading(body, "POR DENTRO")
+			ui._text(body, ui.sim.exploracion.descripcion(cueva))
+			var testimonio := ui.sim.exploracion.testimonio(cueva)
+			if not testimonio.is_empty():
+				ui._text(body, testimonio, true)
 
-	for entry: Array in _actions_for(feature_class, de_la_banda):
+	var explorada := data.has("cueva") and ui.sim != null \
+		and ui.sim.exploracion.explorada(int(data["cueva"]))
+	var pintable := explorada and ui.sim.exploracion.pintable(int(data["cueva"]))
+	for entry: Array in _actions_for(feature_class, de_la_banda, explorada, pintable):
 		var button := Button.new()
 		button.text = entry[1]
 		button.tooltip_text = entry[2]
@@ -802,6 +814,8 @@ static func por_que_no(accion: String, data: Dictionary, sim: SettlementSim) -> 
 		"ocupar":
 			return sim.traslado.lo_que_falta(int(data["cueva"]),
 				data.get("campa", Vector3.ZERO))
+		"entrar":
+			return sim.pinturas.por_que_no_se_entra(int(data["cueva"]))
 	return ""
 
 
@@ -811,7 +825,16 @@ static func por_que_no(accion: String, data: Dictionary, sim: SettlementSim) -> 
 ## nadie tenga que decirlo, así que el botón pedía algo que ya pasa. Y
 ## «trasladar el campamento aquí» sólo en cuevas que no son la de la banda: en la
 ## suya no hay adónde mudarse.
-static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false) -> Array:
+##
+## Y «explorar el interior» sólo mientras no se ha explorado: desde el 2026-09-13,
+## petición del usuario, una cueva explorada no enseña el botón sino lo que se
+## encontró dentro y el testimonio de quien entró.
+##
+## Y «pintar la pared del fondo» sólo en una cueva explorada con zona pintable:
+## petición del usuario del 2026-09-14. Salía en todas, y si hay pared que sirva
+## es justo lo que se averigua al explorar —ver [Exploracion.pintable]—.
+static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false,
+		explorada: bool = false, pintable: bool = false) -> Array:
 	match feature_class:
 		Site.Feature.ABRIGO:
 			var acciones: Array = []
@@ -820,10 +843,17 @@ static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false)
 					"La banda carga lo que puede, anda hasta aquí y se asienta. "
 					+ "Lo que no cabe se queda en la cueva de ahora, y las obras "
 					+ "hay que volver a levantarlas."])
-			acciones.append(["explorar", "Explorar el interior",
-				"Recorrerla a fondo: puede haber galerías, agua o restos."])
-			acciones.append(["pintar", "Pintar la pared del fondo",
-				"Requiere dominar el fuego y la talla laminar."])
+			if not explorada:
+				acciones.append(["explorar", "Explorar el interior",
+					"Recorrerla a fondo: puede haber galerías, agua o restos."])
+			if explorada and pintable:
+				acciones.append(["pintar", "Pintar la pared del fondo",
+					"Requiere dominar el fuego y la talla laminar."])
+			# ENTRAR A MIRAR, en toda cueva: explorada se entra, y sin explorar el
+			# botón sale apagado con el motivo —«la ficha dice por qué», SISTEMAS §13—.
+			# No pide la técnica: decisión del usuario del 2026-09-15.
+			acciones.append(["entrar", "Entrar a mirar la pared",
+				"Ver lo que hay pintado al fondo, a la luz de la lámpara."])
 			return acciones
 		Site.Feature.SURGENCIA:
 			return [["explorar", "Reconocer el manantial",

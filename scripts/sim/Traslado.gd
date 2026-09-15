@@ -272,6 +272,9 @@ func _asentarse() -> void:
 	sim.home_position = _boca
 	sim.home_inside = _dentro
 	sim.home_forecourt = _campa
+	# Lo pintado sin cueva es de la VIEJA: se fija antes de cambiar cuál es la de la
+	# banda, o saldría en la pared nueva. Ver [Pinturas.fijar_lo_pintado_sin_cueva].
+	sim.pinturas.fijar_lo_pintado_sin_cueva()
 	sim.exploracion.cueva_de_la_banda = nueva
 	sim.marcha.forget_routes()
 	sim.marcha._mapa_de = null

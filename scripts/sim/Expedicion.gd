@@ -1,20 +1,21 @@
 class_name Expedicion
 extends RefCounted
-## La salida larga: se sale del mapa, se tarda jornadas y se vuelve sabiendo
-## más — o no se vuelve sabiendo nada, pero las jornadas se han ido igual.
+## La salida larga: se sale del mapa hacia un rumbo, se tarda jornadas y se vuelve
+## sabiendo más — o no se vuelve sabiendo nada, pero las jornadas se han ido igual.
 ##
-## Es la capa regional de docs/SISTEMAS.md §4, y **lo único que la levanta**:
-## la niebla ya estaba puesta —`GameState.discovered` arranca con la cueva y
-## `RegionMap` filtra por él— pero nadie llamaba a `GameState.discover` desde
-## la partida, así que el mapa se quedaba en la cueva para siempre. Medido en
-## ESTADO.md §2.
+## Es la capa regional de docs/SISTEMAS.md §4. **Desde el 2026-09-14 va hacia un
+## rumbo y no a un sitio** («Spec: explorar hacia un rumbo»): el jugador elige
+## hacia dónde, quién y cuántas jornadas, se recorre un [Pasillo] durante la
+## mitad de ellas y al volver se descubre lo que había a la vista. Hasta ese día
+## salía una vez al año, con la tarjeta de primavera, al sitio sin descubrir más
+## cercano, y descubría ese sitio y sus cuatro vecinos.
 ##
 ## ## Lo que cuesta, que es la mitad del frente
 ##
 ## Salir del abrigo no se vuelve el mismo día: quien va **no trabaja** mientras
 ## está fuera y **come de la despensa** antes de irse. Y una expedición que
-## vuelve sin llegar cuesta exactamente lo mismo, porque el coste es haber
-## salido, no haber acertado.
+## vuelve sin nada cuesta exactamente lo mismo, porque el coste es haber salido,
+## no haber acertado.
 
 var sim: SettlementSim
 
@@ -23,20 +24,10 @@ func _init(settlement: SettlementSim) -> void:
 	sim = settlement
 
 
-## Cuántas jornadas se está fuera.
-##
-## Doce: bastante para que se note en la contabilidad del oficio —una estación
-## son cuarenta y cinco, así que es un cuarto de estación— y poco para que
-## quepan dos o tres en un año. **Es una decisión, no una medida**, y se ajusta
-## con la partida delante.
-const JORNADAS_FUERA := 12
-
-## A cuántos emplazamientos llega la noticia de lo que se ha visto.
-##
-## Se descubre el destino y sus vecinos más cercanos: se ha andado hasta allí,
-## se ha mirado desde allí, y se vuelve sabiendo lo que se ve desde allí.
-## Decisión, no medida.
-const SE_DESCUBREN := 4
+## Las jornadas que la ficha propone de entrada: las doce que duraba siempre antes
+## de poderse elegir. Doce es un cuarto de estación: se nota en la contabilidad
+## del oficio y caben dos o tres al año. Las que se pueden elegir, en [Pasillo].
+const JORNADAS_PROPUESTAS := 12
 
 ## Cuánta gente hace falta para que salga una expedición.
 ##
@@ -48,9 +39,16 @@ const MINIMO_PARA_SALIR := 3
 ## Quiénes están fuera ahora mismo, por id.
 var fuera: Array[int] = []
 
-## A qué emplazamiento se fue, y qué jornada vuelven.
-var destino_id: int = -1
+## Hacia dónde se fue —grados desde el norte—, cuántas jornadas, y qué jornada
+## vuelven.
+var rumbo: float = 0.0
+var jornadas: int = 0
 var vuelve_el_dia: int = -1
+
+## El pasillo que recorren, trazado al salir ([Pasillo.a_datos]). Se traza al
+## salir y no al volver: es el que enseñó la flecha, y lo que se descubre es lo
+## que se prometió.
+var pasillo: Dictionary = {}
 
 ## Si se ha mandado alguna vez. Es una de las tres condiciones que cierran la
 ## primera fase — ver [Partida].
@@ -65,46 +63,36 @@ var descubiertos := 0
 ## frente pide contar: esas jornadas **no se recolectan**.
 var jornadas_persona := 0
 
-## Los emplazamientos de la comarca. Lo pone [DemoMain]; sin él no se puede
-## descubrir nada y la expedición sale igual, que es lo correcto: el coste no
-## depende de que haya mapa.
-var sitios: SiteSet = null
-
 
 ## Si hay una expedición fuera ahora mismo.
 func en_marcha() -> bool:
 	return not fuera.is_empty()
 
 
-## Se manda una expedición. Devuelve si ha salido.
-##
-## No sale si ya hay una fuera, si no hay gente bastante, o si la despensa no
-## da para avituallarla: salir sin comida es mandar a tres personas a morirse,
-## no una decisión difícil.
-## Lo que hay que meter en el zurrón para mandar a `cuantos` fuera.
+## Lo que hay que meter en el zurrón para mandar a `cuantos` fuera `dias` jornadas.
 ##
 ## **Las mismas constantes del vivac que usa la cumbre**, no una copia: una piel
 ## de tienda por persona —que vuelve, ver [SettlementSim.VIVAC_PIEL]— y una de
-## leña por persona y noche, más la noche de margen. Con tres personas y doce
-## jornadas: 72 raciones, 3 pieles y 39 de leña.
-func hace_falta_para(cuantos: int) -> Dictionary:
-	var noches := float(JORNADAS_FUERA) + SettlementSim.VIVAC_MARGEN_NOCHES
+## leña por persona y noche, más la noche de margen; y dos raciones por persona y
+## jornada. Con tres personas y doce jornadas: 72 raciones, 3 pieles y 39 de leña.
+func hace_falta_para(cuantos: int, dias: int = JORNADAS_PROPUESTAS) -> Dictionary:
+	var noches := float(dias) + SettlementSim.VIVAC_MARGEN_NOCHES
 	return {
-		"raciones": float(cuantos * JORNADAS_FUERA) * 2.0,
+		"raciones": float(cuantos * dias) * 2.0,
 		"piel": float(cuantos) * SettlementSim.VIVAC_PIEL,
 		"lena": float(cuantos) * SettlementSim.VIVAC_LENA * noches,
 	}
 
 
 ## Qué falta en el abrigo para que puedan salir, dicho como se diría. Vacío si
-## no falta nada. Es lo que la tarjeta enseña cuando no se puede decir que sí.
-func lo_que_falta(cuantos: int) -> Array[String]:
-	var hace_falta := hace_falta_para(cuantos)
+## no falta nada. Es lo que la ficha enseña cuando no se puede mandar.
+func lo_que_falta(cuantos: int, dias: int = JORNADAS_PROPUESTAS) -> Array[String]:
+	var hace_falta := hace_falta_para(cuantos, dias)
 	var falta: Array[String] = []
 	if sim.store.food_rations() < float(hace_falta["raciones"]):
 		falta.append("%.0f raciones" % float(hace_falta["raciones"]))
-	if sim.store.amount(Materia.Kind.PIEL) < float(hace_falta["piel"]):
-		falta.append("%.0f pieles de tienda" % float(hace_falta["piel"]))
+	if sim.store.amount(Materia.Kind.PIEL_CURTIDA) < float(hace_falta["piel"]):
+		falta.append("%.0f pieles curtidas para las tiendas" % float(hace_falta["piel"]))
 	if sim.store.amount(Materia.Kind.LENA) < float(hace_falta["lena"]):
 		falta.append("%.0f de leña" % float(hace_falta["lena"]))
 	return falta
@@ -113,7 +101,7 @@ func lo_que_falta(cuantos: int) -> Array[String]:
 ## Las pieles que se llevaron puestas de tienda, para devolverlas al volver.
 var pieles_prestadas := 0.0
 
-## Por dónde se sale del valle: la celda del borde del mapa hacia el destino.
+## Por dónde se sale del valle: la celda del borde del mapa hacia el rumbo.
 ##
 ## Se guarda para volver por el mismo sitio, que es lo que hace que la vuelta se
 ## lea como una vuelta y no como una aparición.
@@ -123,30 +111,39 @@ var salida: Vector3 = Vector3.ZERO
 const LLEGADA := 24.0
 
 
-## La puerta del valle hacia un destino regional: la celda del borde del mapa
-## **alcanzable** más cercana a ese rumbo.
+## El sitio desde el que sale: el del campamento, y si la simulación no lo sabe
+## —una prueba, una escena montada a mano—, el de la banda.
+func origen() -> Site:
+	return sim.sitio if sim.sitio != null else GameState.home
+
+
+## El pasillo que recorrería una salida hacia `hacia` durante `dias` jornadas, o
+## null si no se sabe desde dónde se sale. **Es el que enseña la flecha** y el que
+## se descubre al volver: ver [Pasillo].
+func pasillo_hacia(hacia: float, dias: int) -> Pasillo:
+	var desde := origen()
+	if desde == null:
+		return null
+	# El andar de esta simulación, el mismo que cuenta `Marcha.hours_to_walk`.
+	var metros_por_hora := sim.walk_speed * sim.seconds_per_day / 24.0
+	return Pasillo.trazar(desde.lon, desde.lat, hacia, dias, metros_por_hora,
+		GameState.sea_level_m)
+
+
+## La puerta del valle hacia un rumbo: la celda del borde del mapa **alcanzable**
+## que menos se desvía de él.
 ##
 ## Alcanzable y no la que caiga: nadie da un paso sin camino debajo —SPECS
 ## §4.3—, y el borde del mapa es tan de piedra y agua como el resto. Si por el
-## rumbo del destino no se llega al borde, se sale por la celda alcanzable que
-## más se le acerque, que es lo que haría cualquiera.
-func puerta_del_valle(hacia: int) -> Vector3:
+## rumbo no se llega al borde, se sale por la celda alcanzable que más se le
+## acerque, que es lo que haría cualquiera.
+func puerta_del_valle(hacia: float) -> Vector3:
 	if sim._terrain == null:
 		return sim.home_position
 	var lado := float(sim._terrain.terrain_size.x)
 	var fondo := float(sim._terrain.terrain_size.y)
-	var rumbo := Vector3(1.0, 0.0, 0.0)
-	if sitios != null:
-		var casa: Site = GameState.home
-		for s: Site in sitios.available_in(GameState.sea_level_m, GameState.era):
-			if s.id != hacia or casa == null:
-				continue
-			# El rumbo regional, pasado al mapa local: lon crece al este y lat
-			# al norte, y la z del mundo crece al sur.
-			rumbo = Vector3(s.lon - casa.lon, 0.0, casa.lat - s.lat)
-			if rumbo.length() < 0.0001:
-				rumbo = Vector3(1.0, 0.0, 0.0)
-			rumbo = rumbo.normalized()
+	# El rumbo, pasado al mapa local: el este es +x y el norte es −z.
+	var direccion := Vector3(sin(deg_to_rad(hacia)), 0.0, -cos(deg_to_rad(hacia)))
 	var mejor := sim.home_position
 	var mejor_lejos := INF
 	# Un punto por cada tramo del borde, y el que menos se desvíe del rumbo.
@@ -167,7 +164,7 @@ func puerta_del_valle(hacia: int) -> Vector3:
 			if hacia_alla.length() < 1.0:
 				continue
 			# Cuánto se desvía del rumbo: 0 es justo en esa dirección.
-			var desvio := 1.0 - hacia_alla.normalized().dot(rumbo)
+			var desvio := 1.0 - hacia_alla.normalized().dot(direccion)
 			if desvio < mejor_lejos:
 				mejor_lejos = desvio
 				mejor = punto
@@ -200,53 +197,85 @@ func andar(person: Inhabitant, index: int, hours: float, delta: float) -> void:
 	sim._pintar_a(person, index)
 
 
-func mandar(cuantos: int, hacia: int) -> bool:
-	if en_marcha():
+## Manda a los primeros `cuantos` que puedan ir. Lo usan las pruebas y las sondas;
+## el jugador elige a quién en la ficha, con [mandar_a].
+func mandar(cuantos: int, hacia: float, dias: int = JORNADAS_PROPUESTAS) -> bool:
+	var quienes: Array[int] = []
+	for person: Inhabitant in sim.people:
+		if quienes.size() >= cuantos:
+			break
+		if puede_ir(person):
+			quienes.append(person.id)
+	if quienes.size() < cuantos:
 		return false
-	if cuantos < MINIMO_PARA_SALIR:
-		return false
+	return mandar_a(quienes, hacia, dias)
 
-	var candidatos := _quienes_pueden_ir(cuantos)
-	if candidatos.size() < cuantos:
-		return false
 
-	# EL AVITUALLAMIENTO VA PRIMERO, y si no hay, no se sale. La comida en
-	# raciones -[Materia.KCAL_RACION], invariante 1 de SPECS §7-, y la tienda y
-	# la hoguera con las constantes del vivac. Ver [hace_falta_para].
-	#
-	# Se mira TODO antes de sacar nada: `sacar_raciones` se lleva lo que haya
-	# aunque no llegue, y una expedición que no sale no se come la despensa.
-	var falta := lo_que_falta(cuantos)
+## Manda a los elegidos hacia un rumbo. Devuelve si han salido.
+##
+## No sale si ya hay una fuera, si son menos del mínimo, si las jornadas no son
+## de las que se pueden elegir o si la despensa no da para avituallarla: salir sin
+## comida es mandar a tres personas a morirse, no una decisión difícil. **No
+## depende de la estación**: se sale cuando se quiere.
+##
+## Comprueba que cada uno siga pudiendo ir: entre que se marca en la ficha y se
+## confirma pueden pasar cosas.
+func mandar_a(quienes: Array[int], hacia: float, dias: int = JORNADAS_PROPUESTAS) -> bool:
+	if en_marcha() or quienes.size() < MINIMO_PARA_SALIR:
+		return false
+	if not Pasillo.jornadas_validas(dias):
+		return false
+	var pueden: Array[int] = []
+	for person: Inhabitant in sim.people:
+		if quienes.has(person.id) and puede_ir(person):
+			pueden.append(person.id)
+	if pueden.size() < MINIMO_PARA_SALIR:
+		return false
+	# EL AVITUALLAMIENTO VA PRIMERO, y si no hay, no se sale. Se mira TODO antes
+	# de sacar nada: `sacar_raciones` se lleva lo que haya aunque no llegue, y una
+	# expedición que no sale no se come la despensa.
+	var falta := lo_que_falta(pueden.size(), dias)
 	if not falta.is_empty():
 		sim._note(Chronicle.Kind.PENURIA,
 			"No hay con qué avituallar una expedición —falta %s—: se queda en casa."
 				% ", ".join(falta), 0)
 		return false
-	var hace_falta := hace_falta_para(cuantos)
+	var hace_falta := hace_falta_para(pueden.size(), dias)
 	sim.despensa.sacar_raciones(float(hace_falta["raciones"]))
 	# La leña arde fuera; la piel es la tienda y vuelve con quien la llevó.
 	sim.store.take(Materia.Kind.LENA, float(hace_falta["lena"]))
-	pieles_prestadas = sim.store.take(Materia.Kind.PIEL, float(hace_falta["piel"]))
+	pieles_prestadas = sim.store.take(Materia.Kind.PIEL_CURTIDA, float(hace_falta["piel"]))
 
 	fuera.clear()
-	for person: Inhabitant in candidatos:
-		person.expedicion_hasta = sim.day + JORNADAS_FUERA
-		fuera.append(person.id)
-	destino_id = hacia
-	vuelve_el_dia = sim.day + JORNADAS_FUERA
+	for person: Inhabitant in sim.people:
+		if pueden.has(person.id):
+			person.expedicion_hasta = sim.day + dias
+			fuera.append(person.id)
+	rumbo = fposmod(hacia, 360.0)
+	jornadas = dias
+	vuelve_el_dia = sim.day + dias
+	var recorrido := pasillo_hacia(rumbo, dias)
+	pasillo = recorrido.a_datos() if recorrido != null else {}
 	mandada_alguna_vez = true
-	jornadas_persona += cuantos * JORNADAS_FUERA
-	_echar_a_andar(hacia)
+	jornadas_persona += pueden.size() * dias
+	_echar_a_andar()
 
 	sim._note(Chronicle.Kind.HALLAZGO,
-		"Salen %d a ver qué hay más allá del valle. No vuelven en %d jornadas."
-			% [cuantos, JORNADAS_FUERA], 2)
+		"Salen %d hacia el %s a ver qué hay más allá del valle. No vuelven en %d jornadas."
+			% [pueden.size(), nombre_del_rumbo(rumbo), dias], 2)
 	return true
 
 
+## El rumbo dicho como se diría: norte, nordeste, este…
+static func nombre_del_rumbo(grados: float) -> String:
+	const NOMBRES := ["norte", "nordeste", "este", "sudeste", "sur", "sudoeste",
+		"oeste", "noroeste"]
+	return NOMBRES[int(round(fposmod(grados, 360.0) / 45.0)) % 8]
+
+
 ## Los pone a andar hacia el borde del valle. Se les ve irse.
-func _echar_a_andar(hacia: int) -> void:
-	salida = puerta_del_valle(hacia)
+func _echar_a_andar() -> void:
+	salida = puerta_del_valle(rumbo)
 	for person: Inhabitant in sim.people:
 		if not fuera.has(person.id):
 			continue
@@ -265,30 +294,19 @@ func nuevo_dia() -> void:
 	_volver()
 
 
-## Quiénes pueden ir: los adultos que están en casa.
+## Si esta persona puede salir de expedición: un adulto en casa y sin tocar.
 ##
-## Ni niños ni ancianos: doce jornadas fuera del valle, durmiendo al raso por
-## sitios que nadie conoce, son para adultos. Es una decisión de diseño.
-## Si esta persona puede salir de expedición. **Una pregunta, un sitio**: lo
-## usan la lista de la tarjeta, la salida a dedo y la comprobación de la vuelta.
-func _puede_ir(person: Inhabitant) -> bool:
+## Ni niños ni ancianos: jornadas fuera del valle, durmiendo al raso por sitios
+## que nadie conoce, son para adultos. Es una decisión de diseño. **Una pregunta,
+## un sitio**: lo usan la ficha, la salida a dedo y la comprobación de la vuelta.
+func puede_ir(person: Inhabitant) -> bool:
 	if person.esta_de_expedicion(sim.day):
 		return false
 	if person.age_group != Inhabitant.Age.ADULTO:
 		return false
-	# Ni tocados: quien está con un percance se queda en el abrigo, y doce
-	# jornadas fuera es lo contrario de descansar. Frente 12.
+	# Ni tocados: quien está con un percance se queda en el abrigo, y jornadas
+	# fuera es lo contrario de descansar. Frente 12.
 	return not person.esta_tocado()
-
-
-func _quienes_pueden_ir(cuantos: int) -> Array[Inhabitant]:
-	var out: Array[Inhabitant] = []
-	for person: Inhabitant in sim.people:
-		if out.size() >= cuantos:
-			break
-		if _puede_ir(person):
-			out.append(person)
-	return out
 
 
 ## Vuelven, y con lo que hayan visto.
@@ -311,26 +329,44 @@ func _volver() -> void:
 	# LAS PIELES VUELVEN. Una tienda no se gasta: se lleva y se trae, igual que
 	# en la acampada de la cumbre. Ver [SettlementSim.VIVAC_PIEL].
 	if pieles_prestadas > 0.0:
-		sim.store.add(Materia.Kind.PIEL, pieles_prestadas)
+		sim.store.add(Materia.Kind.PIEL_CURTIDA, pieles_prestadas)
 		pieles_prestadas = 0.0
 
-	var nuevos := _descubrir_alrededor(destino_id)
-	descubiertos += nuevos
-
-	# EL CONTACTO, que es el propósito de todo esto: la expedición no busca
-	# terreno, busca gente con la que tratar. Ver docs/SISTEMAS.md §4.
 	var conocida := false
-	# LA PRIMERA EXPEDICIÓN SIEMPRE ENCUENTRA GENTE, decidido por el usuario el
-	# 2026-09-13. Con uno de cada cinco sitios ocupados y contacto sólo en el
-	# destino, la pasada de dos años con un jugador que manda la expedición
-	# acabó con **cero tratos y nadie conocido**: el trueque quedaba a una tirada
-	# al año, y la mayoría de partidas no lo verían nunca. Sólo la primera; de
-	# ahí en adelante, el sorteo de [Contacto.OCUPADOS] como siempre. ESTADO §2,
-	# «Dos años con un jugador que decide».
-	if vueltas == 1 and sim.contacto != null and destino_id >= 0:
-		sim.contacto.poblar(destino_id)
-	if sim.contacto != null and sim.contacto.hay_gente_en(destino_id):
-		conocida = sim.contacto.conocerse(destino_id)
+	var nuevos := 0
+	if not pasillo.is_empty():
+		var recorrido := Pasillo.de_datos(pasillo)
+		var dentro := _sitios_del_pasillo(recorrido)
+		for site: Site in dentro:
+			if not sim.descubierto(site):
+				nuevos += 1
+		# LO QUE SE VE SE DESCUBRE, y lo pisado queda recorrido: las dos capas de
+		# la niebla, y los sitios de dentro con la vista. Al volver —decisión del
+		# usuario—: lo visto llega con quien vuelve. Por la barrera si la
+		# simulación la lleva el reloj. Ver [SettlementSim.levantar_niebla].
+		# `"descubre"` sólo aquí: es la ÚNICA forma de descubrir un sitio
+		# (decisión del usuario, 2026-09-14). Ver [GameState.levantar_niebla].
+		sim.levantar_niebla({"forma": "pasillo", "pasillo": pasillo,
+			"capa": NieblaRegional.VISTA, "descubre": true})
+		sim.levantar_niebla({"forma": "pasillo", "pasillo": pasillo,
+			"capa": NieblaRegional.RECORRIDA})
+
+		# EL CONTACTO, que es el propósito de todo esto: la expedición no busca
+		# terreno, busca gente con la que tratar.
+		#
+		# LA PRIMERA EXPEDICIÓN SIEMPRE ENCUENTRA GENTE, decidido por el usuario el
+		# 2026-09-13: con uno de cada cinco sitios ocupados, dos años de partida
+		# acabaron sin conocer a nadie (ESTADO §2). Con rumbo no hay destino, y la
+		# gente se pone **en el sitio del pasillo más lejano** del campamento, el
+		# más cerca de donde se da la vuelta —decisión del usuario del 2026-09-14—.
+		# Sin sitios en el pasillo, no hay a quién encontrar.
+		if vueltas == 1 and sim.contacto != null and not dentro.is_empty():
+			sim.contacto.poblar(_el_mas_lejano(dentro, recorrido).id)
+		if sim.contacto != null:
+			for site: Site in dentro:
+				if sim.contacto.hay_gente_en(site.id) and sim.contacto.conocerse(site.id):
+					conocida = true
+	descubiertos += nuevos
 
 	if conocida:
 		sim._note(Chronicle.Kind.HALLAZGO,
@@ -345,170 +381,32 @@ func _volver() -> void:
 		sim._note(Chronicle.Kind.PENURIA,
 			"Vuelve la expedición sin nada que contar. Las jornadas se han "
 				+ "ido igual.", 1)
-	destino_id = -1
 	vuelve_el_dia = -1
+	pasillo = {}
 
 
-## Se levanta la niebla del destino y de sus vecinos. Devuelve cuántos eran
-## nuevos de verdad.
-func _descubrir_alrededor(id: int) -> int:
-	if sitios == null or id < 0:
-		return 0
-	var centro: Site = null
-	for s: Site in sitios.sites:
-		if s.id == id:
-			centro = s
-			break
-	if centro == null:
-		return 0
-
-	# Por cercanía al destino, que es lo que se ve desde allí.
-	var cerca: Array[Site] = sitios.sites.duplicate()
-	cerca.sort_custom(func(a: Site, b: Site) -> bool:
-		return _lejos(centro, a) < _lejos(centro, b))
-
-	var nuevos := 0
-	for s: Site in cerca:
-		if nuevos >= SE_DESCUBREN:
-			break
-		if GameState.is_discovered(s):
+## Los sitios de la comarca cuyo punto cae dentro del pasillo, sin el propio.
+func _sitios_del_pasillo(recorrido: Pasillo) -> Array[Site]:
+	var dentro: Array[Site] = []
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var desde := origen()
+	for site: Site in comarca.sites:
+		if desde != null and site.id == desde.id:
 			continue
-		GameState.discover(s)
-		nuevos += 1
-	return nuevos
+		if recorrido.contiene(site.lon, site.lat):
+			dentro.append(site)
+	return dentro
 
 
-static func _lejos(a: Site, b: Site) -> float:
-	var dlon := a.lon - b.lon
-	var dlat := a.lat - b.lat
-	return dlon * dlon + dlat * dlat
-
-
-
-## Adónde iría una expedición mandada hoy: el emplazamiento sin descubrir más
-## cercano a la cueva. -1 si no queda ninguno o no hay comarca.
-##
-## El más cercano y no uno sorteado: la primera salida de una banda que no
-## conoce la comarca va a lo que tiene al lado, y así la decisión se puede
-## leer —«vamos a ver qué hay en el valle de al lado»— en vez de ser una
-## lotería.
-func destino_de_hoy() -> int:
-	if sitios == null:
-		return -1
-	var casa: Site = GameState.home
-	var mejor := -1
-	var mejor_lejos := INF
-	for s: Site in sitios.available_in(GameState.sea_level_m, GameState.era):
-		if GameState.is_discovered(s):
-			continue
-		var lejos := _lejos(casa, s) if casa != null else float(s.id)
-		if lejos < mejor_lejos:
-			mejor_lejos = lejos
-			mejor = s.id
+static func _el_mas_lejano(sitios: Array[Site], recorrido: Pasillo) -> Site:
+	var mejor: Site = sitios[0]
+	var mas := -1.0
+	var coseno := cos(deg_to_rad(recorrido.lat))
+	for site: Site in sitios:
+		var x := (site.lon - recorrido.lon) * coseno
+		var z := site.lat - recorrido.lat
+		var lejos := x * x + z * z
+		if lejos > mas:
+			mas = lejos
+			mejor = site
 	return mejor
-
-
-## Propone la decisión de la primavera. Lo llama [SettlementSim] el día citado
-## del segundo mes. Es, además, **el botón que la expedición no tenía**: hasta
-## la tanda 2, `mandar` sólo se podía llamar desde código.
-##
-## No sale tarjeta si ya hay una fuera, si no queda adónde ir o si no hay
-## bastante gente que pueda: una decisión con una sola salida no es una
-## decisión.
-func proponer_la_salida() -> void:
-	if en_marcha():
-		return
-	var hacia := destino_de_hoy()
-	if hacia < 0:
-		return
-	var moment := Moment.new()
-	moment.kind = Moment.Kind.EXPEDICION
-	moment.title = "Es primavera: ¿se sale del valle?"
-	moment.text = ("Hay %d sitios conocidos. Una expedición saldría hacia lo que "
-		+ "haya al otro lado del valle, y podría volver con noticias —o con "
-		+ "gente con la que tratar—.") % GameState.discovered.size()
-	# QUIÉN VA LO ELIGE EL JUGADOR, en la propia tarjeta. Se marcan los primeros
-	# que pueden ir para que decir que sí sea un clic, pero se pueden cambiar.
-	# Ni niños ni tocados salen en la lista: ver [_puede_ir].
-	for person: Inhabitant in sim.people:
-		if _puede_ir(person):
-			moment.candidatos.append(person.id)
-			moment.nombres[person.id] = person.given_name
-	moment.minimo_elegidos = MINIMO_PARA_SALIR
-	for id: int in moment.candidatos:
-		if moment.elegidos.size() >= MINIMO_PARA_SALIR:
-			break
-		moment.elegidos.append(id)
-	# El coste depende de cuántos van, así que las opciones se rehacen cada vez
-	# que se marca o se desmarca a alguien. Ver [Moment.marcar].
-	moment.al_cambiar_la_eleccion = func() -> void: _opciones_de_la_salida(moment, hacia)
-	_opciones_de_la_salida(moment, hacia)
-	sim.raise_moment(moment)
-
-
-## Manda a los que se han elegido en la tarjeta. Devuelve si han salido.
-##
-## `mandar` coge a los primeros que puedan; esto respeta la lista del jugador, y
-## comprueba que cada uno siga pudiendo ir —entre que se levanta la tarjeta y se
-## contesta pueden pasar cosas: el reloj está parado, pero la partida se puede
-## haber guardado y vuelto a cargar—.
-func mandar_a(quienes: Array[int], hacia: int) -> bool:
-	if en_marcha() or quienes.size() < MINIMO_PARA_SALIR or hacia < 0:
-		return false
-	var pueden: Array[int] = []
-	for person: Inhabitant in sim.people:
-		if quienes.has(person.id) and _puede_ir(person):
-			pueden.append(person.id)
-	if pueden.size() < MINIMO_PARA_SALIR:
-		return false
-	var falta := lo_que_falta(pueden.size())
-	if not falta.is_empty():
-		sim._note(Chronicle.Kind.PENURIA,
-			"No hay con qué avituallar una expedición —falta %s—: se queda en casa."
-				% ", ".join(falta), 0)
-		return false
-	var hace_falta := hace_falta_para(pueden.size())
-	sim.despensa.sacar_raciones(float(hace_falta["raciones"]))
-	sim.store.take(Materia.Kind.LENA, float(hace_falta["lena"]))
-	pieles_prestadas = sim.store.take(Materia.Kind.PIEL, float(hace_falta["piel"]))
-	fuera.clear()
-	for person: Inhabitant in sim.people:
-		if pueden.has(person.id):
-			person.expedicion_hasta = sim.day + JORNADAS_FUERA
-			fuera.append(person.id)
-	destino_id = hacia
-	vuelve_el_dia = sim.day + JORNADAS_FUERA
-	mandada_alguna_vez = true
-	jornadas_persona += pueden.size() * JORNADAS_FUERA
-	_echar_a_andar(hacia)
-	sim._note(Chronicle.Kind.HALLAZGO,
-		"Salen %d a ver qué hay más allá del valle. No vuelven en %d jornadas."
-			% [pueden.size(), JORNADAS_FUERA], 2)
-	return true
-
-
-## Las opciones de la tarjeta, rehechas con los que están marcados ahora: lo que
-## cuesta una expedición depende de cuántos van.
-func _opciones_de_la_salida(moment: Moment, hacia: int) -> void:
-	var cuantos := maxi(moment.elegidos.size(), MINIMO_PARA_SALIR)
-	var hace_falta := hace_falta_para(cuantos)
-	var falta := lo_que_falta(cuantos)
-	var bloqueo := ""
-	if not moment.hay_bastantes():
-		bloqueo = "hacen falta %d" % MINIMO_PARA_SALIR
-	elif not falta.is_empty():
-		bloqueo = "falta " + ", ".join(falta)
-	moment.options = [
-		Moment.opcion("Este año no",
-			"Nadie sale. No cuesta nada y no se sabe nada nuevo.",
-			func() -> void: pass),
-		Moment.opcion("Mandarla",
-			("Salen %d %d jornadas con %.0f raciones y %.0f de leña, que no "
-				+ "vuelven, y %.0f pieles de tienda, que sí.") % [cuantos,
-					JORNADAS_FUERA, float(hace_falta["raciones"]),
-					float(hace_falta["lena"]), float(hace_falta["piel"])],
-			func() -> void: mandar_a(moment.elegidos, hacia),
-			{"jornadas": cuantos * JORNADAS_FUERA,
-				"despensa": -float(hace_falta["raciones"])},
-			bloqueo),
-	]

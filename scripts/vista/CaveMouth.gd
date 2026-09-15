@@ -56,7 +56,11 @@ var discovered: bool = false
 
 var _marker: Node3D
 
-## Radio del vano, en metros
+## El ALCANCE de la boca, en metros: de él salen dónde cae la campa, a qué altura
+## vuela el alfiler y el radio de pinchado. **No es el radio del pozo**, que es
+## [hueco_de] —de 2 a 2,7 m—. Ponía «radio del vano», y el paraviento se midió
+## desde un borde de 7 m que no existe (2026-09-14). Quien necesite el agujero,
+## que pregunte [hueco_de].
 var mouth_radius: float = 7.0
 
 ## A qué altura, respecto a la boca, queda el suelo de la cueva. Lo usa
@@ -465,26 +469,31 @@ static func _cara(vertices: PackedVector3Array, normales: PackedVector3Array,
 ## Va por encima del terreno y sin prueba de profundidad, o sea que se ve
 ## aunque la tape una loma: es una marca del jugador sobre su mapa, no un
 ## objeto del mundo, y su trabajo es que no se pierda lo que ya se encontró.
+## El color del alfiler de una cueva: la caliza del abrigo, no el ocre de un
+## material. Sale del mismo sitio que el de las cimas —ver [ParajeMarkers]—
+## porque son las dos cosas del mapa que no son materia.
+const TINTE := Color(0.72, 0.66, 0.55)
+
+
 func _build_marker() -> void:
 	_marker = Node3D.new()
+	# Sobre la boca y a la misma altura a la que vuelan los demás alfileres.
+	_marker.position = Vector3(0.0, mouth_radius * 2.2, 0.0)
 	add_child(_marker)
 
-	var beacon := MeshInstance3D.new()
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.0
-	mesh.bottom_radius = 2.4
-	mesh.height = 9.0
-	beacon.mesh = mesh
-	# Punta hacia abajo, señalando la boca
-	beacon.rotation_degrees = Vector3(180.0, 0.0, 0.0)
-	beacon.position = Vector3(0.0, mouth_radius * 2.6, 0.0)
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 0.86, 0.42)
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.no_depth_test = true
-	beacon.material_override = material
-	_marker.add_child(beacon)
+	# EL MISMO ALFILER QUE LOS PARAJES Y LAS CIMAS. Era un cono amarillo con un
+	# rótulo: se leía como otra cosa distinta, y lo era sólo porque el dibujo
+	# vivía aquí. Petición del usuario del 2026-09-13. Ver [Alfiler].
+	var chapa := Sprite3D.new()
+	chapa.name = "Icono"
+	chapa.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	chapa.texture = Alfiler.textura(_marker, "cueva", MateriaIcon.Glyph.CUEVA, TINTE)
+	chapa.pixel_size = Alfiler.PIXEL
+	chapa.offset = Vector2(0.0, float(Alfiler.ALTO) * 0.5)
+	chapa.no_depth_test = true
+	chapa.render_priority = 2
+	chapa.shaded = false
+	_marker.add_child(chapa)
 
 	var name_text := String(feature.get("name", ""))
 	if name_text.is_empty() or name_text == "sin nombre":
@@ -492,13 +501,15 @@ func _build_marker() -> void:
 
 	var label := Label3D.new()
 	label.text = name_text
-	label.position = Vector3(0.0, mouth_radius * 3.6, 0.0)
+	label.position = Vector3(0.0, -4.0, 0.0)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
+	label.render_priority = 3
 	label.font_size = 48
-	label.pixel_size = 0.05
-	label.modulate = Color(1.0, 0.92, 0.70)
-	label.outline_size = 12
+	label.pixel_size = 0.014
+	label.outline_size = 14
+	label.modulate = UISkin.INK_SOFT
+	label.outline_modulate = Color(0.0, 0.0, 0.0, 0.75)
 	_marker.add_child(label)
 
 
@@ -508,8 +519,45 @@ func discover() -> void:
 	if discovered:
 		return
 	discovered = true
+	# El alfiler es un nodo del árbol, y descubrir una cueva puede pasar dentro
+	# del paso de un campamento que da sus pasos en otro hilo: ahí se enciende
+	# en el hilo principal. Lo que cambia la partida —`discovered`— ya está puesto.
+	# Ver [RelojDeLaPartida].
+	if OS.get_thread_caller_id() == OS.get_main_thread_id():
+		_repintar_marcador()
+	else:
+		_repintar_marcador.call_deferred()
+
+
+## Si el filtro del jugador deja ver los alfileres de cueva. Lo apaga y enciende
+## [FiltroDeMarcadores]; lo hallado sigue hallado, sólo se deja de dibujar.
+var _con_filtro := true
+
+
+func mostrar_marcador(si: bool) -> void:
+	_con_filtro = si
+	_repintar_marcador()
+
+
+func _repintar_marcador() -> void:
 	if _marker != null:
-		_marker.visible = true
+		_marker.visible = discovered and _con_filtro
+
+
+## El alfiler compensa la distancia, igual que los de paraje y cima: si no, de
+## cerca ocupa media pantalla —son 94 px a [Alfiler.PIXEL] metros el píxel— y de
+## lejos no se ve. Las varas con las que se mide son las de [ParajeMarkers], que
+## es donde está el resto del estilo.
+func _process(_delta: float) -> void:
+	if _marker == null or not _marker.visible:
+		return
+	var camara := get_viewport().get_camera_3d()
+	if camara == null:
+		return
+	_marker.scale = Vector3.ONE * clampf(
+		camara.global_position.distance_to(_marker.global_position)
+			/ ParajeMarkers.MARKER_REFERENCE,
+		ParajeMarkers.MARKER_MIN_SCALE, ParajeMarkers.MARKER_MAX_SCALE)
 
 
 ## Dónde está la boca, a ras de suelo. Es lo que la banda toma por casa.
@@ -537,7 +585,13 @@ func inside_point(spread: float = 0.0, angle: float = 0.0) -> Vector3:
 ## esperar a que vuelva la partida de caza. Una cueva del Paleolítico se habita
 ## sobre todo en su puerta, que es donde da la luz.
 func forecourt_point(spread: float = 0.0, angle: float = 0.0) -> Vector3:
-	var out := _mouth_position + _facing * (mouth_radius * 1.6)
+	# LA QUE DECIDIÓ EL TERRENO, en seco y allanada —[Bocas.campa_de]—. Ladera
+	# abajo a secas caía en el río en las cuevas de orilla, y con ella la hoguera
+	# y las obras (2026-09-14). Sin ella —una cueva montada a mano—, la de siempre.
+	var out := _mouth_position + _facing * Bocas.CAMPA
+	if feature.has("campa"):
+		out = feature["campa"] as Vector3
+		out.y = _mouth_position.y
 	if spread > 0.001:
 		out += Vector3(cos(angle), 0.0, sin(angle)) * spread
 	return out

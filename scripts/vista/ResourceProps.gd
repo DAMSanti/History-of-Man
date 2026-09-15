@@ -347,7 +347,7 @@ func _load_library() -> void:
 "
 			+ "  godot --headless --path . --script res://scripts/tools/PropIngest.gd")
 		return
-	_library = load(PropModels.LIBRARY_PATH) as PropLibrary
+	_library = await Carga.cargar(PropModels.LIBRARY_PATH) as PropLibrary
 	if _library != null and not _library.is_usable():
 		push_warning("La biblioteca de props no cubre el catalogo actual")
 		_library = null
@@ -374,7 +374,7 @@ func _junto_a_una_boca(donde: Vector3) -> bool:
 func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	_terrain = terrain
 	_field = field
-	_load_library()
+	await _load_library()
 
 	# Los materiales y el decorado. Van juntos a partir de aqui porque se
 	# siembran igual; lo que no comparten es densidad ni papel.
@@ -389,6 +389,7 @@ func setup(terrain: TerrainGenerator, field: ResourceField) -> void:
 	# nada: eso lo hace `_build_block` cuando la camara se acerca.
 	_specs.clear()
 	for entry: Dictionary in catalogue:
+		await Carga.ceder()
 		var models: Array = entry.get("models", [entry.get("model", "")])
 		for model: String in models:
 			var count := 1

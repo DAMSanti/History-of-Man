@@ -129,7 +129,12 @@ var spent_today: Dictionary = {}
 
 
 ## Saca material. Devuelve cuánto se pudo sacar.
-func take(kind: Materia.Kind, units: float) -> float:
+##
+## `gastado` en falso es sacar SIN gastar: el odre lleno que se lleva quien sale
+## no es agua bebida, y si vuelve sin tocar no se ha consumido nada. Lo que de
+## verdad se bebe se apunta al volver, con [apuntar_gasto]. Ver
+## [Despensa._deliver].
+func take(kind: Materia.Kind, units: float, gastado: bool = true) -> float:
 	var had := amount(kind)
 	var taken := minf(units, had)
 	if taken <= 0.0:
@@ -138,8 +143,16 @@ func take(kind: Materia.Kind, units: float) -> float:
 	if contents[kind] <= 0.0001:
 		contents.erase(kind)
 		ages.erase(kind)
-	spent_today[int(kind)] = float(spent_today.get(int(kind), 0.0)) + taken
+	if gastado:
+		apuntar_gasto(kind, taken)
 	return taken
+
+
+## Apunta como gastado algo que salió antes sin apuntar. Ver [take].
+func apuntar_gasto(kind: Materia.Kind, units: float) -> void:
+	if units <= 0.0:
+		return
+	spent_today[int(kind)] = float(spent_today.get(int(kind), 0.0)) + units
 
 
 func total_kg() -> float:
@@ -208,17 +221,23 @@ func age(days: int) -> void:
 		if life <= 0:
 			continue
 
-		var new_age := float(ages.get(k, 0.0)) + float(days)
+		var old_age := float(ages.get(k, 0.0))
+		var new_age := old_age + float(days)
 		ages[k] = new_age
 
 		var half := float(life) * 0.5
 		if new_age <= half:
 			continue
 
-		# De la mitad de vida al final se pierde progresivamente
-		var spoiled_fraction := clampf(
-			(new_age - half) / maxf(float(life) - half, 1.0), 0.0, 1.0)
-		var keep := 1.0 - spoiled_fraction
+		# De la mitad de vida al final se pierde progresivamente: a la edad `a`
+		# queda `_queda_a(a)` de lo que había. Lo que se pierde HOY es el paso de
+		# la edad de ayer a la de hoy, no esa fracción otra vez sobre lo que
+		# queda. Aplicarla entera cada día —como se hacía— la acumulaba: el
+		# pescado seco, de 200 días, perdía el 70 % en quince días pasada la
+		# mitad de su vida, y el usuario vio irse 2000 raciones en el día 123.
+		var antes := _queda_a(old_age, half, float(life))
+		var keep := 0.0 if antes <= 0.0 \
+			else _queda_a(new_age, half, float(life)) / antes
 		var had := amount(k)
 		var left := had * keep
 		if had - left > 0.0001:
@@ -228,6 +247,12 @@ func age(days: int) -> void:
 			ages.erase(k)
 		else:
 			contents[k] = left
+
+
+## Qué parte queda a una edad: entera hasta la mitad de la vida, y de ahí a
+## cero en línea recta hasta el final.
+static func _queda_a(edad: float, half: float, life: float) -> float:
+	return 1.0 - clampf((edad - half) / maxf(life - half, 1.0), 0.0, 1.0)
 
 
 ## Materiales guardados, ordenados por volumen ocupado: lo que más estorba

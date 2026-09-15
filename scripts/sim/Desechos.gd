@@ -109,7 +109,7 @@ func se_ve() -> bool:
 func crecido() -> float:
 	if volumen() <= 0.0:
 		return 0.0
-	return clampf(pow(volumen() / (SE_VE * 24.0), 1.0 / 3.0), 0.0, 1.0)
+	return clampf(Calculo.potencia(volumen() / (SE_VE * 24.0), 1.0 / 3.0), 0.0, 1.0)
 
 
 ## Lo que hay, dicho en una línea, para la ficha y la crónica.

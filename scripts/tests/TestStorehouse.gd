@@ -128,11 +128,12 @@ func test_las_raciones_se_cuentan_juntas() -> void:
 	assert_gt(esperado, 0.0, "y algo alimenta, no es que todo sea cero")
 
 
-func test_la_grasa_alimenta_mas_que_su_peso() -> void:
+func test_la_grasa_no_cuenta_como_comida_guardada() -> void:
+	# Lo fue hasta el 2026-09-13 —«el alimento más denso que hay»—; el usuario
+	# pidió que sólo sea material. Ver `TestDespensa.test_la_grasa_no_se_come`.
 	var store := _abrigo()
 	store.add(Materia.Kind.GRASA, 10.0)
-	assert_gt(store.food_rations(), 10.0,
-		"la grasa es el alimento más denso que hay")
+	assert_eq(store.food_rations(), 0.0, "diez de grasa no dan ni una ración")
 
 
 func test_los_dias_de_autonomia_dependen_de_las_bocas() -> void:
@@ -163,6 +164,28 @@ func test_la_carne_seca_aguanta() -> void:
 	store.age(60)
 	assert_near(store.amount(Materia.Kind.CARNE_SECA), 20.0, 0.5,
 		"la carne curada cruza el invierno")
+
+
+func test_envejecer_dia_a_dia_pierde_lo_mismo_que_de_una_vez() -> void:
+	# Queja del usuario, día 123: «he perdido 2000 raciones de pescado seco en
+	# pocos días; no ha dado tiempo a comerlo ni a pudrirse». El juego envejece
+	# la despensa DE UNO EN UNO, y `age` aplicaba la fracción podrida de la
+	# edad entera a lo que quedaba CADA DÍA: pasada la mitad de su vida, el
+	# pescado seco perdía un 1 %, un 2 %, un 3 %... de lo que le quedaba, que
+	# acumulado se come el 70 % en quince días. «Se pierde progresivamente de
+	# la mitad de vida al final» quiere decir que al final no queda nada, no
+	# que se vaya a mitad de camino.
+	var de_golpe := _abrigo()
+	de_golpe.add(Materia.Kind.PESCADO_SECO, 100.0)
+	de_golpe.age(150)
+	var poco_a_poco := _abrigo()
+	poco_a_poco.add(Materia.Kind.PESCADO_SECO, 100.0)
+	for _dia in range(150):
+		poco_a_poco.age(1)
+	assert_near(de_golpe.amount(Materia.Kind.PESCADO_SECO), 50.0, 0.5,
+		"a tres cuartos de sus 200 días queda la mitad")
+	assert_near(poco_a_poco.amount(Materia.Kind.PESCADO_SECO), 50.0, 0.5,
+		"y envejeciendo día a día, lo mismo")
 
 
 func test_la_piedra_no_caduca() -> void:
@@ -249,11 +272,11 @@ func test_el_alimento_va_antes_que_la_materia_prima() -> void:
 	assert_true(seen_raw, "hay materia prima")
 
 
-func test_la_grasa_va_con_la_materia_prima_aunque_alimente() -> void:
-	# El caso que descubrio la prueba de arriba. `is_food` no puede decidir el
-	# estante: la grasa se come Y se quema, y el jugador la busca con la
-	# resina y la yesca, no con las bayas.
-	assert_true(Materia.is_food(Materia.Kind.GRASA), "alimenta")
+func test_la_grasa_va_con_la_materia_prima() -> void:
+	# El caso que descubrio la prueba de arriba. La grasa se comía Y se quemaba;
+	# desde el 2026-09-13 sólo se quema —petición del usuario—, y el jugador la
+	# busca con la resina y la yesca, no con las bayas.
+	assert_false(Materia.is_food(Materia.Kind.GRASA), "no alimenta")
 	assert_false(Materia.is_provision(Materia.Kind.GRASA),
 		"pero se guarda con la materia prima")
 	assert_true(Materia.is_provision(Materia.Kind.BAYA),
@@ -270,7 +293,7 @@ func test_la_grasa_va_con_la_materia_prima_aunque_alimente() -> void:
 func _con_reservas() -> SettlementSim:
 	var sim := SettlementSim.new()
 	sim.store.add(Materia.Kind.CARNE_SECA, 40.0)
-	sim.store.add(Materia.Kind.PIEL, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 40.0)
 	return sim
 
@@ -285,13 +308,13 @@ func test_lo_que_se_lleva_de_casa_y_vuelve_no_cuenta() -> void:
 	# Sale con viveres y vivac del almacen, y vuelve sin haber cogido nada
 	person.add_load(Materia.Kind.CARNE_SECA, 6.0)
 	person.note_from_store(Materia.Kind.CARNE_SECA, 6.0)
-	person.add_load(Materia.Kind.PIEL, 1.0)
-	person.note_from_store(Materia.Kind.PIEL, 1.0)
+	person.add_load(Materia.Kind.PIEL_CURTIDA, 1.0)
+	person.note_from_store(Materia.Kind.PIEL_CURTIDA, 1.0)
 
 	sim.despensa._deliver(person)
 	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.CARNE_SECA), 0.0), 0.0,
 		"la comida que fue y volvio no la ha producido nadie")
-	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.PIEL), 0.0), 0.0,
+	assert_eq(sim.taller.produced_today.get(int(Materia.Kind.PIEL_CURTIDA), 0.0), 0.0,
 		"ni la piel de la tienda")
 
 

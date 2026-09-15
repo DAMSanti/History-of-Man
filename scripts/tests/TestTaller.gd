@@ -203,3 +203,133 @@ func test_sin_piel_cruda_no_hay_que_curtir() -> void:
 	sim.toolkit.craft(Tool.Kind.RAEDERA, Tool.Stuff.CUARCITA, 0.9)
 	assert_false(sim.taller.hay_que_curtir(),
 		"sin pieles no se curte nada")
+
+
+# ----------------------- los topes de partida (depurar, 2026-09-13) --
+#
+# Petición del usuario: «es fundamental al empezar la partida poner límites a los
+# materiales en el almacén, porque si no en unos cuantos días se llenan de
+# morralla. Cuando hagas pruebas pon un límite de 50 en todos los materiales, 100
+# en la leña y 10 en el utillaje; si no, las pruebas no serán fiables». La
+# partida nueva arranca con esos topes, y las sondas los heredan por `setup`.
+
+func test_la_partida_nueva_arranca_con_los_topes_puestos() -> void:
+	var sim := SettlementSim.new()
+	sim.setup(null, Vector3.ZERO, 6, 50.0)
+	assert_eq(float(sim.limits.get(Materia.Kind.LENA, -1.0)), 100.0, "100 de leña")
+	assert_eq(float(sim.limits.get(Materia.Kind.PIEDRA, -1.0)), 50.0, "50 de piedra")
+	assert_eq(float(sim.limits.get(Materia.Kind.GRASA, -1.0)), 50.0, "50 de grasa")
+	assert_false(sim.limits.has(Materia.Kind.FRUTO_SECO),
+		"la comida no: tiene su propio tope, el de la despensa")
+	assert_false(sim.limits.has(Materia.Kind.AGUA), "ni el agua, que son odres llenos")
+	assert_eq(int(sim.taller.tool_orders.get(Tool.Kind.ODRE, -1)), 10, "10 odres")
+	assert_eq(int(sim.taller.tool_orders.get(Tool.Kind.LASCA, -1)), 10, "10 lascas")
+
+
+func test_el_numero_del_utillaje_es_un_tope_no_un_encargo() -> void:
+	# Decisión del usuario del 2026-09-13. Era un encargo: con 10 puesto se hacían
+	# 10 aunque la banda necesitara 4.
+	var sim := _sim()
+	var natural := int(sim.taller.tool_natural_demand().get(Tool.Kind.LASCA, 0))
+	assert_gt(float(natural), 1.0, "la banda necesita varias lascas")
+	sim.taller.set_tool_order(Tool.Kind.LASCA, natural + 20)
+	assert_eq(int(sim.taller.tool_demand()[Tool.Kind.LASCA]), natural,
+		"con el tope por encima, se hace lo que hace falta y no más")
+	sim.taller.set_tool_order(Tool.Kind.LASCA, 1)
+	assert_eq(int(sim.taller.tool_demand()[Tool.Kind.LASCA]), 1,
+		"con el tope por debajo, manda el tope")
+
+
+# --- coser pide aguja, siempre ---------------------------------------------
+#
+# «Para hacer vestimenta hace falta que haya agujas» (2026-09-14). La regla
+# existe desde antes; esto la fija: con la técnica sabida, piel curtida de sobra
+# y un peletero trabajando jornadas enteras, sin aguja hecha no sale un vestido.
+
+func test_sin_aguja_hecha_no_se_cose_un_vestido() -> void:
+	var sim := _sim(4)
+	sim.techs = TechTree.new()
+	sim.techs.known[TechTree.Tech.AGUJA] = true
+	sim.toolkit = Toolkit.new()
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, 40.0)
+	var peletero := sim.people[0]
+	peletero.job = Profession.Job.MANUFACTURA
+	peletero.current_speciality = Profession.Speciality.PELETERIA
+	sim.hour = 10.0
+	# CUARENTA y no diez, desde el 2026-09-14. Lo que se comprueba aquí es la
+	# regla —sin aguja no se cose—, no el ritmo, y con el esfuerzo por pieza un
+	# vestido pasó de 22 a 30 horas y el peletero hace antes sus odres: con diez
+	# jornadas la prueba se quedaba a medio vestido y fallaba sin que la regla
+	# tuviera nada que ver. Se le da holgura para que mida lo suyo.
+	var jornadas := 40
+	for _i in range(jornadas):
+		sim.taller._craft(peletero, SettlementSim.HORAS_UTILES)
+	assert_eq(sim.toolkit.count(Tool.Kind.VESTIDO), 0,
+		"cuarenta jornadas de peletería sin aguja: ningún vestido")
+	sim.toolkit.craft(Tool.Kind.AGUJA, Tool.Stuff.HUESO, 0.5)
+	for _i in range(jornadas):
+		sim.taller._craft(peletero, SettlementSim.HORAS_UTILES)
+	assert_gt(float(sim.toolkit.count(Tool.Kind.VESTIDO)), 0.0,
+		"y con una aguja, sí")
+
+
+func test_sin_raedera_no_se_curte() -> void:
+	var sim := _sim(4)
+	sim.toolkit = Toolkit.new()
+	sim.store.add(Materia.Kind.PIEL, 20.0)
+	sim.store.add(Materia.Kind.OCRE, 20.0)
+	sim.store.add(Materia.Kind.GRASA, 20.0)
+	var peletero := sim.people[0]
+	peletero.job = Profession.Job.MANUFACTURA
+	peletero.current_speciality = Profession.Speciality.PELETERIA
+	sim.taller._craft(peletero, SettlementSim.HORAS_UTILES)
+	assert_eq(sim.store.amount(Materia.Kind.PIEL_CURTIDA), 0.0,
+		"sin raedera, la piel se queda cruda")
+
+
+# --- el esfuerzo es de la pieza, no del oficio ----------------------------------
+
+## Una pieza pequeña sale en horas, no en jornadas.
+##
+## Queja del usuario del 2026-09-14: «tarda mucho en fabricar las cosas, diría
+## que varios días de trabajo en hacer un simple punzón». Eran 18,3 horas útiles,
+## porque la velocidad era una sola por especialidad.
+func test_un_punzon_cuesta_horas_y_no_jornadas() -> void:
+	var horas := Tool.horas_de_trabajo(Tool.Kind.PUNZON)
+	assert_lt(horas, float(SettlementSim.HORAS_UTILES),
+		"un punzón de hueso debería salir en menos de una jornada útil (%.1f h)" % horas)
+	assert_gt(horas, 0.0, "pero cuesta algo")
+
+
+## Y el orden entre piezas es el que dice la materia que llevan.
+##
+## La red se lleva 9,0 de fibra y es «la pieza más cara de la banda» según su
+## propia receta; con la velocidad por oficio salía en 9,2 horas y el punzón en
+## 18,3, o sea justo al revés.
+func test_la_red_cuesta_mas_que_el_punzon() -> void:
+	var red := Tool.horas_de_trabajo(Tool.Kind.RED)
+	var punzon := Tool.horas_de_trabajo(Tool.Kind.PUNZON)
+	assert_gt(red, punzon,
+		"la red (%.0f h) tiene que costar más que el punzón (%.0f h)" % [red, punzon])
+
+
+## Dos piezas del MISMO oficio pueden costar muy distinto: eso es lo que no podía
+## pasar antes, y es el cambio entero en una comprobación.
+func test_dos_piezas_del_mismo_oficio_cuestan_distinto() -> void:
+	var punzon := Tool.horas_de_trabajo(Tool.Kind.PUNZON)
+	var arpon := Tool.horas_de_trabajo(Tool.Kind.ARPON)
+	assert_gt(arpon, punzon * 2.0,
+		"el arpón lleva los dientes uno a uno: debería costar mucho más que el punzón")
+
+
+## Todas las piezas que fabrica el taller tienen sus horas puestas.
+##
+## Sin esto, una pieza nueva caería en el valor por defecto sin que nadie se
+## entere, y volvería a costar una jornada porque sí.
+func test_todas_las_piezas_del_taller_tienen_sus_horas() -> void:
+	var sin_horas: Array[String] = []
+	for speciality: int in SettlementSim.SPECIALITY_MAKES:
+		for kind: int in SettlementSim.SPECIALITY_MAKES[speciality]:
+			if not Tool.HORAS_DE_TRABAJO.has(kind):
+				sin_horas.append(Tool.kind_name(kind as Tool.Kind))
+	assert_eq(sin_horas.size(), 0, "piezas sin horas puestas: %s" % str(sin_horas))

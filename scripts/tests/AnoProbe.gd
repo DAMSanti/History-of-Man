@@ -100,7 +100,7 @@ func _init() -> void:
 	var _indice_razonable := func(m: Moment) -> int:
 		var elegido := 0
 		match m.kind:
-			Moment.Kind.EXPEDICION, Moment.Kind.ASCENSO, Moment.Kind.BERREA:
+			Moment.Kind.ASCENSO, Moment.Kind.BERREA:
 				elegido = 1
 			Moment.Kind.INVIERNO:
 				var hace_falta := SettlementSim.HEARTH_WOOD_PER_DAY \

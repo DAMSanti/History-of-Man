@@ -23,7 +23,7 @@ func _initialize() -> void:
 	sim.store.add(Materia.Kind.PIEL, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
 	sim.day = 20
-	sim.expedicion.mandar(3, 1000)
+	sim.expedicion.mandar(3, 90.0)
 	for person: Inhabitant in sim.people:
 		if not sim.expedicion.fuera.has(person.id):
 			person.hurt_days = 4

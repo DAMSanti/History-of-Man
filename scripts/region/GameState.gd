@@ -43,8 +43,93 @@ static var raw_material: float = 0.0
 ## Ids de emplazamientos descubiertos. Al empezar, solo el propio.
 static var discovered: Dictionary = {}
 
+## Lo que se ha visto de la comarca: la niebla del mapa regional. Ver
+## [NieblaRegional] y SISTEMAS §4. Null hasta que empieza una partida.
+static var niebla: NieblaRegional = null
+
+
+## La niebla de la partida, creada la primera vez que se pregunta.
+static func la_niebla() -> NieblaRegional:
+	if niebla == null:
+		niebla = NieblaRegional.de_la_comarca()
+	return niebla
+
+
+## Levanta una forma de la niebla. Devuelve cuántos sitios eran nuevos.
+##
+## La forma es un diccionario y no una función para que pueda esperar en la cola
+## de una simulación —ver [SettlementSim.levantar_niebla]—:
+##
+## - `{"forma": "recuadro", "lon", "lat", "lado"}`: el recuadro de un mapa;
+## - `{"forma": "circulo", "lon", "lat", "radio"}`: lo que se ve desde una cumbre;
+## - `{"forma": "pasillo", "pasillo": Pasillo.a_datos()}`: una expedición.
+##
+## Con `"capa"` —`NieblaRegional.VISTA` por defecto—.
+##
+## **Levantar niebla NO descubre sitios**, salvo que la forma lo pida con
+## `"descubre": true`. Lo hacía —«lo que se ve, se descubre»— y era lo mismo que
+## regalar el mapa: entrar en un mapa levanta un recuadro alrededor, así que
+## empezar partida descubría a los vecinos de casa y visitar un punto ya
+## descubierto descubría los suyos. Dos quejas del usuario del 2026-09-14, «en
+## una nueva partida sólo debe aparecer 1 sitio» y «cuando vuelve al mapa
+## regional le han aparecido puntos nuevos». **Decisión del usuario**: descubren
+## las expediciones y nada más; la cumbre levanta niebla y da pistas, pero no
+## regala el yacimiento. Ver SISTEMAS §4.
+static func levantar_niebla(forma: Dictionary, sitios: SiteSet = null) -> int:
+	var capa := int(forma.get("capa", NieblaRegional.VISTA))
+	var dentro := Callable()
+	match String(forma.get("forma", "")):
+		"recuadro":
+			var lon := float(forma["lon"])
+			var lat := float(forma["lat"])
+			var medio := float(forma["lado"]) * 0.5
+			la_niebla().levantar_recuadro(lon, lat, float(forma["lado"]), capa)
+			var coseno := cos(deg_to_rad(lat))
+			dentro = func(s: Site) -> bool:
+				return absf((s.lon - lon) * Viaje.METROS_POR_GRADO * coseno) <= medio \
+					and absf((s.lat - lat) * Viaje.METROS_POR_GRADO) <= medio
+		"circulo":
+			var lon := float(forma["lon"])
+			var lat := float(forma["lat"])
+			var radio := float(forma["radio"])
+			la_niebla().levantar_circulo(lon, lat, radio, capa)
+			var coseno := cos(deg_to_rad(lat))
+			dentro = func(s: Site) -> bool:
+				var x := (s.lon - lon) * Viaje.METROS_POR_GRADO * coseno
+				var z := (s.lat - lat) * Viaje.METROS_POR_GRADO
+				return x * x + z * z <= radio * radio
+		"pasillo":
+			var pasillo := Pasillo.de_datos(forma["pasillo"])
+			pasillo.levantar_en(la_niebla(), capa)
+			dentro = func(s: Site) -> bool: return pasillo.contiene(s.lon, s.lat)
+		_:
+			push_warning("GameState: forma de niebla desconocida %s" % str(forma))
+			return 0
+	if capa & NieblaRegional.VISTA == 0:
+		return 0
+	# Ver la cabecera: levantar niebla no descubre. Sólo lo pide la expedición.
+	if not bool(forma.get("descubre", false)):
+		return 0
+	if sitios == null:
+		sitios = load("res://data/sites/cantabria_sites.res") as SiteSet
+	var nuevos := 0
+	for site: Site in sitios.sites:
+		if not is_discovered(site) and dentro.call(site):
+			discover(site)
+			nuevos += 1
+	return nuevos
+
 ## Ultimo balance, para poder contarselo al jugador
 static var last_report: String = ""
+
+## Qué familias de alfiler ha dejado encendidas el jugador: `familia -> bool`, y
+## lo que no está, encendido. Ver [FiltroDeMarcadores].
+##
+## Vive aquí y no en el botón porque el botón se rehace con la escena: al ir al
+## mapa regional y volver, el filtro volvía con todo puesto —queja del usuario
+## del 2026-09-14—. Y va en el estado del mapa —[Guardado]— para que tampoco se
+## pierda al cerrar el juego.
+static var marcadores_visibles: Dictionary = {}
 
 static var started: bool = false
 
@@ -63,12 +148,28 @@ static func begin(sites: SiteSet) -> void:
 	food = Subsistence.consumption(population) * START_FOOD_RATIO
 	raw_material = 0.0
 	discovered = {home.id: true}
+	# LA NIEBLA, levantada sólo en el recuadro del primer campamento: es lo que la
+	# banda conoce al empezar. SISTEMAS §4, primer criterio.
+	niebla = null
+	levantar_niebla({"forma": "recuadro", "lon": home.lon, "lat": home.lat,
+		"lado": float(Expedition.local_size_m)}, sites)
 	last_report = "La banda se instala en %s." % home.display_name()
 	started = true
 
 
 static func is_discovered(site: Site) -> bool:
 	return discovered.has(site.id)
+
+
+## Si el jugador ve este sitio: descubierto **y fuera de la niebla**. Es la
+## pregunta del mapa regional y de toda lista de sitios (SISTEMAS §4: «un sitio
+## bajo niebla no se puede seleccionar ni sale en ninguna lista»). Las dos cosas
+## van juntas por la regla de [levantar_niebla], pero un guardado de antes de la
+## niebla puede traer descubiertos sin niebla levantada.
+static func se_ve(site: Site) -> bool:
+	if not is_discovered(site):
+		return false
+	return niebla == null or niebla.levantada(site.lon, site.lat)
 
 
 static func discover(site: Site) -> void:

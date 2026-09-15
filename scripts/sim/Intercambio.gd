@@ -121,8 +121,8 @@ func cambiar(con: int, da: Dictionary, recibe: Dictionary) -> bool:
 		sim.store.take(material as Materia.Kind, float(da[material]))
 	for material: int in recibe:
 		sim.store.add(material as Materia.Kind, float(recibe[material]))
-	historial.append({"con": con, "dia": sim.day, "anyo": GameState.year,
-		"estacion": int(GameState.season), "da": da.duplicate(),
+	historial.append({"con": con, "dia": sim.day, "anyo": sim.anyo,
+		"estacion": int(sim.estacion), "da": da.duplicate(),
 		"recibe": recibe.duplicate()})
 	# Un trato cerrado a gusto de los dos se recuerda. Ver [TRATO_POR_CAMBIO].
 	if sim.contacto != null:
@@ -143,7 +143,7 @@ func cambiar(con: int, da: Dictionary, recibe: Dictionary) -> bool:
 ## Cantidades: decisión.
 func lo_que_traen(con: int) -> Dictionary:
 	var azar := RandomNumberGenerator.new()
-	azar.seed = hash([sim.game_seed, con, GameState.year, int(GameState.season), "traen"])
+	azar.seed = hash([sim.game_seed, con, sim.anyo, int(sim.estacion), "traen"])
 	var traen := {}
 	for material: Materia.Kind in [Materia.Kind.SILEX, Materia.Kind.CONCHA,
 			Materia.Kind.OCRE, Materia.Kind.PIEL]:
@@ -159,8 +159,8 @@ func lo_que_traen(con: int) -> Dictionary:
 func quedan_de(con: int) -> Dictionary:
 	var quedan := lo_que_traen(con)
 	for trato_hecho: Dictionary in historial:
-		if int(trato_hecho["con"]) != con or int(trato_hecho.get("anyo", -1)) != GameState.year \
-				or int(trato_hecho.get("estacion", -1)) != int(GameState.season):
+		if int(trato_hecho["con"]) != con or int(trato_hecho.get("anyo", -1)) != sim.anyo \
+				or int(trato_hecho.get("estacion", -1)) != int(sim.estacion):
 			continue
 		for material: int in (trato_hecho["recibe"] as Dictionary):
 			quedan[material] = maxf(float(quedan.get(material, 0.0))

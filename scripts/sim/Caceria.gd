@@ -205,6 +205,12 @@ func _pick_quarry(person: Inhabitant, species: Array) -> Dictionary:
 		Hunt.BUSCA_PIEZA_M, species)
 	var best: Dictionary = {}
 	var best_score := 0.0
+	# La prioridad de la especie MANDA SOBRE LA CUENTA, dentro de lo que el
+	# cazador tiene a su alcance: ver SISTEMAS §22. Se lleva aparte del
+	# `score` y no multiplicando, porque no es un empujón: un uro en alta gana
+	# a un ciervo mejor puntuado, pero si no hay uro cerca se caza el ciervo.
+	# Con todo en normal esto es una constante y la elección es la de siempre.
+	var best_nivel := Prioridades.Nivel.NUNCA
 	for animal: Dictionary in candidates:
 		var one := String(animal["species"])
 		# Lo que está en el agua no se caza a pie. El ánade se caza con red en
@@ -212,13 +218,24 @@ func _pick_quarry(person: Inhabitant, species: Array) -> Dictionary:
 		# detrás de él.
 		if not _dry_footing(animal["position"]):
 			continue
+		# Y lo que el jugador ha puesto en nunca no se caza, aunque sea lo
+		# único que haya.
+		var nivel := sim.prioridades.de_especie(one)
+		if nivel == Prioridades.Nivel.NUNCA:
+			continue
 		var distance: float = maxf(
 			person.position.distance_to(animal["position"]), 1.0)
 		# Las raciones mandan y la distancia sólo desempata: el exponente la
 		# deja pesar poco a propósito, porque andar doscientos metros de más
 		# por un ciervo sale a cuenta y andarlos por un conejo no.
-		var score := Fauna.rations_of(one) / pow(distance, 0.35)
-		if score > best_score:
+		var score := Fauna.rations_of(one) / Calculo.potencia(distance, 0.35)
+		# `Nivel` va de mejor a peor -ALTA es cero-, así que un nivel más bajo
+		# gana sin comparar puntuaciones; dentro del mismo nivel, la cuenta.
+		# El `score > 0` de siempre se queda: una pieza que no da nada no se
+		# persigue por mucha prioridad que lleve.
+		if (nivel < best_nivel and score > 0.0) \
+				or (nivel == best_nivel and score > best_score):
+			best_nivel = nivel
 			best_score = score
 			best = animal
 	return best
@@ -465,7 +482,7 @@ func _tracking_hours_for(person: Inhabitant,
 		return SettlementSim.HORAS_UTILES
 
 	var chain := person.effectiveness() * sim._knowledge_factor(person)
-	chain *= ResourceField.seasonal_factor(person.activity, GameState.season)
+	chain *= ResourceField.seasonal_factor(person.activity, sim.estacion)
 	chain *= sim.weather.work_factor()
 	chain *= Hunting.crew_factor(speciality, sim.taller.hunters_in(speciality))
 	var tool_kind := sim.taller._tool_for(person)

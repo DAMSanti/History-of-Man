@@ -65,7 +65,7 @@ func _init() -> void:
 	# ¿Y cuántas caen cerca del poblado? Que una materia esté sembrada no quiere
 	# decir que se vea: si su hábitat la manda toda al otro extremo del valle,
 	# el jugador no la encuentra nunca. Esto mide reparto, no existencia.
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	var home := Vector3(2048.0, 0.0, 2048.0)
 	if terrain and terrain.has_method("get_height_at"):
 		home.y = terrain.get_height_at(home)
@@ -146,12 +146,6 @@ func _init() -> void:
 	quit()
 
 
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
-	return null
 
 
 func _cost(vp: RID) -> Vector2:

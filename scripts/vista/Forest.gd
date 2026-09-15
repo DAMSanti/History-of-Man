@@ -125,6 +125,73 @@ const CADUCO := {
 }
 
 
+## EL COLOR DE CADA ESPECIE, medido contra fotos. GRAFICOS §7.1.
+##
+## Las texturas de hoja y corteza vienen de ambientCG, y su color no es el del árbol de
+## aquí: medidas con la luz del juego a mediodía, las copas salían verde azulado
+## —a* ≈ −25 contra −11 a −15 de las fotos— y la corteza del pino sin su naranja. Estos
+## tintes llevan la media a la de `models/arboles/color_de_referencia.json`.
+##
+##   copa      la hoja en verano
+##   otono     la hoja en otoño, sólo los caducos: un tinte que multiplica el verde
+##             no llega nunca a amarillo, así que el otoño se mide aparte
+##   corteza   el tronco, todo el año
+##   impostor  la luz del impostor de varias vistas contra el 3D, por canal: la sombra
+##             que la copa se hace a sí misma y la foto horneada no tiene. Y
+##             `impostor_otono`: con la hoja cayendo, el 3D y el impostor la quitan distinto
+##   minimo    la lámina del escalón Mínimo en verano, y `minimo_otono`: otra
+##             textura, otra cuenta. Sobre la lámina dividida por su brillo medio
+##   rama      lo que queda de un caduco de Mínimo en invierno, contra su corteza
+##
+## Salen de `ArbolColorProbe` con CALIBRAR=1, que itera el tinte contra la foto, y se
+## verifican sin él. Las otras estaciones no tienen foto: siguen la forma del año de
+## [PERENNE] y [CADUCO] a partir de la que sí la tiene.
+const COLOR_DE_ESPECIE := {
+	"pino": {
+		"copa": Color(1.301, 1.359, 0.871),
+		"corteza": Color(1.510, 1.084, 0.827),
+		"impostor": Vector3(0.706, 0.692, 1.163),
+		"minimo": Color(0.936, 0.929, 0.611),
+	},
+	"pino_joven": {
+		"copa": Color(1.245, 1.305, 0.846),
+		"corteza": Color(1.459, 1.041, 0.796),
+		"impostor": Vector3(0.797, 0.793, 1.223),
+		"minimo": Color(0.892, 0.861, 0.581),
+	},
+	"abedul": {
+		"copa": Color(1.690, 1.712, 0.898),
+		"otono": Color(2.049, 1.710, 0.989),
+		"corteza": Color(1.085, 1.006, 0.874),
+		"impostor": Vector3(0.607, 0.593, 0.968),
+		"impostor_otono": Vector3(0.471, 0.444, 0.885),
+		"minimo": Color(0.984, 0.982, 0.586),
+		"minimo_otono": Color(1.193, 0.976, 0.381),
+		"rama": Color(1.210, 1.176, 1.164),
+	},
+	"roble": {
+		"copa": Color(0.820, 0.844, 0.402),
+		"otono": Color(1.118, 0.864, 0.010),
+		"corteza": Color(1.233, 1.029, 0.775),
+		"impostor": Vector3(0.668, 0.714, 1.077),
+		"impostor_otono": Vector3(0.633, 0.513, 3.590),
+		"minimo": Color(0.958, 0.928, 0.532),
+		"minimo_otono": Color(1.349, 1.023, 0.010),
+		"rama": Color(0.909, 0.808, 0.722),
+	},
+	"avellano": {
+		"copa": Color(0.848, 1.023, 0.550),
+		"otono": Color(1.090, 0.859, 0.244),
+		"corteza": Color(0.893, 0.790, 0.639),
+		"impostor": Vector3(0.686, 0.761, 0.877),
+		"impostor_otono": Vector3(0.708, 0.693, 1.459),
+		"minimo": Color(0.843, 0.986, 0.542),
+		"minimo_otono": Color(1.162, 0.959, 0.065),
+		"rama": Color(0.800, 0.718, 0.685),
+	},
+}
+
+
 const KINDS: Array[Dictionary] = [
 	{
 		# Abedular de vaguada: hoja caduca en lo hondo y húmedo. Es la otra
@@ -234,6 +301,8 @@ var _centre := Vector2i(999999, 999999)
 
 ## El naipe cruzado del árbol de cerca y su material por especie.
 var _crossed: ArrayMesh
+## El brillo medio de cada celda del atlas de Mínimo. Ver `brillo_de_celdas`.
+var _brillo_de_celda := PackedFloat32Array()
 var _near_material: Array[ShaderMaterial] = []
 
 ## El material del impostor de cada especie. Es UNO por especie y lo comparten
@@ -241,6 +310,88 @@ var _near_material: Array[ShaderMaterial] = []
 var _far_material: Array[ShaderMaterial] = []
 
 var _total := 0
+
+## Lo que decide la siembra, hasta aquí. Se sube al cambiar CÓMO se siembra —las reglas de
+## [_sow], `KINDS`, `SPACING`—, que no sale en ningún número de lo que se guarda: sin
+## subirla, la vuelta al valle enseñaría el bosque de las reglas viejas.
+const VERSION_DE_LA_SIEMBRA := 1
+
+## La última siembra, con la huella de lo que la decidió. Volver al mismo valle —ir al
+## regional y volver, retomar el campamento— sembraba otra vez los mismos árboles, 9-14 s
+## (INTERFAZ §9). Es UNA, la del último valle: guardar las de todos los valles sería un
+## millón de árboles por valle en memoria. Vive lo que vive el proceso; abrir el juego
+## otra vez siembra.
+static var _siembra_guardada: Dictionary = {}
+
+## Cuántas veces se ha sembrado de verdad en este proceso. Lo lee la sonda del tránsito
+## para decir que la vuelta no sembró.
+static var siembras := 0
+
+
+# --- los escalones (GRAFICOS §7.1, 2026-09-15) ------------------------------------
+
+## El escalón de árboles: 0 Mínimo, 1 Medio, 2 Alto, 3 Ultra. Lo pone la
+## configuración al montar el mapa (INTERFAZ §8.7).
+##
+## **Mínimo es el bosque de siempre** —tarjetas cruzadas y una foto—, por el mismo
+## camino de código. Los otros tres ponen árboles 3D de cerca e impostores de varias
+## vistas de lejos.
+var escalon := 0
+
+## Hasta dónde llega el 3D, en metros desde la cámara. Sale de la configuración
+## (`Configuracion.graficos["radio_3d"]`, donde están las cifras medidas) al montar, y
+## se cambia en caliente con [aplicar_configuracion].
+var radio_3d := 40.0
+
+## Hasta dónde se reparte el nivel de detalle del 3D, por escalón: con el slider en
+## «sin límite», repartir los niveles sobre 100 km dejaba todo el valle en el nivel 0.
+const DETALLE_HASTA := [0.0, 40.0, 70.0, 120.0]
+
+## Hasta dónde mezcla el impostor sus cuatro vistas, por escalón; más lejos lee la más
+## cercana. Medido en la vista de medida, bosque de Medio, dos vueltas: mezclando
+## siempre 7,0-7,3 ms; hasta 300 m, 4,7-4,8; hasta 150, 3,2-3,4; sin mezclar, 3,2-3,3.
+## Medio a 150 m cabe en lo que el usuario dio por bueno —3,8 ms en vez de 3,0—; Alto va
+## por encima y Ultra no tiene límite (GRAFICOS §7).
+const MEZCLA_HASTA := [0.0, 150.0, 300.0, 1.0e6]
+
+## Lado del bloque de cerca en 3D, en metros. **32 y no los 128 de las tarjetas**: el
+## nivel de detalle y el desvanecido se eligen por bloque, y con radios de decenas de
+## metros un bloque de 128 lo metía todo en el nivel 0.
+const BLOQUE_3D_M := 32.0
+
+
+## Dónde empieza cada nivel de detalle, en fracción del radio del 3D.
+const NIVELES_DESDE := [0.0, 0.25, 0.55]
+
+## Cuántas variantes hay de cada especie. Ver `scripts/tools/arboles/generar.mjs`.
+const VARIANTES := 6
+
+const SHADER_3D := "res://shaders/arbol_3d.gdshader"
+const SHADER_VISTAS := "res://shaders/arbol_impostor_vistas.gdshader"
+
+## Especie -> variante -> [ArbolModelo].
+var _modelos: Array = []
+## Especie -> [corteza, hoja]: los materiales 3D, compartidos por sus variantes.
+var _mat_3d: Array = []
+## Especie -> el material del impostor de varias vistas.
+var _mat_vistas: Array[ShaderMaterial] = []
+
+
+## La variante de un pie, fija por su sitio: el mismo árbol es la misma variante en
+## el 3D, en el impostor y en la próxima partida.
+static func variante_de(sitio: Vector3) -> int:
+	return posmod(hash(Vector2i(roundi(sitio.x * 10.0), roundi(sitio.z * 10.0))), VARIANTES)
+
+
+## Lado del bloque de cerca del escalón.
+func lado_de_bloque() -> float:
+	return BLOCK_M if escalon <= 0 else BLOQUE_3D_M
+
+
+## Hasta dónde se montan bloques de cerca: el de las tarjetas en Mínimo, el del 3D en
+## los demás.
+func radio_de_cerca() -> float:
+	return near_distance if escalon <= 0 else radio_3d
 
 
 ## Cuánto se deja sin árboles alrededor de cada boca de cueva, en metros.
@@ -269,16 +420,25 @@ static func en_un_claro(punto: Vector3, bocas: PackedVector3Array,
 
 func setup(terrain: TerrainGenerator) -> void:
 	_terrain = terrain
+	# La densidad es un ajuste de la configuración (INTERFAZ §8), y entra AL
+	# SEMBRAR, que es al montar el mapa: rehacer la siembra en caliente congela la
+	# pantalla unos 10 s (medido, GRAFICOS §7). Ver [resembrar].
+	density = float(Configuracion.graficos["vegetacion"])
 	if not ResourceLoader.exists(PropModels.LIBRARY_PATH):
 		push_warning("Faltan los modelos. Generalos con PropIngest.")
 		return
-	_library = load(PropModels.LIBRARY_PATH) as PropLibrary
+	_library = await Carga.cargar(PropModels.LIBRARY_PATH) as PropLibrary
 	if _library == null:
 		return
 
-	var image: Image = load(ATLAS_PATH) if ResourceLoader.exists(ATLAS_PATH) \
+	var image: Image = await Carga.cargar(ATLAS_PATH) as Image if ResourceLoader.exists(ATLAS_PATH) \
 		else null
+	await Carga.ceder()
 	if image != null:
+		if image.is_compressed():
+			image.decompress()
+		_brillo_de_celda = brillo_de_celdas(image, ATLAS_GRID)
+		await Carga.ceder()
 		image.generate_mipmaps()
 		_atlas = ImageTexture.create_from_image(image)
 		print("Forest: atlas %dx%d, %d celdas por lado" % [
@@ -287,9 +447,44 @@ func setup(terrain: TerrainGenerator) -> void:
 		push_warning("Falta el atlas de arboles. Hornealo con:\n"
 			+ "  godot --path . --script res://scripts/tools/TreeAtlas.gd")
 
+	escalon = clampi(int(Configuracion.graficos.get("arboles", 0)), 0, MEZCLA_HASTA.size() - 1)
+	radio_3d = maxf(float(Configuracion.graficos.get("radio_3d", DETALLE_HASTA[maxi(escalon, 1)])), 1.0)
+	add_to_group(Configuracion.GRUPO)
 	_measure()
-	_sow()
-	_raise_impostors()
+	await _sow()
+
+
+## Los árboles de lejos, ya sembrado el bosque. Va aparte de [setup] para que quien monta
+## la escena lo enseñe como otra etapa de la carga: son 3-5 s de cargar modelos e
+## impostores contra los 14 de sembrar (INTERFAZ §9).
+func levantar_lejos() -> void:
+	await _levantar_lejos()
+
+
+## Los árboles de lejos del escalón que toque.
+func _levantar_lejos() -> void:
+	if escalon <= 0 or not await _cargar_modelos():
+		escalon = 0
+		_raise_impostors()
+		return
+	await _raise_impostors_vistas()
+
+
+## Siembra otra vez con otra densidad: se quitan los árboles de cerca y los
+## impostores y se rehacen. **No lo usa la configuración**, que deja la densidad
+## para el próximo mapa: medido con `GpuProfile NIVELES=1`, tarda **unos 10 s**
+## con el fotograma parado. Lo usa esa sonda para medir lo que cuesta cada valor.
+func resembrar(nueva: float) -> void:
+	if is_equal_approx(nueva, density) or _terrain == null or _library == null:
+		return
+	density = nueva
+	for hijo: Node in get_children():
+		hijo.queue_free()
+	_live.clear()
+	_pending.clear()
+	_centre = Vector2i(999999, 999999)
+	await _sow()
+	await _levantar_lejos()
 
 
 ## La talla de cada especie, sacada de su propia malla.
@@ -328,9 +523,22 @@ func _sow() -> void:
 	var humidity: PackedFloat32Array = maps["humidity"]
 	var river: PackedFloat32Array = maps["river"]
 	var extent: Vector2 = maps["extent"]
+	_extension = extent
 	var origin: Vector2 = maps["origin"]
 	var water_y: float = maps["water_y"]
 	var spacing := extent.x / float(res - 1)
+
+	var huella := huella_de_la_siembra(maps)
+	if _siembra_guardada.get("huella", 0) == huella and not _siembra_guardada.is_empty():
+		# Una copia del reparto por especie, no el de la estática: [_sow] y [resembrar]
+		# lo vacían. Los árboles de dentro sí se comparten, que nadie los toca.
+		_stands.assign(_siembra_guardada["stands"])
+		_total = int(_siembra_guardada["total"])
+		# La etapa de la carga pesaba lo de sembrar, y no se ha sembrado.
+		Carga.dar_por_hecha_la_etapa()
+		print("Forest: %d arboles de la siembra guardada, sin sembrar" % _total)
+		return
+	siembras += 1
 
 	# El rango de alturas, para normalizar la cota igual que hace el terreno.
 	var lowest := height[0]
@@ -364,6 +572,10 @@ func _sow() -> void:
 	_total = 0
 
 	for iz in range(steps_z):
+		# La siembra son 14 s: cada fila dice por dónde va y, con pantalla de carga, deja
+		# pintar si ya ha gastado su cuadro (INTERFAZ §9). Sin pantalla no espera nada.
+		Carga.avanzar(float(iz) / float(steps_z))
+		await Carga.ceder()
 		for ix in range(steps_x):
 			# El candidato, movido dentro de su casilla para que no se lea la
 			# cuadrícula.
@@ -462,11 +674,22 @@ func _sow() -> void:
 
 	print("Forest: %d arboles sembrados en %d x %d candidatos" % [
 		_total, steps_x, steps_z])
+	_siembra_guardada = {"huella": huella, "stands": _stands.duplicate(), "total": _total}
 	for k in range(KINDS.size()):
 		var count := 0
 		for tile: Vector2i in _stands[k]:
 			count += (_stands[k][tile] as Array).size()
 		print("  %-18s %6d" % [KINDS[k]["name"], count])
+
+
+## Todo lo que decide dónde cae cada árbol, en un número: el relieve, la humedad y los
+## ríos tal cual —no su ruta: dos valles pueden salir de la misma—, el recuadro, el agua,
+## las bocas, la densidad y las reglas. Hashear los mapas es trabajo del motor, no bucle de
+## script: milisegundos contra los segundos de sembrar.
+func huella_de_la_siembra(maps: Dictionary) -> int:
+	return hash([VERSION_DE_LA_SIEMBRA, SPACING, BLOCK_M, KINDS, stand_size, density, claros,
+		maps["resolution"], maps["extent"], maps["origin"], maps["water_y"],
+		maps["height"], maps["humidity"], maps["river"]])
 
 
 ## Pertenencia a una banda [min, max] con un margen blando a cada lado.
@@ -525,6 +748,15 @@ func _raise_impostors() -> void:
 		# se giran hacia la cámara -son tres cruzadas- y se desvanecen al revés,
 		# porque son el relevo del impostor y no al contrario. Compartir shader y
 		# textura es lo que hace que el relevo no se vea.
+		if int(kind["cell"]) + KINDS.size() < _brillo_de_celda.size():
+			material.set_shader_parameter("brillo_perfil", _brillo_de_celda[int(kind["cell"])])
+			material.set_shader_parameter("brillo_copa",
+				_brillo_de_celda[int(kind["cell"]) + KINDS.size()])
+		var de_copa := tinte_de(k, Subsistence.Season.VERANO, true)
+		material.set_shader_parameter("tint", de_copa)
+		var colores: Dictionary = COLOR_DE_ESPECIE[String(kind["model"])]
+		if colores.has("rama"):
+			material.set_shader_parameter("rama", colores["rama"])
 		var near := material.duplicate() as ShaderMaterial
 		near.set_shader_parameter("billboard", 0.0)
 		near.set_shader_parameter("invert_fade", 1.0)
@@ -609,8 +841,9 @@ func _process(_delta: float) -> void:
 		Cronometro.cierra("vista: bosque")
 		return
 	var eye := camera.global_position
-	var centre := Vector2i(int(floor(eye.x / BLOCK_M)),
-		int(floor(eye.z / BLOCK_M)))
+	var lado := lado_de_bloque()
+	var centre := Vector2i(int(floor(eye.x / lado)),
+		int(floor(eye.z / lado)))
 	if centre != _centre:
 		_centre = centre
 		_replan()
@@ -624,15 +857,88 @@ func _process(_delta: float) -> void:
 		if _pending.is_empty():
 			break
 		_build_block(_pending.pop_front())
+	if escalon > 0:
+		_poner_el_ojo(eye)
 	Cronometro.cierra("vista: bosque")
 
 
+## La cámara y el radio ya montado, a los materiales del 3D y del impostor.
+##
+## **El impostor sólo se esconde dentro de lo montado**: los bloques pendientes van por
+## distancia, así que el primero de la cola dice hasta dónde está todo en su sitio. Si
+## la cámara corre más que el montaje, el radio encoge y se ve el impostor en vez de un
+## hueco —la otra mitad de la queja, «zonas en las que desaparecen»—.
+func _poner_el_ojo(eye: Vector3) -> void:
+	var radio := radio_de_cerca()
+	var montado := radio
+	if not _pending.is_empty():
+		var bloque: Vector2i = _pending[0]
+		var desde := Vector2(bloque) * BLOQUE_3D_M
+		var caja := Rect2(desde, Vector2(BLOQUE_3D_M, BLOQUE_3D_M))
+		var punto := Vector2(clampf(eye.x, caja.position.x, caja.end.x),
+			clampf(eye.z, caja.position.y, caja.end.y))
+		montado = clampf(punto.distance_to(Vector2(eye.x, eye.z)), 0.0, radio)
+	for pareja: Array in _mat_3d:
+		for m: ShaderMaterial in pareja:
+			m.set_shader_parameter("ojo", eye)
+	for m: ShaderMaterial in _mat_vistas:
+		m.set_shader_parameter("ojo", eye)
+		m.set_shader_parameter("oculto_hasta", montado)
+	radio_montado = montado
+
+
+## Cuántos bloques de montar caben en el mapa, por lado. Cero si todavía no se ha
+## sembrado.
+func bloques_del_mapa() -> Vector2i:
+	if _extension == Vector2.ZERO:
+		return Vector2i.ZERO
+	var lado := lado_de_bloque()
+	return Vector2i(int(ceil(_extension.x / lado)), int(ceil(_extension.y / lado)))
+
+
+## El tamaño del mapa sembrado, en metros.
+var _extension := Vector2.ZERO
+
+
+## Cambia la distancia del 3D sin volver a sembrar: se desmonta el 3D y se vuelve a
+## montar con la nueva. Mientras, el impostor tapa lo que falta —sólo se esconde
+## dentro de lo montado—, así que no queda hueco.
+func aplicar_configuracion() -> void:
+	if escalon <= 0:
+		return
+	var nuevo := maxf(float(Configuracion.graficos.get("radio_3d", radio_3d)), 1.0)
+	if is_equal_approx(nuevo, radio_3d):
+		return
+	radio_3d = nuevo
+	for bloque: Vector2i in _live:
+		for nodo: Node in _live[bloque]:
+			nodo.queue_free()
+	_live.clear()
+	_pending.clear()
+	_centre = Vector2i(999999, 999999)
+	for pareja: Array in _mat_3d:
+		for m: ShaderMaterial in pareja:
+			m.set_shader_parameter("radio_3d", radio_3d)
+
+
+## Hasta dónde está montado el 3D alrededor de la cámara, en metros. Para las sondas.
+var radio_montado := 0.0
+
+
 func _replan() -> void:
-	var reach := int(ceil(near_distance / BLOCK_M))
+	var reach := int(ceil(radio_de_cerca() / lado_de_bloque()))
 	var keep: Dictionary = {}
 	var order: Array[Vector2i] = []
-	for dz in range(-reach, reach + 1):
-		for dx in range(-reach, reach + 1):
+	var desde := Vector2i(-reach, -reach)
+	var hasta := Vector2i(reach, reach)
+	# SIN SALIRSE DEL MAPA: con la distancia del 3D «sin límite» el recorrido eran
+	# millones de bloques vacíos por cada cambio de bloque de la cámara.
+	var bloques := bloques_del_mapa()
+	if bloques != Vector2i.ZERO:
+		desde = Vector2i(maxi(desde.x, -_centre.x), maxi(desde.y, -_centre.y))
+		hasta = Vector2i(mini(hasta.x, bloques.x - 1 - _centre.x), mini(hasta.y, bloques.y - 1 - _centre.y))
+	for dz in range(desde.y, hasta.y + 1):
+		for dx in range(desde.x, hasta.x + 1):
 			if Vector2(dx, dz).length() > float(reach) + 0.5:
 				continue
 			var block := _centre + Vector2i(dx, dz)
@@ -671,6 +977,9 @@ func _replan() -> void:
 ## leídos de la siembra. Si se recalculasen, el de cerca y el de lejos estarían en
 ## sitios distintos y el relevo se vería.
 func _build_block(block: Vector2i) -> void:
+	if escalon > 0:
+		_bloque_3d(block)
+		return
 	if _live.has(block) or _near_material.is_empty():
 		return
 	_live[block] = ([] as Array[MultiMeshInstance3D])
@@ -686,6 +995,8 @@ func _build_block(block: Vector2i) -> void:
 		if found.is_empty():
 			continue
 
+		# A la altura de sus árboles, por lo mismo que en `centro_de`.
+		var aqui := centro_de(found, Vector2(centre.x, centre.z))
 		var multi := MultiMesh.new()
 		multi.transform_format = MultiMesh.TRANSFORM_3D
 		multi.mesh = _crossed
@@ -699,12 +1010,12 @@ func _build_block(block: Vector2i) -> void:
 			var turn := Basis(placement.basis.get_rotation_quaternion())
 			multi.set_instance_transform(i, Transform3D(
 				turn.scaled(Vector3(size.x * grow, size.y * grow, size.x * grow)),
-				placement.origin - centre))
+				placement.origin - aqui))
 
 		var node := MultiMeshInstance3D.new()
 		node.name = "Arbol_%s_%d_%d" % [KINDS[k]["model"], block.x, block.y]
 		node.multimesh = multi
-		node.position = centre
+		node.position = aqui
 		# Éstos SÍ hacen sombra: un bosque sin sombra no pesa en el suelo, y de
 		# cerca es donde se nota. Los impostores no, que son treinta mil.
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
@@ -834,20 +1145,339 @@ func _tile_reach(tile: Vector2i, point: Vector3) -> float:
 ## shader. Se puede llamar una vez por jornada sin pensarlo dos veces.
 func set_season(season: Subsistence.Season, previa: Subsistence.Season,
 		avance: float) -> void:
-	if _far_material.is_empty():
+	if _far_material.is_empty() and _mat_vistas.is_empty():
 		return
 	var t := clampf(avance, 0.0, 1.0)
 	for k in range(KINDS.size()):
 		var kind: Dictionary = KINDS[k]
-		var tabla: Dictionary = CADUCO if bool(kind.get("caduco", false)) 			else PERENNE
-		var desde: Dictionary = tabla[previa]
-		var hasta: Dictionary = tabla[season]
-		var tinte: Color = (desde["tinte"] as Color).lerp(
-			hasta["tinte"] as Color, t)
-		var hoja := lerpf(float(desde["hoja"]), float(hasta["hoja"]), t)
-		for material: ShaderMaterial in [_far_material[k], _near_material[k]]:
+		var tabla: Dictionary = CADUCO if bool(kind.get("caduco", false)) else PERENNE
+		var hoja := lerpf(float(tabla[previa]["hoja"]), float(tabla[season]["hoja"]), t)
+		var de_3d := tinte_de(k, previa, false).lerp(tinte_de(k, season, false), t)
+		var de_minimo := tinte_de(k, previa, true).lerp(tinte_de(k, season, true), t)
+		var materiales: Array = []
+		if k < _far_material.size():
+			for m: ShaderMaterial in [_far_material[k], _near_material[k]]:
+				materiales.append([m, de_minimo])
+		if k < _mat_3d.size():
+			materiales.append([(_mat_3d[k] as Array)[1], de_3d])
+		if k < _mat_vistas.size():
+			materiales.append([_mat_vistas[k], de_3d])
+			_mat_vistas[k].set_shader_parameter("luz",
+				luz_de(k, previa).lerp(luz_de(k, season), t))
+		for par: Array in materiales:
+			var material := par[0] as ShaderMaterial
 			if material == null:
 				continue
-			material.set_shader_parameter("tint",
-				Vector3(tinte.r, tinte.g, tinte.b))
+			var tinte: Color = par[1]
+			material.set_shader_parameter("tint", tinte)
 			material.set_shader_parameter("hoja", hoja)
+
+
+## La luminancia lineal media de lo opaco de cada celda del atlas, en orden de celda.
+##
+## Lo que el shader de Mínimo divide antes de teñir. Se lee del atlas y no se apunta a
+## mano: si se rehornea, cambia con él.
+static func brillo_de_celdas(image: Image, grid: int) -> PackedFloat32Array:
+	var brillos := PackedFloat32Array()
+	var lado := image.get_width() / grid
+	for c in range(grid * grid):
+		var suma := 0.0
+		var n := 0
+		for y in range(0, lado, 4):
+			for x in range(0, lado, 4):
+				var p := image.get_pixel((c % grid) * lado + x, (c / grid) * lado + y)
+				if p.a > 0.5:
+					var lineal := p.srgb_to_linear()
+					suma += 0.2126 * lineal.r + 0.7152 * lineal.g + 0.0722 * lineal.b
+					n += 1
+		brillos.append(suma / float(n) if n > 0 else 1.0)
+	return brillos
+
+
+## La luz del impostor de la especie `k` en una estación: la de otoño en los caducos
+## pelándose, la de verano en lo demás. Ver [COLOR_DE_ESPECIE].
+static func luz_de(k: int, season: Subsistence.Season) -> Vector3:
+	var color: Dictionary = COLOR_DE_ESPECIE[String(KINDS[k]["model"])]
+	var de_otono := bool(KINDS[k].get("caduco", false)) and (season == Subsistence.Season.OTONO
+		or season == Subsistence.Season.INVIERNO)
+	return color["impostor_otono" if de_otono else "impostor"]
+
+
+## El tinte de la copa de la especie `k` en una estación: el medido de la estación con
+## foto más cercana, y encima lo que cambia el año según [PERENNE] o [CADUCO].
+##
+## Los caducos toman el otoño y el invierno del tinte de otoño TAL CUAL —la hoja seca
+## que queda; lo que cambia en invierno es cuánta, `hoja`—, y la primavera del de verano.
+## Los perennes, todo del de verano con su forma del año.
+##
+## El invierno de los caducos se sacaba antes también con la forma del año, relativa al
+## otoño; como el otoño de [CADUCO] tiene 0,42 de azul, el invierno salía ×1,9 de azul y
+## a principios de primavera los robles se veían azules.
+static func tinte_de(k: int, season: Subsistence.Season, minimo: bool) -> Color:
+	var kind: Dictionary = KINDS[k]
+	var caduco := bool(kind.get("caduco", false))
+	var tabla: Dictionary = CADUCO if caduco else PERENNE
+	var color: Dictionary = COLOR_DE_ESPECIE[String(kind["model"])]
+	var de_otono := caduco and (season == Subsistence.Season.OTONO
+		or season == Subsistence.Season.INVIERNO)
+	var ancla := Subsistence.Season.OTONO if de_otono else Subsistence.Season.VERANO
+	var clave := "copa"
+	if minimo:
+		clave = "minimo_otono" if de_otono else "minimo"
+	elif de_otono:
+		clave = "otono"
+	var medido: Color = color[clave]
+	if de_otono:
+		return medido
+	var forma: Color = tabla[season]["tinte"]
+	var base: Color = tabla[ancla]["tinte"]
+	return Color(medido.r * forma.r / base.r, medido.g * forma.g / base.g,
+		medido.b * forma.b / base.b)
+
+
+# --- el bosque de los escalones Medio, Alto y Ultra -----------------------------------
+
+## Carga los árboles 3D y les pone los materiales del bosque. Falso si faltan.
+func _cargar_modelos() -> bool:
+	var shader: Shader = load(SHADER_3D)
+	if shader == null:
+		return false
+	_modelos.clear()
+	_mat_3d.clear()
+	for kind: Dictionary in KINDS:
+		var clave := String(kind["model"])
+		var variantes: Array = []
+		var corteza: ShaderMaterial = null
+		var hoja: ShaderMaterial = null
+		for v in range(VARIANTES):
+			Carga.avanzar(0.6 * float(_modelos.size() * VARIANTES + v) / float(KINDS.size() * VARIANTES))
+			await Carga.ceder()
+			# En segundo plano si hay pantalla de carga: el primer modelo de cada especie
+			# decodifica sus texturas, y de un tirón rozaba el medio segundo de cuadro.
+			var modelo: ArbolModelo = await Carga.cargar(ArbolModelo.ruta(clave, v)) as ArbolModelo \
+				if ResourceLoader.exists(ArbolModelo.ruta(clave, v)) else null
+			if modelo == null:
+				push_warning("Forest: falta el árbol 3D %s %d; va el bosque Mínimo" % [clave, v])
+				return false
+			if corteza == null:
+				corteza = _material_3d(shader, modelo.niveles[0].surface_get_material(0), false)
+				hoja = _material_3d(shader, modelo.niveles[0].surface_get_material(1), true)
+			# Los materiales del bosque, en la malla ya cargada: no se guarda, así que el
+			# recurso del disco no cambia.
+			for malla: Mesh in modelo.niveles:
+				(malla as ArrayMesh).surface_set_material(0, corteza)
+				(malla as ArrayMesh).surface_set_material(1, hoja)
+			variantes.append(modelo)
+		_modelos.append(variantes)
+		_mat_3d.append([corteza, hoja])
+		var de_corteza: Color = COLOR_DE_ESPECIE[clave]["corteza"]
+		corteza.set_shader_parameter("tint", de_corteza)
+		var de_copa := tinte_de(_modelos.size() - 1, Subsistence.Season.VERANO, false)
+		hoja.set_shader_parameter("tint", de_copa)
+	return true
+
+
+func _material_3d(shader: Shader, original: Material, es_hoja: bool) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	var estandar := original as BaseMaterial3D
+	if estandar != null:
+		m.set_shader_parameter("albedo_tex", estandar.albedo_texture)
+		m.set_shader_parameter("recorte", estandar.alpha_scissor_threshold)
+	m.set_shader_parameter("es_hoja", es_hoja)
+	m.set_shader_parameter("radio_3d", radio_de_cerca())
+	return m
+
+
+## Los impostores de varias vistas: por especie, un material con sus seis variantes, y
+## por tesela un MultiMesh donde cada pie lleva su variante en el dato de instancia.
+func _raise_impostors_vistas() -> void:
+	var shader: Shader = load(SHADER_VISTAS)
+	if shader == null:
+		return
+	var cuadro := _cuadro_de_vistas()
+	var radio := radio_de_cerca()
+	_mat_vistas.clear()
+	for k in range(KINDS.size()):
+		Carga.avanzar(0.6 + 0.4 * float(k) / float(KINDS.size()))
+		await Carga.ceder()
+		var clave := String(KINDS[k]["model"])
+		var colores: Array[Image] = []
+		var normales: Array[Image] = []
+		var radios := PackedFloat32Array()
+		var centros := PackedFloat32Array()
+		var anchos := PackedFloat32Array()
+		var altos := PackedFloat32Array()
+		for v in range(VARIANTES):
+			# Una variante son dos imágenes con sus mipmaps: la especie entera de golpe
+			# llegó a un cuadro de 590 ms al fundar (INTERFAZ §9).
+			await Carga.ceder()
+			var base := "res://models/arboles/impostores/%s_%d" % [clave, v]
+			var color: Image = (await Carga.cargar(base + "_color.res") as Image).duplicate()
+			var normal: Image = (await Carga.cargar(base + "_normal.res") as Image).duplicate()
+			color.generate_mipmaps()
+			normal.generate_mipmaps()
+			colores.append(color)
+			normales.append(normal)
+			var ficha: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(base + ".json"))
+			radios.append(float(ficha["radio"]))
+			centros.append(float(ficha["centro_y"]))
+			# La caja del mismo modelo que se horneó, con el mismo margen del 4 %: el ancho,
+			# en diagonal, porque el pie está girado y se mira desde cualquier acimut.
+			var caja := (load(ArbolModelo.ruta(clave, v)) as ArbolModelo).niveles[0].get_aabb()
+			anchos.append(Vector2(caja.size.x, caja.size.z).length() * 0.5 * 1.04)
+			altos.append(caja.size.y * 0.5 * 1.04)
+		var array_color := Texture2DArray.new()
+		array_color.create_from_images(colores)
+		var array_normal := Texture2DArray.new()
+		array_normal.create_from_images(normales)
+		var m := ShaderMaterial.new()
+		m.shader = shader
+		m.set_shader_parameter("color_vistas", array_color)
+		m.set_shader_parameter("normal_vistas", array_normal)
+		m.set_shader_parameter("vistas", ImpostorVistas.VISTAS)
+		m.set_shader_parameter("radios", radios)
+		m.set_shader_parameter("centros", centros)
+		m.set_shader_parameter("anchos", anchos)
+		m.set_shader_parameter("mezcla_hasta", float(MEZCLA_HASTA[clampi(escalon, 0, MEZCLA_HASTA.size() - 1)]))
+		m.set_shader_parameter("altos", altos)
+		m.set_shader_parameter("oculto_hasta", 0.0)
+		var de_corteza: Color = COLOR_DE_ESPECIE[clave]["corteza"]
+		var de_copa := tinte_de(k, Subsistence.Season.VERANO, false)
+		m.set_shader_parameter("tint_corteza", de_corteza)
+		m.set_shader_parameter("luz", luz_de(k, Subsistence.Season.VERANO))
+		m.set_shader_parameter("tint", de_copa)
+		_mat_vistas.append(m)
+
+		var per_tile := _tiles_of(k)
+		for tile: Vector2i in per_tile:
+			var group: Array[Transform3D] = per_tile[tile]
+			if group.is_empty():
+				continue
+			var centre := Vector3((float(tile.x) + 0.5) * TILE_M, 0.0,
+				(float(tile.y) + 0.5) * TILE_M)
+			var multi := MultiMesh.new()
+			multi.transform_format = MultiMesh.TRANSFORM_3D
+			multi.use_custom_data = true
+			multi.mesh = cuadro
+			multi.instance_count = group.size()
+			for i in range(group.size()):
+				var placement: Transform3D = group[i]
+				multi.set_instance_transform(i, Transform3D(placement.basis,
+					placement.origin - centre))
+				multi.set_instance_custom_data(i,
+					Color(float(variante_de(placement.origin)) / 255.0, 0.0, 0.0, 0.0))
+			var node := MultiMeshInstance3D.new()
+			node.name = "Vistas_%s_%d_%d" % [clave, tile.x, tile.y]
+			node.multimesh = multi
+			node.position = centre
+			node.material_override = m
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var reach := TILE_M * 0.5 + 30.0
+			node.custom_aabb = AABB(Vector3(-reach, -400.0, -reach),
+				Vector3(reach * 2.0, 800.0, reach * 2.0))
+			add_child(node)
+
+
+## El cuadrado del impostor de varias vistas: sus esquinas van en la UV, que el shader
+## lee porque el vértice le llega ya en el mundo.
+func _cuadro_de_vistas() -> ArrayMesh:
+	var verts := PackedVector3Array([
+		Vector3(-1.0, -1.0, 0.0), Vector3(1.0, -1.0, 0.0),
+		Vector3(1.0, 1.0, 0.0), Vector3(-1.0, 1.0, 0.0)])
+	var uvs := PackedVector2Array([
+		Vector2(0.0, 1.0), Vector2(1.0, 1.0), Vector2(1.0, 0.0), Vector2(0.0, 0.0)])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Los pies de una especie en un bloque, repartidos por su variante: los mismos de la
+## siembra, sin quitar ni poner ninguno. Es lo que monta `_bloque_3d`, y está aparte
+## para poder probarlo: sin ventana, un MultiMesh no devuelve lo que se le escribió.
+func pies_por_variante(k: int, block: Vector2i) -> Array:
+	var por_variante: Array = []
+	for v in range(VARIANTES):
+		por_variante.append([] as Array[Transform3D])
+	# El bloque es de 32 m y la siembra va por bloques de 128: se toma el de 128 que lo
+	# contiene y se quedan los pies que caen dentro.
+	var desde := Vector2(block) * BLOQUE_3D_M
+	var hasta := desde + Vector2(BLOQUE_3D_M, BLOQUE_3D_M)
+	var padre := Vector2i(int(floor(desde.x / BLOCK_M)), int(floor(desde.y / BLOCK_M)))
+	var found: Array[Transform3D] = _stands[k].get(padre, [] as Array[Transform3D])
+	for placement: Transform3D in found:
+		var o := placement.origin
+		if o.x < desde.x or o.z < desde.y or o.x >= hasta.x or o.z >= hasta.y:
+			continue
+		(por_variante[variante_de(placement.origin)] as Array[Transform3D]).append(placement)
+	return por_variante
+
+
+## Un bloque de cerca en 3D: por especie y variante, un MultiMesh por nivel de detalle
+## con su rango de distancia. Los mismos pies que la siembra —ver `_build_block`—.
+## Dónde se pone el nodo de un grupo de pies: en el centro del bloque y A LA ALTURA
+## MEDIA DE SUS ÁRBOLES, no a cota cero.
+##
+## Godot mide el rango de visibilidad desde el centro de la caja del nodo. Con el nodo
+## a cota cero y los árboles subidos dentro del MultiMesh, un bloque del valle quedaba
+## «lejos» por lo que tiene de alto y se apagaba entero antes de tiempo: con la cámara
+## a 38 m y mirando bajo, el primer plano del 3D desaparecía mientras el impostor ya se
+## había escondido. Lo vio `ArbolAroProbe` (2026-09-15).
+static func centro_de(pies: Array[Transform3D], xz: Vector2) -> Vector3:
+	var suma := 0.0
+	for pie: Transform3D in pies:
+		suma += pie.origin.y
+	return Vector3(xz.x, suma / float(pies.size()) if not pies.is_empty() else 0.0, xz.y)
+
+
+func _bloque_3d(block: Vector2i) -> void:
+	if _live.has(block) or _modelos.is_empty():
+		return
+	_live[block] = ([] as Array[MultiMeshInstance3D])
+	var from := Vector2(block) * BLOQUE_3D_M
+	var centre := Vector3(from.x + BLOQUE_3D_M * 0.5, 0.0, from.y + BLOQUE_3D_M * 0.5)
+	var radio := radio_de_cerca()
+	# Los niveles de detalle se reparten sobre la distancia del escalón, o sobre la
+	# elegida si es menor; más allá, el último nivel llega hasta el radio.
+	var detalle := minf(radio, float(DETALLE_HASTA[clampi(escalon, 1, DETALLE_HASTA.size() - 1)]))
+	for k in range(KINDS.size()):
+		var por_variante := pies_por_variante(k, block)
+		for v in range(VARIANTES):
+			var pies: Array[Transform3D] = por_variante[v]
+			if pies.is_empty():
+				continue
+			var modelo: ArbolModelo = _modelos[k][v]
+			var aqui := centro_de(pies, Vector2(centre.x, centre.z))
+			for n in range(modelo.niveles.size()):
+				var multi := MultiMesh.new()
+				multi.transform_format = MultiMesh.TRANSFORM_3D
+				multi.mesh = modelo.niveles[n]
+				multi.instance_count = pies.size()
+				for i in range(pies.size()):
+					multi.set_instance_transform(i, Transform3D(pies[i].basis,
+						pies[i].origin - aqui))
+				var node := MultiMeshInstance3D.new()
+				node.name = "Arbol3D_%s_%d_%d_%d_%d" % [KINDS[k]["model"], v, n, block.x, block.y]
+				node.multimesh = multi
+				node.position = aqui
+				# Los rangos por NIVEL, medidos desde el centro del bloque —así los hace
+				# Godot— y SIN SOLAPARSE: con holgura a los dos lados, en la franja común
+				# se pintaban dos niveles del mismo árbol a la vez. El último llega hasta
+				# el radio y medio bloque más; el que quita cada árbol es su corte en el
+				# shader, por su pie.
+				node.visibility_range_begin = float(NIVELES_DESDE[n]) * detalle
+				node.visibility_range_end = float(NIVELES_DESDE[n + 1]) * detalle \
+					if n + 1 < NIVELES_DESDE.size() else radio + BLOQUE_3D_M * 0.71
+				# Sombra de cerca, que es donde se nota; el último nivel, sin.
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON \
+					if n < 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				node.custom_aabb = AABB(Vector3(-BLOQUE_3D_M, -80.0, -BLOQUE_3D_M),
+					Vector3(BLOQUE_3D_M * 2.0, 160.0, BLOQUE_3D_M * 2.0))
+				add_child(node)
+				(_live[block] as Array[MultiMeshInstance3D]).append(node)
+

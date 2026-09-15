@@ -1,0 +1,10 @@
+{
+  "name": "history-of-man-arboles",
+  "private": true,
+  "type": "module",
+  "description": "Genera los árboles del bosque con EZ-Tree. GRAFICOS §7.1.",
+  "dependencies": {
+    "@dgreenheck/ez-tree": "1.1.0",
+    "three": "0.170.0"
+  }
+}

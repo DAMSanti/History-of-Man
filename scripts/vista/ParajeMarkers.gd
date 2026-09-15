@@ -27,12 +27,19 @@ const HEIGHT := 7.0
 ## chapa y los dos radios de pinchado. Al subirlo de 0,07 a 0,14 -el doble,
 ## por peticion- los radios de pinchado se quedaron con el numero viejo y el
 ## alfiler pasaba a responder solo en su mitad de abajo.
-const PIN_PIXEL := 0.14
+const PIN_PIXEL := Alfiler.PIXEL
 
 const LABEL_RANGE := 900.0
 
-var _icons: Dictionary = {}
 var _markers: Dictionary = {}
+
+## En qué familia del filtro cae cada marcador, por el id del paraje. Se apunta
+## al hacerlo: preguntárselo al registro para apagarlo obligaría a buscar el
+## paraje de cada alfiler cada vez que se toca el filtro.
+var _familias: Dictionary = {}
+
+## El filtro del jugador, si lo hay. Ver [FiltroDeMarcadores].
+var filtro: FiltroDeMarcadores = null
 var _camera: Camera3D
 
 ## La baliza del rumbo señalado. Sin ella el jugador pincha, no ve nada
@@ -74,16 +81,45 @@ func refresh(parajes: Parajes, terrain: TerrainGenerator) -> void:
 	var seen := {}
 	for paraje: Paraje in parajes.list:
 		seen[paraje.id()] = true
+		_familias[paraje.id()] = FiltroDeMarcadores.familia_de(paraje)
 		if _markers.has(paraje.id()):
 			_paint(_markers[paraje.id()], paraje)
 			continue
 		_markers[paraje.id()] = _build(paraje, terrain)
+	aplicar_filtro()
 
 	# Los que ya no estén en el registro se van
 	for id: String in _markers.keys():
 		if not seen.has(id):
 			(_markers[id] as Node).queue_free()
 			_markers.erase(id)
+
+
+## Apaga y enciende los alfileres según lo que el jugador quiera ver.
+##
+## Se apagan, no se destruyen: volver a encenderlos es un botón, y rehacerlos
+## sería hornear otra vez los alfileres de medio valle cada vez que se toca una
+## casilla.
+func aplicar_filtro() -> void:
+	if filtro == null:
+		return
+	for id: String in _markers:
+		(_markers[id] as Node3D).visible = _pasa_el_filtro(_markers[id] as Node3D)
+	var cimas := filtro.se_ve(FiltroDeMarcadores.Familia.CIMA)
+	for key: String in _peaks:
+		(_peaks[key] as Node3D).visible = cimas
+
+
+## Si este alfiler está entre los que el jugador quiere ver.
+func _pasa_el_filtro(holder: Node3D) -> bool:
+	if filtro == null:
+		return true
+	if holder.name.begins_with("Cima_"):
+		return filtro.se_ve(FiltroDeMarcadores.Familia.CIMA)
+	var id := String(holder.name).trim_prefix("Paraje_")
+	if not _familias.has(id):
+		return true
+	return filtro.se_ve(_familias[id] as FiltroDeMarcadores.Familia)
 
 
 ## Las cimas también llevan alfiler.
@@ -303,8 +339,8 @@ func _process(_delta: float) -> void:
 	Cronometro.cierra("vista: chapas de parajes")
 
 
-const PIN_WIDTH := 72
-const PIN_HEIGHT := 94
+const PIN_WIDTH := Alfiler.ANCHO
+const PIN_HEIGHT := Alfiler.ALTO
 
 
 ## El alfiler de un paraje concreto, ya horneado y compartido.
@@ -336,42 +372,10 @@ func _icon_for_paraje(paraje: Paraje) -> Texture2D:
 ## Control que se dibuja a mano en una textura que pueda llevar un Sprite3D.
 ## Son de 72x94 y hay uno por material, o sea nada.
 func _pin(key: String, glyph: MateriaIcon.Glyph, tint: Color) -> Texture2D:
-	if _icons.has(key):
-		return _icons[key]
-
-	var view := SubViewport.new()
-	view.size = Vector2i(PIN_WIDTH, PIN_HEIGHT)
-	view.transparent_bg = true
-	view.disable_3d = true
-	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	add_child(view)
-
-	var pin := ParajePin.new()
-	pin.body_tint = tint
-	pin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	view.add_child(pin)
-	# El tamaño, DESPUÉS de entrar en el árbol: puesto antes se lo puede
-	# comer el primer redimensionado y el Control se queda a cero, que se ve
-	# como un alfiler en blanco.
-	pin.size = Vector2(PIN_WIDTH, PIN_HEIGHT)
-
-	# El glifo, centrado en la cabeza del alfiler y oscurecido para que se
-	# lea sobre el hueco claro. El color sigue siendo el suyo: el del
-	# material, no uno de adorno.
-	var head_radius := float(PIN_WIDTH) * 0.5 - ParajePin.BORDER
-	var box := head_radius * 0.9
-	var icon := MateriaIcon.new()
-	icon.glyph = glyph
-	icon.tint = tint.darkened(0.3)
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	view.add_child(icon)
-	icon.size = Vector2(box, box)
-	icon.position = Vector2(float(PIN_WIDTH) * 0.5 - box * 0.5,
-		ParajePin.BORDER + head_radius - box * 0.5)
-
-	var texture := view.get_texture()
-	_icons[key] = texture
-	return texture
+	# El horneado vive en [Alfiler] desde el 2026-09-13: lo piden también las
+	# bocas de cueva, y un estilo de marcador escrito en dos sitios acaba siendo
+	# dos estilos.
+	return Alfiler.textura(self, key, glyph, tint)
 
 
 ## Planta o quita la baliza del rumbo señalado.
@@ -716,7 +720,10 @@ func _scale_markers() -> void:
 		# encoger. Al doble ya es la cuarta parte de su tamaño: ni se lee ni
 		# se pincha, y el sitio sigue estando en el minimapa y en la lista de
 		# la ventana de parajes, que es donde se le busca de verdad.
-		var a_la_vista := away <= OCULTAR_MAS_ALLA
+		# Y lo que el jugador ha apagado, tampoco: el filtro manda sobre la
+		# distancia, si no cada cuadro volvería a encender lo que se quitó.
+		# Ver [FiltroDeMarcadores].
+		var a_la_vista := away <= OCULTAR_MAS_ALLA and _pasa_el_filtro(holder)
 		if holder.visible != a_la_vista:
 			holder.visible = a_la_vista
 		if not a_la_vista:

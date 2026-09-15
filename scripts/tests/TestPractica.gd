@@ -33,6 +33,17 @@ func _sim(cuantos: int = 4) -> SettlementSim:
 	return sim
 
 
+func test_las_jornadas_de_la_manufactura_son_las_pedidas() -> void:
+	# Decisión del usuario del 2026-09-13: «las técnicas de manufactura
+	# paleolítica tardan MUCHÍSIMO en investigarse». Eran 45, 110 y 190.
+	assert_eq(int(TechTree.CATALOGUE[TechTree.Tech.NUCLEO]["days"]), 15,
+		"el núcleo preparado, en 15 jornadas")
+	assert_eq(int(TechTree.CATALOGUE[TechTree.Tech.HOJA]["days"]), 45,
+		"la talla laminar, en 45")
+	assert_eq(int(TechTree.CATALOGUE[TechTree.Tech.AGUJA]["days"]), 90,
+		"y la aguja de hueso, en 90")
+
+
 func test_quien_trabaja_en_la_cueva_practica_su_oficio() -> void:
 	# EL FALLO EN UNA LÍNEA: el hogar trabaja en la campa de la boca, no tiene
 	# tajo en el mapa, y así no practicaba jamás.
@@ -171,3 +182,29 @@ func test_andar_o_dormir_no_es_trabajar() -> void:
 			Inhabitant.State.OCIOSO]:
 		assert_false(SettlementSim.cuenta_como_trabajo(state),
 			"%s no es trabajar" % Inhabitant.State.keys()[state])
+
+
+# -------------- las que no suben por un requisito, en rojo (depurar, 2026-09-13) --
+#
+# Petición del usuario: «en la ventana de tecnología, las que no suben por un
+# requisito deberían tener el borde en rojo, y en el tooltip, marcando en rojo,
+# qué le falta». Hasta hoy sólo iba en rojo la parada por material.
+
+func test_la_que_espera_a_otra_tecnica_o_a_una_obra_se_marca() -> void:
+	assert_true(TechTree.frena_un_requisito(TechTree.Freno.PRERREQUISITO), "técnica previa")
+	assert_true(TechTree.frena_un_requisito(TechTree.Freno.OBRA), "obra")
+	assert_true(TechTree.frena_un_requisito(TechTree.Freno.MATERIAL), "material")
+	assert_false(TechTree.frena_un_requisito(TechTree.Freno.JORNADAS),
+		"la que sólo va lenta no: se arregla con gente, no con un requisito")
+	assert_false(TechTree.frena_un_requisito(TechTree.Freno.NINGUNO), "ni la libre")
+
+
+func test_el_aviso_escribe_en_rojo_lo_que_falta() -> void:
+	var tree := TechTree.new()
+	var grafo := TechGraph.new()
+	grafo._tech = tree
+	# La hoja cuelga del núcleo, que no se tiene.
+	var texto := grafo._tooltip(TechTree.Tech.HOJA)
+	grafo.free()
+	assert_true(texto.contains("[color="), "lleva color: %s" % texto)
+	assert_true(texto.contains("[color=%s]" % TechGraph.ROJO_DEL_AVISO), "y es el rojo")

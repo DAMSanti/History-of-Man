@@ -307,6 +307,23 @@ static func _textura_de_humo() -> GradientTexture2D:
 	return _mancha
 
 
+## EL HUMO SUBE HACIA EL CIELO, no hacia donde mira la hoguera.
+##
+## La hoguera se apoya en la pendiente —`ObrasDelAbrigo.asentar` le da la normal del
+## suelo— y el humo cuelga de ella: la dirección de sus bocanadas es la del emisor, así
+## que en una ladera salía perpendicular al corro, tumbado. Queja del usuario del
+## 2026-09-15. Se deja la orientación del mundo y la escala de la hoguera, que la de un
+## vivac es más pequeña. Cada cuadro, porque los fuegos de vivac cambian de sitio.
+func enderezar_el_humo() -> void:
+	_humo.global_basis = orientacion_del_humo(global_basis)
+
+
+## La orientación del humo en el mundo para una hoguera orientada así: la del mundo,
+## con la escala de la hoguera.
+static func orientacion_del_humo(la_hoguera: Basis) -> Basis:
+	return Basis.from_scale(la_hoguera.get_scale())
+
+
 func _process(delta: float) -> void:
 	Cronometro.tramo_raiz("vista: hoguera")
 	if _flames == null:
@@ -318,6 +335,8 @@ func _process(delta: float) -> void:
 	# en el aire se acaba de ir solo, que es como se apaga un fuego.
 	if _humo != null and _humo.emitting != lit:
 		_humo.emitting = lit
+	if _humo != null:
+		enderezar_el_humo()
 	if not lit:
 		Cronometro.cierra("vista: hoguera")
 		return

@@ -83,6 +83,10 @@ func _init(settlement: SettlementSim) -> void:
 	sim = settlement
 
 
+## Con qué se cede a trozos mientras se asienta. Ver [asentarse].
+var _ceder: Callable = Callable()
+
+
 ## Siembra lo que la banda ya sabe. Se llama UNA vez, al fundar.
 ##
 ## UNO DE CADA OFICIO, no todo lo que haya. La primera version revelaba el
@@ -94,12 +98,22 @@ func _init(settlement: SettlementSim) -> void:
 ##
 ## Ahora se busca EL MEJOR SITIO DE CADA OFICIO dentro del radio y se conoce
 ## solo su entorno. El resto del valle sigue en blanco y se gana explorando.
-func asentarse() -> int:
+##
+## `ceder`, si se da, se llama con `await` a trozos: es lo que deja repartir esto entre
+## cuadros detrás de la pantalla de carga —son 2 s al fundar— sin que la simulación sepa
+## nada de pantallas. No cambia el resultado: mientras carga, el reloj no anda. Ver
+## [Carga.ceder] e INTERFAZ §9.
+func asentarse(ceder: Callable = Callable()) -> int:
 	if sim.field == null or sim.knowledge == null or sim.parajes == null:
 		return 0
+	_ceder = ceder
+	if _ceder.is_valid():
+		await sim.marcha.preparar_el_mapa_de_casa(_ceder)
 
 	var salen: Array[Paraje] = []
 	for actividad: int in OFICIOS:
+		if _ceder.is_valid():
+			await _ceder.call()
 		var act := actividad as Subsistence.Activity
 		# Se busca en la vuelta corta y, SI NO HAY NADA, se ensancha.
 		#
@@ -108,9 +122,9 @@ func asentarse() -> int:
 		# junto a un rio SIN SABER DONDE ESTABA EL AGUA. Lo primero que
 		# reconoce cualquiera que acampa es donde beber y donde pescar, y si
 		# esta un poco mas lejos se anda un poco mas.
-		var donde := _el_mejor(act, RADIO)
+		var donde := await _el_mejor(act, RADIO)
 		if donde == Vector3.ZERO:
-			donde = _el_mejor(act, RADIO * 2.0)
+			donde = await _el_mejor(act, RADIO * 2.0)
 		if donde == Vector3.ZERO:
 			continue
 		# Solo su entorno, no el radio entero: lo que se conoce es UN SITIO,
@@ -183,7 +197,11 @@ func asentarse() -> int:
 func _el_mejor(act: Subsistence.Activity, hasta: float) -> Vector3:
 	var mejor := Vector3.ZERO
 	var mejor_nota := 0.0
+	var vistos := 0
 	for celda: Vector2i in sim.field.cells_within(sim.home_position, hasta):
+		vistos += 1
+		if _ceder.is_valid() and vistos % 32 == 0:
+			await _ceder.call()
 		var centre := sim.field.cell_center(celda.x, celda.y)
 		var hay := sim.field.abundance_cell(act, celda.x, celda.y)
 		# EL MISMO LISTON QUE BAUTIZA, no el de «aqui hay algo».

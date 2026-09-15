@@ -276,9 +276,10 @@ func _materials_line(recipe: Dictionary) -> String:
 func _paintings_block(body: VBoxContainer) -> void:
 	if ui.sim == null:
 		return
+	_rotulo(body, "LA PARED DEL FONDO")
+	_lo_que_se_puede_pintar(body)
 	if ui.sim.techs == null or not ui.sim.techs.has(TechTree.Tech.ARTE):
 		return
-	_rotulo(body, "LA PARED DEL FONDO")
 
 	if ui.sim.painting_queue != null:
 		_escrito(body, "Pintando: %s (%.0f%%)" % [ui.sim.painting_queue.title,
@@ -294,6 +295,41 @@ func _paintings_block(body: VBoxContainer) -> void:
 			_fila(body, "   ·  %s" % tale.title, tale.stamp(), UISkin.INK)
 		_escrito(body, "Lo que está en la pared se aprende aunque no quede nadie "
 			+ "que estuviera allí.", true)
+
+
+## Lo vivido que se puede poner en la pared, del más viejo al más nuevo, con su
+## botón. **Sale aunque no se sepa pintar**: sin la técnica el botón no se pulsa y
+## dice por qué, que es lo que pide la spec (SISTEMAS §13, «pintar lo de antes»).
+func _lo_que_se_puede_pintar(body: VBoxContainer) -> void:
+	var lista := ui.sim.pinturas.pintables()
+	if lista.is_empty():
+		return
+	var falta := ui.sim.pinturas.painting_blocked_by()
+	_escrito(body, "Lo vivido que se puede pintar:" if falta.is_empty()
+		else "Lo vivido que se podría pintar —%s—:" % falta, true)
+	for tale: Tale in lista:
+		var fila := HBoxContainer.new()
+		fila.add_theme_constant_override("separation", 8)
+		body.add_child(fila)
+		var nombre := Label.new()
+		nombre.text = "   ·  %s" % tale.title
+		nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Pigmento.escribir(nombre, UISkin.INK, 18)
+		fila.add_child(nombre)
+		var fecha := Label.new()
+		fecha.text = tale.stamp()
+		Pigmento.escribir(fecha, UISkin.INK_SOFT, 16, Pigmento.carbon())
+		fila.add_child(fecha)
+		var boton := Button.new()
+		boton.text = "Pintar"
+		boton.disabled = not falta.is_empty()
+		boton.tooltip_text = "No se puede: %s." % falta if not falta.is_empty() \
+			else "Pintarlo en la pared del fondo."
+		Pigmento.escribir_boton(boton, UISkin.OCHRE if falta.is_empty() else UISkin.INK_SOFT, 16)
+		boton.pressed.connect(func() -> void:
+			ui.sim.pinturas.queue_painting(tale)
+			show_tech())
+		fila.add_child(boton)
 
 
 # -------------------------------------------------------------- caza --
@@ -466,7 +502,7 @@ func _fishing_block(body: VBoxContainer) -> void:
 			for nasa: Nasa in ui.sim.nasas_line.nasas:
 				_fila(body, "   %s  Nasa" % ("◆" if nasa.has_catch() else "·"),
 					"en %s — %.0f%% de vida, %d piezas  ·  %s" % [
-						ui.sim.parajes.place_name(nasa.position,
+						ui.sim.parajes.place_name_en_el_agua(nasa.position,
 							ui.sim.home_position),
 						nasa.condition() * 100.0, nasa.taken,
 						nasa.status_text()],

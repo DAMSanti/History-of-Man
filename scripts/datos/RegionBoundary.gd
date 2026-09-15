@@ -197,6 +197,7 @@ func build_playable_mask(data: HeightmapData, sea_level_m: float) -> PackedFloat
 	var x_max: int = coast.y
 	if x_max <= x_min:
 		return mask
+	var limites := _limites_por_fila(mask, coast, w, h)
 
 	# --- 3. inundacion hasta el agua ------------------------------------
 	# Por vecindad sobre el fondo marino que emerge, sin tope de distancia: el
@@ -228,7 +229,8 @@ func build_playable_mask(data: HeightmapData, sea_level_m: float) -> PackedFloat
 				if dx == 0 and dz == 0:
 					continue
 				var xx := x + dx
-				if xx < x_min or xx > x_max:
+				var limite: Vector2i = limites[zz]
+				if xx < limite.x or xx > limite.y:
 					continue
 				var j := zz * w + xx
 				if dist[j] != -1:
@@ -309,6 +311,72 @@ func _dilate_shoreline(mask: PackedFloat32Array, data: HeightmapData, passes: in
 					grow.append(i)
 		for i: int in grow:
 			mask[i] = 1.0
+
+
+## LOS LÍMITES LATERALES DE LA PLATAFORMA, fila a fila, en columnas.
+##
+## Eran las dos columnas de [_coastal_x_range] tal cual, y hacia el norte la
+## frontera salía como dos reglas: «vamos a hacerla algo fractal y no
+## completamente recta, como una frontera moderna», petición del usuario del
+## 2026-09-14. Cada lado se desplaza con un ruido fractal propio —varias octavas,
+## así que quiebra a lo grande y a lo pequeño, como una raya que sigue arroyos y
+## cordales— y el desplazamiento CRECE desde la costa de hoy: en la línea de
+## costa vale cero, para que la frontera nueva empalme con la administrativa sin
+## escalón, y a [QUIEBRO_FILAS] filas mar adentro ya quiebra entero.
+##
+## Semilla fija: la frontera es la misma en cada partida y en cada horneado.
+func _limites_por_fila(mask: PackedFloat32Array, coast: Vector2i, w: int,
+		h: int) -> Array[Vector2i]:
+	var ruido := FastNoiseLite.new()
+	ruido.seed = 20260914
+	ruido.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	ruido.fractal_type = FastNoiseLite.FRACTAL_FBM
+	ruido.fractal_octaves = 5
+	ruido.frequency = QUIEBRO_FRECUENCIA
+	var costa_izq := _primera_fila_de_tierra(mask, coast.x, w, h)
+	var costa_der := _primera_fila_de_tierra(mask, coast.y, w, h)
+	var limites: Array[Vector2i] = []
+	limites.resize(h)
+	for z in range(h):
+		var sube_izq := clampf(float(costa_izq - z) / QUIEBRO_FILAS, 0.0, 1.0)
+		var sube_der := clampf(float(costa_der - z) / QUIEBRO_FILAS, 0.0, 1.0)
+		var izq := coast.x + roundi(ruido.get_noise_2d(float(z), 0.0)
+			* QUIEBRO_COLUMNAS * sube_izq)
+		var der := coast.y + roundi(ruido.get_noise_2d(float(z), 5000.0)
+			* QUIEBRO_COLUMNAS * sube_der)
+		limites[z] = Vector2i(clampi(izq, 0, w - 1), clampi(der, 0, w - 1))
+	return limites
+
+
+## Cuánto se aparta cada lado de la frontera de su columna, como mucho, en
+## columnas del relieve (unos 111 m cada una). Decisión de dibujo, no de
+## geografía: lo bastante para que se lea quebrada a la escala del mapa, y no
+## tanto como para meterse de verdad delante de Asturias o del País Vasco.
+const QUIEBRO_COLUMNAS := 22.0
+
+## Cada cuántas filas cambia de rumbo la octava gorda del quiebro.
+const QUIEBRO_FRECUENCIA := 0.035
+
+## En cuántas filas desde la costa de hoy crece el quiebro de cero a entero.
+const QUIEBRO_FILAS := 18.0
+
+
+## La fila más al norte con territorio en una columna: donde esa columna toca la
+## costa. `h` si no hay ninguna.
+func _primera_fila_de_tierra(mask: PackedFloat32Array, x: int, w: int, h: int) -> int:
+	for z in range(h):
+		if mask[z * w + x] > 0.5:
+			return z
+	return h
+
+
+## Los límites laterales con que se construye la máscara a una cota: la MISMA
+## cuenta que [build_playable_mask], para quien tenga que comprobarla.
+func limites_por_fila(data: HeightmapData) -> Array[Vector2i]:
+	var mask := rasterize(data)
+	_dilate_shoreline(mask, data, 4, 30.0)
+	return _limites_por_fila(mask, _coastal_x_range(mask, data), data.width,
+		data.height)
 
 
 ## Rango de columnas donde la region toca el mar

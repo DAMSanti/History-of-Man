@@ -64,7 +64,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	if terrain == null or not terrain.has_method("get_terrain_material"):
 		print("sin terreno"); quit(); return
 	var material: ShaderMaterial = terrain.get_terrain_material()
@@ -125,13 +125,3 @@ func _sample(vp: RID) -> float:
 		await process_frame
 		gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
 	return gpu / 60.0
-
-
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if child.get_class() == type_name:
-			return child
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
-	return null

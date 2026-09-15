@@ -13,6 +13,10 @@ extends CanvasLayer
 
 signal cave_action(action: String, feature: Dictionary)
 
+## El jugador quiere mirar otro campamento: la escena lo cambia. Ver
+## [PanelCampamentos] y [DemoMain._ir_al_campamento].
+signal ir_al_campamento(campamento: Campamento)
+
 ## Ancho de ventana. Subió de 380 a 430 al pasar el almacén a filas de una
 ## línea: nombre, cantidad, falta y objetivo con botones no caben en 380 sin
 ## recortar el nombre del material, que es lo único que no se puede recortar.
@@ -132,6 +136,12 @@ var cronica_personal: PanelCronica = PanelCronica.new(self)
 ## Lo que la banda ha PUESTO en el valle. Ver [PanelObras].
 var obras: PanelObras = PanelObras.new(self)
 
+## La cola del taller: qué se va a hacer y en qué orden. Ver [PanelTaller].
+var taller: PanelTaller = PanelTaller.new(self)
+
+## Los campamentos, y la ficha para migrar y mover gente. Ver [PanelCampamentos].
+var campamentos: PanelCampamentos = PanelCampamentos.new(self)
+
 ## Lo que sabe hacer cada oficio y su arbol. Ver [PanelTecnicas].
 var tecnicas: PanelTecnicas = PanelTecnicas.new(self)
 
@@ -199,12 +209,35 @@ func watch_moments(simulation: SettlementSim) -> void:
 	barra.watch_moments(simulation)
 
 
+## Las decisiones de TODOS los campamentos, los que ya hay y los que se sumen
+## —fundados al llegar un viaje—. SISTEMAS §23, punto 7.
+func _escuchar_los_campamentos() -> void:
+	for campamento: Campamento in Campamentos.vivos:
+		_al_sumarse_un_campamento(campamento)
+	Campamentos.al_sumarse.append(_al_sumarse_un_campamento)
+	# Y lo que salió mientras no había interfaz. Ver [Campamentos.sin_ver].
+	var pendientes := Campamentos.sin_ver.duplicate()
+	Campamentos.sin_ver.clear()
+	for moment: Moment in pendientes:
+		barra._on_moment(moment)
+
+
+func _al_sumarse_un_campamento(campamento: Campamento) -> void:
+	if campamento.sim != null:
+		barra.watch_moments(campamento.sim)
+
+
+func _exit_tree() -> void:
+	Campamentos.al_sumarse.erase(_al_sumarse_un_campamento)
+
+
 func _ready() -> void:
 	layer = 10
 	# El tema se cuelga de cada ventana y baja solo a todo lo que contenga.
 	# Un CanvasLayer no es Control y no tiene `theme`, así que no se puede
 	# poner una vez arriba del todo.
 	_skin = UISkin.build_theme()
+	_escuchar_los_campamentos()
 	barra._build_clock()
 	_build_taskbar()
 	popup_hito = PopupHitoTecnico.new()
@@ -252,50 +285,199 @@ func _process(_delta: float) -> void:
 		var frame: Control = _windows[id]
 		if not frame.visible:
 			continue
-		# Con el ratón dentro NO se reconstruye. Reconstruir borra los
+		# Con el ratón dentro NO se reconstruye A CIEGAS. Reconstruir borra los
 		# controles y los crea de nuevo, así que el que estabas señalando deja
 		# de existir: el tooltip se cerraba solo al segundo, y un botón podía
 		# desaparecer justo debajo del cursor a mitad de clic.
 		#
-		# Esto se probó a afinar dejando pasar todo lo que no fuera un botón,
-		# y salió mal: el tooltip del almacén se cerraba igual, porque lo
-		# lleva la fila entera y la fila también se destruía. Ahora ya no hace
-		# falta afinar nada: las cifras que cambian van atadas a su rótulo y
-		# se refrescan sin reconstruir, así que aplazar la reconstrucción
-		# mientras se lee ya no congela nada.
+		# Pero saltárselo sin más dejaba la ventana congelada justo cuando se
+		# acababa de pulsar algo en ella —el ratón sigue ahí—: tras «Explorar el
+		# interior», el botón seguía y la cueva no se describía hasta cerrar y
+		# abrir. Queja del usuario del 2026-09-14. Ahora se rehace FUERA DE
+		# PANTALLA y sólo se cambia si lo que dice ha cambiado: un tooltip se
+		# pierde cuando hay algo nuevo que leer, no cada segundo.
 		if frame.get_global_rect().has_point(frame.get_global_mouse_position()):
+			_repintar_si_cambia(id)
 			continue
-		match id:
-			"almacen": show_store()
-			"trabajos": show_jobs()
-			"banda": show_band()
-			"tecnicas": tecnicas.show_tech()
-			"obras": obras.show_obras()
-			"oficios": oficios.show_professions()
-			"territorio": show_territory()
-			"cronica": show_lore()
-			"parajes": sitios.show_places()
-			"rastros": show_trails()
-			"entidades": censo.show_census()
-			# La ficha de una entidad se repinta SIN volver a mover la cámara.
-			# Mover la cámara es lo que hace la flecha, no el repintado: con el
-			# foco puesto aquí, la vista se enganchaba a la entidad y el
-			# jugador no podía apartarse a mirar el alrededor, que es la mitad
-			# de para qué sirve esto.
-			"persona":
-				if shown_person != null:
-					show_person(shown_person)
-			"entidad":
-				censo.repintar()
-			"paraje":
-				# La ficha de UN paraje concreto: lo que descubre una batida
-				# -materiales nuevos, el % conocido- tiene que verse aquí sin
-				# cerrar y reabrir. Si el sitio se queda en descanso o deja de
-				# existir de alguna forma, `shown_paraje` seguirá siendo valido
-				# -los parajes no se borran-, así que basta con el nulo.
-				if shown_paraje:
-					sitios.show_paraje(shown_paraje)
+		_repintar(id)
+	Cronometro.cierra("interfaz (GameUI)")
 
+
+## Cómo se rehace cada ficha suelta, con lo que se le pidió al abrirla. Lo apunta
+## cada `show_` —ver [recordar]—; las ventanas de lista no lo necesitan, que se
+## rehacen sin argumentos en [_repintar].
+var _rehacer: Dictionary = {}
+
+
+## Apunta cómo volver a pintar una ventana. Lo llaman las fichas que se abren
+## sobre una cosa concreta —un lugar, una cima, un material— para que el
+## repintado automático sepa sobre cuál.
+func recordar(id: String, rehacer: Callable) -> void:
+	_rehacer[id] = rehacer
+
+
+## Los botones de la barra de abajo: la ventana que abre cada uno y su rótulo.
+## Una constante y no una lista suelta en `_setup`, para que una prueba pueda
+## pulsarlos todos: el del taller estuvo sin abrir nada porque `_toggle` no tenía
+## su caso, y nadie lo pulsaba (2026-09-14).
+const BOTONES_DE_LA_BARRA := [
+	["almacen", "Almacén"], ["trabajos", "Trabajos"], ["banda", "Banda"],
+	["tecnicas", "Técnicas"], ["oficios", "Oficios"],
+	["territorio", "Territorio"],
+	["taller", "Taller"], ["campamentos", "Campamentos"],
+	["cronica", "Crónica"], ["parajes", "Parajes"], ["rastros", "Rastros"],
+	["entidades", "Entidades"], ["obras", "Obras"],
+	["trueque", "Trueque"], ["relaciones", "Relaciones"],
+	["controles", "Controles"],
+]
+
+
+## Rehace una ventana abierta.
+func _repintar(id: String) -> void:
+	match id:
+		"almacen": show_store()
+		"trabajos": show_jobs()
+		"banda": show_band()
+		"tecnicas": tecnicas.show_tech()
+		"obras": obras.show_obras()
+		"taller": taller.show_workshop()
+		"campamentos": campamentos.show_campamentos()
+		"campamento": campamentos.show_ficha()
+		"oficios": oficios.show_professions()
+		"territorio": show_territory()
+		"cronica": show_lore()
+		"parajes": sitios.show_places()
+		"rastros": show_trails()
+		"entidades": censo.show_census()
+		# La ficha de una entidad se repinta SIN volver a mover la cámara.
+		# Mover la cámara es lo que hace la flecha, no el repintado: con el
+		# foco puesto aquí, la vista se enganchaba a la entidad y el
+		# jugador no podía apartarse a mirar el alrededor, que es la mitad
+		# de para qué sirve esto.
+		"persona":
+			if shown_person != null:
+				show_person(shown_person)
+		"entidad":
+			censo.repintar()
+		"paraje":
+			# La ficha de UN paraje concreto: lo que descubre una batida
+			# -materiales nuevos, el % conocido- tiene que verse aquí sin
+			# cerrar y reabrir. Si el sitio se queda en descanso o deja de
+			# existir de alguna forma, `shown_paraje` seguirá siendo valido
+			# -los parajes no se borran-, así que basta con el nulo.
+			if shown_paraje:
+				sitios.show_paraje(shown_paraje)
+		_:
+			if _rehacer.has(id) and (_rehacer[id] as Callable).is_valid():
+				(_rehacer[id] as Callable).call()
+
+
+## Rehace una ventana en un cuerpo aparte, y sólo la cambia si lo escrito cambia.
+func _repintar_si_cambia(id: String) -> void:
+	if not _bodies.has(id):
+		return
+	var cuerpo: VBoxContainer = _bodies[id]
+	var aparte := VBoxContainer.new()
+	_bodies[id] = aparte
+	_repintar(id)
+	_bodies[id] = cuerpo
+	if firma_de(aparte) == firma_de(cuerpo):
+		aparte.free()
+		return
+	# LO QUE SÓLO CAMBIA DE TEXTO SE ESCRIBE ENCIMA, sin rehacer los controles. Con
+	# la partida en marcha el «43 %» de una casilla del árbol de técnicas sube cada
+	# pocos segundos, se sustituía la ventana entera y el aviso que se estaba leyendo
+	# se cerraba con su casilla. Queja del usuario del 2026-09-15. Si cambia la forma
+	# —una fila más, un botón que aparece, un color—, se rehace como antes.
+	if copiar_encima(aparte, cuerpo):
+		aparte.free()
+		return
+	_clear(cuerpo)
+	for hijo: Node in aparte.get_children():
+		aparte.remove_child(hijo)
+		cuerpo.add_child(hijo)
+	aparte.free()
+
+
+## Escribe en `viejo` los textos, avisos y botones apagados de `nuevo`, si los dos
+## tienen la misma forma: los mismos controles, en el mismo orden, con el mismo color
+## de letra, visibilidad, transparencia y cursor. Devuelve si lo hizo; si la forma no
+## coincide, no toca nada.
+##
+## Existe para que un repintado no destruya el control que está bajo el ratón. Ver
+## [_repintar_si_cambia].
+static func copiar_encima(nuevo: Node, viejo: Node) -> bool:
+	if not _misma_forma(nuevo, viejo):
+		return false
+	_escribir_encima(nuevo, viejo)
+	return true
+
+
+static func _vivos(nodo: Node) -> Array[Node]:
+	var salida: Array[Node] = []
+	for hijo: Node in nodo.get_children():
+		if not hijo.is_queued_for_deletion():
+			salida.append(hijo)
+	return salida
+
+
+static func _misma_forma(a: Node, b: Node) -> bool:
+	if a.get_class() != b.get_class() or a.get_script() != b.get_script():
+		return false
+	if a is Control:
+		var ca := a as Control
+		var cb := b as Control
+		if ca.visible != cb.visible or ca.modulate != cb.modulate \
+				or ca.self_modulate != cb.self_modulate \
+				or ca.mouse_default_cursor_shape != cb.mouse_default_cursor_shape \
+				or ca.mouse_filter != cb.mouse_filter:
+			return false
+		if (a is Label or a is Button) and (ca.get_theme_color("font_color") != cb.get_theme_color("font_color")
+				or ca.get_theme_font_size("font_size") != cb.get_theme_font_size("font_size")):
+			return false
+	var hijos_a := _vivos(a)
+	var hijos_b := _vivos(b)
+	if hijos_a.size() != hijos_b.size():
+		return false
+	for i in range(hijos_a.size()):
+		if not _misma_forma(hijos_a[i], hijos_b[i]):
+			return false
+	return true
+
+
+static func _escribir_encima(nuevo: Node, viejo: Node) -> void:
+	if nuevo is Label:
+		(viejo as Label).text = (nuevo as Label).text
+	elif nuevo is Button:
+		(viejo as Button).text = (nuevo as Button).text
+		(viejo as Button).disabled = (nuevo as Button).disabled
+	elif nuevo is RichTextLabel:
+		(viejo as RichTextLabel).text = (nuevo as RichTextLabel).text
+	if nuevo is Control:
+		(viejo as Control).tooltip_text = (nuevo as Control).tooltip_text
+		# Lo que se dibuja a mano —el relleno de ocre del árbol— lee el estado vivo.
+		(viejo as Control).queue_redraw()
+	var hijos_nuevo := _vivos(nuevo)
+	var hijos_viejo := _vivos(viejo)
+	for i in range(hijos_nuevo.size()):
+		_escribir_encima(hijos_nuevo[i], hijos_viejo[i])
+
+
+## Lo que dice una ventana, en una cadena: los textos y qué botones están
+## apagados. Dos cuerpos con la misma firma se leen igual.
+static func firma_de(nodo: Node) -> String:
+	var partes: PackedStringArray = []
+	for hijo: Node in nodo.get_children():
+		if hijo.is_queued_for_deletion():
+			continue
+		if hijo is Label:
+			partes.append((hijo as Label).text)
+		elif hijo is Button:
+			partes.append("%s|%s" % [(hijo as Button).text, (hijo as Button).disabled])
+		elif hijo is RichTextLabel:
+			partes.append((hijo as RichTextLabel).text)
+		partes.append(firma_de(hijo))
+	return "|".join(partes)
 
 # ---------------------------------------------------------------- reloj ---
 
@@ -307,7 +489,6 @@ func _process(_delta: float) -> void:
 
 ## Lo que queda por atender. Se encolan: en una jornada pueden bautizarse dos
 ## parajes a la vez, y tragarse el segundo sería peor que no avisar de ninguno.
-	Cronometro.cierra("interfaz (GameUI)")
 
 
 var _moments: Array[Moment] = []
@@ -368,15 +549,7 @@ func _build_taskbar() -> void:
 	bar.add_theme_constant_override("separation", 6)
 	margin.add_child(bar)
 
-	for entry: Array in [
-		["almacen", "Almacén"], ["trabajos", "Trabajos"], ["banda", "Banda"],
-		["tecnicas", "Técnicas"], ["oficios", "Oficios"],
-		["territorio", "Territorio"],
-		["cronica", "Crónica"], ["parajes", "Parajes"], ["rastros", "Rastros"],
-		["entidades", "Entidades"], ["obras", "Obras"],
-		["trueque", "Trueque"], ["relaciones", "Relaciones"],
-		["controles", "Controles"],
-	]:
+	for entry: Array in BOTONES_DE_LA_BARRA:
 		var button := Button.new()
 		button.text = entry[1]
 		button.custom_minimum_size = Vector2(96, 30)
@@ -613,10 +786,18 @@ func _toggle(id: String) -> void:
 		"rastros": show_trails()
 		"entidades": censo.show_census()
 		"obras": obras.show_obras()
+		"taller": taller.show_workshop()
+		"campamentos": campamentos.show_campamentos()
 
 
 func _clear(body: VBoxContainer) -> void:
+	# SE SACAN YA, y se liberan al final del fotograma. Sólo con `queue_free` los
+	# hijos viejos seguían en la ventana mientras se pintaba la nueva, y quien
+	# preguntaba si ya había algo —`_heading`, para poner su filete— decía que sí:
+	# salía una línea arriba de la ventana que el repintado quitaba al segundo.
+	# Lo vio el usuario al añadir un trabajador (2026-09-14).
 	for child in body.get_children():
+		body.remove_child(child)
 		child.queue_free()
 
 

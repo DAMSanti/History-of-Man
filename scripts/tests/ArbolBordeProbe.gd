@@ -43,7 +43,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	var forest: Node = _first(demo, "Forest")
 	var camera: Camera3D = demo.camera
 	if terrain == null or camera == null:

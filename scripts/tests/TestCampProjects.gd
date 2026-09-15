@@ -31,6 +31,15 @@ func test_el_paraviento_no_depende_de_nada() -> void:
 		"se puede levantar sin hogar previo")
 
 
+func test_el_paraviento_se_cierra_con_piel_curtida() -> void:
+	# Decisión del usuario del 2026-09-13: la piel cruda sólo sirve para
+	# curtirla —y para el trueque—. Un cierre de pellejo sin curar se pudre en
+	# la boca de la cueva.
+	var receta := CampProjects.materials(CampProjects.Kind.PARAVIENTO)
+	assert_true(receta.has(Materia.Kind.PIEL_CURTIDA), "pide piel curtida")
+	assert_false(receta.has(Materia.Kind.PIEL), "y no cruda")
+
+
 func test_el_secadero_exige_el_hogar() -> void:
 	assert_eq(CampProjects.requires(CampProjects.Kind.SECADERO),
 		CampProjects.Kind.HOGAR, "ahumar sin fuego no se hace")
@@ -293,6 +302,41 @@ func test_reavivar_cuesta_jornada_y_lena() -> void:
 	assert_lt(sim.store.amount(Materia.Kind.LENA), lena, "y se gasta lena")
 
 
+## Queja del usuario (2026-09-13): «hay ocasiones en que se apaga teniendo
+## leña, y tardan días en encenderlo si lo encienden». Con una obra en cola, el
+## del hogar se ponía con la obra ANTES de mirar el fuego —y si a la obra le
+## faltaba material, se pasaba la jornada esperándolo—: ni lo cuidaba, así que
+## se apagaba esa noche, ni lo prendía mientras la obra siguiera en cola.
+func _del_hogar_con_obra_parada(sim: SettlementSim) -> Inhabitant:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var person := Inhabitant.create(0, Vector3.ZERO, rng)
+	person.job = Profession.Job.HOGAR
+	sim.people = [person]
+	# El secadero pide material que no hay: la obra se queda esperando.
+	sim.camp_queue = CampProjects.Kind.SECADERO
+	return person
+
+
+func test_con_una_obra_parada_el_hogar_se_sigue_cuidando() -> void:
+	var sim := _con_hogar()
+	var person := _del_hogar_con_obra_parada(sim)
+	sim._hearth_tended = false
+	sim.hogar._tend_camp(person, SettlementSim.HORAS_UTILES)
+	assert_true(sim._hearth_tended, "el fuego se cuida aunque haya obra en cola")
+	sim.hogar._burn_hearth()
+	assert_true(sim.hearth_lit, "y esa noche no se apaga")
+
+
+func test_con_una_obra_parada_el_hogar_apagado_se_prende_primero() -> void:
+	var sim := _con_hogar()
+	sim.hearth_lit = false
+	var person := _del_hogar_con_obra_parada(sim)
+	sim.hogar._tend_camp(person, SettlementSim.HORAS_UTILES)
+	assert_true(sim.hearth_lit,
+		"con leña, una jornada del hogar prende el fuego antes que la obra")
+
+
 func test_sin_lena_no_se_puede_reavivar() -> void:
 	var sim := _con_hogar(0.0)
 	sim.hearth_lit = false
@@ -481,3 +525,95 @@ func test_un_odre_roto_pierde_el_agua_que_llevaba() -> void:
 
 	assert_eq(sim.store.amount(Materia.Kind.AGUA), 0.0,
 		"si el odre se rompe, el agua que llevaba se pierde con él")
+
+
+# ------------------------ el odre lleno no es odre vacío (depurar, 2026-09-13) --
+#
+# Queja del usuario: «cuando un odre de agua está lleno, no cuenta como odre
+# vacío; creo que ahora cuenta en ambos». Contaba en dos sitios: el almacén
+# enseñaba «Odre» con todos y «Agua» con los llenos, y la capacidad de guardar
+# comida sumaba doce litros por CADA odre, también por los que llevan agua.
+
+func _con_odres(hechos: int, llenos: float) -> SettlementSim:
+	var sim := SettlementSim.new()
+	for _i in range(hechos):
+		sim.toolkit.craft(Tool.Kind.ODRE, Tool.Stuff.PIEL)
+	sim.store.add(Materia.Kind.AGUA, llenos)
+	return sim
+
+
+func test_los_odres_vacios_son_los_hechos_menos_los_llenos() -> void:
+	var sim := _con_odres(5, 3.0)
+	assert_eq(sim.despensa.odres_vacios(), 2, "cinco hechos y tres llenos: dos vacíos")
+
+
+func test_el_odre_que_va_fuera_no_esta_vacio_en_casa() -> void:
+	var sim := _con_odres(5, 3.0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var fuera := Inhabitant.create(0, Vector3.ZERO, rng)
+	fuera.has_waterskin = true
+	sim.people = [fuera]
+	assert_eq(sim.despensa.odres_vacios(), 1, "el que lleva alguien encima no se llena")
+
+
+func test_el_odre_lleno_no_guarda_comida() -> void:
+	var sim := _con_odres(5, 3.0)
+	sim._ajustar_despensa()
+	assert_near(sim.store.capacidad_comida,
+		Storehouse.A_GRANEL + 2.0 * Storehouse.POR_ODRE, 0.001,
+		"sólo los dos vacíos suman sitio para comida")
+
+
+# ------------------- el corro del fuego y el filtro (depurar, 2026-09-13) --
+
+func test_los_troncos_rodean_la_hoguera_sin_pisarla() -> void:
+	# Los leños van FUERA del corro de piedras: dentro serían leña ardiendo.
+	var centro := Vector3(100.0, 0.0, 100.0)
+	var troncos := CorroDelHogar.troncos(centro)
+	assert_eq(troncos.size(), CorroDelHogar.TRONCOS, "hay cinco leños")
+	for tronco: Dictionary in troncos:
+		var lejos := (tronco["pos"] as Vector3).distance_to(centro)
+		assert_gt(lejos, Bonfire.RING_RADIUS, "%s no pisa las piedras" % str(lejos))
+		assert_lt(lejos, 4.0, "pero se llega a la lumbre desde el asiento")
+
+
+func test_cada_tronco_da_dos_asientos_y_se_acaban() -> void:
+	var centro := Vector3.ZERO
+	var asientos := CorroDelHogar.asientos(centro)
+	assert_eq(asientos.size(), CorroDelHogar.TRONCOS * CorroDelHogar.POR_TRONCO,
+		"dos por leño")
+	assert_true(CorroDelHogar.asiento_de(centro, 0) != Vector3.ZERO, "el primero se sienta")
+	assert_eq(CorroDelHogar.asiento_de(centro, asientos.size()), Vector3.ZERO,
+		"y al que llega tarde no le queda sitio: se queda por la campa")
+
+
+func test_el_filtro_reparte_los_parajes_en_familias() -> void:
+	# La recolección se parte en dos —frutos y leña— porque son dos cuadrillas.
+	var pesquera := Paraje.create(1, 1, Subsistence.Activity.PESCA,
+		Materia.Kind.PESCADO, Vector3.ZERO, 1)
+	var lenar := Paraje.create(2, 2, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.LENA, Vector3.ZERO, 1)
+	var avellanar := Paraje.create(3, 3, Subsistence.Activity.RECOLECCION,
+		Materia.Kind.FRUTO_SECO, Vector3.ZERO, 1)
+	var cantera := Paraje.create(4, 4, Subsistence.Activity.MATERIA_PRIMA,
+		Materia.Kind.PIEDRA, Vector3.ZERO, 1)
+	assert_eq(FiltroDeMarcadores.familia_de(pesquera), FiltroDeMarcadores.Familia.PESCA,
+		"la pesquera, con la pesca")
+	assert_eq(FiltroDeMarcadores.familia_de(lenar), FiltroDeMarcadores.Familia.LENA,
+		"el leñar, con la leña y la fibra")
+	assert_eq(FiltroDeMarcadores.familia_de(avellanar), FiltroDeMarcadores.Familia.FRUTOS,
+		"el avellanar, con los frutos y raíces")
+	assert_eq(FiltroDeMarcadores.familia_de(cantera), FiltroDeMarcadores.Familia.CANTERA,
+		"y la cantera, con la cantera")
+
+
+## Queja del 2026-09-15: en una ladera el humo salía perpendicular a la hoguera. La
+## hoguera se inclina con el suelo; su humo tiene que seguir mirando al cielo.
+func test_en_una_ladera_el_humo_sube_hacia_arriba() -> void:
+	# Una hoguera de vivac (escala 0,6) apoyada en una ladera: su «arriba» es la normal.
+	var ladera := Basis(Quaternion(Vector3.UP, Vector3(0.5, 1.0, 0.2).normalized())) 		* Basis.from_scale(Vector3.ONE * 0.6)
+	var humo := Bonfire.orientacion_del_humo(ladera)
+	assert_lt(ladera.y.normalized().dot(Vector3.UP), 0.99, "la hoguera sí está inclinada")
+	assert_gt(humo.y.normalized().dot(Vector3.UP), 0.999, "el humo mira al cielo, no a la normal del suelo")
+	assert_near(humo.get_scale().x, 0.6, 0.001, "y conserva el tamaño de su hoguera")

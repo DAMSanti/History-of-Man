@@ -79,21 +79,206 @@ func hunters_in(speciality: Profession.Speciality) -> int:
 	return maxi(total, 1)
 
 
-## Pedidos permanentes de herramienta que ha puesto el jugador.
+## Topes de herramienta que ha puesto el jugador: cuántas piezas, como mucho.
 ##
-## Vacio quiere decir «lo que haga falta», que es lo razonable por defecto.
+## Vacio quiere decir «lo que haga falta». Se llama `orders` por lo que fue —un
+## encargo que mandaba sobre lo calculado— hasta el 2026-09-13; ver [tool_demand].
 var tool_orders: Dictionary = {}
 
 
-## Fija -o quita, con 0- un pedido permanente de una pieza.
+## Fija -o quita, con 0- el tope de una pieza.
 ##
-## Igual que el tope de material del almacen: sin pedido, el sim.taller decide
-## solo cuanto hace falta de cada cosa; con uno puesto, el pedido manda.
+## Igual que el tope de material del almacen: sin tope, el sim.taller decide
+## solo cuanto hace falta de cada cosa; con uno puesto, no pasa de ahí.
 func set_tool_order(kind: Tool.Kind, value: int) -> void:
 	if value <= 0:
 		tool_orders.erase(kind)
 	else:
 		tool_orders[kind] = value
+
+
+# --- la cola: lo que se va a hacer y en que orden ---------------------------
+#
+# Una sola lista para el artesano y para la ventana. Ver SISTEMAS §22.
+
+## Lo que ha pedido el jugador, en su orden. Cada entrada es
+## `{"tool": Tool.Kind, "faltan": int}`.
+##
+## **Un encargo es una orden y la meta es un tope**: lo de [tool_orders] limita
+## lo que el taller decide por su cuenta, y esto se hace ademas de eso, aunque
+## la meta este cubierta. Son las dos mitades de la decision del 2026-09-13, no
+## dos formas de pedir lo mismo.
+var encargos: Array[Dictionary] = []
+
+
+## Manda hacer unas cuantas piezas. Si ya habia un encargo de eso, se suman.
+func encargar_pieza(kind: Tool.Kind, cuantas: int) -> void:
+	if cuantas <= 0:
+		return
+	for entrada: Dictionary in encargos:
+		if int(entrada["tool"]) == int(kind):
+			entrada["faltan"] = int(entrada["faltan"]) + cuantas
+			return
+	encargos.append({"tool": int(kind), "faltan": cuantas})
+
+
+## Sube o baja un encargo en la cola.
+func mover_encargo(donde: int, escalones: int) -> void:
+	if donde < 0 or donde >= encargos.size():
+		return
+	var destino := clampi(donde + escalones, 0, encargos.size() - 1)
+	if destino == donde:
+		return
+	var entrada := encargos[donde]
+	encargos.remove_at(donde)
+	encargos.insert(destino, entrada)
+
+
+func quitar_encargo(donde: int) -> void:
+	if donde >= 0 and donde < encargos.size():
+		encargos.remove_at(donde)
+
+
+## En que puesto de la cola de encargos esta esta pieza, o -1.
+func _encargo_de(kind: Tool.Kind) -> int:
+	for i in range(encargos.size()):
+		if int(encargos[i]["tool"]) == int(kind):
+			return i
+	return -1
+
+
+## Una menos del encargo de esta pieza; si se acaba, fuera de la cola.
+func _cumplir_encargo(kind: Tool.Kind) -> void:
+	var donde := _encargo_de(kind)
+	if donde < 0:
+		return
+	var quedan := int(encargos[donde]["faltan"]) - 1
+	if quedan <= 0:
+		encargos.remove_at(donde)
+	else:
+		encargos[donde]["faltan"] = quedan
+
+
+## Todo lo que hay por hacer, en el orden en que se hara.
+##
+## Con `speciality` puesta, solo lo de esa especialidad -que es lo que pregunta
+## un artesano-; sin ella, la cola entera, que es lo que pinta la ventana.
+##
+## Cada entrada lleva:
+##
+##   tool          la pieza
+##   faltan        cuantas quedan (un encargo las suyas; lo automatico, 1)
+##   automatico    si la pide el trabajo en vez del jugador
+##   nivel         [Prioridades.Nivel] de la pieza
+##   especialidad  quien la hace
+##   motivo        "" si se puede hacer; si no, POR QUE no
+##
+## **El motivo no para la cola**: una entrada bloqueada se queda a la vista con
+## su razon y se hace la siguiente. Lo que no lleva el motivo es «no hay nadie
+## de peleteria»: eso no impide hacerla, impide que HOY la haga alguien, y lo
+## dice la ventana en su columna.
+func cola_de_trabajo(speciality: int = -1) -> Array[Dictionary]:
+	var lista: Array[Dictionary] = []
+
+	# LOS ENCARGOS VAN DELANTE, en el orden que les haya dado el jugador.
+	for entrada: Dictionary in encargos:
+		var kind := int(entrada["tool"]) as Tool.Kind
+		var suya := _quien_hace(kind)
+		if speciality >= 0 and suya != speciality:
+			continue
+		lista.append({
+			"tool": int(kind),
+			"faltan": int(entrada["faltan"]),
+			"automatico": false,
+			"nivel": int(sim.prioridades.de_pieza(kind)),
+			"especialidad": suya,
+			"motivo": _por_que_no(kind),
+		})
+
+	# Y detras, lo que pide el trabajo. Mismos filtros que tenia `_next_piece`
+	# salvo los dos que ahora son motivo -herramienta previa y materia prima-:
+	# eso se enseña, no se esconde.
+	var automaticas: Array[Dictionary] = []
+	var puesto := 0
+	for speciality_key: int in SettlementSim.SPECIALITY_MAKES:
+		if speciality >= 0 and speciality_key != speciality:
+			puesto += (SettlementSim.SPECIALITY_MAKES[speciality_key] as Array).size()
+			continue
+		for kind_key: int in (SettlementSim.SPECIALITY_MAKES[speciality_key] as Array):
+			var kind := kind_key as Tool.Kind
+			var sitio := puesto
+			puesto += 1
+			# Lo que nadie pide no se hace, y lo que no se sabe hacer tampoco:
+			# los dos filtros de siempre, ver [_next_piece] antes de la cola.
+			if float(tool_demand().get(kind, 0)) <= 0.0:
+				continue
+			if not knows_tool(kind):
+				continue
+			# Y lo que el jugador aparto no vuelve mientras siga apartado.
+			if sim.prioridades.de_pieza(kind) == Prioridades.Nivel.NUNCA:
+				continue
+			var coverage := tool_coverage(kind)
+			if coverage >= SettlementSim.RESERVA_UTILLAJE:
+				continue
+			automaticas.append({
+				"tool": int(kind),
+				"faltan": 1,
+				"automatico": true,
+				"nivel": int(sim.prioridades.de_pieza(kind)),
+				"especialidad": speciality_key,
+				"motivo": _por_que_no(kind),
+				"cobertura": coverage,
+				"puesto": sitio,
+			})
+
+	# Por nivel, luego por lo menos cubierto, y el orden de SPECIALITY_MAKES
+	# desempata. La ultima clave es explicita porque `sort_custom` NO es
+	# estable: sin ella, dos piezas con la misma cobertura -lo normal al
+	# empezar la partida, las dos a cero- saldrian en cualquier orden y la
+	# partida dejaria de repetirse con la misma semilla (SPECS §3.3).
+	automaticas.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a["nivel"]) != int(b["nivel"]):
+			return int(a["nivel"]) < int(b["nivel"])
+		if not is_equal_approx(float(a["cobertura"]), float(b["cobertura"])):
+			return float(a["cobertura"]) < float(b["cobertura"])
+		return int(a["puesto"]) < int(b["puesto"]))
+	lista.append_array(automaticas)
+	return lista
+
+
+## Que especialidad hace esta pieza. -1 si no la hace ninguna.
+func _quien_hace(kind: Tool.Kind) -> int:
+	for speciality_key: int in SettlementSim.SPECIALITY_MAKES:
+		if (SettlementSim.SPECIALITY_MAKES[speciality_key] as Array).has(int(kind)):
+			return speciality_key
+	return -1
+
+
+## Por que no se puede hacer esta pieza ahora mismo. "" si se puede.
+##
+## Son las dos puertas que `_next_piece` cerraba en silencio -la herramienta
+## previa y la materia prima-, dichas con el nombre de lo que falta. Un encargo
+## que no sale y no dice por que es la peor version de si mismo: desde fuera se
+## ve igual que un taller parado.
+func _por_que_no(kind: Tool.Kind) -> String:
+	if not knows_tool(kind):
+		return "no se sabe hacer todavía"
+	var prerequisite := Tool.needs_tool(kind)
+	if prerequisite >= 0 and sim.toolkit.count(prerequisite as Tool.Kind) <= 0:
+		return "falta %s" % Tool.kind_name(prerequisite as Tool.Kind).to_lower()
+	if not _can_pay_for(kind):
+		var faltan: Array[String] = []
+		var recipe := Tool.recipe(kind)
+		for material: int in recipe:
+			var wanted: float = float(recipe[material])
+			if material == Materia.Kind.PIEDRA \
+					and sim.store.amount(Materia.Kind.SILEX) >= wanted:
+				continue
+			if sim.store.amount(material as Materia.Kind) < wanted:
+				faltan.append(Materia.material_name(
+					material as Materia.Kind).to_lower())
+		return "falta %s" % ", ".join(faltan)
+	return ""
 
 
 ## Si la banda sabe hacer esta pieza.
@@ -258,9 +443,11 @@ func _practicar(person: Inhabitant, fraction: float) -> void:
 ## sin que nadie tenga que pedirlo.
 func tool_demand() -> Dictionary:
 	var demand := tool_natural_demand()
-	# El pedido permanente del jugador manda por encima de lo calculado
+	# El número del jugador es un TOPE, no un encargo: se hace lo que pide el
+	# trabajo y nunca más de eso. Decisión del usuario del 2026-09-13 —era un
+	# encargo, y con 10 puesto se hacían 10 aunque la banda necesitara 4—.
 	for kind: int in tool_orders:
-		demand[kind] = int(tool_orders[kind])
+		demand[kind] = mini(int(demand.get(kind, 0)), int(tool_orders[kind]))
 	return demand
 
 
@@ -294,14 +481,15 @@ func tool_natural_demand() -> Dictionary:
 		Tool.Kind.NASA: 0,
 		Tool.Kind.ANZUELO: 0,
 		Tool.Kind.RED: 0,
-		# Y la lampara, cero MIENTRAS no se sepa pintar. Nadie ahueca un canto
-		# para tener luz dentro de la cueva antes de tener algo que hacer
-		# dentro de la cueva; en cuanto se sabe pintar, una, que es lo que hace
-		# falta y lo que aparece en los yacimientos.
-		Tool.Kind.LAMPARA: 0,
+		# Y UNA lámpara, siempre. Era cero mientras no se supiera pintar —«nadie
+		# ahueca un canto para tener luz dentro de la cueva antes de tener algo
+		# que hacer dentro»—, pero desde la tanda 4 explorar una cueva también
+		# pide lámpara (ver [Exploracion.lo_que_falta]), y eso sí se puede
+		# hacer desde el primer día. Con la demanda a cero la talla no la hacía
+		# nunca y no se podía explorar: queja del usuario del 2026-09-14, «no me
+		# está haciendo lámparas». Una, que es lo que sale en los yacimientos.
+		Tool.Kind.LAMPARA: 1,
 	}
-	if sim.techs != null and sim.techs.has(TechTree.Tech.ARTE):
-		demand[Tool.Kind.LAMPARA] = 1
 	var fishers := workers_in(Subsistence.Activity.PESCA)
 	if fishers > 0:
 		var wanted := _fishing_tool_to_stock()
@@ -500,43 +688,22 @@ func tool_coverage(kind: Tool.Kind) -> float:
 	return float(sim.toolkit.count(kind)) / needed
 
 
-## Que pieza toca hacer dentro de una especialidad: la que mas falte.
+## Que pieza toca hacer dentro de una especialidad: la primera de la cola que
+## se pueda hacer.
+##
+## Era «la que mas falte» y ahora es «la primera de [cola] sin motivo», que con
+## la cola sin encargos y todo en normal **es exactamente la misma pieza**: la
+## cola automatica sale ordenada por cobertura y desempatada por el orden de
+## [SettlementSim.SPECIALITY_MAKES], que es el criterio que habia aqui.
+##
+## Lo que se gana es que la ventana del taller y el artesano miren LA MISMA
+## LISTA. Pintar la cola con una regla y elegir con otra es la forma segura de
+## que un dia digan cosas distintas -SPECS §7, una pregunta un sitio-.
 func _next_piece(speciality: Profession.Speciality) -> int:
-	var options: Array = SettlementSim.SPECIALITY_MAKES.get(speciality, [])
-	if options.is_empty():
-		return -1
-	var chosen := -1
-	var worst := INF
-	for kind: int in options:
-		var kind_value := kind as Tool.Kind
-		# Lo que ya esta cubierto de sobra no se hace: nadie talla ciento
-		# veinte lascas que no va a usar
-		# Lo que nadie pide no se hace. `tool_coverage` devuelve 1.0 cuando la
-		# demanda es cero -no hay con que dividir- y 1.0 esta por debajo de la
-		# reserva, asi que sin esta linea el sim.taller se ponia a trenzar redes
-		# que la banda ni sabe calar todavia.
-		if float(tool_demand().get(kind_value, 0)) <= 0.0:
-			continue
-		# Y lo que todavia no se sabe hacer, no se hace. Ver `Tool.tech_of`.
-		if not knows_tool(kind_value):
-			continue
-		var coverage := tool_coverage(kind_value)
-		if coverage >= SettlementSim.RESERVA_UTILLAJE:
-			continue
-		# Sin la herramienta previa no es que se tarde mas: es que no se hace
-		var prerequisite := Tool.needs_tool(kind_value)
-		if prerequisite >= 0 and sim.toolkit.count(prerequisite as Tool.Kind) <= 0:
-			continue
-		# Y sin materia prima en el abrigo, tampoco. Antes esto no se miraba
-		# aqui: se elegia la pieza MENOS cubierta aunque no hubiera con que
-		# hacerla, y el artesano se plantaba delante de ella sin probar con
-		# otra que si podia sacar.
-		if not _can_pay_for(kind_value):
-			continue
-		if coverage < worst:
-			worst = coverage
-			chosen = kind
-	return chosen
+	for entrada: Dictionary in cola_de_trabajo(speciality):
+		if String(entrada["motivo"]).is_empty():
+			return int(entrada["tool"])
+	return -1
 
 
 ## Si el abrigo tiene la materia prima que pide una pieza.
@@ -604,7 +771,13 @@ func _craft(person: Inhabitant, hours: float) -> void:
 	# El margen del 30% es la reserva: se trabaja hasta tener algo de sobra,
 	# no hasta el filo justo, porque quedarse al ras un dia de caza es como se
 	# pierde una jornada entera.
-	if tool_coverage(kind_value) >= SettlementSim.RESERVA_UTILLAJE:
+	#
+	# SALVO QUE SEA UN ENCARGO. La meta es un tope para lo que el taller decide
+	# solo; un encargo es una orden y se hace aunque pase de ella. Ver
+	# SISTEMAS §22 y la decision del 2026-09-13 sobre [tool_orders].
+	var por_encargo := _encargo_de(kind_value) >= 0
+	if not por_encargo \
+			and tool_coverage(kind_value) >= SettlementSim.RESERVA_UTILLAJE:
 		person.craft_progress = 0.0
 		return
 
@@ -617,8 +790,15 @@ func _craft(person: Inhabitant, hours: float) -> void:
 
 	# Progreso acumulado hacia la siguiente pieza. Se guarda por persona
 	# porque una azagaya no sale de una sentada.
-	var rate: float = float(SettlementSim.CRAFT_PER_DAY.get(speciality, 1.0))
-	person.craft_progress += fraction * rate * person.effectiveness()
+	#
+	# LO QUE MANDA SON LAS HORAS DE LA PIEZA, no la velocidad del oficio
+	# (2026-09-14): ver [Tool.HORAS_DE_TRABAJO]. Antes esto era
+	# `fraction * CRAFT_PER_DAY[speciality]`, o sea la misma velocidad para todo
+	# lo que sale de un banco, y por eso un punzón costaba 18 horas y una red 9.
+	# El oficio sigue contando, pero por donde debe: en `effectiveness()`, que es
+	# la destreza del que talla.
+	person.craft_progress += (hours / Tool.horas_de_trabajo(kind_value)) \
+		* person.effectiveness()
 	if person.craft_progress < 1.0:
 		return
 
@@ -650,6 +830,10 @@ func _craft(person: Inhabitant, hours: float) -> void:
 
 	var made := sim.toolkit.craft(kind_value, stuff, person.effectiveness())
 	note_tool_made(kind_value)
+	# Y si esta pieza era de un encargo, el encargo tiene una menos. Cumplido,
+	# desaparece de la cola: un encargo es una cantidad y se acaba.
+	if por_encargo:
+		_cumplir_encargo(kind_value)
 	person.craft_progress -= 1.0
 	# Las piezas se apuntan en negativo del catalogo de materiales para no
 	# mezclarlas con la materia prima: el libro de trabajo las separa al
@@ -721,7 +905,7 @@ func _yields_for(person: Inhabitant) -> Dictionary:
 	# que encuentra.
 	if speciality == Profession.Speciality.CAZA_MENOR 			or speciality == Profession.Speciality.CAZA_MAYOR:
 		return Hunting.yields_at(speciality, person.work_centre,
-			GameState.season as Subsistence.Season, sim.techs, sim.toolkit)
+			sim.estacion as Subsistence.Season, sim.techs, sim.toolkit)
 	# El cantero recoge la cuerna de desmogue igual que el recolector: el
 	# desmogadero es un sitio de materia prima -uno de los cuatro nombres de
 	# `Parajes.MATERIA_PRIMA_POOL`- y esta rama no pasa por la tabla de
@@ -729,7 +913,7 @@ func _yields_for(person: Inhabitant) -> Dictionary:
 	# en `SPECIALITY_YIELDS` porque la tabla es constante y esto es de
 	# temporada; la cifra la pone `Tajo`, que es donde vive la del otro oficio.
 	if speciality == Profession.Speciality.CANTERA \
-			and GameState.season == Subsistence.Season.INVIERNO:
+			and sim.estacion == Subsistence.Season.INVIERNO:
 		var cantera: Dictionary = (SettlementSim.SPECIALITY_YIELDS[speciality]
 			as Dictionary).duplicate()
 		cantera[Materia.Kind.ASTA] = Tajo.ASTA_DE_DESMOGUE

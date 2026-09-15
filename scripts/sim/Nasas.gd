@@ -170,7 +170,7 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 				"levantó la nasa: %d piezas" % pieces)
 			sim._note(Chronicle.Kind.TIERRA, "%s levantó la nasa de %s: %d piezas."
 				% [person.given_name,
-					sim.parajes.place_name(full.position, sim.home_position), pieces], 0)
+					sim.parajes.place_name_en_el_agua(full.position, sim.home_position), pieces], 0)
 			person.creel_day = sim.day
 			return _spend(hours, Nasa.JORNADA_DE_REVISAR)
 
@@ -200,7 +200,7 @@ func _creel_round(person: Inhabitant, hours: float) -> float:
 	sim._note(Chronicle.Kind.TIERRA,
 		"%s caló una nasa en %s. Pesca sola: sólo hay que ir a levantarla."
 			% [person.given_name,
-				sim.parajes.place_name(placed.position, sim.home_position)], 1)
+				sim.parajes.place_name_en_el_agua(placed.position, sim.home_position)], 1)
 	return _spend(hours, Nasa.JORNADA_DE_CALAR)
 
 
@@ -241,7 +241,7 @@ func _age_nasas() -> void:
 			sim._note(Chronicle.Kind.PENURIA,
 				"La nasa de %s se ha podrido en %s. Dio %d piezas."
 					% [nasa.maker,
-						sim.parajes.place_name(nasa.position, sim.home_position),
+						sim.parajes.place_name_en_el_agua(nasa.position, sim.home_position),
 						nasa.taken], 0)
 			continue
 		alive.append(nasa)

@@ -12,7 +12,7 @@ config_version=5
 
 config/name="History of Man"
 config/description="Simulacion de una banda paleolitica en la Cantabria del Magdaleniense: subsistencia, tecnica y territorio sobre relieve real."
-run/main_scene="res://scenes/region_map.tscn"
+run/main_scene="res://scenes/menu_principal.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 

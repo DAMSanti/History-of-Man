@@ -21,6 +21,14 @@ func _sim(semilla: int = 20260912) -> SettlementSim:
 	var sim := SettlementSim.new()
 	sim.chronicle = Chronicle.new()
 	sim._rng.seed = semilla
+	# LA FECHA, SUYA Y FIJA. Lo que trae esa gente depende de la estación y el
+	# año —[Intercambio.lo_que_traen]—, y leyendo la global la prueba dependía del
+	# año que dejara cambiado otra prueba: salió el 2026-09-14, cuando
+	# `TestDecisiones` dejó de pasar del invierno a la primavera. En el año 2 en
+	# primavera traen 8 de sílex. Ver [SettlementSim.estacion].
+	sim.dirigido = true
+	sim._estacion = Subsistence.Season.PRIMAVERA
+	sim._anyo = 2
 	for i in range(6):
 		var p := Inhabitant.new()
 		p.id = i

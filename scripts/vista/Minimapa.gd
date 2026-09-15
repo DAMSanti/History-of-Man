@@ -66,6 +66,25 @@ func _poner_boton_de_comarca(encima: Control) -> void:
 	icono.set_anchors_preset(Control.PRESET_FULL_RECT)
 	back.add_child(icono)
 
+	# Y DEBAJO, MANDAR UNA EXPEDICIÓN HACIA UN RUMBO (SISTEMAS §4): se pulsa y se
+	# pincha en el valle hacia dónde. Aquí y no en la barra de abajo, que ya no
+	# cabe a 1280×720, y junto al de la comarca porque los dos miran fuera del
+	# valle.
+	var rumbo := Button.new()
+	rumbo.text = "Rumbo"
+	rumbo.anchor_left = 1.0
+	rumbo.anchor_right = 1.0
+	rumbo.offset_left = -BOTON * 2.0 - 5.0
+	rumbo.offset_right = -5.0
+	rumbo.offset_top = BOTON + 10.0
+	rumbo.offset_bottom = BOTON * 2.0 + 10.0
+	rumbo.tooltip_text = "Mandar una expedición: pulsa y pincha en el valle hacia dónde"
+	rumbo.add_theme_font_size_override("font_size", 11)
+	if demo.ui and demo.ui._skin:
+		rumbo.theme = demo.ui._skin
+	rumbo.pressed.connect(func() -> void: demo.empezar_a_apuntar())
+	encima.add_child(rumbo)
+
 
 ## La columna del bloque del minimapa, para poder colgarle cosas debajo.
 var _columna: VBoxContainer
@@ -117,6 +136,8 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 	var sun := Vector3(-0.6, 0.62, -0.5).normalized()
 
 	for py in range(size):
+		# Medio segundo de bucle: con pantalla de carga, deja pintar entre filas.
+		await Carga.ceder()
 		for px in range(size):
 			var world := Vector3(
 				float(px) / float(size - 1) * float(demo.terrain_size.x), 0.0,
@@ -199,6 +220,11 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 	demo._minimap = TextureRect.new()
 	demo._minimap.set_anchors_preset(Control.PRESET_FULL_RECT)
 	demo._minimap.texture = ImageTexture.create_from_image(image)
+	# Un clic en el mapa lleva allí la cámara. Petición del usuario del
+	# 2026-09-14. Arrastrar con el botón pulsado sigue moviéndola, que es lo que
+	# se espera de un minimapa.
+	demo._minimap.mouse_filter = Control.MOUSE_FILTER_STOP
+	demo._minimap.gui_input.connect(_pinchado_en_el_minimapa)
 	sobre_el_mapa.add_child(demo._minimap)
 	_poner_boton_de_comarca(sobre_el_mapa)
 
@@ -216,6 +242,23 @@ func _build_minimap(canvas: CanvasLayer) -> void:
 	demo._overlay_label.custom_minimum_size = Vector2(size, 0)
 	demo._overlay_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label_panel.add_child(demo._overlay_label)
+
+	# Y el filtro de alfileres, debajo del mapa: es lo que decide qué se ve en el
+	# valle, así que va donde se mira el valle. Ver [FiltroDeMarcadores].
+	_colgar_el_filtro(column, size)
+
+
+## El botón de qué alfileres se ven. Petición del usuario del 2026-09-13.
+func _colgar_el_filtro(column: VBoxContainer, size: int) -> void:
+	var filtro := FiltroDeMarcadores.new()
+	filtro.name = "FiltroDeMarcadores"
+	filtro.custom_minimum_size = Vector2(size, 0)
+	if demo.ui and demo.ui._skin:
+		filtro.theme = demo.ui._skin
+	column.add_child(filtro)
+	demo.filtro_de_marcadores = filtro
+	filtro.cambiado.connect(demo._aplicar_filtro_de_marcadores)
+	demo._aplicar_filtro_de_marcadores()
 
 
 
@@ -440,6 +483,30 @@ func _cycle_overlay() -> void:
 				and demo.knowledge.knows_season(activity, GameState.season) else "temporada por descubrir"
 			demo._overlay_label.text = "%s — lo que la banda conoce (%s)" % [
 				Subsistence.activity_name(activity), season_note]
+
+
+## Lleva la cámara al punto del valle que corresponde a donde se ha pinchado.
+func _pinchado_en_el_minimapa(event: InputEvent) -> void:
+	var boton := event as InputEventMouseButton
+	var arrastre := event as InputEventMouseMotion
+	var pulsado := (boton != null and boton.pressed and boton.button_index == MOUSE_BUTTON_LEFT) \
+		or (arrastre != null and (arrastre.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0)
+	if not pulsado or demo.camera == null or demo._minimap.size.x <= 0.0:
+		return
+	demo.camera.set_target(punto_del_valle(
+		(event as InputEventMouse).position, demo._minimap.size,
+		Vector2(demo.terrain_size)))
+	demo._minimap.accept_event()
+
+
+## El punto del valle —en llano— que cae bajo un punto del minimapa. El mapa
+## cubre el recuadro entero, de la esquina (0, 0) a `terrain_size`, igual que
+## [_plot] al pintarlo. La cámara apoya la altura sola.
+static func punto_del_valle(en_el_mapa: Vector2, lado_del_mapa: Vector2,
+		mundo: Vector2) -> Vector3:
+	var u := clampf(en_el_mapa.x / maxf(lado_del_mapa.x, 1.0), 0.0, 1.0)
+	var v := clampf(en_el_mapa.y / maxf(lado_del_mapa.y, 1.0), 0.0, 1.0)
+	return Vector3(u * mundo.x, 0.0, v * mundo.y)
 
 
 func _plot(image: Image, world: Vector3, colour: Color, radius: int) -> void:

@@ -77,29 +77,38 @@ var world_size: Vector2 = Vector2.ZERO
 ## Las veredas guardadas, por clave de trayecto: {String: Vereda}.
 var veredas: Dictionary = {}
 
-## En que orden se aprendieron, para soltar la mas vieja al llegar al tope.
-var _veredas_orden: Array[String] = []
+## En qué orden se aprendieron **las de cada rejilla**, para soltar la más vieja
+## de esa rejilla al llegar al tope. Ver [VEREDAS_QUE_SE_RECUERDAN].
+var _orden_por_rejilla: Dictionary = {}
 
-## Cuantas veredas se recuerdan.
+## De qué rejilla es cada vereda, para poder soltarla de su lista.
+var _rejilla_de: Dictionary = {}
+
+## Cuantas veredas se recuerdan **por rejilla**.
 ##
 ## Doscientas cubren de sobra los trayectos de una temporada; guardarlas todas
 ## seria pagar memoria por caminos que no se van a repetir nunca. Era
 ## `SettlementSim.ROUTE_CACHE_LIMIT` y se movio con la memoria.
+##
+## **Por rejilla y no en total** —decisión del usuario del 2026-09-14—: desde que
+## las veredas duran el año (SISTEMAS §18), las cuatro estaciones comparten esta
+## memoria, y con un tope común una estación muy andada echaría a las otras antes
+## de que su rejilla volviera. Son hasta ochocientas, unas decenas de KB.
 const VEREDAS_QUE_SE_RECUERDAN := 200
 
 
 ## La vereda a ese trayecto, si se sabe Y SIRVE CON LA REJILLA DE HOY.
 ##
-## Devuelve `null` si no hay, y tambien si la que hay se trazo con otro rio:
-## ahi se descarta de verdad -se borra- en vez de dejarla ocupando sitio hasta
-## que alguien avise. Ver [Vereda.sirve_en].
+## Devuelve `null` si no hay, y también si la que hay se trazó con otro río: ésa
+## **se queda dormida**, no se borra. Hasta el 2026-09-14 se borraba al leerla
+## —«para no dejarla ocupando sitio»—, y con eso la vereda de primavera no
+## llegaba nunca a la primavera siguiente. Ver [Vereda.sirve_en] y SISTEMAS §18.
 func vereda(clave: String, grid: Navgrid) -> Vereda:
 	var guardada: Variant = veredas.get(clave, null)
 	if guardada == null:
 		return null
 	var camino := guardada as Vereda
 	if not camino.sirve_en(grid):
-		_olvidar(clave)
 		return null
 	return camino
 
@@ -107,21 +116,28 @@ func vereda(clave: String, grid: Navgrid) -> Vereda:
 ## Se aprende un camino, sellado con la rejilla que lo trazo.
 func recordar_vereda(clave: String, camino: PackedVector3Array,
 		grid: Navgrid) -> void:
-	if not veredas.has(clave):
-		_veredas_orden.append(clave)
-	veredas[clave] = Vereda.de(camino, grid)
-	while _veredas_orden.size() > VEREDAS_QUE_SE_RECUERDAN:
-		_olvidar(_veredas_orden[0])
+	var nueva := Vereda.de(camino, grid)
+	var sello := _sello_de(nueva)
+	if veredas.has(clave):
+		_soltar_de_su_lista(clave)
+	veredas[clave] = nueva
+	_rejilla_de[clave] = sello
+	if not _orden_por_rejilla.has(sello):
+		_orden_por_rejilla[sello] = ([] as Array[String])
+	var orden: Array[String] = _orden_por_rejilla[sello]
+	orden.append(clave)
+	while orden.size() > VEREDAS_QUE_SE_RECUERDAN:
+		_olvidar(orden[0])
 
 
-## Se olvidan todas. Lo llama quien cambie por donde se pasa.
-##
-## El sello de [Vereda] ya impide que una vereda de otra rejilla se ande, asi
-## que esto no es lo que sostiene la regla: es la limpieza, para no arrastrar
-## doscientas veredas muertas hasta que el tope las empuje.
+## Se olvidan todas. Lo llama quien cambie **por dónde se pasa** sin cambiar el
+## río: cerrar una celda a mano (`Marcha`) deja veredas que cruzan por donde ya no
+## se puede, y el sello no lo ve. El cambio de estación **ya no las tira**: para
+## eso está el sello. Ver SISTEMAS §18.
 func olvidar_veredas() -> void:
 	veredas.clear()
-	_veredas_orden.clear()
+	_orden_por_rejilla.clear()
+	_rejilla_de.clear()
 
 
 ## Cuantas veredas hay guardadas. Es el tope que pide EPOCA_01 §10.1, frente 4.
@@ -129,9 +145,28 @@ func veredas_recordadas() -> int:
 	return veredas.size()
 
 
+## Cuántas hay guardadas de una rejilla.
+func veredas_de(grid: Navgrid) -> int:
+	var sello := "%.4f|%.4f" % [grid.built_with_caudal if grid != null else 1.0,
+		grid.built_with_encharque if grid != null else 0.0]
+	var orden: Array = _orden_por_rejilla.get(sello, [])
+	return orden.size()
+
+
+static func _sello_de(camino: Vereda) -> String:
+	return "%.4f|%.4f" % [camino.caudal, camino.encharque]
+
+
+func _soltar_de_su_lista(clave: String) -> void:
+	var sello := String(_rejilla_de.get(clave, ""))
+	if _orden_por_rejilla.has(sello):
+		(_orden_por_rejilla[sello] as Array[String]).erase(clave)
+	_rejilla_de.erase(clave)
+
+
 func _olvidar(clave: String) -> void:
 	veredas.erase(clave)
-	_veredas_orden.erase(clave)
+	_soltar_de_su_lista(clave)
 
 
 func setup(cells_x: int, cells_z: int, world_extent: Vector2) -> void:

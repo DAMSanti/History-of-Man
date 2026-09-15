@@ -36,7 +36,28 @@ extends Node3D
 ## la esquina solo estorbaba la vista del terreno.
 @export var show_debug_ui: bool = false
 
-## Referencias a nodos
+## El mapa con gente que esta escena mira. Lo que decide partida vive ahi; la
+## escena es su vista. Ver [Campamento] y SISTEMAS §23.
+var campamento: Campamento
+
+## Si el campamento ya estaba vivo y la escena sólo lo mira: ni se monta ni se
+## empieza ni se vuelca. Ver [_montar_el_campamento].
+var _adoptado := false
+
+## Si la visita va con el reloj de la partida corriendo. Ver [_montar_la_visita].
+var _de_visita_con_reloj := false
+
+## Si la escena volcó una partida guardada: detrás van los demás campamentos.
+var _retomada := false
+
+## Mandar una expedición hacia un rumbo desde el valle: si el clic es un rumbo, la
+## ficha y la flecha. Ver [FichaDeRumbo] y SISTEMAS §4.
+var _apuntando := false
+var _ficha_de_rumbo: FichaDeRumbo = null
+var _flecha: FlechaDeRumbo = null
+
+## Referencias a nodos. `terrain`, `sim`, `field`, `knowledge`, `herds`, `tech` y
+## `_caves` son del campamento: aqui se guardan para no reescribir la vista.
 var terrain: TerrainGenerator
 var camera: OrbitalCamera
 var debug_label: Label
@@ -103,6 +124,15 @@ var sepulturas_view: SepulturasView
 ## La hoguera en la boca de la cueva. Ver [HearthFire].
 var hearth_fire: HearthFire
 
+## El secadero, el paraviento, el lavadero y los troncos. Ver [ObrasDelAbrigo].
+var obras_del_abrigo: ObrasDelAbrigo
+
+## Qué alfileres se ven en el valle. Lo cuelga [Minimapa] debajo del mapa.
+var filtro_de_marcadores: FiltroDeMarcadores
+
+## El menú de la partida, el que abre ESC. Ver [MenuDelJuego].
+var menu_del_juego: MenuDelJuego
+
 ## Las hogueras de vivac de quien duerme fuera. Ver [BivouacFires].
 var bivouac_fires: BivouacFires
 
@@ -116,6 +146,10 @@ var weather_view: WeatherView
 var nav_overlay: NavOverlay
 
 ## Dimensiones de la cabana de demostracion, en metros
+## Hasta dónde se acerca la cámara del valle, en metros de órbita: casi a pie
+## de tierra. Petición del usuario del 2026-09-14; ver [_setup_camera].
+const CAMARA_A_PIE_DE_TIERRA := 3.5
+
 const HUT_SIZE := 3.0
 const HUT_HEIGHT := 2.2
 
@@ -133,11 +167,49 @@ func _phase_end(label: String) -> void:
 	print("[TIMING] %s: %d ms" % [label, Time.get_ticks_msec() - _phase_t0])
 
 
+## Las etapas del montaje, con lo que cuesta cada una en milisegundos, medido con
+## `CargaProbe` con la pantalla puesta (ventana, bosque Medio, 2026-09-15): el relieve
+## 0,65 s; los alrededores, el minimapa y los elementos, 0,6-0,65; la simulación y lo que
+## la banda sabe al llegar, 2,2 al fundar y 0,15 al retomar —se toma lo de en medio—; los
+## recursos visibles, 0,65-0,7; sembrar el bosque, 9,5-9,8; el bosque de lejos, 3,6-3,9
+## —eran 2,4-2,9 antes de cargar sus modelos en un hilo y ceder por variante—; y el hogar,
+## la fauna y la interfaz, 0,25-0,5. Son los pesos de la barra. Ver [Carga] e INTERFAZ §9.
+##
+## Volviendo al mismo valle no se siembra ([Forest.siembras]) y la etapa se da por hecha
+## con lo que tardó: lo de lejos pasa a ser media carga, y con su peso viejo a media barra
+## había pasado sólo el 36 % del tiempo.
+const ETAPAS := [
+	["Levantando el relieve", 650.0],
+	["Dibujando los alrededores", 630.0],
+	["Despertando a la banda", 1200.0],
+	["Poniendo a la vista lo que da el valle", 660.0],
+	["Sembrando el bosque", 9650.0],
+	["Plantando el bosque de lejos", 3700.0],
+	["Encendiendo el hogar", 400.0],
+]
+
+## Si la escena ya está en pie. Con pantalla de carga el montaje dura varios cuadros, y
+## hasta aquí no se juega ni se puede dar por hecho que exista lo de dentro.
+var montado := false
+signal se_monto
+
+
 func _ready() -> void:
 	var t_ready0 := Time.get_ticks_msec()
 	print("=== Iniciando Demo ===")
+	# CON PANTALLA DE CARGA, EL MAPA SE MONTA EN VARIOS CUADROS, y mientras tanto la
+	# escena está parada: sus `_process` darían por hecho cosas que todavía no existen.
+	# Sin pantalla —una sonda— se monta de un tirón, como siempre. INTERFAZ §9.
+	var cargando := Carga.abierta()
+	if cargando:
+		process_mode = Node.PROCESS_MODE_DISABLED
+		Carga.etapas(ETAPAS)
+		Carga.etapa(0)
 	_phase_start(); _apply_expedition(); _phase_end("_apply_expedition")
-	_phase_start(); _setup_terrain(); _phase_end("_setup_terrain")
+	_phase_start(); _montar_el_campamento(); _phase_end("_montar_el_campamento")
+	# El cambio de escena ya se ha comido parte de este cuadro: si no cede antes del
+	# relieve, el primer cuadro de la carga pasaba de 500 ms (medido, 521).
+	await Carga.ceder()
 	# Vegetacion desactivada: los arboles se colocaban con base_scale de 1
 	# unidad sobre un mapa donde 1 unidad = 1 m, o sea arbolitos de un metro
 	# que desde la camara solo se leian como manchas oscuras en el suelo.
@@ -148,22 +220,36 @@ func _ready() -> void:
 	_phase_start(); _connect_signals(); _phase_end("_connect_signals")
 
 	# Las bocas de cueva se excavan en la malla ANTES de generarla
-	_phase_start(); _mark_cave_carvings(); _phase_end("_mark_cave_carvings")
+	# Un campamento adoptado ya tiene su relieve generado, con las bocas.
+	if not _adoptado:
+		_phase_start(); campamento.marcar_las_bocas(); _phase_end("marcar_las_bocas")
+		# La malla de la caché del relieve, cargada aparte y retenida hasta generar: el
+		# `load` de dentro de `generate` la encuentra hecha. Sin esto el relieve era un
+		# cuadro de 680 ms al fundar.
+		var _malla_cacheada: Resource = null
+		var ruta_de_la_malla := terrain.malla._cache_base_path() if terrain.malla != null else ""
+		if Carga.abierta() and not ruta_de_la_malla.is_empty() and ResourceLoader.exists(ruta_de_la_malla):
+			_malla_cacheada = await Carga.cargar(ruta_de_la_malla)
+		await Carga.ceder(500.0)
 
-	# Generar mundo
-	print("Generando terreno...")
-	_phase_start()
-	terrain.generate()
-	_phase_end("terrain.generate (mapa jugable)")
+		# Generar mundo
+		print("Generando terreno...")
+		_phase_start()
+		await terrain.generate(Carga.ceder_y_avanzar if Carga.abierta() else Callable())
+		_phase_end("terrain.generate (mapa jugable)")
 	print("Terreno generado. Mesh: ", terrain._terrain_mesh)
+	Carga.siguiente()
+	await Carga.ceder()
 
 	# Las ocho casillas de alrededor, en gris: sin ellas el mapa se corta a
 	# cuchillo y detras no hay nada
 	_phase_start(); _build_surroundings(); _phase_end("_build_surroundings (8 casillas)")
+	await Carga.ceder()
 
 	# Ahora si: el minimapa se pinta del relieve ya generado
 	if _minimap_canvas:
-		_phase_start(); minimapa._build_minimap(_minimap_canvas); _phase_end("_build_minimap")
+		_phase_start(); await minimapa._build_minimap(_minimap_canvas); _phase_end("_build_minimap")
+	await Carga.ceder()
 
 	# Poblar recursos
 
@@ -173,10 +259,16 @@ func _ready() -> void:
 	_phase_start(); _place_site_features(); _phase_end("_place_site_features")
 
 	# La gente. El mapa local corre por dias; el regional, por estaciones.
-	_phase_start(); _start_settlement(); _phase_end("_start_settlement")
+	_phase_start(); await _start_settlement(); _phase_end("_start_settlement")
 
+	await Carga.ceder(200.0)
 	print("[TIMING] === _ready() TOTAL: %d ms ===" % (Time.get_ticks_msec() - t_ready0))
 	print("=== Demo inicializado correctamente ===")
+	montado = true
+	if cargando:
+		process_mode = Node.PROCESS_MODE_INHERIT
+		Carga.cerrar()
+	se_monto.emit()
 
 
 ## Toma los datos que dejo el mapa regional al fundar.
@@ -199,49 +291,39 @@ func _apply_expedition() -> void:
 		Expedition.sea_level_m])
 
 
-## Marca en el terreno las entalladuras de las bocas de cueva.
+## Crea el campamento y su relieve con los ajustes de la escena.
 ##
-## Se hace antes de generar porque la excavacion altera el heightmap y con el
-## se construyen la malla, las normales y la colision.
-func _mark_cave_carvings() -> void:
-	if not Expedition.is_active() or terrain == null:
+## El relieve es del campamento y no de la escena: un mapa que no se mira sigue
+## necesitando saber por dónde se pasa. Ver [Campamento] y SISTEMAS §23.
+##
+## **UN CAMPAMENTO VIVO SE ADOPTA, no se monta otro** (SISTEMAS §23, tarea 14):
+## si la partida ya lo lleva —se fundó al llegar un viaje, o se miró antes y
+## siguió simulando desde fuera—, la escena lo mete en su árbol y le pone la vista
+## encima. Montarlo de nuevo sería otra simulación del mismo valle, y volcar el
+## guardado encima lo devolvería al último autoguardado.
+func _montar_el_campamento() -> void:
+	var vivo: Campamento = null
+	if Expedition.is_active() and not Expedition.visita:
+		vivo = Campamentos.de_sitio(Expedition.site.id)
+	if vivo != null:
+		_adoptado = true
+		campamento = vivo
+		if vivo.get_parent() != null:
+			vivo.get_parent().remove_child(vivo)
+		add_child(vivo)
+		vivo.sim.se_mira = true
+		terrain = vivo.terrain
+		# Lo guardado es más viejo que lo vivo: no se vuelca.
+		Expedition.retomando = false
 		return
-
-	# Dónde se abre de verdad cada boca lo decide [Bocas] al generar, con el
-	# relieve hecho y antes de excavar: si cae en el agua o donde no se llega
-	# desde casa, se mueve, y la entalladura va con ella.
-	var casa := terrain.geo_to_world(Expedition.site.lon, Expedition.site.lat)
-	terrain.colocar_las_bocas = func(t: TerrainGenerator) -> Array[Dictionary]:
-		return Bocas.colocar(t, t.carvings, casa)
-
-	var marked := 0
-	var features := Expedition.site.features_in(Expedition.era)
-	for indice in range(features.size()):
-		var f: Dictionary = features[indice]
-		if int(f.get("class", Site.Feature.OTRO)) != Site.Feature.ABRIGO:
-			continue
-		var world := terrain.geo_to_world(f.get("lon", 0.0), f.get("lat", 0.0))
-		if world.x < 0.0 or world.z < 0.0 				or world.x > terrain_size.x or world.z > terrain_size.y:
-			continue
-		# Ceñida a la visera de ESA cueva, que va de 3 a 6 m: ver
-		# [CaveMouth.entalladura_de]. Eran 13 m de radio y 9 de hondo para todas.
-		var hueco := CaveMouth.entalladura_de(f)
-		terrain.carvings.append({
-			"position": world,
-			"radius": float(hueco["radius"]),
-			"depth": float(hueco["depth"]),
-			# La sima: el radio del pozo y lo que baja. La malla del relieve
-			# quita su ruedo y cose ahi un embudo fino, que a un punto cada
-			# cinco metros un agujero de dos sale cuadrado. Ver
-			# [TerrainGenerator.simas] y [MallaDelTerreno._construir_simas].
-			"boca": CaveMouth.hueco_de(f),
-			"hondo": CaveMouth.PROFUNDIDAD_DE_LA_SIMA,
-			# Para que [_place_site_features] ponga cada boca donde quedó SU
-			# entalladura, y no donde decía el catálogo.
-			"feature": indice,
-		})
-		marked += 1
-	print("Bocas de cueva excavadas en la malla: %d" % marked)
+	campamento = Campamento.new()
+	campamento.name = "Campamento"
+	add_child(campamento)
+	campamento.preparar_el_relieve(terrain_size, terrain_resolution, max_height,
+		seed_value, sea_level, use_real_terrain, heightmap_path, region_offset)
+	campamento.relieve = heightmap_path
+	campamento.recuadro = region_offset
+	terrain = campamento.terrain
 
 
 ## Coloca los elementos reales que caen dentro de este recuadro.
@@ -261,10 +343,12 @@ func _place_site_features() -> void:
 	# Solo lo que YA EXISTE en la epoca. Un dolmen o una ermita los levanto
 	# alguien despues: no son elementos del terreno, son prueba de ocupacion
 	# posterior y se cuentan aparte, en las atestiguaciones del emplazamiento.
-	# Dónde quedó cada boca, por su índice en el catálogo. Ver [Bocas].
-	var bocas := {}
-	for boca: Dictionary in terrain.carvings_colocadas:
-		bocas[int(boca.get("feature", -1))] = boca
+	# LAS CUEVAS YA ESTAN: las pone el campamento, porque son partida además de
+	# geometría —ver [Campamento.colocar_las_cuevas]—. Aquí van sólo los jalones.
+	if not _adoptado:
+		campamento.colocar_las_cuevas()
+	_caves = campamento.caves
+	placed += _caves.size()
 	var features := Expedition.site.features_in(Expedition.era)
 	for indice in range(features.size()):
 		var f: Dictionary = features[indice]
@@ -273,44 +357,15 @@ func _place_site_features() -> void:
 		# datos porque senalan karst, que es pista de exploracion.
 		if int(f.get("class", Site.Feature.OTRO)) == Site.Feature.SIMA:
 			continue
+		if int(f.get("class", Site.Feature.OTRO)) == Site.Feature.ABRIGO:
+			continue
 
 		var world := terrain.geo_to_world(f.get("lon", 0.0), f.get("lat", 0.0))
 		# Puede caer fuera del recuadro de 4 km aunque este a menos de 2 km
 		# del centro, porque el recuadro es cuadrado y el radio circular
 		if world.x < 0.0 or world.z < 0.0 				or world.x > terrain_size.x or world.z > terrain_size.y:
 			continue
-
-		var is_cave: bool = int(f.get("class", Site.Feature.OTRO)) == Site.Feature.ABRIGO
-
-		# La boca, donde la dejó [Bocas]: nunca en el agua ni donde no se llega.
-		if is_cave and bocas.has(indice):
-			var boca: Dictionary = bocas[indice]
-			world = boca["position"]
-			if float(boca.get("movida_m", 0.0)) > 0.0:
-				print("Cueva %s movida %.0f m: caía en el agua o donde no se llega"
-					% [String(f.get("name", "")), float(boca["movida_m"])])
-
-		# LA ALTURA ES LA DEL BORDE, no la del fondo. Desde que la cueva es una
-		# sima de cincuenta metros —ver [CaveMouth.PROFUNDIDAD_DE_LA_SIMA]—,
-		# preguntar la cota en el punto de la boca devuelve el fondo del pozo, y
-		# con ella se hundían la marca, la gente y la hoguera. El borde se mide en
-		# corro, por fuera de la boca.
-		if is_cave:
-			world.y = _borde_de_la_sima(world, CaveMouth.hueco_de(f))
-		else:
-			world.y = terrain.get_height_at(world)
-
-		if is_cave:
-			# Boca construida contra la ladera y orientada cuesta abajo, que es
-			# como se abre una cueva. La media esfera mirando al cielo que
-			# habia aqui parecia un agujero pintado en el suelo.
-			var cave := CaveMouth.new()
-			cave.id = indice
-			root.add_child(cave)
-			cave.build(terrain, world, f)
-			_caves.append(cave)
-			placed += 1
-			continue
+		world.y = terrain.get_height_at(world)
 
 		# El resto de elementos naturales -manantiales, cavidades sin
 		# clasificar- siguen siendo un jalon, que es lo que son: una senal
@@ -357,50 +412,75 @@ func _start_settlement() -> void:
 
 	var home := terrain.geo_to_world(Expedition.site.lon, Expedition.site.lat)
 
-	_levantar_simulacion(home)
-	_levantar_marcadores()
-	_levantar_conocimiento(home)
-	_levantar_vegetacion()
-	_levantar_hogar()
-	_levantar_fauna_y_tecnica()
-	_levantar_interfaz()
-	_elegir_tajos(home)
-
-
-## La simulacion y el campo de recursos: lo primero de todo, porque el resto
-## le pregunta a ellos.
-##
-## `setup` va ANTES que nada mas porque asignar los tajos ya necesita saber
-## si se llega a ellos, y eso lo decide el terreno que se le pasa aqui.
-func _levantar_simulacion(home: Vector3) -> void:
-	sim = SettlementSim.new()
-	sim.name = "Asentamiento"
-	add_child(sim)
-
-	# El setup va PRIMERO porque asignar los tajos ya necesita saber si se
-	# llega a ellos, y eso lo decide el terreno que se le pasa aqui
-	sim.setup(terrain, home, GameState.population, GameState.food)
+	# EL ORDEN ES EL DE ANTES DE SACAR EL CAMPAMENTO, y lo que va por el
+	# campamento consume azar de la partida: ver [Campamento]. Lo de la escena,
+	# intercalado, es vista y no toca la simulacion.
+	# Adoptado, lo del campamento ya está hecho: sólo se monta la vista.
+	Carga.siguiente()
+	# Lo que cuesta la simulación, 370 ms medidos al fundar: se cede antes si no cabe.
+	await Carga.ceder(400.0)
+	var _t := Time.get_ticks_msec()
+	if not _adoptado:
+		campamento.levantar_la_simulacion(home,
+			0 if Expedition.visita else GameState.population, GameState.food)
+	print("[TIMING]   levantar_la_simulacion: %d ms" % (Time.get_ticks_msec() - _t))
+	sim = campamento.sim
+	field = campamento.field
 	sim.day_passed.connect(_on_day_passed)
-
-	# LA COMARCA DE AHI FUERA: adonde puede ir una expedicion y quien vive en
-	# cada sitio. Va aqui y no en `setup` porque la comarca es un dato regional
-	# horneado que la simulacion local no carga por su cuenta, y SPECS §2.3 dice
-	# que este es el unico sitio donde se cablean subsistemas. Sin esto la
-	# expedicion salia, gastaba y volvia sin descubrir nada, y nadie vivia en
-	# ninguna parte: compilaba, y no funcionaba.
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
-	if comarca != null:
-		sim.expedicion.sitios = comarca
-		var ids := PackedInt32Array()
-		for sitio: Site in comarca.available_in(GameState.sea_level_m, GameState.era):
-			# La cueva de la banda no esta «ocupada por otro grupo»: es la suya.
-			if GameState.home != null and sitio.id == GameState.home.id:
-				continue
-			ids.append(sitio.id)
-		sim.contacto.repartir_la_gente(ids)
-
-	# Lo que el valle tiene, repartido en manchas y con su estacion
-	field = ResourceMapper.build(terrain, home)
+	await Carga.ceder()
+	_t = Time.get_ticks_msec()
+	_levantar_marcadores()
+	print("[TIMING]   _levantar_marcadores: %d ms" % (Time.get_ticks_msec() - _t))
+	_t = Time.get_ticks_msec()
+	if not _adoptado:
+		await campamento.levantar_el_conocimiento(home, Carga.ceder_y_avanzar)
+	print("[TIMING]   levantar_el_conocimiento: %d ms" % (Time.get_ticks_msec() - _t))
+	knowledge = campamento.knowledge
+	Carga.siguiente()
+	await Carga.ceder()
+	_t = Time.get_ticks_msec()
+	await _levantar_vegetacion()
+	print("[TIMING]   _levantar_vegetacion: %d ms" % (Time.get_ticks_msec() - _t))
+	Carga.siguiente()
+	await Carga.ceder()
+	_t = Time.get_ticks_msec()
+	if not _adoptado:
+		campamento.asentar_en_la_cueva()
+	print("[TIMING]   asentar_en_la_cueva: %d ms" % (Time.get_ticks_msec() - _t))
+	_t = Time.get_ticks_msec()
+	_levantar_hogar()
+	print("[TIMING]   _levantar_hogar: %d ms" % (Time.get_ticks_msec() - _t))
+	# La fauna y la técnica, 570 ms medidos al fundar.
+	await Carga.ceder(600.0)
+	_t = Time.get_ticks_msec()
+	if not _adoptado:
+		campamento.levantar_fauna_y_tecnica()
+	print("[TIMING]   levantar_fauna_y_tecnica: %d ms" % (Time.get_ticks_msec() - _t))
+	herds = campamento.herds
+	tech = campamento.tech
+	# El aviso en pantalla de la tecnica aprendida. Contarla es del campamento.
+	sim.tecnica_aprendida.connect(_on_tecnica_aprendida)
+	await Carga.ceder(200.0)
+	_t = Time.get_ticks_msec()
+	_levantar_interfaz()
+	print("[TIMING]   _levantar_interfaz: %d ms" % (Time.get_ticks_msec() - _t))
+	if _adoptado or Expedition.visita:
+		return
+	# Los tajos, 170-290 ms: el último paso largo antes de soltar la pantalla.
+	await Carga.ceder(300.0)
+	_t = Time.get_ticks_msec()
+	campamento.elegir_tajos(home)
+	print("[TIMING]   elegir_tajos: %d ms" % (Time.get_ticks_msec() - _t))
+	# Y DESDE AQUÍ LO LLEVA EL RELOJ DE LA PARTIDA, que sobrevive a la escena. Va
+	# al final, como en `CampamentosProbe`: el reloj toma la velocidad del primer
+	# campamento, que `setup` deja en pausa hasta contestar la decisión del
+	# arranque. Ver [RelojDeLaPartida.dirigir].
+	Campamentos.alta(get_tree(), campamento)
+	if _retomada:
+		var errores := Guardado.retomar_los_demas(get_tree(),
+			load(MenuPrincipal.SITIOS) as SiteSet, Expedition.site.id)
+		if not errores.is_empty():
+			print("Los demás campamentos se retoman a medias: %s" % ", ".join(errores))
 
 
 ## Los marcadores y visores del mundo: el asa por la que el jugador agarra
@@ -473,40 +553,6 @@ func _levantar_marcadores() -> void:
 	add_child(nav_overlay)
 
 
-## La cronica y lo que la banda sabe del valle, que al llegar es nada.
-##
-## Sabe que en el rio hay peces; no sabe en que remanso. Eso lo aprende
-## pisandolo. Lo de alrededor del campamento si lo conoce: vive ahi.
-func _levantar_conocimiento(home: Vector3) -> void:
-	sim.chronicle = Chronicle.new()
-	sim.chronicle.record(sim.day, GameState.season as int, GameState.year,
-		Chronicle.Kind.GENTE,
-		"La banda se instala en %s. Son %d, y no conocen el valle."
-			% [Expedition.site.display_name() if Expedition.is_active()
-				else "el abrigo", sim.population()], 2)
-
-	knowledge = BandKnowledge.new()
-	knowledge.setup(field.width, field.height, field.world_size)
-	sim.field = field
-	sim.knowledge = knowledge
-
-	# La banda ya conoce lo que tiene alrededor del campamento: vive ahi. Sin
-	# esto arrancaria sin ver ni su propia cueva, que es absurdo -y ademas
-	# dejaria el mapa entero en negro sin nada por donde empezar a leerlo.
-	knowledge.see_from(home, sim.sight_range * 1.6)
-
-	# Y LO QUE YA SABE DE SUS ALREDEDORES. Va AQUI y no en `sim.setup`, que es
-	# donde estuvo primero y no servia de nada: el campo de recursos se puebla
-	# en esta funcion, o sea DESPUES de `setup`, asi que `Querencia` corria con
-	# `sim.field` a null y sembraba cero parajes.
-	#
-	# Una banda no llega a un valle y planta el campamento a ciegas: elige el
-	# abrigo por lo que tiene alrededor. Ver [Querencia].
-	var sembrados := Querencia.new(sim).asentarse()
-	print("La banda se asienta: %d parajes de la primera vuelta al abrigo"
-		% sembrados)
-
-
 ## Lo que se ve crecer: los recursos en el suelo, la hierba y el bosque.
 func _levantar_vegetacion() -> void:
 	# Los recursos, VISIBLES en el terreno. Hasta ahora la abundancia existia
@@ -518,7 +564,7 @@ func _levantar_vegetacion() -> void:
 	# Ver [ResourceProps.LEJOS_DE_LA_BOCA].
 	for cave: CaveMouth in _caves:
 		props.bocas.append(cave.pick_position())
-	props.setup(terrain, field)
+	await props.setup(terrain, field)
 
 	# LA HIERBA VA APAGADA, y es una decisión, no un descuido.
 	#
@@ -551,7 +597,12 @@ func _levantar_vegetacion() -> void:
 	# `CaveMouth.build` alrededor de la boca.
 	for cave: CaveMouth in _caves:
 		forest.claros.append(cave.pick_position())
-	forest.setup(terrain)
+	Carga.siguiente()
+	await Carga.ceder()
+	await forest.setup(terrain)
+	Carga.siguiente()
+	await Carga.ceder()
+	await forest.levantar_lejos()
 
 
 ## El fuego del abrigo y las hogueras de quien duerme fuera, con la cueva de
@@ -563,33 +614,25 @@ func _levantar_hogar() -> void:
 	hearth_fire = HearthFire.new()
 	hearth_fire.name = "Hoguera"
 	add_child(hearth_fire)
-	# La cueva de casa manda dónde se duerme y dónde se hace corro. Sin esto la
-	# banda se apila en el punto del emplazamiento, a la intemperie.
-	var home_cave := _cave_at(sim.home_position)
-	# Y si la banda se muda, la hoguera y los tajos van con ella. Ver [Traslado].
+	# La cueva de casa, que el campamento ya ha asentado: dónde se duerme y la
+	# campa. Ver [Campamento.asentar_en_la_cueva].
+	var home_cave := campamento.cueva_en(sim.home_position)
+	# Y si la banda se muda, la hoguera y las obras que se ven van con ella; los
+	# tajos, los busca el campamento. Ver [Traslado].
 	sim.campamento_trasladado.connect(_on_campamento_trasladado)
-	if home_cave != null:
-		# La de casa sale siempre pintable al explorarla. Ver
-		# [Exploracion.cueva_de_la_banda].
-		sim.exploracion.cueva_de_la_banda = home_cave.id
-		sim.home_inside = home_cave.inside_point()
-		sim.home_forecourt = home_cave.forecourt_point()
-		# El interior NO se apoya en el terreno, y ahí está la diferencia: la
-		# galería se mete DENTRO de la ladera, así que preguntarle la altura al
-		# terreno en ese punto devuelve la del monte que hay encima —medido,
-		# once metros más arriba— y la banda dormía en el tejado de su cueva. El
-		# suelo de la cueva es el de su boca, que es la altura que ya trae
-		# `inside_point`. Antes se tomaba la de `pick_position`, que va 2,8 m
-		# por encima para que se pueda pinchar: la banda dormía flotando.
-		sim.home_inside.y = home_cave.inside_point().y
-		if terrain:
-			sim.home_forecourt.y = terrain.get_height_at(sim.home_forecourt)
 
 	# La hoguera va en la campa de la boca, no encima del abrigo: es donde se
 	# hace el fuego de una cueva.
 	hearth_fire.setup(sim, terrain,
 		sim.home_forecourt if sim.home_forecourt != Vector3.ZERO
 		else sim.home_position)
+
+	# Y el resto de lo que la banda levanta en el abrigo: secadero, paraviento,
+	# lavadero y los troncos del corro. Ver [ObrasDelAbrigo].
+	obras_del_abrigo = ObrasDelAbrigo.new()
+	obras_del_abrigo.name = "ObrasDelAbrigo"
+	add_child(obras_del_abrigo)
+	_plantar_obras(home_cave)
 
 	# Y las hogueras de quien duerme fuera. Ver [BivouacFires].
 	bivouac_fires = BivouacFires.new()
@@ -602,68 +645,16 @@ func _levantar_hogar() -> void:
 	conchero = Conchero.new()
 	conchero.name = "Conchero"
 	add_child(conchero)
-	conchero.setup(sim, terrain,
-		sim.home_position + Vector3(14.0, 0.0, 9.0))
+	conchero.setup(sim, terrain, _sitio_del_conchero(home_cave,
+		sim.home_forecourt if sim.home_forecourt != Vector3.ZERO else sim.home_position))
 
 	# El paisaje sigue al calendario: la cota de nieve baja en invierno y se
 	# retira en verano. Se asienta ya en la estacion de arranque -si no, la
 	# partida empieza con la nieve de la estacion anterior y tarda doce
 	# jornadas en corregirse- y luego se mueve sola. Ver [Temporada].
-	sim.temporada.asentar(GameState.season as Subsistence.Season)
+	# La temporada ya la asentó el campamento. Ver [Campamento.asentar_en_la_cueva].
 	sim.day_passed.connect(_on_dia_para_el_paisaje)
 	_on_dia_para_el_paisaje(sim.day)
-	# Y las cuevas que la banda va encontrando, a HORAS DE JUEGO: escriben en
-	# la cronica, asi que cada cuanto se miran es de la partida y no del
-	# fotograma. Ver docs/specs/LO_MISMO_MAS_DEPRISA.md, paso 0.
-	sim.hour_passed.connect(_on_hora_para_los_hallazgos)
-
-
-## Cada hora de juego, mirar si la banda ha dado con alguna cueva.
-func _on_hora_para_los_hallazgos(_dia: int, _hora: int) -> void:
-	_check_discoveries()
-
-
-## La fauna que anda de verdad por el valle, y el arbol de tecnicas.
-func _levantar_fauna_y_tecnica() -> void:
-	herds = WildlifeHerds.new()
-	herds.name = "Wildlife"
-	add_child(herds)
-	herds.setup(terrain, field)
-	# Y con ella su poblacion: la caza resta y la cria repone, con techo. Se
-	# monta DESPUES de sembrar la fauna porque el techo sale del censo real.
-	herds.poblaciones = Poblaciones.new(herds)
-	sim.poblaciones = herds.poblaciones
-	# La fauna anda al compas de la partida: en pausa no se mueve. Ver
-	# `WildlifeHerds.sim`.
-	herds.sim = sim
-	# Y la banda caza LO QUE ANDA POR AHI, no una media. Sin esta linea la caza
-	# se resuelve con la tabla de [Hunting] -el respaldo de `Caceria._hunt_step`
-	# para las pruebas sin valle-; con ella, el cazador acecha a un ciervo de
-	# los que se ven. Ver [Hunt] y [Caceria].
-	#
-	# La fauna cuelga de [Caceria] y no del simulador. Estuvo puesta como
-	# `sim.caceria.wildlife` -de cuando la caceria vivia dentro de `SettlementSim`- y
-	# al sacarla nadie corrigio esta linea: GDScript no avisa de asignar una
-	# propiedad que no existe hasta que corre, las pruebas montan la fauna a
-	# mano y las sondas la piden por `sim.caceria.wildlife`, asi que EN LA
-	# PARTIDA DE VERDAD la caza llevaba resolviendose por la tabla vieja sin
-	# que se notara. Aparecio al limpiar el proyecto.
-	if sim and sim.caceria:
-		sim.caceria.wildlife = herds
-
-	tech = TechTree.new()
-	# La simulacion consulta el arbol de verdad, no solo la ficha: con que se
-	# pesca hoy sale de ahi -ver `Fishing`-, y sin el solo se pesca a mano.
-	if sim:
-		sim.techs = tech
-		# Y el arbol consulta la despensa: aprender cuesta material, no solo
-		# jornadas. Ver `TechTree.LEARNING_COST`.
-		tech.larder = sim.store
-		# Y la escena escucha lo que se aprende. La cuenta de jornadas es de la
-		# simulacion -ver [SettlementSim._practica_del_dia]-; el relato, el hito
-		# y el aviso son de aqui.
-		if not sim.tecnica_aprendida.is_connected(_on_tecnica_aprendida):
-			sim.tecnica_aprendida.connect(_on_tecnica_aprendida)
 
 
 ## La interfaz, el censo de lo pintado y las capas que van encima.
@@ -690,6 +681,7 @@ func _levantar_interfaz() -> void:
 	ui.census = census
 	ui.camera = camera
 	ui.cave_action.connect(_on_cave_action)
+	ui.ir_al_campamento.connect(_ir_al_campamento)
 	add_child(ui)
 	# El reloj se cuelga debajo del minimapa, que ya esta montado: el minimapa
 	# se construye antes que la interfaz -necesita el relieve generado- asi que
@@ -704,26 +696,43 @@ func _levantar_interfaz() -> void:
 		#
 		# Y una partida RETOMADA no empieza: sigue. Ni momento inicial ni
 		# decisión de la estación, que ya se citó en su día y viene guardada.
-		if Expedition.retomando:
+		if _adoptado:
+			pass  # sigue donde iba: ni empieza ni se vuelca
+		elif Expedition.visita:
+			_montar_la_visita()
+		elif Expedition.retomando:
 			_retomar_la_partida()
 		else:
 			sim.iniciar_partida()
+		# Las cumbres, del campamento y no del alfiler: buscarlas apunta en la
+		# crónica. Ver [Campamento.mirar_las_cumbres].
+		campamento.mirar_las_cumbres()
+
+		# LOS ALFILERES, YA, con la partida puesta y el filtro que eligió el
+		# jugador. Las cimas sólo se repintaban al cerrar la jornada, así que al
+		# retomar un mapa salían sin alfiler hasta el día siguiente; y el filtro
+		# se colgaba del minimapa ANTES de que existieran los alfileres de
+		# paraje, que se quedaban sin él hasta tocar el botón. Medido con
+		# `MarcadoresProbe` sobre el guardado del jugador (2026-09-14): 0 cimas y
+		# «filtro en markers false» al volver del mapa regional.
+		if paraje_markers != null:
+			paraje_markers.refresh_peaks(sim.cumbres.peaks(), terrain)
+		_aplicar_filtro_de_marcadores()
+
+		# El menú de la partida, el que abre ESC. Va aquí y no en `_setup_ui`
+		# porque necesita la simulación, la fauna y las cuevas montadas: son lo
+		# que guarda. Ver [MenuDelJuego].
+		menu_del_juego = MenuDelJuego.new()
+		menu_del_juego.name = "MenuDelJuego"
+		# En una visita no hay mapa que guardar: ver [Guardado.sitio_de_la_banda].
+		menu_del_juego.montar(null if Expedition.visita else sim, herds, _caves)
+		menu_del_juego.visible = false
+		add_child(menu_del_juego)
 
 	minimapa._build_resource_overlay()
 	# Las cuevas del entorno del campamento salen ya descubiertas, por lo mismo
-	_check_discoveries()
-
-
-## La cota del borde de una sima: la mediana del corro de alrededor, que no la
-## mueve ni un canchal ni una vaguada sueltos.
-func _borde_de_la_sima(centro: Vector3, radio: float) -> float:
-	var cotas: Array[float] = []
-	for i in range(12):
-		var angulo := TAU * float(i) / 12.0
-		cotas.append(terrain.get_height_at(centro + Vector3(
-			cos(angulo) * radio * 1.4, 0.0, sin(angulo) * radio * 1.4)))
-	cotas.sort()
-	return cotas[cotas.size() / 2]
+	if not _adoptado:
+		campamento.revisar_hallazgos()
 
 
 ## La cueva de un id, o null.
@@ -741,52 +750,80 @@ func _casa_de(cave: CaveMouth) -> Dictionary:
 	var dentro := cave.inside_point()
 	var campa := cave.forecourt_point()
 	if terrain:
-		campa.y = terrain.get_height_at(campa)
+		# En el rellano de la campa, igual que al fundar. Ver [_levantar_hogar].
+		campa = ObrasDelAbrigo.asiento_llano(terrain, campa, Bonfire.RING_RADIUS)
 	return {"boca": cave.boca(), "dentro": dentro, "campa": campa}
 
 
-## La banda se ha asentado en otra cueva: la hoguera va a la campa nueva y los
-## tajos se buscan otra vez alrededor de la casa nueva.
+## La banda se ha asentado en otra cueva: la hoguera va a la campa nueva. Los
+## tajos los busca otra vez el campamento: ver [Campamento].
 func _on_campamento_trasladado(_cueva: int) -> void:
 	if hearth_fire != null:
-		hearth_fire.global_position = sim.home_forecourt
-	_elegir_tajos(sim.home_position)
+		hearth_fire.colocar(terrain, sim.home_forecourt)
+	# Las obras son del sitio y se vuelven a levantar allí: ver [Traslado]. Lo
+	# que hay que mover es DÓNDE se plantan cuando se levanten.
+	_plantar_obras(campamento.cueva_en(sim.home_position))
 
 
-## Donde se va a trabajar: de los sitios que ofrece el valle, los que de
-## verdad se alcanzan.
-func _elegir_tajos(home: Vector3) -> void:
-	var descartados := 0
-	for entry: Dictionary in _find_work_sites(home):
-		# Se pesca y se coge agua DESDE la orilla. El punto que sale de la
-		# mascara cae en mitad del cauce, asi que primero se arrima a la ribera
-		# y luego se comprueba si se llega.
-		var spot := _best_work_spot(entry["activity"] as Subsistence.Activity,
-			_nearest_shore(entry["position"]))
-		if spot == Vector3.ZERO:
-			descartados += 1
-			continue
-		entry["position"] = spot
-		sim.set_work_site(entry["activity"], spot)
-
-	# La banda arranca SIN REPARTIR: toda la tabla de trabajos en «—», y el
-	# primer reparto lo hace el jugador. Es la primera decision de la partida y
-	# se la estaba dando hecha `assign_default_jobs`, que sigue existiendo
-	# -la usan las sondas, que necesitan una banda trabajando para medir- pero
-	# ya no se llama al empezar.
-	sim.apply_priorities()
-
-	print("Asentamiento: %d personas, %d sitios de trabajo" % [
-		sim.population(), sim.work_sites.size()])
-	if descartados > 0:
-		print("  %d tajos descartados: quedan al otro lado del agua" % descartados)
+## Enseña o esconde los alfileres que el jugador haya elegido: los de paraje y
+## los de cima los lleva [ParajeMarkers]; los de cueva, cada [CaveMouth].
+func _aplicar_filtro_de_marcadores() -> void:
+	if filtro_de_marcadores == null:
+		return
+	if paraje_markers != null:
+		paraje_markers.filtro = filtro_de_marcadores
+		paraje_markers.aplicar_filtro()
+	var cuevas := filtro_de_marcadores.se_ve(FiltroDeMarcadores.Familia.CUEVA)
+	for cave: CaveMouth in _caves:
+		cave.mostrar_marcador(cuevas)
 
 
-## Metros antes del destino a los que se corta el trayecto cuando el tajo esta
-## en el agua. La orilla de un rio de 22 m queda a 11 m del eje, bastante mas
-## que el radio de llegada, asi que con el radio normal toda pesquera saldria
-## inalcanzable.
-const RIVER_APPROACH_M := 30.0
+## Le dice a [ObrasDelAbrigo] dónde cae cada cosa en este abrigo: la campa —que
+## es donde arde el hogar—, la boca de la cueva y la orilla más cercana.
+func _plantar_obras(cave: CaveMouth) -> void:
+	if obras_del_abrigo == null:
+		return
+	var campa := sim.home_forecourt if sim.home_forecourt != Vector3.ZERO \
+		else sim.home_position
+	var boca := cave.boca() if cave != null else sim.home_position
+	var mirando := cave.facing() if cave != null else Vector3.FORWARD
+	# La orilla de verdad, la misma a la que se va a por agua. Ver
+	# [Hogar._fetch_water].
+	var orilla := sim.tajo._shore_near(sim.home_position)
+	obras_del_abrigo.setup(sim, terrain, campa, boca, mirando, orilla)
+	# Y el montón, junto a la boca y no en el punto del emplazamiento: ver
+	# [_sitio_del_conchero].
+	if conchero != null:
+		conchero.colocar(_sitio_del_conchero(cave, campa))
+
+
+## Dónde se tira lo que sobra: a un lado de la boca, cuesta abajo, a unos metros
+## del filo del pozo.
+##
+## Iba a `home_position + (14, 0, 9)` —diecisiete metros del punto del
+## emplazamiento, sin mirar dónde cae la boca— y no se movía si la banda se
+## mudaba: «el conchero aparece demasiado alejado de la cueva», queja del usuario
+## del 2026-09-14. Un conchero cantábrico está en la boca misma, a un lado de la
+## puerta. Del lado que BAJA porque lo que se tira rueda cuesta abajo, y a un
+## lado y no delante porque delante está la campa, donde se vive.
+func _sitio_del_conchero(cave: CaveMouth, campa: Vector3) -> Vector3:
+	if cave == null:
+		return campa + Vector3(8.0, 0.0, 0.0)
+	var mirada := cave.facing().normalized()
+	var lado := mirada.cross(Vector3.UP).normalized()
+	var desde := cave.boca() + mirada * cave.mouth_radius
+	var alcance := cave.mouth_radius + CONCHERO_JUNTO_A_LA_BOCA
+	var uno := desde + lado * alcance
+	var otro := desde - lado * alcance
+	if terrain != null and terrain.get_height_at(otro) < terrain.get_height_at(uno):
+		return otro
+	return uno
+
+
+## Cuánto se aparta el conchero del filo de la boca, a un lado, en metros. Lo
+## justo para que el montón en su máximo —[Conchero.RADIO_MAX] de mancha, la loma
+## algo menos— no se meta en el pozo. Decisión, no medida.
+const CONCHERO_JUNTO_A_LA_BOCA := 6.0
 
 
 ## Monta las ocho casillas de terreno de alrededor.
@@ -828,179 +865,6 @@ func _build_surroundings() -> void:
 	print("Casillas de alrededor montadas")
 
 
-## Acerca un punto a la ribera vadeable mas proxima A LA QUE SE LLEGUE.
-##
-## Hace falta porque los tajos de agua salen de la mascara de cauce y por tanto
-## caen DENTRO del rio: nadie pesca desde el centro del Nansa. Y hace falta que
-## exija alcance porque la orilla mas cercana a un punto del cauce es, la mitad
-## de las veces, la de enfrente.
-func _nearest_shore(point: Vector3) -> Vector3:
-	if terrain == null:
-		return point
-
-	var walkable := func(p: Vector3) -> bool:
-		return terrain.crossing_difficulty_at(p) <= Hydrography.FORD_WADEABLE
-
-	if walkable.call(point) and (sim == null or sim.marcha.can_reach(point)):
-		return point
-
-	# Espiral corta hacia fuera. Se guarda ademas la primera orilla sin mas,
-	# por si no hubiera ninguna alcanzable: mejor devolver tierra firme
-	# inalcanzable -que el filtro de alcance descartara luego- que un punto en
-	# mitad del agua.
-	var fallback := point
-	var has_fallback := false
-
-	for radius in range(5, 200, 5):
-		for spoke in range(16):
-			var angle := TAU * float(spoke) / 16.0
-			var candidate := point + Vector3(cos(angle), 0.0, sin(angle)) * float(radius)
-			if candidate.x < 0.0 or candidate.z < 0.0 \
-					or candidate.x > float(terrain_size.x) or candidate.z > float(terrain_size.y):
-				continue
-			if not walkable.call(candidate):
-				continue
-
-			candidate.y = terrain.get_height_at(candidate)
-			if sim == null or sim.marcha.can_reach(candidate):
-				return candidate
-			if not has_fallback:
-				fallback = candidate
-				has_fallback = true
-
-	return fallback
-
-
-## Busca en el terreno donde se hace cada cosa.
-##
-## No son puntos inventados: el cauce sale de la mascara de rios, la orilla de
-## la cota del mar, y el coto de caza del llano mas amplio a distancia
-## razonable. Si el sitio no tiene costa, no habra marisqueo, y punto.
-func _find_work_sites(home: Vector3) -> Array[Dictionary]:
-	var found: Array[Dictionary] = []
-	var half := Vector2(terrain_size) * 0.5
-	var best_river := Vector3.ZERO
-	var best_river_score := -1.0
-	var best_coast := Vector3.ZERO
-	var best_coast_dist := INF
-	var best_hunt := Vector3.ZERO
-	var best_hunt_score := -1.0
-	var best_gather := Vector3.ZERO
-	var best_gather_score := -1.0
-
-	var step := 64
-	for z in range(step, terrain_size.y - step, step):
-		for x in range(step, terrain_size.x - step, step):
-			var point := Vector3(x, 0, z)
-			point.y = terrain.get_height_at(point)
-			var distance := Vector2(x - home.x, z - home.z).length()
-			# Nada demasiado lejos: se va y se vuelve en el dia.
-			#
-			# Y el suelo baja de 90 m a 30. Ese suelo era el que mandaba a los
-			# pescadores a 800 m con el río a cincuenta pasos de la cueva:
-			# medido, salían por la mañana, no llegaban a tiempo de trabajar y
-			# se pasaban la partida entera yendo y volviendo sin traer un pez.
-			# Un abrigo se elige POR estar junto al agua; que el tajo no pueda
-			# estar donde está el agua es justo lo contrario de lo que se quiere.
-			if distance > 1500.0 or distance < 30.0:
-				continue
-
-			var river: float = terrain.heightmap.sample_river_mask_meters(
-				terrain.heightmap_region_offset.x + float(x) * terrain.meters_per_unit,
-				terrain.heightmap_region_offset.y + float(z) * terrain.meters_per_unit)
-			var slope := terrain.get_slope_at(point)
-
-			# Un punto al otro lado del rio no es candidato a nada. El filtro va
-			# aqui dentro y no al final para que la banda se quede con el mejor
-			# sitio ALCANZABLE, en vez de perder la actividad entera porque el
-			# mejor absoluto cayera en la otra orilla.
-			#
-			# Se comprueba solo cuando el candidato GANA, no en cada celda del
-			# barrido: el trayecto recorre cientos de celdas y hacerlo dos mil
-			# veces colgaba la fundacion.
-			if river > 0.25:
-				# El precio de la distancia no es un descuento simbólico: es lo
-				# que decide si se puede trabajar el sitio o sólo llegar a él.
-				# Con `distance / 4000` un cauce un pelo mejor a ochocientos
-				# metros le ganaba a uno bueno a cien, y la cuadrilla se pasaba
-				# la jornada andando. Ahora la distancia MULTIPLICA, así que un
-				# sitio al que no da tiempo a ir no gana nunca.
-				var score := river * clampf(1.0 - distance / 1200.0, 0.05, 1.0)
-				# A la pesquera se llega por la ribera, asi que el trayecto se
-				# corta antes del cauce en vez de en el radio de llegada
-				if score > best_river_score and sim.marcha.can_reach(point, RIVER_APPROACH_M):
-					best_river_score = score
-					best_river = point
-
-			if terrain.is_underwater(point) and distance < best_coast_dist \
-					and sim.marcha.can_reach(point, RIVER_APPROACH_M):
-				best_coast_dist = distance
-				best_coast = point
-
-			# Coto de caza: llano y despejado, ni pegado a casa ni lejisimos
-			var hunt := (1.0 - clampf(slope, 0.0, 1.0)) - absf(distance - 700.0) / 2600.0
-			if hunt > best_hunt_score and sim.marcha.can_reach(point):
-				best_hunt_score = hunt
-				best_hunt = point
-
-			# Recoleccion: ladera suave y cerca
-			var gather_fit := 1.0 - clampf(slope * 0.7, 0.0, 1.0)
-			var gather := gather_fit * clampf(1.0 - distance / 1400.0, 0.05, 1.0)
-			if gather > best_gather_score and sim.marcha.can_reach(point):
-				best_gather_score = gather
-				best_gather = point
-
-	if best_hunt_score > 0.0:
-		found.append({"activity": Subsistence.Activity.CAZA, "position": best_hunt,
-			"label": "Coto de caza"})
-	if best_river_score > 0.0:
-		found.append({"activity": Subsistence.Activity.PESCA, "position": best_river,
-			"label": "Pesquera"})
-		# Los cantos se cogen en la barra de grava de la misma orilla, no
-		# cruzando al otro lado por un desplazamiento fijo en diagonal
-		# Los cantos se cogen en la barra de grava de la misma orilla. El
-		# desplazamiento se vuelve a arrimar a la ribera porque en diagonal se
-		# metia otra vez en el cauce.
-		found.append({"activity": Subsistence.Activity.MATERIA_PRIMA,
-			"position": _nearest_shore(_nearest_shore(best_river) + Vector3(35, 0, 35)),
-			"label": "Cantos de cuarcita"})
-	if best_coast_dist < INF:
-		found.append({"activity": Subsistence.Activity.MARISQUEO, "position": best_coast,
-			"label": "Marisqueo"})
-	if best_gather_score > 0.0:
-		found.append({"activity": Subsistence.Activity.RECOLECCION, "position": best_gather,
-			"label": "Recolección"})
-	return found
-
-
-## El mejor punto para plantar un tajo de esta actividad: el que MAS tiene y
-## al que ADEMAS se puede llegar. Vector3.ZERO si no hay ninguno.
-##
-## Los sitios de trabajo salian de la forma del terreno —ladera suave,
-## meandro, barra de cantos— sin preguntarle nada al campo de recursos ni a
-## la rejilla de caminos. Con eso, el tajo de pesca del sitio 56 caia en una
-## celda con abundancia 0,000 —habiendo 156 celdas de rio con pesca en el
-## mismo mapa— y encima en otra zona de la rejilla, o sea sin camino: la
-## banda salia a pescar, no llegaba, se ponia a prospectar por el monte y
-## volvia de vacio todos los dias de la partida.
-##
-## Ahora se pregunta a los dos: se ordenan las celdas que de verdad tienen
-## recurso cerca y se coge la primera a la que se pueda ir andando.
-func _best_work_spot(activity: Subsistence.Activity, near: Vector3) -> Vector3:
-	var candidates: Array[Vector3] = []
-	if sim.field:
-		for rich: Vector3 in sim.field.best_spots_near(activity, near, 400.0, 12):
-			candidates.append(rich)
-	candidates.append(near)
-
-	for candidate: Vector3 in candidates:
-		var spot := _nearest_shore(candidate)
-		spot.y = terrain.get_height_at(spot)
-		if sim.marcha.can_reach(spot):
-			return spot
-	return Vector3.ZERO
-
-
 ## Los postes azules que marcaban «aquí trabaja la gente» se han ido: eran
 ## de antes de que existieran los parajes, cuando el único sitio de trabajo
 ## era una corazonada del fundador. Ahora cada sitio tiene nombre, chapa y
@@ -1009,6 +873,9 @@ func _best_work_spot(activity: Subsistence.Activity, near: Vector3) -> Vector3:
 ## reserva al que ir mientras no se conozca ningún paraje.
 func _on_day_passed(_day: int) -> void:
 	_update_band_panel()
+	# Y la partida queda con algo que no está en disco. Ver [Partidas.sucia]: es
+	# una marca, no una comparación de ficheros.
+	Partidas.tocar()
 
 	# Las chapas de paraje NO se rehacen aqui: se rehacen en cuanto nace o
 	# muere un sitio. Ver `_repintar_parajes`.
@@ -1048,18 +915,50 @@ func _on_day_passed(_day: int) -> void:
 ## tecla, o sea entre fotogramas, no a mitad de un `_advance`. Una instantánea
 ## tomada a medio paso es media partida, SPECS §3.2.
 func _return_to_region() -> void:
-	if sim:
+	# La pantalla antes que guardar: guardar también es del cuadro de la tecla.
+	Carga.abrir(get_tree(), "Saliendo a la comarca")
+	await get_tree().process_frame
+	_dejar_la_escena()
+	Expedition.clear()
+	Carga.cambiar_de_escena(get_tree(), Expedition.REGION_SCENE)
+
+
+## Salta a otro campamento sin pasar por el mapa regional: SISTEMAS §23, punto 8.
+func _ir_al_campamento(otro: Campamento) -> void:
+	if otro == campamento:
+		return
+	Carga.abrir(get_tree(), "Yendo a %s" % otro.nombre())
+	_dejar_la_escena()
+	Campamentos.traspaso_de(otro)
+	Carga.cambiar_de_escena(get_tree(), Expedition.LOCAL_SCENE)
+
+
+## Lo que se hace al irse de un mapa, vaya adonde se vaya: guardar la partida y
+## sacar el campamento de la escena, que sigue simulando fuera.
+func _dejar_la_escena() -> void:
+	# Una visita no se guarda: no hay banda, y guardarla la haría pasar por el
+	# mapa de la banda. Ver [Guardado.sitio_de_la_banda].
+	if sim and not Expedition.visita:
+		var velocidad := sim.time_scale
 		sim.time_scale = 0.0
 		GameState.population = sim.population()
 		GameState.food = sim.store.food_rations()
 		var fallo := Guardado.guardar(sim, herds, _caves)
+		# La partida no se para por salir al mapa regional: SISTEMAS §23, punto 5.
+		sim.time_scale = velocidad
+		# El autoguardado deja el mapa en la carpeta de trabajo, no en la
+		# ranura: la partida sigue teniendo algo que no está guardado.
+		Partidas.tocar()
 		if fallo.is_empty():
 			print("Estado del mapa guardado en %s" % Guardado.ruta_de(
 				Expedition.site.id if Expedition.site != null else -1))
 		else:
 			print("NO se ha podido guardar: %s" % fallo)
-	Expedition.clear()
-	get_tree().change_scene_to_file(Expedition.REGION_SCENE)
+	# EL CAMPAMENTO SALE DE LA ESCENA, NO DE LA PARTIDA: sigue simulando fuera del
+	# árbol. Ver [Campamentos.dejar_de_mirar].
+	if Campamentos.vivos.has(campamento):
+		remove_child(campamento)
+		Campamentos.dejar_de_mirar(campamento)
 
 
 ## Vuelca la partida guardada sobre la escena recién montada.
@@ -1067,6 +966,47 @@ func _return_to_region() -> void:
 ## Va al final de `_ready`, cuando ya existen la simulación, la fauna y las
 ## cuevas: [Instantanea.volcar] ata lo guardado a lo que hay, y lo que no
 ## existiera todavía se crearía suelto y sin que nadie lo apunte.
+## Deja montada una VISITA: el mapa sin banda, con la fecha en la que va la banda
+## y el reloj parado.
+##
+## Decisión del usuario del 2026-09-14: «cuando voy a otro mapa no debe traer a mi
+## banda, sólo cargar y mostrarme el mapa; lo que sí debe hacer es mantener la
+## fecha entre todas las zonas». **El reloj no corre aquí** mientras no exista la
+## simulación de la banda en segundo plano —queda para su spec—: si corriera, al
+## volver la banda estaría en otra fecha que el mundo.
+func _montar_la_visita() -> void:
+	# UN MAPA VISITADO SE VE ENTERO en el regional (SISTEMAS §4). Fuera del paso.
+	if Expedition.site != null:
+		GameState.levantar_niebla({"forma": "recuadro", "lon": Expedition.site.lon,
+			"lat": Expedition.site.lat, "lado": float(Expedition.local_size_m)})
+	# Y EN SU MINIMAPA, sólo lo que las expediciones pisaron, con las cuevas de
+	# dentro. Ver [Campamento.ver_lo_recorrido].
+	campamento.ver_lo_recorrido(GameState.niebla)
+	# CON CAMPAMENTOS VIVOS, EL RELOJ CORRE (SISTEMAS §23, tarea 14, que cambia la
+	# decisión de arriba: ya existe la simulación en segundo plano). La simulación
+	# de la visita no tiene gente y el reloj no le da pasos; la toma para que los
+	# botones de velocidad muevan la partida, y copia su fecha en cada fotograma.
+	var reloj := Campamentos.reloj
+	if reloj != null and is_instance_valid(reloj) and not Campamentos.vivos.is_empty():
+		reloj.dirigir(sim)
+		Campamentos.a_la_fecha(sim)
+		_de_visita_con_reloj = true
+		sim._note(Chronicle.Kind.TIERRA, "De visita en %s. Aquí no vive nadie de los tuyos; "
+			% (Expedition.site.display_name() if Expedition.site != null else "este mapa")
+			+ "en tus campamentos la vida sigue mientras miras.", 2)
+		return
+	var banda := Guardado.leer()
+	if not banda.is_empty():
+		sim.day = int(banda.get("jornada", sim.day))
+		GameState.season = int(banda.get("estacion", GameState.season)) as Subsistence.Season
+		GameState.year = int(banda.get("anyo", GameState.year))
+	sim.time_scale = 0.0
+	sim._note(Chronicle.Kind.TIERRA, "De visita en %s. La banda sigue en su valle; aquí "
+		% (Expedition.site.display_name() if Expedition.site != null else "este mapa")
+		+ "no vive nadie de los tuyos, y el tiempo no corre mientras miras.", 2)
+	print("Visita: sin banda, jornada %d, reloj parado" % sim.day)
+
+
 func _retomar_la_partida() -> void:
 	if not Expedition.retomando:
 		return
@@ -1077,39 +1017,11 @@ func _retomar_la_partida() -> void:
 		print("Se pedía retomar y no hay estado de este mapa que leer")
 		return
 	var errores := Guardado.volcar(guardado, sim, herds, _caves)
+	_retomada = true
 	if errores.is_empty():
 		print("Partida retomada: jornada %d" % sim.day)
 	else:
 		print("La partida se retoma a medias: %s" % ", ".join(errores))
-
-
-func _setup_terrain() -> void:
-	terrain = TerrainGenerator.new()
-	terrain.name = "TerrainGenerator"
-	terrain.terrain_size = terrain_size
-	terrain.resolution = terrain_resolution
-	terrain.max_height = max_height
-	terrain.seed_value = seed_value
-	terrain.sea_level = sea_level
-
-	if use_real_terrain and ResourceLoader.exists(heightmap_path):
-		var data := load(heightmap_path) as HeightmapData
-		if data:
-			terrain.height_source = TerrainGenerator.HeightSource.HEIGHTMAP
-			terrain.heightmap = data
-			terrain.heightmap_region_offset = region_offset
-			# A escala local la altitud no separa pasto de roca: eso lo hace la
-			# pendiente. Con bandas absolutas el recuadro salia entero marron.
-			terrain.bands_relative = true
-			print("Terreno real: ", data.describe())
-			print("  recuadro en uso: %.0f x %.0f m desde (%.0f, %.0f)" % [
-				terrain_size.x, terrain_size.y, region_offset.x, region_offset.y])
-		else:
-			push_warning("No se pudo cargar el heightmap, se usa el procedural")
-	elif use_real_terrain:
-		push_warning("No existe %s, se usa el terreno procedural" % heightmap_path)
-
-	add_child(terrain)
 
 
 func _setup_camera() -> void:
@@ -1125,13 +1037,24 @@ func _setup_camera() -> void:
 		var world := float(maxi(terrain_size.x, terrain_size.y))
 		# Se pasa el recorrido completo; la camara se queda con la banda util
 		camera.set_distance_limits(maxf(10.0, world * 0.01), world * 2.0)
+		# PERO POR ABAJO, HASTA EL SUELO. El recorte dejaba el tope en unos
+		# 55 m de órbita, y el usuario quiere «hacer más zoom hasta
+		# prácticamente estar sobre el terreno» (2026-09-14). Se abre sólo el
+		# extremo cercano —el lejano sigue siendo el de la banda útil—, y la
+		# muesca de abajo se ensancha para que el tramo nuevo no cueste veinte
+		# vueltas de rueda: el paso es multiplicativo, así que un 8 % a tres
+		# metros se ve igual que un 8 % a cincuenta.
+		camera.min_distance = CAMARA_A_PIE_DE_TIERRA
+		camera.zoom_factor_near = 1.08
+		camera.zoom_fine_span = 0.25
 		# Mas contenido: a world*0.15 se cruzaban los 4 km en siete segundos
 		camera.move_speed = maxf(25.0, world * 0.045)
 		camera.far = world * 4.0
-		# El plano cercano por defecto (0.05) con un lejano de miles de unidades
-		# arruina la precision del buffer de profundidad. Como la camara nunca
-		# se acerca mas que min_distance, se puede subir sin recortar nada.
-		camera.near = maxf(world * 0.0008, 0.1)
+		# El plano cercano tiene que caber por debajo de la órbita más corta, o
+		# a pie de tierra la hierba de delante se recorta. Godot 4.5 guarda la
+		# profundidad invertida, así que un cercano de 0,1 con miles de metros
+		# de lejano ya no arruina la precisión como con el búfer clásico.
+		camera.near = 0.1
 
 		# Configurar posición inicial del target. Usar los setters: asignar las
 		# propiedades sueltas tras el _ready() de la cámara no refrescaba la vista.
@@ -1143,7 +1066,11 @@ func _setup_camera() -> void:
 		# La camara consulta el terreno para no colarse bajo tierra al acercarse
 		camera.height_probe = func(point: Vector3) -> float:
 			return terrain.get_height_at(point)
-		camera.ground_clearance = 14.0
+		# El punto de órbita, AL SUELO -y antes de `set_target`, que ya lo apoya-.
+		# Ver [OrbitalCamera._apoyar_el_centro].
+		# A la altura de los ojos de alguien de pie: bajar hasta el suelo es
+		# para eso. Eran 14 m, la copa de un árbol.
+		camera.ground_clearance = 1.6
 		# La camara no sale del recuadro jugable
 		camera.bounds_min = Vector2.ZERO
 		camera.bounds_max = Vector2(float(terrain_size.x), float(terrain_size.y))
@@ -1217,16 +1144,60 @@ func _setup_performance_overlay() -> void:
 
 ## Se ha aprendido una tecnica practicandola. Lo cuenta [SettlementSim].
 func _on_tecnica_aprendida(gained: int) -> void:
-	var learned := gained as TechTree.Tech
-	print("Tecnica aprendida: %s" % TechTree.tech_name(learned))
-	# Aprender a hacer algo es un hito, y se cuenta como tal: con su relato y
-	# con la opcion de dejarlo en la pared. Ver [Tale].
-	if sim:
-		sim.tell_technique(learned)
-		# La pasarela ya no abre nada por sí sola: permite CONSTRUIR, y lo que
-		# abre un cruce es la obra. Ver [Pasarelas] y EPOCA_01 §10.1, frente 13.
+	# Contarla —el relato y el hito— es del campamento, que la cuenta se mire o
+	# no. Aquí sólo el aviso en pantalla. Ver [Campamento.levantar_fauna_y_tecnica].
 	if ui != null:
-		ui.show_tech_milestone(learned)
+		ui.show_tech_milestone(gained as TechTree.Tech)
+
+
+## Empieza a apuntar el rumbo de una expedición. En una visita no hay quien salga.
+func empezar_a_apuntar() -> void:
+	if sim == null or Expedition.visita or sim.people.is_empty():
+		return
+	_apuntando = true
+	sim._note(Chronicle.Kind.HALLAZGO,
+		"Pincha en el valle hacia dónde sale la expedición.", 0)
+
+
+## El rumbo hacia un punto del valle, desde la cueva: el este es +x y el norte, −z.
+func _apuntar_a(punto: Vector3) -> void:
+	var rumbo := rad_to_deg(atan2(punto.x - sim.home_position.x,
+		-(punto.z - sim.home_position.z)))
+	if _flecha == null:
+		_flecha = FlechaDeRumbo.new()
+		_flecha.name = "FlechaDeRumbo"
+		add_child(_flecha)
+	if _ficha_de_rumbo == null:
+		_ficha_de_rumbo = FichaDeRumbo.new()
+		_ficha_de_rumbo.name = "FichaDeRumbo"
+		# El pasillo no cabe en el valle: la flecha va de la cueva a la puerta
+		# por la que saldrían. Ver [Expedicion.puerta_del_valle].
+		_ficha_de_rumbo.cambiada.connect(func(_recorrido: Pasillo) -> void:
+			_flecha.trazar_rumbo(terrain, sim.home_position,
+				sim.expedicion.puerta_del_valle(_ficha_de_rumbo.rumbo)))
+		_ficha_de_rumbo.cerrada.connect(_cerrar_el_rumbo)
+		ui.add_child(_ficha_de_rumbo)
+		_ficha_de_rumbo.abrir(sim, rumbo, campamento.nombre())
+	else:
+		_ficha_de_rumbo.apuntar(rumbo)
+
+
+func _cerrar_el_rumbo(_mandada: bool) -> void:
+	_apuntando = false
+	if _ficha_de_rumbo != null:
+		_ficha_de_rumbo.queue_free()
+		_ficha_de_rumbo = null
+	if _flecha != null:
+		_flecha.queue_free()
+		_flecha = null
+
+
+## La simulación de una visita se suelta del reloj al irse: la escena la libera, y
+## el reloj le daría la vuelta a un objeto liberado.
+func _exit_tree() -> void:
+	if _de_visita_con_reloj and Campamentos.reloj != null \
+			and is_instance_valid(Campamentos.reloj):
+		Campamentos.reloj.soltar(sim)
 
 
 func _connect_signals() -> void:
@@ -1240,40 +1211,6 @@ func _on_terrain_generated() -> void:
 	# Inicializar vegetación después de generar terreno
 	# Solo si hay vegetacion: esta desactivada mientras no haya especies con
 	# porte de verdad, y estas llamadas se quedaban colgando de un nodo nulo
-
-
-## Revisa qué cuevas ha encontrado ya la banda.
-##
-## Una cueva sin descubrir no se dibuja: no es que esté oculta, es que para el
-## jugador todavía no existe. Es lo que da sentido a explorar.
-## La boca de cueva más cercana a un punto, o null si no hay ninguna cerca.
-func _cave_at(point: Vector3) -> CaveMouth:
-	var best: CaveMouth = null
-	var best_dist := 90.0
-	for cave: CaveMouth in _caves:
-		var reach := cave.pick_position().distance_to(point)
-		if reach < best_dist:
-			best_dist = reach
-			best = cave
-	return best
-
-
-func _check_discoveries() -> void:
-	if knowledge == null:
-		return
-	for cave: CaveMouth in _caves:
-		if cave.discovered:
-			continue
-		if knowledge.is_discovered(cave.pick_position()):
-			cave.discover()
-			var name_text := String(cave.feature.get("name", "una cavidad"))
-			print("Descubierta: %s" % name_text)
-			if sim and sim.chronicle:
-				var away := int(cave.pick_position().distance_to(sim.home_position))
-				sim.chronicle.record(sim.day, GameState.season as int,
-					GameState.year, Chronicle.Kind.HALLAZGO,
-					"La banda dio con %s, a %d m del abrigo." % [name_text, away],
-					2)
 
 
 ## Estado de la gente, uno a uno
@@ -1316,6 +1253,8 @@ func _update_band_panel() -> void:
 func _process(_delta: float) -> void:
 	if sim == null:
 		return
+	if _de_visita_con_reloj:
+		Campamentos.a_la_fecha(sim)
 	Cronometro.abre_el_fotograma()
 	Cronometro.tramo_raiz("escena principal (DemoMain)")
 	var frame := Engine.get_process_frames()
@@ -1487,6 +1426,16 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 			if sim != null and not sim.exploracion.mandar(int(data.get("cueva", -1))):
 				print("Banda: no se puede explorar %s: %s" % [label,
 					sim.exploracion.lo_que_falta(int(data.get("cueva", -1)))])
+		"entrar":
+			# LA SALA, encima de la escena: no se cambia de mapa. Ver [SalaDeLaCueva].
+			var cueva := int(data.get("cueva", -1))
+			var falta := sim.pinturas.por_que_no_se_entra(cueva) if sim != null else "no hay banda"
+			if not falta.is_empty():
+				print("Banda: no se entra en %s: %s" % [label, falta])
+			else:
+				var sala := SalaDeLaCueva.new()
+				ui.add_child(sala)
+				sala.montar(sim, cueva, label)
 		"pintar":
 			if tech and not tech.has(TechTree.Tech.ARTE):
 				print("Banda: todavia no se sabe pintar (falta %s)" %
@@ -1521,6 +1470,13 @@ func _unhandled_input(event: InputEvent) -> void:
 ## estan mas cerca de la camara; y el suelo desnudo va el ultimo, para que el
 ## clic sea un verbo en todas partes.
 func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
+	# APUNTANDO, el clic es el rumbo de la expedición y nada más.
+	if _apuntando:
+		var punto := _pick_ground(event.position)
+		if punto != Vector3.INF:
+			_apuntar_a(punto)
+		get_viewport().set_input_as_handled()
+		return
 	# Un clic en cualquier otro sitio borra el camino pintado: si no, se
 	# quedan lineas de gente que ya ha llegado
 	if paraje_markers:
@@ -1585,7 +1541,7 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 		datos["campa"] = _casa_de(cave)["campa"]
 		ui.sitios.show_feature(datos, cave.pick_position(),
 			sim.home_position if sim else Vector3.ZERO,
-			sim != null and cave == _cave_at(sim.home_position))
+			sim != null and cave == campamento.cueva_en(sim.home_position))
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1620,10 +1576,22 @@ func _tecla(event: InputEventKey) -> void:
 			# Primero cierra lo que tengas delante. Salirse del mapa entero
 			# al pulsar ESC daba un susto cada vez: eso ahora es el boton
 			# del minimapa, que es donde se busca.
-			if ui and ui.close_topmost():
+			#
+			# Y sin nada delante, el menú de la partida —guardar, cargar,
+			# salir—, que es lo que pidió la spec de INTERFAZ §7. Cerrar una
+			# ventana y abrir el menú son dos pulsaciones distintas a
+			# propósito: con una sola, salir del juego estaría a un ESC de
+			# distancia de mirar el almacén.
+			if _ficha_de_rumbo != null:
+				_cerrar_el_rumbo(false)
+				get_viewport().set_input_as_handled()
+				return
+			if menu_del_juego != null and menu_del_juego.esta_abierto():
+				menu_del_juego.cerrar()
+			elif ui and ui.close_topmost():
 				pass
-			elif Expedition.is_active():
-				_return_to_region()
+			elif menu_del_juego != null:
+				menu_del_juego.abrir()
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
 			if sim:
 				var index: int = event.keycode - KEY_1
@@ -1656,14 +1624,14 @@ func _tecla(event: InputEventKey) -> void:
 		# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
 		# segundo reloj: sólo manda `sim`.
 		KEY_P, KEY_SPACE:
-			if sim:
+			if sim and (not Expedition.visita or _de_visita_con_reloj):
 				sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0
 		KEY_F1:
-			if sim: sim.time_scale = 1.0
+			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 1.0
 		KEY_F2:
-			if sim: sim.time_scale = 3.0
+			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 3.0
 		KEY_F3:
-			if sim: sim.time_scale = 5.0
+			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 5.0
 
 
 ## Donde toca el terreno el rayo del cursor, o INF si no lo toca.
@@ -1746,9 +1714,8 @@ func _on_dia_para_el_paisaje(_day: int) -> void:
 	if terrain == null or sim == null or sim.temporada == null:
 		return
 	terrain.set_snow_line(sim.temporada.cota_de_nieve())
-	# Y el caudal, que es lo que de verdad cierra el paso: un rio crecido no es
-	# un rio con mas azul, es un rio que no se vadea.
-	terrain.caudal = sim.temporada.caudal()
+	# El caudal no va aqui: cierra el paso, asi que es partida y lo lleva el
+	# campamento. Ver [Campamento._on_dia_para_el_rio].
 	# Y el color: el pasto y la hojarasca se apagan con el año. Solo las capas
 	# VIVAS -la caliza es igual de gris en enero que en agosto-.
 	terrain.set_season_tint(sim.temporada.tinte_del_pasto())

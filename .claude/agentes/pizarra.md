@@ -22,3 +22,4 @@ docs/AGENTES.md §3. No se anota aquí: se toma con `mkdir`.
 
 <!-- Los bloques van debajo de esta línea. Si no hay ninguno, nadie está
      trabajando y el repositorio está libre. -->
+

@@ -44,6 +44,15 @@ func show_jobs() -> void:
 	_los_que_no_estan(body)
 	_job_grid(body)
 
+	# LA CAZA, A LA VISTA. Estas filas vivían dentro del selector de especialidades
+	# de antes de la rejilla, al que ya no llamaba nadie, y el jugador no las
+	# encontraba (queja del 2026-09-14). INTERFAZ §4.
+	ui._heading(body, "CAZA")
+	_who_goes(body, Profession.Job.CAZA)
+	_presas_y_su_nivel(body, Profession.Job.CAZA)
+	ui._heading(body, "EXPLORACIÓN")
+	_who_goes(body, Profession.Job.EXPLORACION)
+
 	ui._text(body, "Cada cual hace lo que tiene MÁS ARRIBA de lo que puede. Si "
 		+ "alguien lleva recolección en 1 y exploración en 2, recolecta: para "
 		+ "que salga a explorar, súbele la exploración o bájale la otra.", true)
@@ -537,107 +546,66 @@ func _cannot_because(job: Profession.Job, person: Inhabitant) -> String:
 	return "no cumple lo que pide el oficio"
 
 
-## Qué materiales concretos hay en los parajes conocidos, y CUÁNTO QUEDA.
+## A qué presa se le va antes, en la rama de caza.
 ##
-## Lo que importa es lo que sigue ahí fuera, no lo que ya está guardado: el
-## almacén tiene su propia pestaña. Aquí la pregunta es «¿me queda avellana en
-## el avellanar o lo hemos dejado seco?».
-##
-## Solo se listan los materiales que esa actividad da AHORA. El asta aparece
-## en invierno y no antes, porque es cuando el ciervo suelta la cuerna; la
-## bellota solo en otoño.
-func _materials_of(activity: Subsistence.Activity) -> Array[String]:
-	if ui.sim == null:
-		return []
-
-	var person_days := ui.sim.remaining_person_days(activity)
-	if person_days <= 0.0:
-		return []
-
-	var lines: Array[String] = []
-	var yields: Dictionary = ui.sim.tajo._yield_materials(activity)
-	for kind: int in yields.keys():
-		var k := kind as Materia.Kind
-		var left := ui.sim.remaining_units(activity, k)
-		if left < 0.5:
-			continue
-
-		# Del abrigo solo se dice si va bien o va justo: el detalle esta en su
-		# propia pestana, y aqui estorbaria
-		var stored := ui.sim.store.amount(k)
-		var depot := "nada guardado"
-		if stored >= left * 0.5:
-			depot = "buena cantidad en el abrigo"
-		elif stored >= 1.0:
-			depot = "poco en el abrigo"
-		elif stored > 0.0:
-			depot = "casi nada en el abrigo"
-
-		lines.append("· %s — quedan ~%.0f %s · %s" % [
-			Materia.material_name(k), left, Materia.unit_name(k), depot])
-
-	lines.sort()
-
-	# Cuanto aguanta con la gente que hay puesta AHORA. Es la unica cifra que
-	# convierte el porcentaje en una decision.
-	var workers := 0
-	for person: Inhabitant in ui.sim.people:
-		if person.has_task and person.activity == activity:
-			workers += 1
-	if workers > 0:
-		lines.append("· Con %d trabajando aguanta ~%d jornadas antes de agotarse."
-			% [workers, int(person_days / float(workers))])
-	else:
-		lines.append("· Sin nadie trabajando: %d jornadas-persona sin tocar."
-			% int(person_days))
-
-	return lines
-func _speciality_picker(body: VBoxContainer, job: Profession.Job) -> void:
-	if ui.sim == null:
+## No hay ventana de caza, así que va aquí, que es donde se decide quién sale a
+## cazar —INTERFAZ §4—. Salen TODAS las especies del catálogo y no sólo las que
+## se pueden cobrar hoy: las que no, apagadas y con lo que falta, para poder
+## dejarlas puestas antes de tener el arma.
+func _presas_y_su_nivel(body: VBoxContainer, job: Profession.Job) -> void:
+	if job != Profession.Job.CAZA or ui.sim == null:
 		return
+	ui._text(body, "A qué pieza se le va antes. Un clic cambia el nivel: normal, alta, baja, nunca.", true)
+	for species: String in Fauna.SPECIES:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		body.add_child(row)
 
-	var current := Profession.Speciality.NINGUNA
-	for person: Inhabitant in ui.sim.people:
-		if person.job == job:
-			current = person.speciality as Profession.Speciality
-			break
+		var hueco := Control.new()
+		hueco.custom_minimum_size = Vector2(14, 0)
+		row.add_child(hueco)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	body.add_child(row)
+		var falta := Fauna.weapon_missing(species) \
+			if not Fauna.huntable_with(species, ui.sim.toolkit) else ""
 
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(14, 0)
-	row.add_child(spacer)
+		var label := Label.new()
+		label.text = "%s — %.0f raciones" % [Fauna.species_name(species),
+			Fauna.rations_of(species)]
+		if not falta.is_empty():
+			label.text += " · %s" % falta
+		label.custom_minimum_size = Vector2(240, 0)
+		label.add_theme_font_size_override("font_size", 11)
+		# Apagada la que no se puede cobrar todavía, pero se deja tocar: es el
+		# sentido de poder priorizar el uro antes de saber hacer la azagaya.
+		label.add_theme_color_override("font_color",
+			UISkin.INK_FAINT if not falta.is_empty() else UISkin.INK)
+		row.add_child(label)
 
-	var options: Array = [Profession.Speciality.NINGUNA]
-	options.append_array(Profession.specialities_of(job))
-
-	for speciality: int in options:
 		var button := Button.new()
-		button.text = Profession.speciality_name(speciality as Profession.Speciality)
-		button.tooltip_text = Profession.speciality_desc(
-			speciality as Profession.Speciality)
-		button.toggle_mode = true
-		button.button_pressed = current == speciality
+		button.custom_minimum_size = Vector2(58, 20)
 		button.add_theme_font_size_override("font_size", 11)
+		_pintar_nivel_de_presa(button, species)
 		button.pressed.connect(func() -> void:
-			ui.sim.set_speciality(job, speciality as Profession.Speciality)
+			ui.sim.fijar_prioridad_especie(species,
+				Prioridades.siguiente(ui.sim.prioridades.de_especie(species)))
 			show_jobs())
 		row.add_child(button)
+		# Atado: cambiar el nivel por código se ve sin cerrar la ventana.
+		ui._bind(button, func() -> void: _pintar_nivel_de_presa(button, species))
 
-	# Y qué está haciendo cada cual AHORA, que con rotación no es lo mismo que
-	# lo que se ha pedido
-	if current == Profession.Speciality.NINGUNA:
-		var counts: Dictionary = ui.sim.speciality_counts(job)
-		var parts: Array[String] = []
-		for speciality: int in counts.keys():
-			parts.append("%d en %s" % [counts[speciality],
-				Profession.speciality_name(speciality as Profession.Speciality).to_lower()])
-		if not parts.is_empty():
-			ui._text(body, "   hoy: " + ", ".join(parts), true)
 
-	_who_goes(body, job)
+func _pintar_nivel_de_presa(button: Button, species: String) -> void:
+	var nivel := ui.sim.prioridades.de_especie(species)
+	button.text = Prioridades.nombre(nivel)
+	button.tooltip_text = "De lo que tenga a su alcance, el cazador va a por " \
+		+ "lo de más nivel. Lo que esté en nunca no se caza."
+	var tinta := UISkin.INK_SOFT
+	match nivel:
+		Prioridades.Nivel.ALTA:
+			tinta = UISkin.OCHRE
+		Prioridades.Nivel.BAJA, Prioridades.Nivel.NUNCA:
+			tinta = UISkin.INK_FAINT
+	button.add_theme_color_override("font_color", tinta)
 
 
 ## Quiénes van, por su nombre, en los oficios que salen del abrigo.
@@ -662,6 +630,9 @@ func _who_goes(body: VBoxContainer, job: Profession.Job) -> void:
 				person.current_speciality as Profession.Speciality).to_lower(),
 			ui.barra._person_card_line(person)]
 		ui._text(body, line, person.hurt_days <= 0)
+
+
+## La ventana de la banda: cada cual, con lo suyo.
 func show_band() -> void:
 	var body := ui._window("banda", "La banda")
 	ui._clear(body)
@@ -748,3 +719,66 @@ func _band_person_row(body: VBoxContainer, person: Inhabitant) -> void:
 		if click and click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 			ui.show_person(person))
 	frame.tooltip_text = "Pincha para ver su ficha."
+
+
+## Qué materiales concretos hay en los parajes conocidos, y CUÁNTO QUEDA.
+##
+## **Lo llama [PanelRastros] a través de `GameUI._materials_of`**, no esta
+## ventana: por eso se borró sin querer el 2026-09-14 —terminaba pegado al
+## `_speciality_picker` muerto que se estaba quitando, sin línea en blanco de
+## por medio— y Territorio reventó con «Nonexistent function '_materials_of'».
+## Si alguna vez parece que no lo usa nadie, búscalo en `scripts/ui/`.
+##
+## Lo que importa es lo que sigue ahí fuera, no lo que ya está guardado: el
+## almacén tiene su propia pestaña. Aquí la pregunta es «¿me queda avellana en
+## el avellanar o lo hemos dejado seco?».
+##
+## Solo se listan los materiales que esa actividad da AHORA. El asta aparece
+## en invierno y no antes, porque es cuando el ciervo suelta la cuerna; la
+## bellota solo en otoño.
+func _materials_of(activity: Subsistence.Activity) -> Array[String]:
+	if ui.sim == null:
+		return []
+
+	var person_days := ui.sim.remaining_person_days(activity)
+	if person_days <= 0.0:
+		return []
+
+	var lines: Array[String] = []
+	var yields: Dictionary = ui.sim.tajo._yield_materials(activity)
+	for kind: int in yields.keys():
+		var k := kind as Materia.Kind
+		var left := ui.sim.remaining_units(activity, k)
+		if left < 0.5:
+			continue
+
+		# Del abrigo solo se dice si va bien o va justo: el detalle esta en su
+		# propia pestana, y aqui estorbaria
+		var stored := ui.sim.store.amount(k)
+		var depot := "nada guardado"
+		if stored >= left * 0.5:
+			depot = "buena cantidad en el abrigo"
+		elif stored >= 1.0:
+			depot = "poco en el abrigo"
+		elif stored > 0.0:
+			depot = "casi nada en el abrigo"
+
+		lines.append("· %s — quedan ~%.0f %s · %s" % [
+			Materia.material_name(k), left, Materia.unit_name(k), depot])
+
+	lines.sort()
+
+	# Cuanto aguanta con la gente que hay puesta AHORA. Es la unica cifra que
+	# convierte el porcentaje en una decision.
+	var workers := 0
+	for person: Inhabitant in ui.sim.people:
+		if person.has_task and person.activity == activity:
+			workers += 1
+	if workers > 0:
+		lines.append("· Con %d trabajando aguanta ~%d jornadas antes de agotarse."
+			% [workers, int(person_days / float(workers))])
+	else:
+		lines.append("· Sin nadie trabajando: %d jornadas-persona sin tocar."
+			% int(person_days))
+
+	return lines

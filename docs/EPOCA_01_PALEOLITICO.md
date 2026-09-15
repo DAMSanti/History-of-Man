@@ -192,18 +192,34 @@ Ya están en `TechTree.CATALOGUE` y `TechTree.BRANCHES`, con jornadas y coste en
 material medidos, no inventados aquí. Resumen por oficio (el oficio sale de la
 rama, `TechTree.job_of`):
 
-| Oficio | Técnicas, en orden | Jornadas acumuladas hasta el final |
+Las jornadas son **acumuladas en el oficio** (`TechTree.days_in`), no de cada
+técnica por separado: la cifra de la aguja incluye las de la hoja.
+
+| Oficio | Técnicas, en orden | Jornadas del oficio hasta la última |
 |---|---|---|
-| `MANUFACTURA` | Lasca → Núcleo (45) → Hoja (110) → Aguja (190) | 345 |
-| `CAZA` | Lazo (35) → Cepo (110) → Red de aves (190) → Foso (330) → Azagaya (140) → Ojeo (260) → Propulsor (420) → Arco (700) | hasta 2185 |
-| `RIBERA` | Pesquera (60) → Nasa (180) → Anzuelo (320) → Red (560) → Arpón (850) | hasta 1970 |
-| `EXPLORACION` | Pasarela (70) → Piragua (150, pide `Kind.HOGAR`) | 220 |
+| `MANUFACTURA` | Lasca → Núcleo (15) → Hoja (45) → Aguja (90) | 90 |
+| `CAZA` | Lazo (35) → Cepo (110) → Red de aves (190) → Foso (330) → Azagaya (140) → Ojeo (260) → Propulsor (420) | 420 |
+| `RIBERA` | Pesquera (60) → Nasa (120) → Anzuelo (180) → Red (240) → Arpón (300) | 300 |
+| `EXPLORACION` | Pasarela (70) | 70 |
 | `HOGAR` | Arte (200, pide `Kind.HOGAR`) | 200 |
 
-**El nudo de esta época, y está medido:** `AZAGAYA` cuelga de `HOJA`, que se
-practica en materia prima. Una banda con uno o dos en el taller **no llega a la
-caza mayor en un año de partida**, así que los cazadores viven de trampas. No es
-calibración, es una cadena de prerrequisitos. Ver [ESTADO.md](ESTADO.md) §2.
+**Las de manufactura y ribera las decidió el usuario el 2026-09-13** —eran
+15/45/90 contra 45/110/190, y 60/120/180/240/300 contra 60/180/320/560/850—
+porque «tardan MUCHÍSIMO en investigarse»: con las viejas, ni la talla laminar
+ni el arpón llegaban en una partida. Son una decisión, no una medida.
+
+> La tabla decía además `Arco` en la caza y `Piragua` en la exploración, y las
+> dos se habían quitado del árbol el 2026-09-13 por ser del Mesolítico (ver
+> EPOCA_02 y `TestPractica`). Ganó el código; la tabla estaba pendiente de
+> arreglar y se arregló aquí.
+
+**El nudo de esta época** era que `AZAGAYA` cuelga de `HOJA`, que se practica en
+manufactura: con 110 jornadas de laminar, una banda con uno o dos en el taller
+**no llegaba a la caza mayor en un año de partida** y los cazadores vivían de
+trampas (medido, [ESTADO.md](ESTADO.md) §2). Con la laminar en 45 el nudo se
+afloja; lo que no cambia es la **forma** del nudo —una cadena de
+prerrequisitos entre dos oficios distintos—, y eso hay que volver a medirlo con
+un año antes de darlo por resuelto.
 
 **Lo que falta de instalación, no de técnica:** `CampProjects.Kind` tiene
 `HOGAR`, `SECADERO`, `LAVADERO` y `PARAVIENTO`. Es la lista correcta para esta
@@ -450,7 +466,8 @@ unos treinta días, y a partir de ahí `_next_piece` da −1, `_speciality_can_w
 da false y el reparto manda al artesano a su siguiente oficio —lo cual es
 deliberado y está comentado en `Reparto.gd`—. El taller no se para: **termina**.
 Y el régimen permanente de reposición, 0,3 jornadas/día medidas, no da para las
-110 jornadas de práctica que pide la talla laminar. Eso es balanceo, no un
+110 jornadas de práctica que pedía entonces la talla laminar —45 desde el
+2026-09-13, ver §7—. Eso es balanceo, no un
 fallo, y la decisión de qué se toca no estaba en esta spec. Ver ESTADO.md §2.
 
 **Riesgos técnicos conocidos**
@@ -1076,10 +1093,18 @@ evitar, cada una con su coste **escrito en la opción antes de elegir**:
 
 | Estación | Qué se decide | Qué cuesta decir que sí |
 |---|---|---|
-| **Primavera** | ¿Se manda una expedición fuera del valle? | 3 adultos, 12 jornadas y 72 raciones, vuelvan con algo o no |
+| ~~**Primavera**~~ *(quitada el 2026-09-14: ver abajo)* | ~~¿Se manda una expedición fuera del valle?~~ | ~~3 adultos, 12 jornadas y 72 raciones~~ |
 | **Verano** | ¿Se sube a las cumbres ahora que no hiela? | El riesgo de la ascensión; y si no se sube, la ventana sin ropa se cierra con el verano |
 | **Otoño** | ¿Volcarse en la berrea? | Un mes sin recolectar ni hacer leña quien caza |
 | **Invierno** | ¿El fuego a manos llenas o racionado? | Racionado: la leña dura el doble y una noche de cada dos se duerme sin fuego |
+
+> **La de primavera se quita con la exploración hacia un rumbo** (spec del
+> 2026-09-14, [SISTEMAS.md](SISTEMAS.md) §4): la expedición se manda cuando se
+> quiera, así que la tarjeta sobra y la primavera se queda sin decisión del año.
+> Consecuencia aceptada al escribir la spec. **Quitada el 2026-09-14**: desde ese
+> día son **tres decisiones al año**, y la primavera no tiene ninguna. La
+> expedición se manda desde la ficha de rumbo, con las jornadas que se elijan (de
+> 4 a 24) y la regla de coste de siempre. `TestDecisiones` lo comprueba.
 
 **Y salen en el segundo mes de su estación, no el primer día** (2026-09-13,
 tanda 3, frente 9). Cada una cae en una jornada sorteada entre la **16 y la 30**
@@ -1781,6 +1806,13 @@ ver cuando el fuego se apaga.
 - El fotograma no empeora de forma medible con cinco fuegos en pantalla, medido
   con la herramienta de siempre, antes y después.
 
+> **El humo sube al cielo aunque la hoguera esté en cuesta** (`/depurar`, 2026-09-15).
+> Queja: «el humo está saliendo perpendicular a la hoguera». La hoguera se apoya en la
+> pendiente —el corro y la leña siguen la normal del suelo— y el humo, hijo suyo, lanzaba
+> sus bocanadas hacia ese «arriba» tumbado. Ahora el emisor toma la orientación del
+> mundo con la escala de su hoguera (`Bonfire.enderezar_el_humo`), y conserva la leve
+> deriva del aire que ya tenía. Prueba en `TestCampProjects`.
+
 #### 25. El trueque como el almacén
 
 **Una ventana como la del almacén**: a la izquierda los materiales de la banda,
@@ -1875,6 +1907,15 @@ curso» → Tanda 4.
   `RegionBoundary.build_playable_mask` inunda hasta el agua, **con los límites
   laterales que ya tiene** —para no extenderse delante de Asturias— y sin el
   tope de distancia. Una herramienta de horneado nueva en `tools/`.
+  > **Los límites laterales, quebrados (2026-09-14).** Eran dos columnas fijas y
+  > hacia el norte la frontera salía como dos reglas —medido en la máscara
+  > vieja: el levante en la misma columna **217 filas seguidas**—. Petición del
+  > usuario: «algo fractal y no completamente recta, como una frontera moderna».
+  > `RegionBoundary._limites_por_fila` desplaza cada lado con ruido fractal de
+  > cinco octavas, hasta 22 columnas (unos 2,4 km), creciendo desde cero en la
+  > costa de hoy para empalmar con la frontera administrativa sin escalón.
+  > Rehorneado con `HornearEras`; `TestFrontera` exige rachas rectas de menos de
+  > 12 filas y sigue exigiendo que la línea llegue al agua con los límites nuevos.
 - **19, el hogar.** `CampProjects`: el trabajo del hogar pasa de jornada a
   **cuatro horas de trabajo**, sin tocar la unidad en que cuentan las demás obras.
 - **20, el abrigo.** `PanelSitios._actions_for` pierde «taller» y ofrece
@@ -2171,6 +2212,39 @@ La Pasiega, El Pendo, Covalejos, El Mirón —con el enterramiento de la Dama
 Roja— y La Garma, con suelo de ocupación sellado. El propulsor, los arpones de
 asta, las agujas con ojo y el trabajo de piel están documentados en el
 Magdaleniense cantábrico.
+
+> **El arte que se ve dentro de las cuevas (spec del 2026-09-15, SISTEMAS §13)**
+> tiene que ser de esta sección: **cada cueva con arte paleolítico documentado
+> muestra su arte real**, calcado a mano de referencias publicadas, y un texto
+> corto de lo que hay y de cuándo es. La lista de cuevas se escribe aquí, cada una
+> con su fuente, y parte de las cántabras del bien de la UNESCO «Cueva de Altamira
+> y arte rupestre paleolítico del norte de España» que estén en el mapa. **Nada
+> inventado se presenta como real**, y una cronología discutida se dice discutida.
+
+**Las diez cuevas con arte que se ven por dentro** (`ArteDeLosDeAntes`, construido
+el 2026-09-15). Lo que muestra cada panel es una muestra de lo que hay, no el
+inventario; las cifras son las de la fuente.
+
+| Cueva | Qué hay | Cuándo | Fuentes |
+|---|---|---|---|
+| Cueva de Altamira | Techo de bisontes polícromos sobre el relieve, gran cierva, caballos, jabalí | Techo magdaleniense, ~15 000 años; marcas rojas de ≥35 600 | <https://es.wikipedia.org/wiki/Cueva_de_Altamira>, <https://doi.org/10.1126/science.1219957> |
+| Cueva de El Castillo | Más de 50 manos en negativo, serie de discos rojos, bisontes | Disco ≥40 800 años, mano ≥37 300 (series de uranio) | <https://www.arterupestrecantabrico.es/cuevas/cueva-de-el-castillo.html>, <https://doi.org/10.1126/science.1219957> |
+| Cueva de La Pasiega | Más de 700 formas: 97 cérvidos, 80 équidos, 31 bóvidos, 130+ signos | Varias fases; «La Trampa» ≥64 800 años **y discutido** | <https://es.wikipedia.org/wiki/Cueva_de_La_Pasiega>, <https://doi.org/10.1126/science.aap7778>, <https://www.sciencenews.org/article/dating-questions-challenge-whether-neandertals-drew-spanish-cave-art> |
+| Cueva de Las Monedas | 28 animales en trazo negro: 15 caballos, 4 renos, 4 cabras, bisonte, uro, oso | Magdaleniense superior | <https://www.arterupestrecantabrico.es/cuevas/cueva-de-las-monedas.html> |
+| Cueva de Las Chimeneas | Ciervos y signos cuadrangulares en negro | C14: 15 070 ± 140 BP (ciervo), 13 940 ± 140 BP (signo) | <https://www.arterupestrecantabrico.es/cuevas/cueva-de-las-chimeneas.html> |
+| Cueva de Covalanas | 18 ciervas rojas en tamponado, caballo, bóvido, posible reno | Final del Gravetiense e inicio del Solutrense | <https://www.arterupestrecantabrico.es/cuevas/cueva-de-covalanas.html> |
+| Cueva del Pendo | Friso rojo descubierto en 1997: ciervas, caballo, posible uro, cabra, signos | ~20 000 años | <https://es.wikipedia.org/wiki/Cueva_de_El_Pendo> |
+| Cueva de La Garma | Más de 500 pinturas y grabados: ~100 animales, 40 manos en negativo, 100+ signos | Desde las primeras fases hasta el Magdaleniense medio | <https://www.arterupestrecantabrico.es/cuevas/cueva-de-la-garma.html> |
+| Cueva de Chufín | Ciervas, cabras, caballos y bisontes sin cabeza en rojo, grabados, puntos | Solutrense; 20 000–25 000 años | <https://es.wikipedia.org/wiki/Cueva_de_Chuf%C3%ADn> |
+| Cueva de Hornos de la Peña | Sólo grabados: caballo del abrigo, bóvidos, ciervos, cabras, reno | Abrigo auriñaciense; interior magdaleniense superior | <https://es.wikipedia.org/wiki/Cueva_de_Hornos_de_la_Pe%C3%B1a> |
+
+**Una fecha que se discute, y por eso se dice.** Hoffmann y otros (*Science*,
+2018) fecharon con uranio-torio la costra sobre «La Trampa» de La Pasiega en más
+de 64 800 años y la atribuyeron a neandertales. White y otros (*Journal of Human
+Evolution*, 2020) y otros autores lo discuten: el lavado de la costra envejece la
+fecha, y ese signo está pintado encima de animales que se tienen por
+premagdalenienses. El juego no toma partido: el texto dice las dos cosas. Y es
+el signo del que se calcó el escaleriforme (CREDITOS).
 
 El **ciclo estacional de decisiones** del §3 es `INFERIDO`: la estacionalidad de
 salmón y berrea es real y los yacimientos muestran ocupación estacional, pero el

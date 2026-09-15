@@ -31,8 +31,11 @@ func test_las_jornadas_no_pasan_de_las_que_pide() -> void:
 		"no se anuncian más jornadas de las que la técnica pide")
 	assert_true(texto.contains("70 de 70 jornadas, ya hechas"),
 		"se dice que las jornadas están hechas")
-	assert_true(texto.contains("falta: tras núcleo preparado"),
+	assert_true(texto.contains("tras núcleo preparado"),
 		"y qué la frena, en esa misma línea")
+	assert_true(texto.contains("falta: [color=%s]tras núcleo preparado"
+		% TechGraph.ROJO_DEL_AVISO),
+		"y lo que falta va en rojo: petición del usuario del 2026-09-13")
 
 
 func test_a_medias_se_cuenta_lo_que_lleva() -> void:

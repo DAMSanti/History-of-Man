@@ -90,12 +90,24 @@ queda cargado igual y no obliga a tocar `project.godot`:
 | Clase | Qué guarda | Contrato |
 |---|---|---|
 | `Expedition` (`region/`) | El traspaso regional → local: qué `Site`, qué relieve, qué recuadro, qué cota del mar, qué época | Lo escribe el mapa regional al fundar y lo lee `DemoMain._ready`. `is_active()` decide si la capa local arranca de una partida o de sus valores de demo |
-| `GameState` (`region/`) | La partida: emplazamiento de arranque, población inicial, estación, qué se lleva la banda | Constantes de diseño (`HOME_LAT`, `START_POPULATION := 15`) más el estado que cruza escenas |
+| `GameState` (`region/`) | La partida: emplazamiento de arranque, población inicial, estación, qué se lleva la banda, lo descubierto y **la niebla del mapa regional** (`niebla`, una `NieblaRegional`, desde el 2026-09-14) | Constantes de diseño (`HOME_LAT`, `START_POPULATION := 15`) más el estado que cruza escenas. La niebla se levanta sólo con `levantar_niebla(forma)`, que **descubre los sitios de dentro**; y un sitio se enseña si `se_ve(site)` —descubierto y fuera de la niebla— (SISTEMAS §4) |
+| `Configuracion` (`vista/`) | La configuración del equipo: pantalla, gráficos por nivel y sueltos, volúmenes (desde el 2026-09-14) | **No es de la partida**: su propio fichero, `user://configuracion.cfg`, con la ruta conmutable para pruebas como `Guardado.carpeta`. Los niveles viven en `Configuracion.NIVELES` y sólo ahí. Se aplica al abrir el juego (`MenuPrincipal`) y en caliente por el grupo `configuracion_grafica` (INTERFAZ §8) |
+| `Carga` (`ui/`) | La pantalla de carga abierta y la barra (desde el 2026-09-15) | La abre quien va a cambiar de escena, **antes** de pedirlo; la escena que llega declara sus etapas, cede entre cuadros (`Carga.ceder`) y la cierra al terminar. **Sin pantalla abierta no se reparte nada** y la escena se monta de un tirón. Con ella abierta, el reloj de la partida no anda (§3.1). La pantalla cuelga de la raíz del árbol, como los campamentos. INTERFAZ §9 |
+| `Forest._siembra_guardada` (`vista/`) | La última siembra del bosque, con la huella de lo que la decidió (desde el 2026-09-15) | **Es caché, no estado**: volver al mismo valle con la misma huella —relieve, humedad, ríos, recuadro, bocas, densidad y `VERSION_DE_LA_SIEMBRA`— reutiliza los árboles; cualquier otra cosa siembra y la sustituye. Una sola, la del último valle (35 MB). Quien cambie las reglas de `_sow` sube la versión. INTERFAZ §9 |
 | `UISkin.era` (`ui/`) | La era que lleva puesta la interfaz | Se viste con `UISkin.vestir(era)`; los colores son `static var` y no `const` justamente porque cambian con la era |
 
 **Regla: no se añaden autoloads.** Si algo parece necesitar ser global, se
 pregunta primero si de verdad lo necesita; si lo necesita, va como estática con
 su comentario de por qué.
+
+> **Y desde el 2026-09-14 hay estado que vive fuera de las escenas**
+> ([SISTEMAS.md](SISTEMAS.md) §23): los campamentos y el reloj de la partida.
+> `Campamentos` (`region/`) es la estática —sólo el índice—, y cada `Campamento`
+> y el `RelojDeLaPartida` son **nodos colgados de la raíz del árbol**, no de la
+> escena que se mira, para que `change_scene_to_file` no los destruya y sigan
+> simulando. No es un autoload —nada en `project.godot`—, pero es la excepción
+> que esta regla tiene que conocer: un `Node` que simula necesita estar en el
+> árbol para que le llegue `_process`.
 
 ### 2.3. El cableado
 
@@ -122,8 +134,10 @@ congelar el motor congelaría también la interfaz y la cámara.
 
 **Y la noche se salta dando MÁS PASOS, no pasos más largos** (2026-09-12).
 Cuando `SettlementSim.nadie_trabaja()` —nadie en `TRABAJANDO`, `BUSCANDO` ni
-`RECONOCIENDO`— se siguen dando pasos de `PASO_FIJO` hasta gastar
-`MS_DE_NOCHE_POR_CUADRO` (8 ms) del cuadro.
+`RECONOCIENDO`— se siguen dando pasos de `PASO_FIJO` hasta cubrir la noche que
+le toca al cuadro —`NOCHE_HORAS_POR_SEGUNDO`, 5 h por segundo de reloj— o gastar
+`MS_DE_NOCHE_TOPE` (60 ms). Era un presupuesto fijo de 8 ms, y con ventana no se
+notaba: el usuario la veía «igual de lenta que el día» (2026-09-14).
 
 Esto **no rompe el contrato de arriba, y la distinción es la clave del diseño**:
 subir `time_scale` cambiaría cuánta hora de juego avanza cada paso, y con ella
@@ -136,6 +150,37 @@ Que eso valga depende de que **nada de la simulación dependa del fotograma**, y
 está comprobado: `Marcha.nuevo_cuadro()` es un `pass`, y `_path_nodes_this_frame`
 y `_stranded_this_frame` se ponen a cero dentro de `_advance`. Si alguien mete
 estado por cuadro, rompe esto sin dar un error.
+
+**Y los pasos de los campamentos van en paralelo** (2026-09-14): el reloj da el
+paso de cada campamento que no se mira en un hilo del `WorkerThreadPool` y el del
+que se mira en el principal, espera a todos y cierra la barrera. El paso que cruza
+medianoche va en serie. Los que no se miran están **fuera del árbol**, y el
+relieve lee su origen local (`TerrainGenerator._origen`). Ver §7, invariantes 8 y
+9, y SISTEMAS §23.
+
+**Lo que un paso de un campamento dirigido no toca**, que es lo que lo permite: la estación y el año los lee de su copia
+(`sim.estacion`, `sim.anyo`; el primero publica la global), lo descubierto de la
+comarca va a una cola que el reloj junta en la barrera —y desde el 2026-09-14 **la
+niebla que levanta**, en `SettlementSim.niebla_por_levantar`, formas en diccionario
+que el reloj pasa a `GameState.levantar_niebla` detrás de lo descubierto—, el
+presupuesto de caminos sale de su propia búsqueda y no de `Wayfinder.last_nodes`,
+y el cepo no cuenta fuera del hilo principal. Lo que falta para los hilos está en
+SISTEMAS §23.
+
+**Con varios campamentos, los pasos los da el `RelojDeLaPartida`** (2026-09-14,
+SISTEMAS §23): el mismo `PASO_FIJO`, el mismo tope, la misma noche con el mismo
+presupuesto, pero **los mismos pasos a todos**, uno a uno y en orden, y la noche
+se salta sólo si no trabaja nadie en ninguno. Una simulación dirigida
+(`SettlementSim.dirigido`) no da pasos en su `_process`, y sólo la primera gira
+`GameState.season` y `year` (`gira_la_estacion`). La pausa no tiene dueño aparte:
+lo que cambie en la velocidad de cualquier simulación —la interfaz, una
+decisión— pasa a ser la de todas. Medido: un campamento llevado así, sin vista,
+da las mismas firmas que el mismo mirado con la escena (ESTADO §2).
+
+**Y con la pantalla de carga abierta no se da ningún paso** (2026-09-15, INTERFAZ §9):
+el reloj de la partida y la simulación suelta vuelven sin acumular el tiempo de esos
+cuadros, que se tira. Una carga repartida entre cuadros haría andar la partida detrás
+de la pantalla, y guardar ese tiempo la haría ponerse al día al cerrarla. `TestCarga`.
 
 Se apaga con `NOCHE=0` **para medir**, no para jugar: la corrida que demuestra
 que la partida no cambia necesita la pareja con y sin. Y el interruptor está en
@@ -255,6 +300,13 @@ el grano que sabes cortar no es un presupuesto: corta a mitad de fila.
 
 ### 4.4. `scripts/sim/` — la simulación
 
+**Un mapa con gente es un `Campamento`** (2026-09-14): monta el relieve, las
+cuevas, la simulación, la fauna y la técnica, y lleva la lógica de partida que
+antes estaba en `DemoMain` —descubrir cuevas, contar técnicas, reelegir tajos,
+fijar el caudal, buscar las cumbres—. `DemoMain` es su vista. **La regla para
+saber qué va en el campamento**: si al dejar de mirar el mapa algo dejara de
+pasar, la partida sería otra.
+
 `SettlementSim` es el objeto central y es una **fachada**: los temas cerrados
 viven en su propia clase, construida con `Clase.new(self)`, y el simulador deja
 pasamanos para no reescribir las llamadas de fuera.
@@ -264,9 +316,20 @@ Subsistemas hoy: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`, `Contacto`,
 `Intercambio`, `Marcha`, `Nasas`, `Partida`, `Percances`, `Pinturas`,
 `Reconocimiento`, `Relevo`, `Reparto`, `Tajo`, `Taller`, `Tanteo`, `Trampas`.
 
-> **`Expedicion` y `Contacto` necesitan la comarca regional**, que es un dato
-> horneado que la simulación local no carga por su cuenta. Se la pasa
-> `DemoMain` justo después de `setup`, que es donde §2.3 dice que se cablea.
+> **`Prioridades` es la excepción y conviene saber por qué** (2026-09-14). Vive
+> en `sim/` y cuelga de `SettlementSim.prioridades`, pero **no lleva referencia
+> al simulador ni da pasos**: es estado del jugador —qué material, qué especie y
+> qué pieza quiere antes—, no un tema de la simulación. Se guarda solo, porque
+> `Instantanea` recorre por reflexión, y no es estático a propósito: cuando haya
+> varios campamentos (SISTEMAS §23), cada uno se lleva el suyo sin tocarlo. Lo
+> que lo lee está en SISTEMAS §22.
+
+> **`Contacto` necesita la comarca regional**, que es un dato horneado que la
+> simulación local no carga por su cuenta. Se la pasa `Campamento` justo después
+> de `setup`, que es donde §2.3 dice que se cablea. `Expedicion` la necesitaba
+> también hasta el 2026-09-14; desde que sale hacia un rumbo busca en la comarca
+> los sitios de su pasillo al volver, y lo que sí se le cablea es **el sitio del
+> campamento** (`SettlementSim.sitio`), desde el que sale.
 > **Y repartir quién vive dónde consume tiradas del `_rng`**, así que desde el
 > 2026-09-12 todas las partidas se desplazan respecto de las anteriores: una
 > firma o una cifra medida antes de esa fecha no se compara con una de después.
@@ -328,6 +391,11 @@ no un fallo por arreglar a ciegas.
 - `Moment` es el contrato de «la partida deja de ser gestión y te mira»: se
   levanta desde dentro de un paso y la interfaz pone `time_scale` a cero ahí
   mismo. El bucle del §3.1 corta ahí por eso.
+  **En un campamento que lleva el `RelojDeLaPartida`, no sale dentro del paso**
+  (2026-09-14, SISTEMAS §23): se guarda y el reloj la entrega en la barrera, al
+  acabar la vuelta de todos los campamentos. Es lo que hace un jugador —nunca
+  contesta a mitad de paso— y lo que permite una sola barra para varios
+  campamentos. Una simulación suelta la sigue sacando al momento.
 - **Y cada opción declara lo que cuesta** (desde el 2026-09-12): `"cuesta"`, en
   despensa, jornadas y riesgo, construida con `Moment.opcion`.
   `Moment.la_eleccion_importa()` dice si elegir cambia alguna cifra. Un momento
@@ -347,8 +415,13 @@ no un fallo por arreglar a ciegas.
 
 Dibujo y ventanas. `GameUI` es fachada igual que `SettlementSim`, con sus
 paneles sacados (`PanelAlmacen`, `PanelCenso`, `PanelObras`, `PanelOficios`,
-`PanelRastros`, `PanelSitios`, `PanelTecnicas`, `PanelTrabajos`,
+`PanelRastros`, `PanelSitios`, `PanelTaller`, `PanelTecnicas`, `PanelTrabajos`,
 `PanelCronica`, `BarraSuperior`).
+
+**Una escena que se monta en varios cuadros lo dice** (2026-09-15): `DemoMain.montado`
+y `RegionMap.montado`, con la señal `se_monto`. Mientras monta está parada (`PROCESS_MODE_DISABLED`), y quien la
+espera —una sonda— espera a `montado` y no a que exista la cámara o la interfaz, que se
+crean al principio. Ver INTERFAZ §9.
 
 **La vista no decide nada de la partida.** Lee el estado y lo dibuja. Un
 contador propio en la vista es un segundo modelo de algo que ya está simulado, y
@@ -462,11 +535,45 @@ primer `assert` no falla: pasa. Lo que la delata es el total de comprobaciones.
 
 ### 6.4. Persistencia
 
-**Existe desde el 2026-09-13**, y es la FASE A3: `Guardado` (`region/`), **un
-fichero por MAPA** en `user://mapas/sitio_<id>.sav`, automático al volver al mapa
-regional. Entrar en un mapa ya visitado —con F o con el botón— **lo retoma**;
-entrar en uno nuevo no toca a los demás; y lo descubierto de la comarca se suma
-al cargar, no se pisa.
+**Existe desde el 2026-09-13**, y es la FASE A3: `Guardado` (`region/`), un
+fichero en `user://mapas/sitio_<id>.sav`, automático al volver al mapa regional.
+Lo descubierto de la comarca se suma al cargar, no se pisa.
+
+**Desde el 2026-09-14 hay un estado por campamento** ([SISTEMAS.md](SISTEMAS.md)
+§23, fases 2 a 4). Lo que había antes, y se dice para que no queden dos reglas:
+ese mismo día, horas antes, **sólo el mapa de la banda tenía estado**
+(`Guardado.sitio_de_la_banda`) y entrar en otro era una visita con el reloj
+parado; y hasta ese día cada mapa nuevo fundaba otra banda con su propio fichero
+—una partida del usuario acabó con tres—. Lo que queda de aquello: sin
+campamentos vivos, la banda es la del mapa con más jornadas, y un mapa sin
+campamento sigue sin guardarse.
+
+El contrato de hoy:
+
+- **Los campamentos viven fuera de las escenas.** `Campamentos` (`region/`) es un
+  índice estático —como pide §2.2, sin autoload— de nodos `Campamento` que cuelgan
+  de la raíz del árbol o de ninguna parte, y un `RelojDeLaPartida` que les da los
+  pasos a todos (§3.1). La escena local **adopta** el campamento del mapa en que
+  entra (`DemoMain._montar_el_campamento`) y lo suelta al irse
+  (`DemoMain._dejar_la_escena`); no monta otro ni vuelca el guardado encima.
+- **Una sola fecha**: la del reloj. Lo que no se mira se simula igual y sólo deja
+  de dibujarse; la firma de un campamento no depende de que se mire (§3.2, §7).
+- **La visita no para el reloj** si hay campamentos vivos: su simulación, sin
+  gente, la toma el reloj y copia la fecha de la partida.
+- **Guardar es guardar la partida**: `Guardado.guardar` escribe el
+  `sitio_<n>.sav` del campamento de la escena, el de **cada** campamento vivo
+  —abandonados incluidos— con su relieve y su `orden` de paso, y **`partida.sav`**
+  en la misma carpeta con la fecha del reloj y **los grupos de camino**
+  (`Viaje.a_datos`). `Guardado.retomar_los_demas` los monta sin mirar en el orden
+  guardado. `Guardado.VERSION` es **2**, y `VERSIONES_QUE_SE_LEEN` sigue abriendo
+  la 1 como partida de un campamento.
+- **Otra partida suelta los campamentos de esta**: `Partidas.nueva`,
+  `Partidas.cargar` y salir al menú llaman a `Campamentos.vaciar`.
+
+> **Y la configuración no es de la partida** ([INTERFAZ.md](INTERFAZ.md) §8): va
+> en su propio fichero en `user://`, fuera de `user://partidas/` y de
+> `user://mapas/`, y las pruebas escriben la suya en otra carpeta, con la misma
+> regla que el guardado.
 
 > **Era un fichero por partida, y así se perdió una partida del usuario** (el
 > mismo día): salió al mapa regional, eligió su sitio, pulsó F y se le fundó una
@@ -479,6 +586,26 @@ al cargar, no se pisa.
 > Esto es el **estado de los mapas**, que vive mientras dura la partida. El
 > **guardado de partida** —cerrar el juego y seguir otro día— se desarrollará
 > aparte, más adelante.
+>
+> **Y ya está hecho: [INTERFAZ.md](INTERFAZ.md) §7** (2026-09-14). La partida
+> guardada es **una carpeta** en `user://partidas/<id>/` con los mismos
+> `sitio_<n>.sav` de aquí dentro y una cabecera `partida.sav` con su propia
+> versión (`Partidas.VERSION`, distinta de la de un mapa); la partida abierta
+> vive en `user://partida_abierta/`, que es a donde apunta `Guardado.carpeta`
+> mientras se juega, y **guardar** copia esa carpeta a la ranura. Medido con
+> `PartidaProbe` en dos procesos: guardar a media jornada, cerrar, cargar y
+> seguir da **las mismas cinco firmas diarias**.
+>
+> **Y las dos carpetas son conmutables** (`Partidas.raiz` y `Partidas.borrador`,
+> como `Guardado.carpeta`): una prueba que llame a `nueva()` con la carpeta del
+> jugador puesta le vacía la partida abierta.
+>
+> Lo que ahí se decide y afecta a este contrato: una partida guardada **guarda la partida
+> entera** —todos los mapas visitados, lo descubierto de la comarca, las
+> relaciones, el valle que se jugaba y la fecha—, se puede guardar **en
+> cualquier momento**, el nombre lo pone el jugador y no hay límite de partidas.
+> El autoguardado por mapa de este apartado **se queda** como está: es lo que
+> sostiene la sesión, no lo que la deja en disco.
 
 Cada fichero lleva dos cosas: el recorrido de `Instantanea` —la partida entera,
 azar incluido— y lo que ella no guarda porque cruza escenas: el emplazamiento
@@ -496,10 +623,12 @@ se toma en `paso_cerrado` (§3.2), no cuando cambia el número de jornada: en un
 mismo fotograma corren varios pasos, y tomarla fuera de ahí hace que dos
 corridas iguales parezcan distintas.
 
-Fuera de alcance por ahora: el guardado de partida entero, guardar a mano, y
-compatibilidad entre versiones del juego. Y **en el mapa regional no se «funda»:
-se «entra al mapa»**, decidido por el usuario; tener varios grupos viviendo en
-mapas distintos se desarrollará más adelante.
+Fuera de alcance por ahora: la compatibilidad entre versiones del juego. El
+guardado de partida entero y guardar a mano **salieron de esta lista el
+2026-09-13**: ver [INTERFAZ.md](INTERFAZ.md) §7. Y **en el mapa regional no se «funda»:
+se «entra al mapa»**, decidido por el usuario. Tener varios grupos viviendo en
+mapas distintos, que aquí se aplazaba, **está hecho desde el 2026-09-14**: ver
+arriba y SISTEMAS §23.
 
 ### 6.5. Datos
 
@@ -531,6 +660,15 @@ Lo que rompe el juego sin dar un solo error de compilación:
 7. **Compilar no es funcionar.** GDScript no avisa de asignar una propiedad que
    no existe: `sim.wildlife = herds` tuvo la fauna desconectada de la caza
    durante meses sin que se notara.
+8. **Nada de `exp` ni `pow` de la librería en código que corra dentro de un
+   paso** (2026-09-14): usar `Calculo.exponencial` y `Calculo.potencia`. Las de
+   la librería no dan el mismo último bit en el hilo principal que en un hilo del
+   pool —medido: un 15 % y un 5 % de los valores—, y con varios campamentos el que
+   se mira da su paso en uno y los demás en otro. Lo comprueba `TestCalculo`.
+9. **Lo que corre dentro del paso de un campamento que no se mira no toca un nodo
+   del árbol** (2026-09-14): esos campamentos dan su paso en otros hilos, y Godot
+   no deja. Por eso están fuera del árbol (`Campamentos.dejar_de_mirar`), y lo que
+   sólo es de vista —el alfiler de una cueva— va diferido.
 
 ---
 
@@ -538,7 +676,9 @@ Lo que rompe el juego sin dar un solo error de compilación:
 
 - Multijugador.
 - Streaming de chunks (cancelado, no aplazado).
-- Guardado manual, varias ranuras, y que un guardado de otra versión cargue
-  (el automático sí existe: §6.4).
+- Que un guardado de **otra versión** del juego cargue: se rechaza avisando.
+  (El guardado manual y varias partidas **dejaron de estar fuera de alcance el
+  2026-09-13**: tienen spec en [INTERFAZ.md](INTERFAZ.md) §7. El automático por
+  mapa ya existe: §6.4.)
 - Build de exportación.
 - Autoloads nuevos (§2.2).

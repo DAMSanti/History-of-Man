@@ -43,6 +43,10 @@ var _pendiente: Dictionary = {}
 ## llevar a una situación que la visita tenía sorteada para después.
 var _vistas: Dictionary = {}
 
+## Lo que va eligiendo quien está dentro: `id de cueva -> [{situacion, opcion}]`.
+## Al salir pasa a `_sabido` y es de lo que sale el testimonio. Ver [testimonio].
+var _recorrido: Dictionary = {}
+
 ## Con qué situación abrió la última visita, para que la siguiente cueva no abra
 ## igual. Ver [Repertorio.visita_de].
 var _ultima_apertura: String = ""
@@ -103,6 +107,7 @@ func mandar(cueva: int) -> bool:
 	_ultima_apertura = String(visita[0])
 	_pendiente[cueva] = visita.slice(1)
 	_vistas[cueva] = {}
+	_recorrido[cueva] = []
 	_preguntar(cueva, String(visita[0]))
 	return true
 
@@ -150,6 +155,8 @@ func decidir(cueva: int, situacion: String, opcion: int) -> void:
 	var quien := _persona(quien_esta_dentro(cueva))
 	if quien == null:
 		return
+	(_recorrido.get_or_add(cueva, []) as Array).append(
+		{"situacion": situacion, "opcion": opcion})
 	var sigue := _consecuencia(cueva, situacion, opcion, quien)
 	if not sigue:
 		_pendiente.erase(cueva)
@@ -237,13 +244,94 @@ func nueva_jornada() -> void:
 			"explorada": true,
 			"pintable": hay_zona_pintable(sim.game_seed, cueva)
 				or cueva == cueva_de_la_banda,
+			# Quién y cómo, que es lo que cuenta la ficha. El nombre y no la
+			# persona: el testimonio sigue ahí aunque quien lo dio ya no esté.
+			"quien": quien.given_name if quien != null else "",
+			"mujer": quien != null and quien.sex == Inhabitant.Sex.MUJER,
+			"recorrido": _recorrido.get(cueva, []),
 		}
+		_recorrido.erase(cueva)
 	_dentro.clear()
 
 
 ## Si esta cueva ya se ha recorrido a fondo.
 func explorada(cueva: int) -> bool:
 	return bool((_sabido.get(cueva, {}) as Dictionary).get("explorada", false))
+
+
+## Lo que cuenta quien la exploró, en primera persona, o vacío si no se ha
+## explorado.
+##
+## Sale de lo que ELIGIÓ dentro —ver [Repertorio.TESTIMONIOS]—, así que dos
+## visitas a la misma cueva con decisiones distintas cuentan cosas distintas.
+## Petición del usuario del 2026-09-13.
+func testimonio(cueva: int) -> String:
+	var sabido: Dictionary = _sabido.get(cueva, {})
+	var quien := String(sabido.get("quien", ""))
+	if not bool(sabido.get("explorada", false)) or quien.is_empty():
+		return ""
+	var mujer := bool(sabido.get("mujer", false))
+	var frases: Array[String] = ["Entré con la lámpara encendida y la grasa justa."]
+	var peor := Repertorio.Efecto.NADA
+	for paso: Dictionary in (sabido.get("recorrido", []) as Array):
+		var situacion := String(paso["situacion"])
+		var opcion := int(paso["opcion"])
+		var frase := Repertorio.dice(situacion, opcion, mujer)
+		if not frase.is_empty():
+			frases.append(frase)
+		var efecto := Repertorio.efecto_de(situacion, opcion)
+		if _gravedad(efecto) > _gravedad(peor):
+			peor = efecto
+	frases.append(_remate(peor, mujer, bool(sabido.get("pintable", false))))
+	return "«%s»\n— %s, al salir de la cueva." % [" ".join(frases), quien]
+
+
+## Qué pesa más al contarlo. No es el orden del enum: salir herido se cuenta
+## antes que haber visto pared buena.
+static func _gravedad(efecto: Repertorio.Efecto) -> int:
+	match efecto:
+		Repertorio.Efecto.PELIGRO, Repertorio.Efecto.HERIDA:
+			return 4
+		Repertorio.Efecto.SUSTO:
+			return 3
+		Repertorio.Efecto.HALLAZGO:
+			return 2
+		Repertorio.Efecto.PINTABLE:
+			return 1
+	return 0
+
+
+## La última frase del testimonio: cómo salió.
+static func _remate(peor: Repertorio.Efecto, mujer: bool, pintable: bool) -> String:
+	match peor:
+		Repertorio.Efecto.PELIGRO, Repertorio.Efecto.HERIDA:
+			return "Salí con el cuerpo marcado, pero salí."
+		Repertorio.Efecto.SUSTO:
+			return "No pienso volver a entrar %s." % ("sola" if mujer else "solo")
+		Repertorio.Efecto.HALLAZGO:
+			return "Y no volví con las manos vacías."
+	if pintable:
+		return "Dentro hay pared buena para pintar; la he tocado con estas manos."
+	return "Eso es lo que hay ahí dentro, ni más ni menos."
+
+
+## Cómo es por dentro, para la ficha del lugar. Vacío si no se ha explorado.
+func descripcion(cueva: int) -> String:
+	var sabido: Dictionary = _sabido.get(cueva, {})
+	if not bool(sabido.get("explorada", false)):
+		return ""
+	var lineas: Array[String] = []
+	for paso: Dictionary in (sabido.get("recorrido", []) as Array):
+		var hay := Repertorio.hay(String(paso["situacion"]))
+		if not hay.is_empty() and not lineas.has(hay):
+			lineas.append(hay)
+	if lineas.is_empty():
+		lineas.append("Una cavidad recorrida de punta a punta, sin nada que la haga "
+			+ "distinta de otras.")
+	lineas.append("Tiene una pared buena, seca y lisa, donde se puede pintar."
+		if pintable(cueva)
+		else "No tiene pared buena para pintar: la roca es húmeda o se deshace.")
+	return " ".join(lineas)
 
 
 ## Si tiene pared donde pintar. **Sólo se sabe explorándola**: antes de eso la

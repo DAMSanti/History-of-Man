@@ -163,8 +163,12 @@ func _colour_at(grid: Navgrid, terrain: TerrainGenerator, point: Vector3,
 	# dice la ficha al pinchar el terreno, y por eso ya no se contradicen. Con
 	# la celda de cuarenta metros, un arroyo más estrecho que ella no salía
 	# pintado porque el centro de su celda estaba seco.
+	# Con pasarela EN ESTE PUNTO, la misma pregunta que la rejilla. Preguntaba por
+	# `built_with_bridge`, el permiso de cruzar cualquier cauce que se quitó el
+	# 2026-09-13 al hacer de la pasarela una obra (SISTEMAS §20): la tecla N
+	# cerraba el juego —queja del usuario del 2026-09-14—.
 	if not Traversal.is_passable(slope, ford, grid.built_with_boat,
-			grid.built_with_bridge):
+			grid._hay_pasarela(point)):
 		return BLOCKED_COLOUR
 
 	# Y lo que la REJILLA dice de la celda: aunque el punto se pise, si su

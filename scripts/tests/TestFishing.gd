@@ -313,6 +313,22 @@ func test_cada_escalon_pide_mas_practica_que_el_anterior() -> void:
 		previous = days
 
 
+func test_las_jornadas_de_la_escalera_de_pesca_son_las_pedidas() -> void:
+	# Decisión del usuario del 2026-09-13: «las mejoras técnicas de pesca son muy
+	# caras de desbloquear en jornadas; quiero que sean 60, 120, 180, 240 y
+	# 300». Eran 60, 180, 320, 560 y 850: el arpón no llegaba en la partida.
+	var pedidas := [60, 120, 180, 240, 300]
+	var n := 0
+	for method_key: int in Fishing.ORDER:
+		var tech := Fishing.tech_of(method_key as Fishing.Method)
+		if tech < 0:
+			continue
+		assert_eq(int(TechTree.CATALOGUE[tech as TechTree.Tech]["days"]), pedidas[n],
+			"%s pide %d jornadas" % [TechTree.tech_name(tech as TechTree.Tech), pedidas[n]])
+		n += 1
+	assert_eq(n, pedidas.size(), "y son cinco escalones")
+
+
 func test_todo_lo_que_saca_la_pesca_sale_en_la_ficha_del_paraje() -> void:
 	# La regla que ya se aplicó a la recolección: lo que se puede traer de un
 	# sitio tiene que salir en la ficha del sitio.

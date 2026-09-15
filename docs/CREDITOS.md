@@ -106,6 +106,75 @@ Lobo, caballo, vaca, cerdo, oveja, águila y pájaro pequeño de [Quaternius](ht
   búsqueda, no leyendo el texto— y además el Solutrense es **anterior** al
   Magdaleniense.
 
+## Árboles del bosque en 3D (GRAFICOS §7.1)
+
+**Generados**, no descargados: no hay modelos CC0 realistas hechos para juego de pino
+silvestre, abedul, roble y avellano, y el usuario decidió generarlos (2026-09-15).
+
+- **Geometría** — [EZ-Tree](https://github.com/dgreenheck/ez-tree), de Daniel
+  Greenheck, **licencia MIT**. Se usa como herramienta (`scripts/tools/arboles/generar.mjs`)
+  y lo que se guarda en `models/arboles/` es su salida, con presets afinados por
+  especie y seis variantes cada una.
+- **Hojas** — atlas de [ambientCG](https://ambientcg.com), **CC0**:
+  [LeafSet019](https://ambientcg.com/view?id=LeafSet019) (pino; es un ramillete de
+  conífera, no acículas de pino silvestre),
+  [LeafSet004](https://ambientcg.com/view?id=LeafSet004) (abedul),
+  [LeafSet016](https://ambientcg.com/view?id=LeafSet016) (roble) y
+  [LeafSet024](https://ambientcg.com/view?id=LeafSet024) (avellano). **Las texturas de
+  hoja que trae EZ-Tree no declaran licencia, y por eso no se usan.**
+- **Cortezas** — ambientCG, **CC0**: [Bark014](https://ambientcg.com/view?id=Bark014)
+  (pino), [Bark009](https://ambientcg.com/view?id=Bark009) (abedul),
+  [Bark001](https://ambientcg.com/view?id=Bark001) (roble) y
+  [Bark004](https://ambientcg.com/view?id=Bark004) (avellano).
+- **Color de referencia** — de cada foto **sólo se guarda el color medio** en CIELAB
+  (`models/arboles/color_de_referencia.json`, con título, página, licencia y autor de
+  cada una); la foto no está en el repositorio. Todas de Wikimedia Commons:
+
+  | Qué | Foto | Autor | Licencia |
+  |---|---|---|---|
+  | Pino, copa | [Pinus sylvestris Scots Pine at Stansted Mountfitchet 3](https://commons.wikimedia.org/wiki/File:Pinus_sylvestris_Scots_Pine_at_Stansted_Mountfitchet,_Essex,_England_3.jpg) | Acabashi | CC BY-SA 4.0 |
+  | Pino, corteza | [Pinus sylvestris bark 2012-05-18](https://commons.wikimedia.org/wiki/File:Pinus_sylvestris_bark_2012-05-18.jpg) | Rudolf Schäfer | CC BY-SA 2.0 |
+  | Abedul, copa en verano | [Efremov - 2025 - Betula pendula crown](https://commons.wikimedia.org/wiki/File:Efremov_-_2025_-_Betula_pendula_crown.jpg) | Юрий Д.К. | CC BY 4.0 |
+  | Abedul, copa en otoño | [Betula pendula (fall colors)](https://commons.wikimedia.org/wiki/File:Betula_pendula_(fall_colors).jpg) | Le.Loup.Gris | CC BY-SA 3.0 |
+  | Abedul, corteza | [Betula pendula bark TK 2023-04-16 1](https://commons.wikimedia.org/wiki/File:Betula_pendula_bark_TK_2023-04-16_1.jpg) | T. Kebert | CC BY-SA 4.0 |
+  | Roble, copa en verano | [Pferdekopfeiche, Ivenack, NW view](https://commons.wikimedia.org/wiki/File:Pferdekopfeiche,_Ivenack,_NW_view.jpg) (el robledal del fondo) | Radomianin | CC BY-SA 4.0 |
+  | Roble, copa en otoño | [Autumn English Oak (Quercus robur) leaves](https://commons.wikimedia.org/wiki/File:Autumn_English_Oak_(Quercus_robur)_leaves_(26092351292).jpg) | AnemoneProjectors | CC BY-SA 2.0 |
+  | Roble, corteza | [Oak tree Quercus robur bark at High Beach](https://commons.wikimedia.org/wiki/File:Oak_tree_Quercus_robur_bark_at_High_Beach,_Essex,_England.jpg) | Acabashi | CC BY-SA 4.0 |
+  | Avellano, copa en verano | [Corylus avellana shrub](https://commons.wikimedia.org/wiki/File:Corylus_avellana_shrub.jpg) | MPF | CC BY-SA 3.0 |
+  | Avellano, copa en otoño | [20171114Corylus avellana2](https://commons.wikimedia.org/wiki/File:20171114Corylus_avellana2.jpg) | AnRo0002 | CC0 |
+  | Avellano, corteza | [Corylus avellana bark](https://commons.wikimedia.org/wiki/File:Corylus_avellana_bark.jpg) | MurielBendel | CC BY-SA 4.0 |
+
+## Arte parietal: los motivos de la pared
+
+Las figuras que se pintan en la pared de la cueva (SISTEMAS §13) son **calcos**:
+`scripts/tools/calcar_motivos.py` baja cada referencia de Wikimedia Commons, separa
+el pigmento, saca sus contornos y la silueta del cuerpo, y escribe
+`scripts/datos/Motivos.gd`. Ninguna figura se ha dibujado de memoria. Los calcos
+limpios de **José-Manuel Benito Álvarez** (usuario Locutus Borg), publicados en
+dominio público, son la mayor parte; el de la mano es de **Hugo Obermaier**
+(muerto en 1946). Las pinturas en sí son prehistóricas y no tienen autor con
+derechos.
+
+| Motivo | Qué es | Referencia | Licencia |
+|---|---|---|---|
+| Bisonte | Bisonte del gran techo de Altamira | <https://commons.wikimedia.org/wiki/File:Altamira-3.png> | Dominio público (J.-M. Benito) |
+| Jabalí | Jabalí del borde izquierdo del mismo techo | <https://commons.wikimedia.org/wiki/File:Altamira-3.png> | Dominio público (J.-M. Benito) |
+| Cierva | Cierva roja en tinta plana, panel 22, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_A-Cierva_roja_(panel_22).png> | Dominio público (J.-M. Benito) |
+| Ciervo | Ciervo negro de Las Chimeneas | <https://commons.wikimedia.org/wiki/File:Cueva_de_Chimeneas_(ciervo).png> | Dominio público (J.-M. Benito) |
+| Caballo | Caballo grabado de Hornos de la Peña | <https://commons.wikimedia.org/wiki/File:Cueva_de_Hornos_de_la_Pe%C3%B1a_(grabados).png> | Dominio público (J.-M. Benito) |
+| Uro | Uro de la Sala de los Toros, **Lascaux** | <https://commons.wikimedia.org/wiki/File:Lascaux_painting.jpg> | Dominio público |
+| Mano | Mano roja del panel 54, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_B-panel_54.png> | Dominio público (H. Obermaier) |
+| Serie de puntos | Panel 48, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_A-panel_48.png> | Dominio público (J.-M. Benito) |
+| Bastoncillos | Ideomorfos del panel 37, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_A-panel_37.png> | Dominio público (J.-M. Benito) |
+| Claviformes | Panel 58, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_B-panel_58.png> | Dominio público (J.-M. Benito) |
+| Tectiforme | Galería A, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_A-Tectiformes.png> | Dominio público (J.-M. Benito) |
+| Escaleriforme | El marco en escalera de «La Trampa», panel 78, La Pasiega | <https://commons.wikimedia.org/wiki/File:La_Pasiega-Galeria_C-La_Trampa.png> | Dominio público (J.-M. Benito) |
+
+**El uro es el único que no es cantábrico.** No se encontró en Commons, el
+2026-09-15, ni un calco ni una foto libre de un uro de las cuevas de la región;
+el de Lascaux es del mismo Magdaleniense. Si aparece uno cantábrico, se cambia la
+línea de `calcar_motivos.py` y se vuelve a calcar.
+
 ## Lo que falta
 
 - **Cuerna de desmogue** — Icono del Magdaleniense: azagayas y arpones salen de aquí. No existe en Poly Haven ni en ambientCG.

@@ -216,6 +216,31 @@ func regrow(activity: Subsistence.Activity, rate: float,
 	return cruzadas
 
 
+## EL REMONTE: cada primavera el río vuelve a estar lleno de pescado.
+##
+## Decisión del usuario del 2026-09-14, entre repoblar de golpe en primavera,
+## rebrotar más deprisa todo el año o volver antes del barbecho. Es la que cuenta
+## [seasonal_factor]: el salmón sube el Deva y el Nansa en primavera, y un tramo
+## vaciado el año anterior se llena con la subida, no con lo que crían los que
+## quedaron. Con el rebrote común —[regrow], 0,045— un remanso vaciado en
+## primavera tardaba unas 130 jornadas en volver al 90 % de
+## [Barbecho.PESCA_REPUESTA], o sea casi el año entero: «los peces desaparecen en
+## verano y no vuelven».
+##
+## Sólo la pesca, y sólo lo que TIENE capacidad: un tramo secado por
+## [dry_cell] se quedó sin río y no hay nada que remontar.
+func remonte() -> void:
+	var activity := Subsistence.Activity.PESCA
+	if not grids.has(activity) or not capacities.has(activity):
+		return
+	var grid: PackedFloat32Array = grids[activity]
+	var cap: PackedFloat32Array = capacities[activity]
+	for i in range(mini(grid.size(), cap.size())):
+		if cap[i] > 0.001:
+			grid[i] = cap[i]
+	grids[activity] = grid
+
+
 ## Cuanto queda en una celda respecto a lo que tenia intacta, de 0 a 1.
 func stock_fraction(activity: Subsistence.Activity, x: int, z: int) -> float:
 	if not capacities.has(activity):
@@ -378,6 +403,27 @@ func stock_of_cell(activity: Subsistence.Activity, index: int) -> float:
 	if index >= grid.size() or cap[index] <= 0.001:
 		return 0.0
 	return clampf(grid[index] / cap[index], 0.0, 1.0)
+
+
+## Le devuelve a esa celda lo que se cogió y no se llevó nadie.
+##
+## Es la vuelta atrás de [take_from_cell], y existe por la carga por
+## prioridades -SISTEMAS §22-: lo que se suelta del zurrón para hacerle sitio a
+## un material de nivel más alto **vuelve al paraje**, como si no se hubiera
+## cogido. Es la decisión del usuario del 2026-09-14, y sin esto recolectar con
+## prioridades puestas esquilmaría el monte por lo que nadie se llevó.
+##
+## Nunca se pasa de la capacidad de la celda: devolver no es sembrar.
+func give_back_to_cell(activity: Subsistence.Activity, index: int,
+	amount: float) -> void:
+	if index < 0 or amount <= 0.0 or not grids.has(activity):
+		return
+	var grid: PackedFloat32Array = grids[activity]
+	if index >= grid.size():
+		return
+	var cap: PackedFloat32Array = capacities.get(activity, grid)
+	grid[index] = minf(grid[index] + amount, cap[index])
+	grids[activity] = grid
 
 
 ## Le quita a esa celda lo que se haya cogido de ella.

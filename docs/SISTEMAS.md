@@ -40,6 +40,9 @@ Lo que hace hoy el juego **medido**, con qué sonda y con qué cifra, está en
 | [§18](#18-los-caminos-que-la-banda-aprende) | Los caminos que la banda aprende, y por qué caducan |
 | [§19](#19-la-temperatura-y-el-abrigo-que-se-lleva-puesto) | La temperatura, y el abrigo que se lleva puesto |
 | [§20](#20-la-pasarela-una-obra-en-un-cruce-no-un-permiso) | La pasarela: una obra en un cruce, y no un permiso sobre el mapa |
+| [§21](#21-el-hogar-cuidarlo-va-por-delante-de-todo-lo-demás) | El hogar: por qué se apagaba teniendo leña, y el corro del fuego |
+| [§22](#22-lo-que-el-jugador-prioriza-materiales-presas-y-la-cola-del-taller) | **Spec**: lo que el jugador prioriza —materiales, presas— y la cola del taller |
+| [§23](#23-varios-campamentos-migrar-y-la-partida-que-no-se-mira) | **Spec**: varios campamentos, migrar, y la partida que sigue mientras no se mira |
 
 Las once fichas de época (`EPOCA_01_PALEOLITICO.md`… `EPOCA_11_EL_VAPOR.md`)
 serían once listas sueltas sin este esqueleto. Fueron doce: el siglo corto
@@ -333,6 +336,28 @@ los 862 de golpe; los descubre"*.
 > sorteado o no. Sólo el destino deja contacto, y con uno de cada cinco
 > ocupados dos años de partida acabaron **sin conocer a nadie y sin un trato**
 > —ESTADO §2—. De la segunda en adelante, el sorteo.
+>
+> **Coronar una cumbre bautiza de golpe lo que se ve, y lo cuenta una vez**
+> (2026-09-14, petición del usuario: «un solo mensaje diciendo se han descubierto
+> X parajes»). `Reconocimiento.bautizar_desde_la_cumbre` pone nombre sin tope a
+> todo lo que `_reveal_from_summit` deja conocido en el alcance de la vista, sin
+> la tarjeta de «un sitio con nombre» de cada uno, y la tarjeta de la cumbre dice
+> cuántos y los cinco primeros. Antes esos sitios salían de la cola **uno por
+> vuelta** —`Reconocimiento.DE_UNA_VUELTA`, que sigue siendo la regla para quien
+> vuelve de batir el monte— y cada uno con su tarjeta. `TestExploration`.
+>
+> **Y quien sube, corona** (2026-09-14, segundo `/depurar`: «se queda
+> explorando en lugar de hacer la subida, coronar y terminar»). La marcha amarra
+> el destino a la celda abierta más cercana y la de una cumbre empinada está
+> cerrada: el camino acababa una celda más abajo, a más de los 12 m de
+> `Cumbres._is_on_peak`, y al llegar la persona caía en la rama del explorador
+> —reconocer y bautizar parajes—. Ahora quien sale a subir lleva su cumbre
+> (`Inhabitant.cumbre_objetivo`), y **llegar a su destino es intentar coronarla**.
+> Los parajes salen al coronar, en el aviso único de arriba. `TestExploration`.
+>
+> **Y los nombres no se acaban**: 60 palabras de lugar (`Paraje.LUGARES`) en vez
+> de 15, sacadas de la toponimia menor de Cantabria. Con quince, el decimosexto
+> sitio del mismo material ya salía «(2)».
 
 **Capa exterior**, la base para lo que aún no tiene fecha. "Otra banda" no
 es un `Settlement` jugable propio todavía —eso es una banda de IA rival o
@@ -375,7 +400,264 @@ Paleolítico ya exige que exista.
 > recua. Criterios en [EPOCA_01](EPOCA_01_PALEOLITICO.md) §10.1 → Tanda 3,
 > frentes 10 y 15.
 
+### Spec (2026-09-14): explorar hacia un rumbo, y la niebla del mapa regional
+
+Dos piezas que se piden juntas porque una no se entiende sin la otra: **el
+jugador elige hacia dónde sale la gente**, y **el mapa regional sólo enseña lo
+que alguien ha visto**.
+
+**Por qué.** La expedición de hoy sale una vez al año, en la tarjeta de
+primavera, y va sola al sitio sin descubrir **más cercano**: el jugador decide
+si sale y quién, pero no adónde. Y el mapa regional esconde los sitios no
+descubiertos pero enseña el relieve entero de Cantabria, así que «descubrir»
+quita alfileres de encima de un mapa que ya se ve. Las dos cosas vacían la
+exploración de decisión: no hay rumbo que elegir ni nada que ver aparecer.
+
+**Lo que se pide.**
+
+1. **Salir cuando se quiera, hacia donde se quiera.** El jugador elige tres
+   cosas: **el rumbo** —pinchando en el mapa regional, o en el borde del valle—,
+   **quién va** —como hoy, adultos que puedan, tres como mínimo— y **cuántas
+   jornadas** dura. La partida sale por el borde del mapa hacia ese rumbo,
+   recorre un pasillo en esa dirección durante la mitad de las jornadas y vuelve.
+   Lo que cuesta sigue la regla de hoy —raciones por persona y jornada, la piel
+   y la leña del vivac, y cuesta igual si vuelve sin nada—.
+2. **Descubre lo que tiene a la vista.** Los sitios que caen dentro del pasillo
+   recorrido quedan descubiertos, y los que estén ocupados dejan contacto como
+   hoy. Ya no se descubre «el destino y sus cuatro vecinos».
+3. **Sustituye a la tarjeta de primavera.** La primavera se queda sin decisión
+   del año —ver [EPOCA_01](EPOCA_01_PALEOLITICO.md), las cuatro decisiones—: es
+   una consecuencia aceptada, porque salir cuando se quiere hace que esa tarjeta
+   sobre.
+4. **La niebla del mapa regional.** Lo no descubierto se tapa con una niebla
+   opaca clara, dejando intuir **el perfil de la costa de la época** para no
+   perder la orientación; ni sitios, ni ríos, ni frontera se ven bajo ella.
+   Levantan la niebla, y queda levantada para siempre en la partida:
+   - **el recuadro entero de cada campamento** —ver §23—, habitado o abandonado;
+   - **el pasillo de cada expedición**, de ida y de vuelta;
+   - **lo que se ve desde cada cumbre coronada**, con el mismo alcance de vista
+     que ya descubre parajes (1,4 km), aunque salga del recuadro;
+   - **cada mapa visitado**, entero.
+5. **Y en el mapa visitado, la misma niebla.** Al entrar de visita, el minimapa
+   y el valle están en niebla salvo lo que las expediciones hayan recorrido, y
+   los parajes y cuevas que encontraron se ven con su alfiler.
+
+Cómo se ve la niebla y lo que cuesta: [GRAFICOS.md](GRAFICOS.md) §3. Cómo se
+elige el rumbo: [INTERFAZ.md](INTERFAZ.md) §4.
+
+**Criterios de aceptación.**
+
+- Con la partida recién empezada, **la fracción del mapa regional sin niebla es
+  la del recuadro del primer campamento** y nada más —medida sobre la máscara de
+  niebla, en celdas—.
+- Una expedición mandada hacia un rumbo durante N jornadas descubre **sólo**
+  sitios cuyo punto cae dentro del pasillo recorrido, y **todos** los de dentro:
+  prueba con un catálogo de sitios puesto a mano a los dos lados del pasillo.
+- Dos expediciones de las mismas jornadas y gente hacia rumbos opuestos
+  descubren **conjuntos disjuntos** de sitios y levantan niebla en lados
+  opuestos del campamento.
+- Mandarla no depende de la estación: una prueba la manda en invierno y sale.
+- Coronar una cumbre junto al borde del recuadro levanta niebla **fuera** del
+  recuadro, hasta el alcance de vista.
+- La niebla sobrevive a guardar y cargar, y a ir y volver del mapa regional:
+  prueba de ida y vuelta sobre la máscara.
+- En el mapa regional, un sitio bajo niebla **no se puede seleccionar** ni sale
+  en ninguna lista.
+
+**Fuera de alcance.**
+
+- **Rutas con varios tramos** o puntos de paso: un rumbo, una ida y una vuelta.
+- **Niebla que vuelve** con el tiempo: lo visto no se olvida.
+- **Cambiar el alcance de vista de las cumbres**, o el coste de la expedición:
+  se usan los que hay.
+- **Contacto y trueque**: siguen como están; esto sólo cambia qué se descubre.
+
+### Plan técnico: rumbo y niebla (2026-09-14)
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+- `Expedicion` (`sim/`) sale con `mandar_a(quienes, hacia)` hacia **un sitio**
+  (`destino_de_hoy`, el más cercano sin descubrir), dura `JORNADAS_FUERA` = 12 y al
+  volver descubre el destino y `SE_DESCUBREN` = 4 vecinos (`_descubrir_alrededor`),
+  por la cola de la barrera (`SettlementSim.descubrir`). La propone sólo
+  `proponer_la_salida`, desde `SettlementSim._decision_de_la_estacion` en primavera.
+- **La niebla regional de hoy son alfileres**: `RegionMap._refresh_sites` enseña
+  sólo lo de `GameState.discovered`, y el relieve, los ríos, el mar y la frontera
+  (`_border`, una cinta de malla) se ven enteros. El relieve es un
+  `TerrainGenerator` con `shaders/triplanar.gdshader`, que ya tiene una máscara
+  sobre el mundo (`region_mask_tex`, la del territorio de la época): el patrón de
+  una textura de máscara en el shader existe.
+- **La niebla del valle** es la del minimapa (`Minimapa._refresh_minimap_fog`), de
+  lo explorado por la banda de ese mapa. Una visita tiene simulación sin gente, así
+  que su minimapa sale todo en niebla.
+- La cumbre ve `Cumbres.ASCENT_SIGHT_RANGE` = 1 400 m, sólo dentro del recuadro
+  (`_reveal_from_summit` recorre la rejilla local).
+- No hay paso de mundo local a geográfico: `TerrainGenerator.geo_to_world` sólo va
+  en un sentido.
+
+**Módulos afectados.**
+
+1. **`NieblaRegional` (`region/`, nuevo)**: una rejilla sobre el recuadro del
+   relieve regional con dos capas de bits —**vista** (lo que levanta la niebla) y
+   **recorrida por expediciones** (lo que se enseña en el minimapa de una visita)—.
+   Levanta rectángulos geográficos, círculos y pasillos **por exceso** (toda celda
+   que la forma toque), para que un sitio descubierto no caiga nunca en una celda
+   con niebla. Cuelga de `GameState.niebla`: es estado que cruza escenas, como
+   `discovered`, y sin autoload (SPECS §2.2).
+2. **`Pasillo` (`sim/`, nuevo)**: la geometría de una salida —origen, rumbo,
+   jornadas— y `contiene(lon, lat)`. **Una sola**: la usan la expedición al
+   volver, la flecha del mapa regional y la del valle. Así la flecha cubre el
+   mismo pasillo que se descubre por construcción, y la prueba lo compara.
+3. **Levantar la niebla pasa por la barrera**, igual que descubrir (§23, SPECS
+   §3.1): quien la levanta dentro del paso —la expedición al volver, la cumbre al
+   coronar— lo deja en una cola de su simulación, y el reloj lo junta en
+   `GameState.niebla` en orden de campamento. Al levantar, se descubren los sitios
+   **cuyo punto está dentro de la forma** —geométrico, no por celdas—.
+4. **`Expedicion`** con rumbo y jornadas: `mandar_a(quienes, rumbo, jornadas)`,
+   el coste con las jornadas elegidas y la regla de hoy, `puerta_del_valle` por
+   rumbo, y al volver el pasillo: sitios, contacto de los ocupados y niebla. Se
+   van `destino_de_hoy`, `SE_DESCUBREN`, `_descubrir_alrededor` y
+   `proponer_la_salida`; la primavera se queda sin decisión.
+5. **`Cumbres`** levanta un círculo de `ASCENT_SIGHT_RANGE` alrededor del pico,
+   con `TerrainGenerator.world_to_geo` (nuevo, el inverso del que hay).
+6. **`Campamentos`/`GameState.begin`/la visita**: el recuadro de un campamento al
+   darse de alta, y el de un mapa visitado al entrar.
+7. **`Guardado`**: la niebla en el fichero, sumada al cargar como `discovered`.
+8. **`shaders/triplanar.gdshader`, el agua y la frontera del regional**: la calima
+   encima de lo no visto, el trazo de costa, el borde fundido. `RegionMap` pone la
+   textura de `GameState.niebla`.
+9. **Mandar**: en el mapa regional (pinchar el rumbo desde un campamento, flecha
+   con el pasillo, ficha de quién y cuántas jornadas) y en el valle (pinchar el
+   rumbo desde la cueva, la misma ficha). La ficha es de interfaz y va en
+   `ui/`; la flecha, en `vista/`.
+10. **La visita**: su minimapa, en niebla salvo la capa de lo recorrido por
+    expediciones, y las cuevas de dentro con su alfiler.
+
+**Decisiones del usuario (2026-09-14).**
+
+- **El pasillo tiene 700 m a cada lado** del rumbo: la mitad de lo que se ve desde
+  una cumbre, porque desde el fondo de un valle se ve menos.
+- **La ida avanza con el andar de siempre** sobre el relieve regional —el de
+  `Viaje.camino`: Tobler y 11 horas útiles por jornada— durante la mitad de las
+  jornadas; por la montaña se llega menos lejos.
+- **Se eligen de 4 a 24 jornadas, de 2 en 2.**
+- **La primera expedición encuentra gente en el sitio del pasillo más lejano** del
+  campamento, el más cerca de donde se da la vuelta. Si en el pasillo no hay
+  ningún sitio, no hay a quién encontrar.
+- **En la visita salen con alfiler sólo las cuevas** de lo recorrido por
+  expediciones: una expedición no bautiza parajes en valles ajenos.
+- **La niebla del pasillo se levanta al volver**, con los sitios y el contacto.
+- **Todas las tareas seguidas.**
+
+**Qué contrato cambia, dicho**: `GameState` gana `niebla` (SPECS §2.2 y §4.x), y
+se escribe sólo en la barrera o fuera del paso (SPECS §3.1, §7). EPOCA_01 pierde
+la decisión de primavera.
+
+**Orden de dependencias.** La niebla y el pasillo, antes que nada que los use; la
+barrera antes que la expedición y la cumbre; la expedición antes que las fichas;
+el shader antes que las capturas; y el coste de GPU se mide al final, con todo
+pintado.
+
+**Riesgos técnicos.**
+
+- **Cambia la partida**: sin tarjeta de primavera y con otra forma de descubrir,
+  las firmas de las sondas largas se desplazan una vez. No hay línea que conservar.
+- **La frontera es una malla**, no un shader del relieve: esconderla bajo la
+  niebla pide que su material lea la misma textura.
+- **El trazo de costa se calcula en el shader** a partir de la cota y el mar de la
+  época; en el relieve regional la costa cae entre vértices de ~111 m, y el trazo
+  puede salir dentado. Se mira en la captura.
+- **Las sondas que contestaban la tarjeta de primavera** (`TironAnualProbe` y
+  otras) dejan de mandar expediciones solas. Si alguna cuenta con ellas, se dice.
+
+### Cómo quedó: rumbo y niebla (2026-09-14)
+
+**La niebla** (`NieblaRegional`, `region/`) es la rejilla del relieve regional
+—1 792 × 1 280 celdas de 111 m— con dos capas: **vista**, que levanta la niebla
+del mapa regional, y **recorrida**, lo que pisaron las expediciones. Se levanta
+**por exceso** (toda celda que la forma toque) y sólo con
+`GameState.levantar_niebla`, que **descubre los sitios cuyo punto cae dentro**: lo
+que se ve se descubre, una sola regla. Dentro del paso de un campamento va a la
+cola de la barrera, como lo descubierto. La levantan el recuadro de cada
+campamento al empezar o darse de alta, el mapa visitado, el pasillo de cada
+expedición al volver (las dos capas) y un círculo de 1 400 m alrededor de cada
+cumbre coronada (`TerrainGenerator.world_to_geo`, nuevo). Se guarda en cada
+fichero de campamento y se suma al cargar. Un sitio se enseña si
+`GameState.se_ve`: descubierto **y** fuera de la niebla.
+
+**El pasillo** (`Pasillo`, `sim/`) es una geometría sola para las tres preguntas
+—qué se descubre, qué niebla se levanta y qué dibuja la flecha—: se anda por el
+rumbo a tramos de 250 m con `Viaje.andar_un_tramo` —la misma cuenta del viaje
+entre campamentos— hasta gastar las horas útiles de media salida, **parando en la
+costa de la época** y en el borde del relieve, con 700 m a cada lado.
+
+**La expedición** (`Expedicion`) sale con `mandar_a(quienes, rumbo, jornadas)`
+cuando se quiera, de 4 a 24 jornadas de 2 en 2, con el coste de siempre; traza el
+pasillo **al salir** —el que enseñó la flecha— y al volver descubre lo de dentro,
+levanta la niebla y deja contacto con los sitios ocupados del pasillo. La primera
+encuentra gente en el sitio del pasillo más lejano. **La primavera se quedó sin
+decisión**: ver EPOCA_01.
+
+**Se manda** desde el mapa regional (tecla R y un clic hacia dónde) o desde el
+valle (botón **Rumbo** bajo el minimapa), con la misma `FichaDeRumbo` y una
+`FlechaDeRumbo`. Cómo se ve, en [GRAFICOS.md](GRAFICOS.md) §3; las ventanas, en
+[INTERFAZ.md](INTERFAZ.md) §4. **La visita** enseña en su minimapa sólo lo
+recorrido por expediciones, con las cuevas de dentro
+(`Campamento.ver_lo_recorrido`).
+
+**Medido.**
+
+- Al empezar se ven **1 482 celdas** de 2 293 760: el recuadro de 4 km.
+- **Un pasillo de 12 jornadas hacia el este desde Cueva los Pendios: 130,8 km de
+  ida y 11 sitios**. Con el andar de siempre salen unos **22 km por jornada** sobre
+  el relieve real, así que las salidas largas llegan casi siempre a la costa o al
+  borde de la comarca.
+- La niebla cuesta **entre −0,02 y +0,24 ms de GPU** a 1080p en cinco corridas
+  (GRAFICOS §3), dentro del presupuesto de 1 ms.
+
+**Lo que salió al hacerlo.**
+
+- **El pasillo cruzaba el mar** hasta el filo del mapa. Ahora se para en la costa.
+- **Un punto justo en el borde de un pasillo caía en una celda sin levantar**, por
+  0,3 m de descuadre entre el coseno de la celda y el de la forma: se levanta con
+  un metro de holgura (`NieblaRegional.HOLGURA_M`).
+- **Un guardado de antes de la niebla** traía descubiertos sin niebla, y al
+  abrirlo quedaban tapados: al cargarlo se levanta el recuadro de cada uno.
+- **`TestIntercambio` dependía del año global** que dejaba cambiado
+  `TestDecisiones`: salió al quitar la tarjeta de primavera, y ahora fija su fecha.
+
+**Deuda que queda, dicha.**
+
+- **La niebla se levanta al volver**, entera: no se ve avanzar a la expedición por
+  el mapa regional mientras está fuera.
+- **Tras cerrar el juego, se manda desde el regional sólo con campamentos vivos**:
+  hasta entrar en el mapa de la banda la tecla R dice que no hay desde dónde (la
+  misma deuda de §23).
+- El trazo de costa bajo la niebla sale del relieve regional a 111 m: se ve bien a
+  la distancia de la captura, y de muy cerca puede dentarse.
+
 ---
+
+> **Levantar niebla no descubre sitios** (2026-09-14). Dos quejas del usuario a
+> la vez —«en una nueva partida sólo debe aparecer 1 sitio en el mapa regional» y
+> «cuando el jugador visita un punto del mapa regional que ha descubierto, al
+> volver le han aparecido puntos nuevos»— resultaron ser **el mismo fallo**.
+> `GameState.levantar_niebla` descubría todo yacimiento que quedara bajo la forma
+> levantada, bajo la regla «lo que se ve, se descubre»; y **entrar en un mapa
+> levanta un recuadro alrededor** (`DemoMain`, `Campamentos`). Así que empezar
+> partida descubría a los vecinos de casa, y visitar un sitio descubría los
+> suyos: el mapa se regalaba solo.
+>
+> Ahora la niebla y el descubrimiento van por separado. Levantar niebla **sólo
+> levanta niebla**; descubrir lo pide la forma con `"descubre": true`, y **la
+> única que lo pide es la expedición** (`Expedicion`). **Decisión del usuario**:
+> descubren las expediciones; la cumbre levanta niebla y da pistas de por dónde
+> mirar, pero no regala el yacimiento. La cueva de casa se descubre al empezar,
+> y punto. `TestNieblaRegional`.
+>
+> Una prueba pedía lo contrario y se reescribió diciéndolo: se llamaba «levantar
+> descubre lo de dentro y nada de fuera» y comprobaba bien la regla de entonces.
+> Lo que estaba mal era la regla.
 
 ## 5. El comercio, de la concha de lejos al mercado nacional
 
@@ -586,6 +868,33 @@ Las cifras de rendimiento de cada uno, y si están bien calibradas, en
 
 ## 10. La despensa: lo que se pudre y lo que se salva
 
+> **Lo que se pierde HOY es el paso de la edad de ayer a la de hoy** (arreglado
+> el 2026-09-13). `Storehouse.age` calculaba la fracción podrida de la edad
+> ENTERA —cero hasta la mitad de la vida, y de ahí a uno al final— y se la
+> aplicaba **a lo que quedaba, cada día**. Eso se acumula: pasada la mitad de
+> vida, el pescado seco perdía un 1 %, un 2 %, un 3 %… de lo que le quedaba, y
+> en quince días se iba el 70 %. El usuario lo vio en el día 123 —«he perdido
+> 2 000 raciones de pescado seco en pocos días»— y tenía razón: no le había
+> dado tiempo a pudrirse. Ahora `age` divide lo que queda a la edad de hoy
+> entre lo que quedaba a la de ayer, así que envejecer día a día pierde
+> exactamente lo mismo que envejecer de una vez, que es lo que la regla decía.
+> Lo defiende `TestStorehouse.test_envejecer_dia_a_dia_pierde_lo_mismo_que_de_una_vez`.
+>
+> **Y la grasa ya no es comida** (decisión del usuario, 2026-09-13): «no quiero
+> que se coman la grasa, quiero que la utilicen sólo como material». Es la
+> lámpara de explorar cuevas, el curtido y el aglutinante de la pintura, y con
+> la grasa contando como ración no quedaba para ninguna de las tres —que es la
+> razón de fondo de que no se curtiera ni una piel—. `Materia.Kind.GRASA` tiene
+> `kcal: 0` y sale de `LO_QUE_AGUANTA_EL_VIAJE`.
+>
+> **El almacén arranca con topes** (decisión del usuario, misma tarde): 50 de
+> cada material, 100 de leña y 10 de cada pieza de utillaje
+> (`SettlementSim.TOPE_DE_MATERIAL`, `TOPE_DE_LENA`, `TOPE_DE_UTILLAJE`,
+> puestos en `setup`). Sin ellos, «en unos cuantos días se llena de morralla».
+> La comida no lleva tope de material: tiene el suyo, el de la despensa. Y el
+> número del utillaje pasó de ser un ENCARGO a ser un TOPE: el taller hace lo
+> que pide el trabajo y nunca más de ese número.
+
 `Storehouse.age` aplica la podredumbre desde siempre, y **no se veía**. Desde
 fuera, un montón que no crece porque nadie lo trae y uno que no crece porque se
 pudre se leen exactamente igual, y no son lo mismo: el primero se arregla
@@ -713,6 +1022,36 @@ el cazador que sale por la mañana va primero a lo que dejó abierto.
 
 ## 12. La pesca
 
+> **Un tramo en descanso no se pesca, llegue quien llegue** (2026-09-13). El
+> barbecho existía y saltaba —`Barbecho.revisar`—, pero no impedía pescar: la
+> lista de sitios adonde mandar a alguien (`SettlementSim._work_candidates`)
+> añadía detrás del mejor **todos** los sitios conocidos del oficio y el de
+> reserva de la fundación sin mirar si descansaban, así que en cuanto el bueno
+> no tenía camino el pescador acababa en el tramo en descanso y allí `Tajo` le
+> sacaba los peces a la celda más rica a 80 m. Ahora la lista se filtra, y
+> además `Tajo.celda_trabajada` no da celda en un paraje en descanso: el que
+> pasa por allí buscando o tanteando tampoco saca nada.
+>
+> **Y la pesca descansa antes y vuelve más tarde que lo demás**: por debajo del
+> **30 %** se deja en barbecho y no se vuelve hasta el **90 %**
+> (`Barbecho.PESCA_ESQUILMADA` y `PESCA_REPUESTA`, decisión del usuario). El
+> resto de oficios sigue en el 20 % / 55 %: un río se vacía por tramos y tarda
+> más en llenarse que un avellanar.
+>
+> **Y cada primavera, el remonte** (`ResourceField.remonte`, 2026-09-14,
+> decisión del usuario). Con el rebrote común —0,045 al día, logístico— un remanso
+> vaciado en primavera tardaba **unas 130 jornadas** en volver al 90 %: casi el
+> año entero en barbecho. El usuario lo vio así: «el paraje está con peces, al
+> rato el marcador se apaga y cuando miro sólo tiene cuarcita». Ahora al entrar la
+> primavera todo tramo con río vuelve lleno —el salmón que sube el Deva y el
+> Nansa, que es lo que ya contaba `seasonal_factor`—, y el barbecho lo devuelve
+> al cerrar esa jornada. Lo secado por `dry_cell` no remonta: no tiene río.
+>
+> **La ficha no se calla el pescado de un remanso esquilmado**
+> (`Paraje.fill_contents`). Por debajo del umbral se saltaba la actividad entera
+> y quedaba la piedra de la orilla por toda ficha; ahora lo que nombra el sitio
+> sigue en la lista con lo que quede, si está en temporada.
+
 **Una nasa no es un peldaño de una escalera de rendimiento: es un objeto que se
 queda en el río.** Tenerla en la escalera junto al arpón y el sedal significaba
 que una banda con nasas y sin arpón se pasaba el día de pie en la orilla con una
@@ -735,6 +1074,15 @@ por la mañana y luego pesca con lo mejor que tenga.
   (`NasaMarkers`).
 
 ---
+
+> **Lo que está en el agua se nombra por el agua** (2026-09-14). Queja del
+> usuario: la ventana de técnicas ponía nasas en «la veta de ocre» o «la veta de
+> sílex». La nasa se cala donde pesca el pescador —junto al agua, `Nasas._room_for_nasa`—
+> y eso no siempre cae en un paraje de pesca; cuando no había ninguno a menos de
+> `Parajes.MERGE_RANGE` (320 m), el nombre caía en el paraje más cercano **de
+> cualquier clase**. Ahora, sin paraje de agua al alcance, se nombra por la orilla
+> —«la orilla al norte del abrigo, a 900 m»—. **Decisión del usuario**: «donde
+> pesca, pero bien nombrada». `TestParajes`.
 
 ## 13. Lo que se cuenta, y lo que se pinta
 
@@ -791,9 +1139,18 @@ oficio entero.
 grasa, dos jornadas de alguien del hogar y una **lámpara** (`Tool.Kind.LAMPARA`,
 un canto ahuecado con grasa y una mecha — la de Lascaux es literalmente eso).
 Es de las poquísimas piezas cuyo rendimiento sin ella es **cero**: a oscuras no
-se pinta ni despacio ni deprisa. Y el taller no hace lámparas antes de saber
-pintar: nadie ahueca un canto para tener luz dentro de la cueva antes de tener
-algo que hacer dentro de la cueva.
+se pinta ni despacio ni deprisa. **El taller pide UNA lámpara desde el primer
+día** (`Taller.tool_natural_demand`). Hasta el 2026-09-14 la pedía sólo al saber
+pintar —«nadie ahueca un canto para tener luz dentro de la cueva antes de tener
+algo que hacer dentro»—, pero desde la tanda 4 **explorar** también la pide, y
+eso se hace desde el principio: con la demanda a cero la talla no hacía ninguna y
+no se podía explorar. Queja del usuario: «no me está haciendo lámparas». Era la
+misma regla escrita en dos sitios con dos respuestas.
+
+> **Y la talla que «se salta» a veces no es un fallo.** La meta del utillaje es
+> un tope, no un encargo (decisión del usuario del 2026-09-13): cuando lo que
+> pide el trabajo está cubierto, el tallador sólo practica si queda técnica que
+> aprender y hay piedra. Tener menos piezas que la meta no le da trabajo.
 
 **Lo que NO levanta relato**, y por qué: el bautizo de un paraje. Un relato es un
 `Moment`, o sea el reloj parado, y si cada sitio con nombre parara la partida a
@@ -802,6 +1159,297 @@ tarjeta sin leerla. **Se pinta lo que pasa pocas veces**: una caza mayor, una
 cumbre, una técnica.
 
 ---
+
+### Spec (2026-09-15): la pared que se ve, y lo que otros pintaron antes
+
+**El problema.** Pintar hoy es un dato: el relato pasa a la lista de pintados, la
+crónica dice «está en la pared del fondo» y el techo de aprendizaje sube. **No hay
+pared.** Nadie la ha visto nunca, y por eso no hay razón de juego ni de curiosidad
+para mirar dentro de una cueva: explorar una dice «tiene zona pintable» y ahí se
+acaba. Y el mapa tiene **cuevas reales con arte paleolítico documentado** —de las
+más importantes de Europa— que en el juego son un alfiler como cualquier otro.
+
+La petición del usuario: un sistema de pintar al fondo de la cueva **con
+visualización**, y algo de lore que dé sentido a entrar a mirar las cuevas y ver
+las pinturas.
+
+**Lo decidido, a preguntas del usuario:**
+
+1. **Se entra en la cueva, en 3D.** Una sala donde está **la pared del fondo** y
+   se mira con la cámara, a la luz de la lámpara. No es una ventana con un dibujo
+   encima: es un sitio en el que se entra.
+2. **La pared es roca con su relieve**, y **la pintura tiene su sitio**: se sabe
+   que en el Paleolítico se aprovechaban las formas de la roca —un abombamiento
+   para el vientre de un bisonte, una grieta para el lomo, una repisa para el
+   suelo— y así se pinta aquí. **La figura no la coloca el jugador ni cae en un
+   hueco cualquiera**: va donde la roca la recalca, y usa el relieve para
+   recalcarse.
+3. **Arte parietal desbloquea pintar, y pintar lo de antes.** Los relatos se
+   guardan desde el primer día —cacerías grandes, hallazgos, técnicas—, sepa o no
+   la banda pintar. Al aprender la técnica, **lo vivido antes de saber pintar se
+   puede pintar también**, no sólo lo que pase después.
+4. **En las cuevas con arte documentado se ve el arte real**: las ciervas de
+   Covalanas, las manos de El Castillo, los bisontes de Altamira. Cada panel lleva
+   un texto corto sobre **los que estuvieron antes**, fiel a lo documentado —qué
+   hay y de cuándo es— y con sus fuentes en CREDITOS.
+5. **Mirar pinturas ajenas es relato y lore, sin efecto de juego.** Entra en la
+   crónica y en lo que la banda cuenta; no sube techos, no enseña técnicas ni da
+   motivos nuevos.
+6. **Los motivos se dibujan a mano, calcados en vectorial** a partir de
+   referencias publicadas, con el trazo y la paleta del Paleolítico cantábrico
+   —ocre rojo, carbón negro, ocre amarillo—, y cada uno cita su referencia en
+   CREDITOS.
+
+**Entrar a mirar no pide la técnica** —confirmado por el usuario al planear,
+2026-09-15—: cualquier cueva explorada tiene sala. Sin la técnica, la de la banda
+está vacía y las ajenas enseñan su arte y su lore.
+
+**Y dos decisiones más del usuario al planear (2026-09-15):**
+
+- **Lo que no es caza se pinta con signos y manos**: los hallazgos con signos
+  —puntos, escaleriformes—, las técnicas con signos tectiformes o claviformes, y
+  la primera vez de algo importante con una mano en negativo. La caza mayor lleva
+  su animal.
+- **Con la pared llena se pinta encima**, como en las cuevas reales —La Pasiega
+  está llena de figuras superpuestas—: cuando no queda sitio que recalque bien, la
+  figura nueva va sobre la más antigua **de la banda**, nunca sobre una
+  documentada. No hay tope.
+
+#### Criterios de aceptación
+
+**La sala**
+
+- De una cueva **explorada** se puede entrar a su sala, desde el mapa de la banda
+  y desde el alfiler de un sitio visitado. De una sin explorar no, y la ficha dice
+  por qué. Prueba.
+- **Todo relato pintado en esa cueva está en su pared**, y nada más: el número de
+  figuras propias de la sala es el de relatos pintados allí. Prueba sobre una
+  pared con cinco pintados.
+- **Entrar y salir no cuesta como ir al mapa regional**: ni la entrada ni la salida
+  tardan más de **2 s** en el sitio 56, medido como `TransitoProbe` (ESTADO §2 dice
+  por qué importa: hoy la vuelta al mapa de la banda son 18 s). Si la sala no puede
+  cumplirlo sin arreglar antes esa vuelta, se dice al planear.
+- **Cabe en el fotograma**: en Medio y a 1080p, la sala no cuesta más GPU que la
+  vista del valle en ese mismo nivel (18,1 ms en el equipo de medida, GRAFICOS §7),
+  con `GpuProfile`, dos corridas.
+- Mientras se mira dentro, **la partida sigue o se pausa como con cualquier otra
+  ventana**, sin regla nueva. Prueba.
+
+**La pared y el sitio de cada figura**
+
+- **La figura va donde la roca la recalca**, y se mide: para cada figura puesta, el
+  ajuste entre su contorno y el relieve de la pared en su sitio es **mejor que el
+  del 90 % de los sitios tomados al azar donde podía ir** —libres de otras
+  figuras— en la misma zona pintable. Sonda sobre una pared con al menos veinte
+  figuras.
+  > *Decía «de los sitios tomados al azar», sin más, hasta el 2026-09-15.* Al
+  > medirlo, con la pared ya llena la figura quince se comparaba con huecos
+  > ocupados por otras catorce: salía al 88 % contra cualquier sitio y al 99 % contra
+  > los libres. **Decisión del usuario**: vale contra los libres, que es la pregunta
+  > de verdad —si eligió el mejor hueco disponible—.
+- **La misma partida pone las mismas figuras en los mismos sitios**: con la misma
+  semilla y los mismos relatos, dos corridas dan la misma pared. Prueba.
+- **Una figura nueva nunca va encima de una figura documentada** de una cueva con
+  arte real. Prueba.
+
+**Pintar lo de antes**
+
+- Un relato del día 10, con la técnica aprendida el día 50, **se puede encargar el
+  día 51** y acaba en la pared con la fecha de lo que cuenta, no la del día en que
+  se pintó. Prueba.
+- La lista de lo que se puede pintar **incluye lo anterior a la técnica** y dice de
+  cuándo es cada cosa. Prueba de la ventana.
+- **Sin la técnica no se encarga nada**, ni antiguo ni nuevo, y la ventana dice
+  por qué. Prueba.
+
+**Los motivos**
+
+- **Todo relato pintable tiene su motivo**: cada especie que se caza como pieza
+  mayor, cada clase de hallazgo y cada técnica pintable tienen un dibujo propio.
+  **Ninguno cae en un motivo genérico de relleno.** Prueba que recorre las especies
+  y los tipos de relato del juego.
+- **Cada motivo cita su referencia** en CREDITOS: la figura o el panel real del que
+  se calcó y dónde está publicado. Prueba que cruza el catálogo con CREDITOS.
+
+**El arte de los que estuvieron antes**
+
+- **Cada cueva del mapa con arte parietal paleolítico documentado tiene su panel**.
+  La lista se saca de fuentes, no de memoria, y se escribe en EPOCA_01 §12 con la
+  fuente de cada una; como punto de partida, las cuevas cántabras del bien «Cueva
+  de Altamira y arte rupestre paleolítico del norte de España» de la UNESCO que
+  estén en el conjunto de sitios. Prueba: toda cueva de esa lista tiene panel, y
+  ninguna cueva sin arte documentado lo tiene.
+- **Cada panel dice lo que hay y de cuándo es**, sin inventar: qué motivos, qué
+  técnica y la cronología publicada. Si la cronología está discutida, lo dice. Y si
+  el panel es **anterior** a la banda —las manos de El Castillo lo son por muchos
+  miles de años—, el texto lo cuenta así: es exactamente el lore que se pide.
+- **La primera vez que la banda entra** en una cueva con arte, el texto del panel
+  entra en la crónica y en lo que la banda cuenta; **al volver a entrar, no se
+  repite**. Prueba.
+- **Mirarlo no cambia nada más**: ni techos de aprendizaje, ni técnicas, ni
+  motivos. Prueba de que el estado de la banda es el mismo antes y después, salvo
+  la crónica y el relato.
+
+#### Fuera de alcance
+
+- **Que mirar pinturas ajenas tenga efecto de juego.** Decisión del usuario.
+- **Reproducir los paneles reales tal cual**: son calcos interpretados de
+  referencias —qué motivos hay, con qué técnica, en qué disposición—, no réplicas.
+- **Pintar a mano**, elegir el sitio de una figura o moverla.
+- **Ver la pintura mientras se está pintando**, a medias: la figura aparece al
+  terminar.
+- **El grabado**, el arte mueble —plaquetas, propulsores decorados— y el arte de
+  otras épocas (el levantino, el esquemático).
+- **Recorrer la cueva entera**: la sala es la pared del fondo, no las galerías.
+  Explorar sigue siendo lo que es hoy (§13 y EPOCA_01, frente 22).
+- **Cambiar lo que la pintura propia hace en la partida**: el techo de aprendizaje
+  sigue como está arriba.
+
+#### Plan técnico (2026-09-15)
+
+**Lo que hay, comprobado en el código antes de planear.**
+
+- **Pintar sólo pasa en la cueva de la banda** (`Exploracion.cueva_de_la_banda`),
+  y lo pintado es `SettlementSim.paintings`, una lista de `Tale` **sin cueva ni
+  sitio**. Si la banda se muda (`Traslado`), las pinturas viejas se verían en la
+  cueva nueva: hay que atarlas a la suya.
+- **Una cueva es un elemento del mapa local**, identificado por su índice en el
+  catálogo del sitio (`CaveMouth.id`), con nombre y **lat/lon** de
+  OpenStreetMap. Lo explorado y lo pintable vive en cada campamento
+  (`Exploracion._sabido`).
+- **Las diez cuevas cántabras del bien de la UNESCO están en los datos**: Altamira,
+  El Castillo, Las Monedas, Las Chimeneas, La Pasiega, El Pendo, La Garma, Chufín,
+  Covalanas y Hornos de la Peña. Unas son sitio regional (ids 1, 6, 7, 8, 15, 16 y
+  17) y **todas son elemento de algún mapa local**: El Castillo, Las Monedas y Las
+  Chimeneas están dentro del de La Pasiega. Algunas salen repetidas con nombres
+  casi iguales, así que **se reconocen por coordenadas y no por nombre**.
+- **Los relatos y las pinturas se guardan solos**: `Instantanea` guarda por
+  reflexión toda variable de la simulación. Un campo nuevo en `Tale` se guarda
+  sin tocar el guardado, y una partida vieja lo trae a su valor por defecto.
+- **Pintar ya se encarga desde el momento del relato**, con el botón «pintarlo»,
+  y la pared se lista en la ventana de Técnicas (`PanelTecnicas`, bloque del
+  hogar). No hay forma de encargar un relato viejo.
+- **Los relatos pintables son los que tienen tarea**: la caza mayor —ciervo,
+  jabalí, caballo, uro—, los hallazgos con tarea (la cumbre coronada) y las
+  técnicas.
+
+**Módulos.**
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| **Los motivos**: cada figura como polígonos en coordenadas de la figura, con su color, su técnica (tinta plana, contorno, puntos, mano en negativo) y la referencia de la que se calcó | nuevo, `scripts/datos/Motivos.gd` | SPECS §4.1: datos puros, **constantes en código y no un `.tres`**, porque la pared se calcula dentro del paso de campamentos fuera del árbol (§3.1) y cargar recursos desde ahí no es seguro |
+| **El arte de los que estuvieron antes**: las diez cuevas con su lat/lon, sus paneles —qué motivos, cuántos, técnica—, la cronología publicada y la fuente | nuevo, `scripts/datos/ArteDeLosDeAntes.gd` | §4.1 |
+| **La pared**: el relieve de una zona pintable a partir de la semilla de la partida, el sitio y la cueva; la medida de cuánto recalca la roca una figura en un sitio; y la colocación, voraz y en orden —primero lo documentado, después lo pintado por la banda por fecha de pintado— | nuevo, `scripts/sim/ParedDeLaCueva.gd` | §4.4, puro y sin nodos. **Azar con su propio generador sembrado, no el `_rng` de la simulación** (§7), como `Exploracion.hay_zona_pintable` |
+| **La figura en su sitio**: `Tale` gana la cueva donde se pintó y su sitio en la pared (posición, escala, giro) | `scripts/banda/Tale.gd` | se guarda solo |
+| **Pintar**: al terminar, la figura se coloca y queda en el relato; la lista de lo que se puede pintar, incluidos los relatos de antes de la técnica | `scripts/sim/Pinturas.gd` | §4.4 |
+| **Lo que se ve al entrar por primera vez**: el texto del panel a la crónica y a los relatos, **sin tarea**, así que no es pintable ni sube ningún techo; y qué cuevas ha mirado ya este campamento | `Pinturas.gd` | §4.4 |
+| **La sala**: un `SubViewport` con **su propio `World3D`** encima de la escena, con la malla de la pared, la luz de la lámpara y las figuras | nuevo, `scripts/vista/SalaDeLaCueva.gd` y `shaders/pared_pintada.gdshader` | §4.7: lee la simulación, no la cambia |
+| **Entrar y salir**: el botón en la ficha de la cueva del mapa de la banda y en la del sitio del mapa regional, con el motivo cuando no se puede | `scripts/ui/GameUI.gd` y la ficha del sitio de `RegionMap` | §4.7 |
+| **Pintar lo de antes**, en la ventana de Técnicas | `scripts/ui/PanelTecnicas.gd` | §4.7 |
+
+**Decisiones de arquitectura, sólo las que la spec obliga a tomar.**
+
+1. **La sala NO es un cambio de escena.** La spec pide entrar y salir en menos de
+   2 s, y cambiar de escena cuesta hoy 18 s de vuelta (ESTADO §2). Es una capa
+   encima de lo que haya, con su mundo 3D propio: así **ni el sol, ni la niebla,
+   ni el cielo del valle entran en la cueva**, y al salir no hay nada que
+   reconstruir.
+2. **La figura se coloca al terminar de pintarla y se guarda en el relato**, no se
+   recalcula al entrar. «La pintura tiene su sitio»: si mañana cambia cómo se mide
+   el ajuste, lo ya pintado no se mueve. Lo documentado sí se coloca al entrar,
+   porque es de los datos y siempre sale igual.
+3. **La colocación es de la simulación y la pared también**, aunque la pared sea
+   algo que se ve: el sitio de cada figura es un hecho de la partida, y lo decide
+   el paso, no la vista. La vista sólo dibuja la misma pared con más detalle.
+4. **Cuánto recalca la roca una figura, medido así**: el relieve abombado dentro
+   del cuerpo —convexidad media bajo la silueta— más cómo sigue el contorno a las
+   crestas y grietas —alineación del contorno con el gradiente—, con escala y
+   giro dentro de un margen. **El criterio de la spec (mejor que el 90 % de los
+   sitios al azar) se mide con esta misma cuenta**, así que por construcción
+   sale; lo que de verdad hay que mirar es que la cuenta sea la buena, y eso se
+   ve en las capturas.
+5. **Las cuevas con arte se reconocen por coordenadas**: un elemento del mapa local
+   a menos de 150 m de una cueva de `ArteDeLosDeAntes`.
+6. **Lo pintado antes de este cambio** —relatos con la cueva a su valor por
+   defecto— se da por pintado en la cueva de la banda, y se coloca la primera vez
+   que se entra.
+
+**Orden de dependencias.** Los motivos y el arte documentado, antes que la pared
+(que coloca motivos); la pared, antes que pintar con sitio y que la sala; la sala,
+antes que entrar y salir; y todo, antes de medir.
+
+**Riesgos técnicos.**
+
+- **Dibujar los motivos es el trabajo más incierto.** Se calcan en vectorial a
+  partir de referencias publicadas —calcos de Breuil y de las monografías, fotos
+  de los paneles—, y la calidad depende de poder **ver** esas referencias al
+  trazar. Si una referencia no se puede consultar, el motivo se para y se dice; no
+  se dibuja de memoria como si fuera un calco.
+- **Algunas cronologías están discutidas**: el signo escaleriforme de La Pasiega
+  fechado en más de 64 000 años y atribuido a neandertales se discute en la
+  literatura. El texto lo dice discutido, como pide la spec.
+- **Ver Altamira pide un campamento que la haya explorado**: la visita desde el
+  mapa regional no lleva gente y no explora. Para la mayoría de las partidas, las
+  cuevas con arte sólo se verán fundando o migrando cerca. Es lo que dice la spec,
+  pero conviene saberlo.
+- **Una capa 3D encima de la escena** tiene que quedarse con la entrada del ratón y
+  del teclado mientras está abierta, y soltarla al salir, sin que la cámara del
+  valle se mueva por debajo.
+- **La pared se calcula en el paso de campamentos fuera del árbol**: nada de nodos,
+  recursos ni texturas en `ParedDeLaCueva`. Si hace falta rasterizar un motivo a
+  textura, eso es de la vista.
+
+#### Cómo quedó (2026-09-15)
+
+**Lo construido, pieza a pieza.**
+
+- **Los motivos** son doce calcos (`Motivos`, generado por
+  `scripts/tools/calcar_motivos.py` desde Wikimedia Commons): bisonte, jabalí,
+  cierva, ciervo, caballo, uro, mano, serie de puntos, bastoncillos, claviformes,
+  tectiforme y escaleriforme. Once son cántabros; **el uro es de Lascaux**, porque no
+  hay uno cántabro con licencia libre (CREDITOS). Qué figura lleva cada relato lo
+  dice `Tale.motivo()`.
+- **El arte de los que estuvieron antes** son las diez cuevas de `ArteDeLosDeAntes`,
+  reconocidas **al metro** por las coordenadas de OpenStreetMap, con muestra de
+  paneles, texto y fuentes (EPOCA_01 §12).
+- **La pared** (`ParedDeLaCueva`) es de la simulación: relieve sembrado, convexidad y
+  pendiente, y colocación en dos pasadas. Colocar una figura cuesta **~50 ms**.
+- **Pintar** deja la figura con su cueva y su sitio en el relato (`Pinturas`); mudarse
+  no se lleva las pinturas; lo pintado de antes va a la cueva de la banda.
+- **Pintar lo de antes**: la ventana de Técnicas lista todo lo pintable, también sin
+  la técnica, con el motivo.
+- **Entrar** en la sala (`SalaDeLaCueva`) desde la ficha de la cueva o desde el mapa
+  regional; la primera vez en una cueva con arte, su texto va a la crónica y a los
+  relatos, sin tarea.
+
+**Medido.** Con `ParedProbe` (60 figuras en 3 paredes): la peor figura recalca mejor
+que el **100 % de los sitios libres**. Con `CuevaCaptura` (dos corridas): entrar
+**0,4–0,6 s**, salir 1–3 ms, GPU **2,0–2,1 ms**.
+
+**Lo que salió distinto del plan, y conviene saber.**
+
+- **«Por construcción sale» no salía**: con la pared llena, una figura quedaba al 88 %
+  contra cualquier sitio, porque se comparaba con huecos ya ocupados. **Decisión del
+  usuario**: el criterio es contra los sitios libres (arriba, en los criterios, con lo
+  que decía antes).
+- **El listón de pintar encima volvió a la mediana** tras probar el 90 %, que pintaba
+  encima con la pared a medias. Y **una lectura mía, dicha para que se corrija**: con
+  la pared llena, la figura va encima de la más antigua de la banda sólo si ahí
+  recalca al menos igual que en el mejor hueco libre.
+- **Pisar a otra figura cuenta también por el contorno**, no sólo por el cuerpo.
+- **El determinismo del paso prohíbe `exp`** de la librería (`TestCalculo`): la pared
+  usa `Calculo.exponencial`.
+- **Mirar desde el mapa regional pide un campamento vivo en ese sitio** que haya
+  explorado la cueva: lo explorado es de cada campamento.
+
+**Queda pendiente.**
+
+- **De cerca, el trazo se ve escalonado**: la textura de pinturas es de 110 px por
+  metro. Subirla cuesta tiempo de entrada; está medido que hoy sobra margen (0,6 s de
+  2).
+- **La primera sepultura no es pintable**: su hito no lleva tarea, aunque su
+  comentario dice que se puede dejar en la pared. Es anterior a este trabajo y queda
+  en ESTADO §2 para `/depurar`.
 
 ## 14. Los desechos, y el lobo
 
@@ -923,6 +1571,17 @@ no la tienes en enero**.
 
 ## 16. El curtido de piel, y el taller que practica
 
+> **Todo lo que se cose o se tensa pide piel CURTIDA** (2026-09-13). La cruda se
+> seguía gastando en tres sitios —la tienda del vivac, la de la expedición y el
+> paraviento— y por eso desaparecía sin que se curtiera nada: «se gastan pieles
+> crudas, pero no han hecho aún ninguna piel curtida… ¿en qué coño se usan?».
+> Una tienda de pellejo sin curar se pudre en doce días, que es justo lo que
+> dura una expedición. La cruda queda para **curtirla y para el trueque**, que
+> es lo que se comercia de verdad.
+>
+> Y la otra mitad de por qué no se curtía: **curtir pide grasa**, y la grasa se
+> la comían. Ver §10.
+
 `Materia.Kind.PIEL` estaba en el catálogo con `dias: 0` —no se pudre— y su
 propia ficha decía *«sin curtir se pudre»*. `Profession.SPECIALITY_INFO`
 describía la peletería como «descarnar y curtir con raederas, ocre y grasa»
@@ -947,6 +1606,13 @@ algo más?»*, y la respuesta, mirando el propio catálogo, era que sí.
   en cuanto hay para un par de piezas.
 - Curtir va SIEMPRE antes que tallar dentro de `Taller._craft`: una prenda
   no se hace con piel cruda.
+- **Coser pide una aguja HECHA, no sólo la técnica** (`Tool.needs_tool`): el
+  vestido pide `AGUJA` en el utillaje y el odre `RAEDERA`, y cada pieza cosida
+  gasta media jornada de la aguja. El usuario lo dudó el 2026-09-14 al ver
+  vestidos y ninguna aguja; lo fijan `TestTaller` —diez jornadas de peletería
+  sin aguja no sacan un vestido, con una sí— y la de curtir sin raedera. Tener
+  vestidos y cero agujas es lo normal **después**: las agujas se gastan cosiendo
+  y los vestidos quedan.
 
 **Lo que cambia:** curtir deja de ser una frase de sabor y pasa a competir
 por el tiempo del peletero y por el ocre y la grasa del almacén — los
@@ -970,7 +1636,54 @@ ser sólo cosa del arte.
 > gasta piedra por gastarla. Es lo que cierra el 🔴 «el taller se para solo», y
 > la salida que eligió el usuario entre cuatro.
 
+### El esfuerzo es de la pieza, no del oficio (2026-09-14)
+
+Queja del usuario: «tarda mucho en fabricar las cosas, diría que varios días de
+trabajo en hacer un simple punzón… dame los tiempos y vamos a revisarlos, porque
+no me gustan de momento».
+
+**Los tiempos de entonces, medidos.** La velocidad era una sola cifra por
+especialidad —`SettlementSim.CRAFT_PER_DAY`, ya borrada— y todas las piezas de un
+oficio costaban igual. Con 11 horas útiles al día (`SettlementSim.HORAS_UTILES`):
+
+| Oficio | Piezas/jornada | Horas por pieza | Piezas |
+|---|---|---|---|
+| Talla | 3,0 | 3,7 h | lasca, raedera, buril, punta, lámpara |
+| Cordelería | 1,2 | 9,2 h | cuerda, cesto, nasa, **red** |
+| Asta | 0,6 | **18,3 h** | azagaya, arpón, aguja, **punzón**, anzuelo |
+| Peletería | 0,5 | 22 h | odre, vestido |
+
+El usuario tenía razón, y la tabla destapaba algo peor que la escala: **la red
+—9,0 de fibra, «la pieza más cara de la banda» según su propia receta— salía en
+9,2 horas y el punzón de hueso en 18,3**. El orden estaba invertido.
+
+**Lo que hay ahora**: [Tool.HORAS_DE_TRABAJO], horas de trabajo **por pieza**,
+en órdenes de magnitud de arqueología experimental —lo caro de una aguja es
+perforarle el ojo; lo de un arpón, sacarle los dientes uno a uno; una red son
+semanas de tarde—. Punzón 1 h, aguja 3, azagaya 6, arpón 12, red 45, vestido 30,
+lasca 0,25. Revisadas y aceptadas por el usuario antes de aplicarlas. El oficio
+**sigue contando, pero como destreza** (`Inhabitant.effectiveness()`), no como
+velocidad única. `TestTaller`.
+
+**Y mueve la partida, avisado antes de tocarlo**: el utillaje pequeño pasa a ser
+casi gratis y el aparejo de pesca y la ropa se vuelven inversiones. Se vio en el
+acto: `test_sin_aguja_hecha_no_se_cose_un_vestido` daba diez jornadas al peletero
+y con el vestido a 30 h —más los odres que hace antes— ya no llegaba. La prueba
+comprueba la regla de la aguja, no el ritmo, así que se le dio holgura; **pero
+queda dicho que la ropa se encareció** y hay que mirar que la banda siga llegando
+vestida al invierno.
+
 ## 17. El agua: odres, y por qué llenar uno puede ser una salida
+
+> **Un odre lleno no es un odre vacío** (2026-09-13). Cuántos hay vacíos lo
+> contestaban por su cuenta cuatro sitios —el llenado en casa, la salida a por
+> agua, la vuelta de la orilla y la capacidad de la despensa—, ninguno
+> descontaba el que va fuera con alguien, y la capacidad de guardar comida
+> sumaba **doce litros por cada odre**, también por los que llevan agua: el
+> mismo odre contaba dos veces. Ahora lo contesta `Despensa.odres_vacios()` —los
+> hechos, menos los llenos, menos los que lleva alguien encima— y de ahí beben
+> los cuatro. En el almacén, la fila del odre dice los **vacíos**; los llenos ya
+> salen como Agua.
 
 `Materia.Kind.AGUA` —«un odre lleno»— se sincronizaba solo:
 `Despensa._sync_waterskins` igualaba su cantidad a «odres que ha hecho el
@@ -1003,6 +1716,27 @@ pegadas al agua»*.
 - `Despensa._sync_waterskins` deja de igualar y pasa a ser sólo un tope: el
   agua nunca puede superar los odres que existen, para que un odre que se
   rompe se lleve su agua con él.
+
+> **El agua del río no es agua gastada** (2026-09-14). Queja del usuario: con la
+> cueva junto al río, **1 277 de agua gastada en 167 jornadas**. Eran tres cosas,
+> y la primera era la gorda:
+>
+> 1. **Un odre por salida, bebiera o no.** Los recipientes vuelven en
+>    `Despensa._deliver`, y quien sale sin haber traído carga no pasa por ahí: se
+>    quedaba el odre puesto, y `_hand_out_containers` le sacaba **otro lleno**
+>    del almacén en la salida siguiente. Ahora quien ya lleva odre no coge otro.
+> 2. **El odre contaba como bebido al salir.** Ahora sale del almacén sin
+>    apuntarse (`Storehouse.take(…, false)`) y al volver devuelve lo que no se
+>    bebió (`Despensa.agua_en_el_odre`, que sale de `water_left`: las horas por
+>    encima de `SED_HORAS_SIN_ODRE` son las del odre). Beber junto al río lo
+>    rellena, así que un odre que pasa el día en la orilla vuelve lleno. **Lo
+>    gastado es sólo lo bebido del odre** (`Storehouse.apuntar_gasto`), y lo que
+>    se pierde al romperse uno tampoco cuenta: se pierde, no se bebe.
+> 3. **El sorbo en casa miraba a la persona, no a la cueva.** Quien estaba en la
+>    campa o dentro, a más de veinte metros del cauce, bebía del almacén aunque
+>    la cueva diera al río. Ahora en casa manda `Hogar._home_by_water`.
+>
+> Pruebas en `TestJornada`, «el agua del río no es agua gastada».
 
 **Lo que cambia:** una cueva mal elegida —lejos del río, aunque abrigada—
 tiene un coste real y recurrente en jornadas de HOGAR, no solo narrativo.
@@ -1135,6 +1869,107 @@ ancho que salvan, lo que cuestan y lo que aguantan, pero no el mecanismo.
 
 ---
 
+> **Y se olvidan enteras cada vez que se rehace la rejilla** (2026-09-14, al
+> depurar las pasarelas): `Marcha.forget_routes` llama a
+> `BandKnowledge.olvidar_veredas`, y eso pasa **en cada cambio de estación** y cada
+> vez que se levanta una pasarela. El comentario del código lo llama «limpieza»
+> —el sello de `Vereda` ya impide andar una vereda de otra rejilla—, pero el efecto
+> es que lo aprendido no dura de una estación a la siguiente, y §20 se apoyaba en
+> ello.
+
+### Plan técnico: que lo aprendido dure el año (2026-09-14)
+
+**El síntoma, y de dónde sale.** Al depurar las pasarelas se vio que la regla del
+vado casi nunca tenía veredas que mirar. La causa: `Marcha.forget_routes` vacía
+`BandKnowledge.veredas` **entera** en cada cambio de rejilla, y la rejilla cambia
+al entrar cada estación, al levantar una pasarela y al cerrar una celda a mano.
+
+**Lo que hay hoy, comprobado en el código.**
+
+- Cada vereda lleva **su sello**: `Vereda.caudal` y `Vereda.encharque`, los de la
+  rejilla que la trazó, y `BandKnowledge.vereda(clave, grid)` la **descarta al
+  leerla** si no coinciden (`Vereda.sirve_en`). Once pruebas lo sostienen
+  (`TestVeredas`).
+- `forget_routes` se llama en cuatro sitios: al **cerrar una celda** a mano
+  (`Marcha`, cuando alguien no pasa por donde la rejilla decía), al **amasar** una
+  rejilla nueva, al **cambiar de estación** y al **mudarse de cueva** (`Traslado`).
+- El tope de memoria es `VEREDAS_QUE_SE_RECUERDAN` = 200, y hoy guarda las de
+  **una** rejilla.
+
+**Lo que cambia.** El borrado en bloque se quita de donde el sello ya protege —el
+amasado y el cambio de estación—, y **se queda donde el sello no ve nada**: cerrar
+una celda a mano cambia por dónde se pasa **sin tocar el caudal ni el
+encharcamiento**, así que una vereda de esa misma rejilla puede cruzar por la celda
+que se acaba de tachar. La mudanza de cueva no cambia la rejilla; se mira aparte.
+
+Con eso, una vereda de primavera **duerme** el resto del año y **vuelve a valer**
+cuando su rejilla vuelve: es lo que pide §18 —«ninguna ruta se anda con otra
+rejilla»— sin tirar lo aprendido.
+
+**Módulos afectados.**
+
+1. **`Marcha`**: `forget_routes` deja de olvidar veredas; se separa en dos —lo que
+   hay que hacer siempre (avisar a `Parajes.revisar_el_mapa`) y el olvido, que sólo
+   pide quien cierra una celda—.
+2. **`BandKnowledge`**: el tope pasa a contarse por rejilla o se sube, para que
+   cuatro estaciones no se pisen entre ellas (decisión de abajo). Y `olvidar_veredas`
+   se queda para quien de verdad tenga que tirarlas.
+3. **`Pasarelas`**: nada que tocar —su regla del vado vuelve a tener veredas que
+   mirar—, pero su prueba pasa a cubrir el caso «la estación vuelve».
+4. **`TestVeredas`**: la prueba nueva de que una vereda sobrevive a un ciclo de
+   estaciones y se vuelve a andar cuando su rejilla vuelve.
+
+**Decisiones del usuario (2026-09-14).**
+
+- **El tope se cuenta por rejilla**: 200 veredas por estación, así que ninguna
+  echa a las de las otras antes de que su estación vuelva.
+- **Cerrar una celda a mano sigue tirándolas todas**, por ahora: es lo de hoy y es
+  seguro. Afinarlo —tirar sólo las que pasan por esa celda— queda dicho como deuda.
+- **Todas las tareas seguidas.**
+
+**Riesgos técnicos.**
+
+- **Cambia la partida**: con más veredas guardadas se buscan menos caminos y la
+  gente anda por donde ya anduvo. Las firmas de las sondas se desplazan una vez.
+- **Memoria**: 200 veredas de una rejilla pasan a ser 200 repartidas entre cuatro;
+  si el tope se queda corto, el ciclo las expulsa antes de que su estación vuelva y
+  el cambio no sirve de nada. Es la decisión de abajo.
+- **Cerrar una celda sigue tirándolo todo**: es un borrado en bloque por una celda.
+  Afinarlo —tirar sólo las veredas que pasan por ahí— es trabajo aparte y se dice.
+
+### Cómo quedó: lo aprendido dura el año (2026-09-14)
+
+**Lo que cambió, en tres sitios:**
+
+- `Marcha.forget_routes` **ya no olvida las veredas**: tira las rutas en curso y
+  levanta `Parajes.revisar_el_mapa`, nada más. Quien sí las tira es
+  `Marcha._cerrar_y_olvidar`, el único caso en que cambia por dónde se pasa **sin
+  cambiar el río**, que es lo que el sello no ve.
+- `BandKnowledge.vereda` **ya no borra la caducada al leerla**: la deja dormida.
+  Eso era lo que de verdad impedía que una vereda llegase a la estación siguiente,
+  y no estaba en el plan: se vio al escribir la primera prueba.
+- El tope es **200 por rejilla** (decisión del usuario), con su lista de orden por
+  sello, así que una estación muy andada no echa a las otras.
+
+**Medido** con `VeredasProbe` (sitio 56, `SEMILLA=42`, cuatro jornadas por tramo:
+primavera, invierno y primavera otra vez):
+
+| | guardando las veredas | tirándolas, como antes |
+|---|---|---|
+| búsquedas por jornada, primera primavera | 152,0 | 152,0 |
+| búsquedas por jornada, al volver la primavera | **150,5** | **151,0** |
+| veredas guardadas al final | 350 | 200 |
+
+**O sea: un 0,3 %.** El cambio es el correcto —lo aprendido no se tira, y la regla
+del vado de §20 vuelve a tener veredas que mirar—, pero **no es una mejora de
+rendimiento**, y conviene que quede escrito antes de que alguien lo cuente como
+tal. La sonda dice por qué: **el tope de 200 se satura en cuatro jornadas**, así
+que de una estación a la siguiente sobrevive sólo lo último que se anduvo, y los
+destinos cambian a diario. Si alguna vez se quiere el ahorro de verdad, la palanca
+es el tope o la clave de la vereda, no el olvido.
+
+**Deuda que queda:** cerrar una celda a mano sigue tirando **todas** las veredas,
+no sólo las que cruzan por ella.
 ## 19. La temperatura, y el abrigo que se lleva puesto
 
 > **Spec (2026-09-12).** Escrita con `/spec` sobre la intención de `/epoca 1`.
@@ -1263,12 +2098,66 @@ un permiso sobre el mapa entero, y sobre el terreno no aparecía nada.
 | | |
 |---|---|
 | La técnica | **Permite construir**, no abre nada por sí sola |
-| Dónde | Lo elige **la banda**, no el jugador: el cruce de sus veredas (§18) que más rodeo ahorra |
-| Hasta qué ancho | **Dos celdas de agua**, unos 16 m. Decisión del usuario |
+| Dónde | Lo elige **la banda**, no el jugador. Por este orden: **(1) hacia la parte del valle que no se alcanza** —la más grande, mirando la rejilla de caminos—; (2) **un vado de sus veredas (§18) que la crecida cierra**; (3) el cruce que más rodeo ahorra |
+| Hasta qué ancho | **Dos celdas de la rejilla de caminos**, 80 m (la celda es de 40 m; aquí ponía «unos 16 m», que era falso). Decisión del usuario |
 | Qué cuesta | **40 de leña y 6 jornadas-persona**. Decisión del usuario: el doble de lo que cuesta aprender la técnica |
 | Qué abre | **Ese cruce, las cuatro estaciones**, que es lo que un vado no da |
-| Cómo se pierde | Cuando la crecida de la estación que entra pasa de `Hydrography.FORD_IMPASSABLE` en esa celda. **Sin sorteo** |
-| Dónde vive | `Pasarelas` (`sim/`), `Navgrid._hay_pasarela`, `PasarelaView` (`vista/`) |
+| Cómo se pierde | Cuando la crecida de la estación que entra pasa **de lo que la pasarela salva** —calado 1,0, `Hydrography.tope_de_vado` con pasarela— en esa celda. **Sin sorteo** |
+
+> **Corregido el 2026-09-14, a petición del usuario.** Se perdía cuando la
+> crecida pasaba de `FORD_IMPASSABLE` (0,70), que es **el mismo umbral que cierra
+> el vado**: la pasarela sólo sobrevivía donde el cauce no se cerraba nunca, o sea
+> donde no hacía falta, y la riada se la llevaba justo la estación en que servía.
+> Y la elección sólo miraba rodeos con el agua de hoy: un río que la banda cruza
+> andando en verano no salía nunca, porque su vereda no rodea nada. Queja del
+> usuario: «no se están construyendo pasarelas; gracias a ellas deberíamos tener
+> acceso a todo el mapa».
+| Se ven | En la ventana **Obras**, sección «Pasarelas de troncos»: las armadas, la que está en marcha con sus jornadas, y **por qué no hay ninguna** —sin técnica, sin cruce que valga, sin nadie explorando o sin leña— |
+| Dónde vive | `Pasarelas` (`sim/`), `Navgrid._hay_pasarela`, `PasarelaView` (`vista/`), `PanelObras` (`ui/`) |
+
+> **Corregido otra vez el 2026-09-14, con la queja repetida** —«creo que no se
+> están construyendo pasarelas… gracias a ellas deberíamos tener acceso a todo el
+> mapa»—, y esta vez la causa estaba **debajo** de la regla:
+>
+> - **Las dos reglas de antes se apoyaban en las veredas** (§18), y a la otra
+>   orilla de un río que la banda no ha cruzado nunca **no hay vereda**: esa mitad
+>   del valle no se abría jamás. Ahora lo primero que se mira es la rejilla de
+>   caminos: desde la zona de casa, ¿hay otra zona al otro lado de dos celdas de
+>   agua? De las que haya, la más grande. Lo comprueba `TestPasarela` con una
+>   orilla sin vereda ninguna.
+> - **Y rehacer la rejilla borra todas las veredas aprendidas**
+>   (`Marcha.forget_routes` → `BandKnowledge.olvidar_veredas`), o sea **cada cambio
+>   de estación y cada pasarela nueva**. Así que la regla del vado casi nunca tenía
+>   veredas que mirar. Se deja dicho aquí y en §18: es de donde viene, en el fondo,
+>   que no se construyeran. **Arreglado el mismo día** —las veredas ya duran el
+>   año, §18—, así que la regla del vado vuelve a tener de dónde elegir. La primera versión de la regla nueva pedía la rejilla
+>   con `sim.navgrid()` y **disparaba ese borrado el mismo día**; ahora lee la que
+>   ya hay.
+> - **No abre todo el valle**: lo que está al otro lado de un cauce de más de 80 m
+>   —o de un acantilado— sigue sin abrirse, y la ventana de Obras lo dice.
+
+> **Y la regla nueva salió con dos fallos, corregidos el mismo día** con dos
+> quejas más del usuario. Los dos son del mismo sitio —`_hacia_lo_que_no_se_alcanza`—
+> y conviene que queden escritos, porque los dos son de creerse una cifra por lo
+> que parece decir su nombre:
+>
+> - **«Está construyendo pasarelas de troncos en el monte, no para cruzar los
+>   ríos… las pasarelas son para ponerlas de vereda a vereda de ríos.»** El hueco
+>   se buscaba con `cost <= Navgrid.BLOCKED`, y en la rejilla eso significa **«no
+>   se pasa»**, no «hay agua»: un cantil cuenta igual que un cauce. Se armaban
+>   pasarelas sobre roca seca. Ahora la celda tiene que llevar agua, preguntado
+>   **al terreno y con el mismo criterio que la regla del vado**
+>   (`crossing_difficulty_at` + `Hydrography.can_cross`). El intento intermedio
+>   —`Navgrid.moja`— parecía lo suyo y no vale: se rinde y dice que no en cuanto
+>   la rejilla no guarda la máscara de vados entera, y dejó tres pruebas en rojo
+>   sin elegir ningún cruce.
+> - **«Ha hecho una pasarela para cruzar el río pegado al borde del mapa, como a
+>   3 km de la cueva. Deben estar cerca de la cueva, la clave es la
+>   eficiencia.»** Se elegía la zona más grande del mapa estuviera donde
+>   estuviera. Ahora se puntúa **lo que abre entre lo que cuesta llegar**, y no
+>   se mira nada más allá de 1 500 m del abrigo —la escala en que la banda sale y
+>   vuelve en el día—. `TestPasarela` cubre las dos con un cantil seco y un mapa
+>   de dos ríos.
 
 **Cómo elige el sitio, y por qué así.** La vereda que más se desvía de la línea
 recta entre sus dos extremos es, por definición, la que rodea algo, y lo que se
@@ -1284,3 +2173,694 @@ la caza del Paleolítico termina en el propulsor, y los factores que el arco
 daba a la caza (×1,70 menor, ×1,20 mayor) vuelven con él en el Mesolítico.
 
 ---
+
+## 21. El hogar: cuidarlo va por delante de todo lo demás
+
+El fuego se apaga por dos motivos y los dos son del diseño: que se acabe la leña
+y que **no lo cuide nadie** —un hogar sin nadie encima se apaga en una noche, y
+es lo que hace que el mínimo de gente en el oficio de Hogar signifique algo—.
+
+Lo que estaba mal (2026-09-13): dentro de `Hogar._tend_camp`, **la obra en cola
+iba por delante del fuego**. Quien llevaba el hogar se ponía con la obra antes
+de mirarlo, y si a esa obra le faltaba material se pasaba la jornada esperándolo
+sin hacer nada más. Dos consecuencias, y el usuario vio las dos: el fuego se
+apagaba esa noche «teniendo leña» —porque nadie lo había cuidado— y no se volvía
+a prender mientras la obra siguiera en cola, que podían ser días.
+
+El orden es ahora:
+
+1. **Prender, si está apagado.** Cuesta media jornada de alguien y leña
+   (`HEARTH_RELIGHT_DAYS`, `HEARTH_RELIGHT_WOOD`), y no se hace nada más hasta
+   conseguirlo: sin brasas no se ahúma, no se cura y no se trabaja de noche.
+2. **Darlo por cuidado**, que es lo que impide que se apague esta noche. Echar
+   un leño es un momento, así que no gasta la jornada.
+3. Y después, lo demás: la obra en cola, el agua, la pintura, los heridos y el
+   secadero.
+
+Lo defienden `TestCampProjects.test_con_una_obra_parada_el_hogar_se_sigue_cuidando`
+y `..._el_hogar_apagado_se_prende_primero`.
+
+**Y la banda se junta alrededor** (`CorroDelHogar`): quien está en el abrigo sin
+tajo en el monte —ocioso, comiendo, al hogar o tallando— se pone en uno de los
+diez sitios de los cinco troncos que rodean la hoguera, y quien no coge sitio se
+queda por la campa. Ver [GRAFICOS.md](GRAFICOS.md) §4.1.
+
+---
+
+## 22. Lo que el jugador prioriza: materiales, presas y la cola del taller
+
+> **Spec (2026-09-14)**, de `/spec`. Petición del usuario: «tenemos que tener
+> una forma de dar prioridad a los materiales, para que prioricen recoger unos
+> sobre otros a elección del jugador; lo mismo con la manufactura y con la caza
+> —priorizar conejos, o uros—. Quiero también ver la cola de producción y poder
+> editarla».
+
+**Qué hay hoy, y por qué no basta.** Las prioridades que existen son **de
+persona y oficio**: quién recolecta, quién caza, quién talla. Dentro del oficio
+no decide nadie:
+
+- el recolector se trae **todo lo que hay en temporada** en su sitio, hasta
+  llenar lo que carga, y el tope del almacén sólo le hace dejar en el monte lo
+  que ya sobra;
+- el cazador elige la pieza por **raciones entre distancia**, y ya está;
+- el taller hace **la pieza menos cubierta** de lo que pide el trabajo, sin que
+  se vea qué va a hacer después, y la meta del utillaje es un tope, no un
+  encargo —decisión del 2026-09-13—.
+
+Así que el jugador que necesita sílex para la talla laminar, o piel para el
+invierno, no tiene más palanca que poner más gente: no puede decir **qué**.
+
+### La prioridad
+
+**Cada material, cada especie y cada tipo de pieza lleva un nivel**: **alta**,
+**normal**, **baja** o **nunca**. Todo empieza en normal. Varios pueden compartir
+nivel. Se guarda con la partida, por campamento —ver §23—.
+
+**Materiales** —lo que recogen recolección, materia prima, pesca y marisqueo—.
+Cambia dos cosas:
+
+1. **Adónde va la gente.** Al elegir paraje, pesa lo que abunda de alta
+   prioridad: entre dos sitios igual de alcanzables, se va al que tiene más de
+   lo prioritario aunque tenga menos de lo demás. Lo que está en **nunca** no
+   cuenta para elegir sitio.
+2. **Qué entra primero en la carga.** Cuando no cabe todo, entra primero lo de
+   alta, luego normal, luego baja. Lo de **nunca** se deja en el monte, igual que
+   lo que tiene el tope lleno. Lo demás se sigue cogiendo si cabe: priorizar no
+   es dejar de coger.
+
+**Especies de caza.** La prioridad **manda sobre el valor de la pieza, dentro de
+lo que tiene a su alcance**: de las piezas al alcance de la búsqueda, el cazador
+va a por las de mayor nivel, y entre las de un mismo nivel elige como hoy, por
+raciones y distancia. Así va a por el uro aunque haya un ciervo más cerca, pero
+si no hay uro a su alcance caza otra cosa. Lo que está en **nunca** no se caza
+aunque sea lo único que hay. No cambia adónde va a cazar.
+
+**Piezas del taller.** Ordenan la parte automática de la cola, abajo.
+
+### La cola del taller
+
+**Una lista visible, y editable, de lo que se va a hacer y en qué orden.** Tiene
+dos clases de entrada:
+
+- **Encargos del jugador**: una pieza y una cantidad —«3 azagayas»—. Se hacen
+  **aunque pasen de la meta del utillaje**: la meta sigue siendo un tope para lo
+  automático, y un encargo es una orden. Se añaden, se reordenan y se quitan.
+- **Lo que pide el trabajo**, marcado como automático: lo que hoy decide el
+  taller por su cuenta. Se ordena por su nivel de prioridad y, dentro del mismo
+  nivel, como hoy —lo menos cubierto primero—. **Subir o bajar una entrada
+  automática cambia el nivel de prioridad de esa pieza; quitarla la pone en
+  nunca.** Una sola palanca con dos puertas, no dos reglas.
+
+**Los encargos van delante de lo automático.** El artesano coge **la primera
+entrada que puede hacer**: la de su especialidad, con la técnica sabida, la
+herramienta previa y la materia prima en el abrigo. Una entrada que no se puede
+hacer **dice por qué** —falta aguja, falta hueso, nadie de peletería— y **no
+para la cola**: se salta y se hace la siguiente. Un encargo cumplido desaparece.
+
+Dónde se ven y se tocan las prioridades y la cola: [INTERFAZ.md](INTERFAZ.md) §4.
+
+### Criterios de aceptación
+
+- **Carga**: una persona en un sitio con avellana (alta) y baya (normal), con
+  sitio para menos de lo que hay de las dos, vuelve con avellana hasta llenar y
+  baya sólo en lo que sobre. Con la baya en nunca, vuelve sin baya aunque le
+  quepa. Prueba.
+- **Sitio**: con dos parajes igual de lejos, uno rico en sílex y otro en
+  cuarcita, y el sílex en alta, el cantero elige el del sílex; con los dos en
+  normal, el que elegía hoy. Prueba.
+- **Caza**: con un uro y un ciervo a su alcance, el ciervo más cerca y con más
+  raciones, y el uro en alta, se persigue el uro. Sin uro a su alcance, el
+  ciervo. Con el ciervo en nunca y sólo ciervo a su alcance, no se persigue
+  nada. Prueba sobre la elección de pieza.
+- **Cola, orden**: con un encargo de 2 azagayas y la demanda automática de
+  lascas, el astero hace primero las 2 azagayas; con el encargo cumplido, la
+  entrada desaparece y siguen las automáticas. Prueba.
+- **Cola, bloqueo**: un encargo de vestido sin aguja hecha aparece con su motivo
+  y el peletero hace la siguiente entrada que sí puede. Prueba.
+- **Cola, encargo sobre meta**: con la meta de azagayas cubierta, un encargo de
+  3 azagayas saca 3 azagayas más. Prueba.
+- **Cola, automático**: bajar una entrada automática la pone por detrás de las
+  del nivel normal; quitarla deja esa pieza en nunca y no vuelve a aparecer
+  mientras siga en nunca. Prueba.
+- **Lo que se ve es lo que se hace**: durante 20 jornadas con encargos y
+  prioridades puestos, la pieza que termina cada artesano es siempre la primera
+  entrada de la cola que podía hacer en ese momento. Sonda que compara la cola
+  pintada con lo terminado.
+- **Nada cambia sin tocar nada**: con todo en normal y la cola sin encargos, la
+  firma diaria de una partida con semilla fija es **la misma** que antes de este
+  trabajo durante 10 jornadas.
+- Las prioridades y los encargos **sobreviven a guardar y cargar**.
+
+### Fuera de alcance
+
+- **Prioridad de oficios o de personas**: ya existe, y no se toca.
+- **Prioridades del hogar y de la exploración**: no recogen material.
+- **Qué especie cae en las trampas** y en la red de aves: no se elige la presa.
+- **Encargos con fecha** («para el invierno») o repetidos («siempre 5»): un
+  encargo es una cantidad y se acaba.
+- **Cambiar cuánto rinde nada**: esto elige qué, no cuánto.
+
+### Plan técnico
+
+> `/plan-tarea` del 2026-09-14, contrastado contra `scripts/`. Tareas en
+> [ROADMAP.md](ROADMAP.md) «En curso». Lo que al implementar se caiga de aquí
+> se corrige aquí.
+
+**Dónde decide hoy cada cosa**, que es donde entra la prioridad:
+
+| Regla | Dónde está | Qué hace hoy |
+|---|---|---|
+| Carga | `Tajo._fill_the_basket` | Recorre la tabla de rendimientos en su orden y mete cada material mientras quepa, **tick a tick**. Con eso sólo, ordenar el recorrido no basta: en cada tick entra un poco de todo, y al llenarse el zurrón va mezclado |
+| Sitio | `Tajo._rank_known_spots` → `_best_known_spot` | Puntúa por abundancia **de la actividad**, sin distinguir material; se reordena una vez al día y se queda con los veinte mejores |
+| Presa | `Caceria._pick_quarry` | `Fauna.rations_of / distancia^0,35` entre lo que hay a `Hunt.BUSCA_PIEZA_M` |
+| Pieza | `Taller._next_piece(especialidad)` | La menos cubierta de `SettlementSim.SPECIALITY_MAKES` con demanda, técnica, herramienta previa y materia prima, por debajo de `RESERVA_UTILLAJE`; la usan `_craft`, `crafting_now`, `_workshop_short` y `SettlementSim._speciality_can_work` |
+| A quién se manda al taller | `Reparto._speciality_pressure` | La peor cobertura de lo que hace la especialidad |
+
+**Módulos afectados.**
+
+1. **`scripts/sim/Prioridades.gd`, nuevo.** `RefCounted` sin referencia al
+   simulador: `enum Nivel { ALTA, NORMAL, BAJA, NUNCA }` y tres diccionarios
+   —material (`Materia.Kind`), especie (`String` de `Fauna.SPECIES`), pieza
+   (`Tool.Kind`)— que **sólo guardan lo que no es normal**. Lo tiene
+   `SettlementSim.prioridades`, **una instancia por simulación y nada
+   estático**: así §23 se lo lleva con cada campamento sin tocarlo. No da pasos,
+   no emite señales y no pide azar: no le aplica ningún contrato de §3 de
+   SPECS salvo el de guardarse, que sale solo del recorrido de `Instantanea`.
+   El jugador lo toca por `SettlementSim` (fachada), porque cambiar un nivel de
+   material tiene que reordenar los sitios (`tajo._rank_known_spots()`).
+2. **`Tajo._fill_the_basket`, la carga.** Con todo en normal, **el mismo
+   recorrido de hoy, sin tocar**. Con algún nivel puesto: se recorre por nivel
+   —empate, el orden de la tabla—, lo de nunca se salta como lo que tiene el
+   tope lleno, y **cuando no cabe algo de un nivel, se descarga lo que la
+   persona lleva de un nivel más bajo** hasta hacerle sitio. Es lo que hace
+   verdad «vuelve con avellana hasta llenar y baya sólo en lo que sobre».
+3. **`Tajo._rank_known_spots`, el sitio.** La puntuación de cada sitio con
+   paraje se multiplica por un **peso por nivel** de lo que el paraje tiene:
+   `Σ abundancia × peso(nivel) / Σ abundancia`, sólo sobre lo que la banda
+   **sabe** que hay (`Paraje.sabidos`) —lo no averiguado no se usa para elegir,
+   igual que `Paraje.listing` no delata lo bueno—. Monte sin paraje, o sin nada
+   sabido, pesa 1. Todo en normal da 1 en todas partes. No se aplica a la caza:
+   la especie no cambia adónde se va.
+4. **`Caceria._pick_quarry`, la presa.** Fuera lo de nunca; de lo que queda,
+   gana el nivel más alto, y dentro del nivel la cuenta de hoy.
+5. **`Taller`, la cola.** `encargos: Array[Dictionary]` (`tool`, `faltan`), en
+   orden, con `encargar`, `mover_encargo` y `quitar_encargo`. **`cola(especialidad
+   := -1)` es la única función que construye la lista**: los encargos en su
+   orden y detrás lo automático —demanda mayor que cero, técnica sabida,
+   cobertura bajo `RESERVA_UTILLAJE`, nivel distinto de nunca— ordenado por
+   nivel, cobertura y posición en `SPECIALITY_MAKES`. Esa última clave es
+   explícita porque `sort_custom` no es estable, y es la que reproduce el
+   desempate de hoy. Cada entrada lleva su `motivo` si no se puede hacer (falta
+   la herramienta previa, falta un material) y quién la hará. **`_next_piece`
+   pasa a ser «la primera entrada sin motivo de `cola(especialidad)`»**, así que
+   `_craft`, `crafting_now`, `_workshop_short` y `_speciality_can_work` ven la
+   cola sin tocarse; y la ventana pinta `cola()`. `_craft` no mira la reserva
+   cuando la pieza es de un encargo, y al terminarla le resta una.
+6. **`Reparto._speciality_pressure`.** Un encargo que se puede hacer pone la
+   presión de su especialidad a cero —si no, con la meta cubierta nadie iría al
+   taller a hacerlo—, y las piezas en nunca no cuentan para la peor cobertura.
+   Sin encargos y todo en normal, la cuenta de hoy.
+7. **Ventanas** ([INTERFAZ.md](INTERFAZ.md) §4): el nivel en la fila de
+   `PanelAlmacen._material_row`, sólo en lo que se recoge; las especies en
+   `PanelTrabajos._speciality_picker` cuando el oficio es la caza —no hay
+   ventana de caza—, con las del valle (`WildlifeHerds`) y apagadas con
+   `Fauna.weapon_missing` las que no se pueden cazar; y **`PanelTaller`**, nuevo,
+   con su botón en la barra de `GameUI`. Las tres leen el estado y llaman a la
+   fachada: la vista no guarda niveles propios (SPECS §4.7).
+
+**Decisiones que la spec obliga a tomar**, las dos **del usuario, 2026-09-14**:
+
+- **El peso de cada nivel al elegir sitio**: **×2 lo alto, ×1 lo normal, ×0,5 lo
+  bajo, ×0 lo de nunca.** Es un empujón y no una orden: el sitio con lo
+  prioritario gana a uno mediano, pero un paraje el doble de rico en lo demás
+  todavía puede ganarle. Es una decisión, no una medida —no hay corrida previa
+  de la que saliera—.
+- **Lo que se descarga del zurrón vuelve al paraje**, como si no se hubiera
+  cogido: se le devuelve lo que se le restó y el libro de trabajo no lo apunta.
+  Es lo más cercano al «se deja en el monte» de la spec.
+
+Y una que la spec no contempla y se resuelve aquí: **quitar una entrada
+automática la deja en nunca, y hay que poder sacarla de ahí**. La ventana Taller
+lleva al pie una línea de «apartadas» con las piezas en nunca y un botón para
+devolverlas a normal; sin eso, quitar una entrada sería irreversible desde la
+única ventana donde se quita.
+
+**Orden de dependencias.**
+
+1. **La firma de antes, lo primero y sin tocar un `.gd`**: diez jornadas con
+   semilla fija sobre el árbol de hoy. Después ya no se puede sacar.
+2. `Prioridades` y su sitio en `SettlementSim`: lo leen todas las demás.
+3. Presa, carga y sitio no dependen entre sí.
+4. La cola antes que el reparto, y las dos antes que `PanelTaller`.
+5. El guardado se comprueba con todo el estado ya puesto.
+
+**Riesgos técnicos.**
+
+- **La firma cambia aunque la partida no.** `Instantanea` recorre por reflexión,
+  así que tres diccionarios vacíos nuevos cambian el SHA desde la jornada cero.
+  «Nada cambia sin tocar nada» se comprueba con `Cotejo` **ignorando esos
+  campos**; si `Cotejo` no sabe ignorar, se le enseña, y se dice.
+- **Coste de la cola.** `_next_piece` se pregunta mucho —`crafting_now` para la
+  chapa de cada artesano, `_craft` en cada paso— y ya hoy llama a
+  `tool_demand()`, que construye un diccionario, dentro de un bucle. Por eso
+  `cola` admite especialidad y sólo construye esa. Si el F3 enseña al taller, se
+  mide antes de optimizar.
+- **Guardados de antes.** Un fichero sin estos campos tiene que cargar con todo
+  en normal y sin encargos; si `Instantanea.volcar` no lo tolera, se sube la
+  versión de `Guardado` y se dice.
+- **Deuda heredada, no se toca**: `craft_progress` es de la persona y no de la
+  pieza, así que al saltar a un encargo el progreso de la anterior se lo lleva
+  la nueva. Pasa hoy igual cuando cambia la pieza menos cubierta.
+
+### Cómo quedó (2026-09-14)
+
+Construido y en verde. Lo que hace el juego hoy:
+
+| Regla | Dónde vive | Qué hace |
+|---|---|---|
+| Los niveles | `Prioridades` (`sim/`), colgado de `SettlementSim.prioridades` | Material, especie y pieza; **sólo se guarda lo que no es normal**, y `hay_algo_puesto()` es el interruptor del camino de siempre. Se toca por `fijar_prioridad_material/especie/pieza`, y el de material reordena los parajes ahí mismo |
+| La carga | `Tajo._por_prioridad` y `Tajo._soltar_lo_de_menos_nivel` | Se recorre por nivel, lo de nunca se deja en el monte, y cuando no cabe algo de un nivel se suelta lo de nivel inferior que ya se llevaba. **Lo soltado vuelve al paraje** (`ResourceField.give_back_to_cell`): se le devuelve lo que se le restó y el libro de trabajo no lo apunta |
+| El sitio | `Tajo._peso_de_prioridad` | Pesa la puntuación del paraje con `Σ abundancia × peso / Σ abundancia` sobre **lo que la banda sabe** que hay ahí. Uno si no hay prioridades, si el monte no tiene paraje, o si es caza |
+| La presa | `Caceria._pick_quarry` | El nivel va aparte de la puntuación: manda, pero sólo entre lo que hay a su alcance. Lo de nunca no se caza aunque sea lo único |
+| La cola | `Taller.cola_de_trabajo(especialidad)` | **La única lista**: encargos delante en su orden, automáticas detrás por nivel, cobertura y orden de `SPECIALITY_MAKES`. `_next_piece` es «la primera sin motivo», así que el artesano y la ventana miran lo mismo |
+| Los encargos | `Taller.encargos`, `encargar_pieza`, `mover_encargo`, `quitar_encargo` | Se hacen **aunque pasen de la meta** —la meta es un tope de lo automático—, y al cumplirse desaparecen |
+| Quién va al taller | `Reparto._speciality_pressure` | Un encargo hacedero pone la presión a cero; lo apartado no cuenta para la peor cobertura |
+
+Lo que se ve y se toca, en [INTERFAZ.md](INTERFAZ.md) §4. Y dos cosas que sólo
+se saben por haberlo construido:
+
+- **Los nombres de método de una fachada son globales de hecho.**
+  `tools/LlamadasHuerfanas.gd` casa por nombre, así que `cola` y `encargar`
+  —que ya eran del horno de rejillas y del Wayfinder— daban cinco huérfanas
+  falsas. Pasaron a `cola_de_trabajo` y `encargar_pieza`.
+- **El desempate de la cola se escribe.** `sort_custom` no es estable, y al
+  empezar la partida media docena de piezas están a cobertura cero: sin la
+  clave del orden de `SPECIALITY_MAKES`, dos corridas con la misma semilla
+  dejarían de dar la misma partida (SPECS §3.3).
+
+---
+
+## 23. Varios campamentos, migrar, y la partida que no se mira
+
+> **Spec (2026-09-14)**, de `/spec`. Petición del usuario: «sistema para
+> migración y simulación cuando estamos fuera», y en el segundo `/depurar` del
+> mismo día: «sería mejor que continúen simulando mientras estoy en otro mapa».
+> Sustituye a la visita con el reloj parado, que se dejó como arreglo mínimo.
+
+**Qué hay hoy.** La banda vive en **un** mapa, el primero. Entrar en otro es una
+visita sin gente y **con el reloj parado**: si corriera, al volver la banda
+estaría en otra fecha que el mundo. Y **nada simula lo que no se está mirando**:
+la simulación de la banda depende de la escena, que se destruye al cambiar de
+mapa. Por eso no se puede migrar, ni mirar otro valle mientras la banda vive.
+
+**Esto cambia tres decisiones escritas**, y lo dice aquí para que no queden dos
+reglas: la de **una sola banda en un mapa** —SPECS §6.4, del 2026-09-14—, la de
+**varias bandas vivas a la vez, fuera de alcance** —INTERFAZ §7.5 y SPECS §6.4— y
+la **visita con el reloj parado** —SPECS §6.4—.
+
+### Lo que se pide
+
+1. **Campamentos.** La partida empieza con uno, en el primer mapa. Un
+   campamento es un mapa con gente, con su propia despensa, utillaje, obras,
+   parajes, prioridades y cola del taller (§22). **No hay tope de campamentos.**
+2. **Migrar.** El jugador elige **quién sale** de un campamento y **a qué sitio
+   descubierto** va. Salen por el borde del mapa cargando lo que pueden —la
+   misma regla del traslado dentro del valle—, viajan **las jornadas que salgan
+   de la distancia y el relieve**, con la marcha de la expedición, gastan
+   raciones por persona y jornada y pueden tener percances por el camino. Al
+   llegar:
+   - a un mapa **sin campamento**, lo fundan;
+   - a uno **abandonado**, lo vuelven a ocupar con todo lo que se dejó;
+   - a uno **con gente**, se suman a él.
+3. **Mover gente entre campamentos, cuando se quiera**, con la misma regla: se
+   elige quién y adónde, y viaja. Mientras viaja no está en ningún campamento.
+4. **Todo lo que tiene gente se simula siempre**, se mire o no: **la misma
+   simulación**, sin dibujar, al mismo reloj. Lo que no se mira no es una cuenta
+   resumida: al entrar, el campamento está exactamente como si se hubiera
+   estado mirando.
+5. **Una sola fecha para toda la partida.** Todos los campamentos, los que
+   viajan y los mapas de visita van al mismo reloj; la velocidad y la pausa son
+   de todos. **La noche se acelera cuando no trabaja nadie en ningún
+   campamento**; los que viajan no la frenan.
+6. **Un campamento sin gente queda abandonado**: conserva su estado —obras,
+   almacén, parajes— y no se simula hasta que alguien vuelva.
+7. **Las decisiones de cualquier campamento salen igual**, con el nombre del
+   campamento en la tarjeta: se para el reloj de todos y se decide desde donde
+   se esté. Los avisos sin decisión van a la crónica con el nombre del
+   campamento.
+8. **Cambiar de campamento**: desde el mapa regional se entra en cualquiera, y
+   dentro del juego una **lista de campamentos** —gente, estado, alerta— salta
+   directo a otro sin pasar por el regional. Ver [INTERFAZ.md](INTERFAZ.md) §4.
+9. **La visita** es entrar en un mapa sin campamento: sin gente, **con el reloj
+   corriendo**, y con la niebla de §4.
+
+### Criterios de aceptación
+
+- **Lo que no se mira es la misma partida**: con semilla fija, un campamento
+  simulado 10 jornadas sin dibujar mientras se mira otro mapa da **la misma
+  firma diaria**, jornada a jornada, que el mismo campamento mirado esas 10
+  jornadas. Sonda de cotejo, dos corridas.
+- **La fecha es una**: tras 5 jornadas mirando el campamento B, el campamento A
+  y los viajeros están en la misma jornada y hora que B. Prueba.
+- **Migrar cuesta**: un grupo que migra a un sitio a distancia D tarda las
+  jornadas que salen de D y del relieve, gasta raciones por persona y jornada
+  del campamento de origen y llega con lo que cargó. Prueba con un sitio puesto a
+  mano; y dos destinos a distinta distancia tardan distinto.
+- **Llegar funda, reocupa o suma**: las tres, cada una con su prueba —en la de
+  reocupar, las obras y el almacén que se dejaron están—.
+- **Un campamento vaciado** se guarda y no gasta simulación: su jornada no avanza
+  ni cambia su estado mientras está vacío. Prueba.
+- **Decisiones de otro campamento**: una decisión levantada en un campamento que
+  no se mira para el reloj de todos y sale con su nombre. Prueba.
+- **La noche**: con un campamento durmiendo y otro con alguien trabajando, no se
+  acelera; con los dos durmiendo, sí. Prueba.
+- **Guardar y cargar** una partida con dos campamentos y un grupo de viaje:
+  vuelven los dos y el grupo sigue en su jornada de camino. Prueba de ida y
+  vuelta.
+- **El coste se mide y se escribe**: lo que cuesta cada campamento simulado sin
+  dibujar, en milisegundos por jornada de juego y en fotograma, con 1, 2 y 4
+  campamentos, en [ESTADO.md](ESTADO.md). **No hay tope**, pero la cifra tiene
+  que estar: sin ella no se sabe cuándo la partida empieza a ir lenta.
+
+### Fuera de alcance
+
+- **Bandas de IA** o gente que no sea del jugador en los campamentos.
+- **Caminos entre mapas** que se construyan, o viajes con varios tramos: se va
+  de un campamento o sitio a otro.
+- **Comercio entre campamentos** más allá de lo que carga quien viaja.
+- **Una cuenta resumida** para campamentos lejanos o muchos a la vez: se decidió
+  simular siempre de verdad.
+- **Cambiar la simulación** de un campamento: se ejecuta la que hay, fuera de la
+  pantalla.
+
+### Plan técnico
+
+> `/plan-tarea` del 2026-09-14, contrastado contra `scripts/`. Tareas en
+> [ROADMAP.md](ROADMAP.md) «En curso». Lo que al implementar se caiga de aquí se
+> corrige aquí.
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+| Hecho | Dónde | Por qué importa |
+|---|---|---|
+| **La partida es de la escena.** `SettlementSim`, `TerrainGenerator`, `WildlifeHerds`, `ResourceField` y las `CaveMouth` son nodos de `DemoMain`, y `change_scene_to_file` los destruye | `DemoMain._start_settlement` y `_levantar_*` | Lo que no se mira no puede seguir vivo si vive en la escena. Hoy sólo sobrevive en disco (`Guardado`) |
+| **La escena todavía decide partida.** `_check_discoveries` descubre cuevas y escribe en la crónica, `_on_tecnica_aprendida` llama a `sim.tell_technique`, `_on_campamento_trasladado` reelige tajos | `DemoMain`, colgado de `hour_passed`, `tecnica_aprendida` y el traslado | Un campamento que no se mira dejaría de descubrir, de contar técnicas y de elegir tajos: **otra partida**, y la firma lo delataría |
+| **El reloj es de cada simulación.** Cada `SettlementSim` lleva su `day`, `hour`, `_pendiente`, `time_scale` y su noche acelerada | `SettlementSim._process` | Dos simulaciones con su propio `_process` se desincronizan en cuanto una salta la noche y la otra no |
+| **La estación y el año son globales y los avanza cada simulación** | `SettlementSim._advance_local_season` escribe `GameState.season` y `GameState.year` | Con dos campamentos, la primavera llegaría dos veces |
+| **La fauna ya va en el paso fijo**: con partida, el fotograma sólo pinta | `WildlifeHerds._process` → `avanzar` desde el paso | Bien: dejar de dibujar no cambia la caza |
+| **El terreno construye malla y agua dentro de `generate`** | `TerrainGenerator.generate` → `malla._create_terrain_mesh`, `_create_water` | No hay hoy un modo «sólo datos»: un campamento sin mirar arrastra su malla, y la memoria es el riesgo gordo |
+| **Viajar fuera del mapa no depende de la distancia**: la expedición está fuera `JORNADAS_FUERA := 12` | `Expedicion` | «Las jornadas que salgan de la distancia y el relieve» no tiene hoy regla ninguna que reutilizar |
+| **El guardado ya es por mapa**, con `sitio_<n>.sav` y la partida como carpeta | `Guardado`, `Partidas` | Varios campamentos caben: un fichero cada uno, más lo que es de la partida |
+
+**Módulos afectados.**
+
+1. **`scripts/region/Campamentos.gd`, nuevo — el registro.** `static var` con los
+   campamentos vivos, cada uno un `Node3D` **colgado de la raíz del árbol y no de
+   la escena**, con su terreno, campo, fauna, cuevas y simulación dentro. Así
+   sobreviven a `change_scene_to_file`. **Cambia el contrato de SPECS §2.2 y
+   §6.4, y se declara**: no es un autoload —nada en `project.godot`—, pero sí es
+   estado que vive fuera de las escenas, y SPECS dice que eso va en estáticas con
+   su porqué. Aquí la estática es sólo el índice; los nodos cuelgan de la raíz
+   porque un `Node` que simula necesita estar en el árbol.
+2. **`scripts/sim/Campamento.gd`, nuevo — un mapa con gente.** Lo que hoy monta
+   `DemoMain._start_settlement` **sin la vista**: terreno, campo, fauna, cuevas,
+   simulación y el cableado de §2.3. Y la lógica de partida que hoy está en la
+   escena —descubrir cuevas, contar técnicas, reelegir tajos— **se muda aquí**,
+   para que corra se mire o no. Contrato: construye, no dibuja; `DemoMain`
+   pasa a ser la **vista** de un campamento, no su dueño.
+3. **`scripts/sim/RelojDeLaPartida.gd`, nuevo — una sola fecha.** Da los pasos de
+   `PASO_FIJO` **a todos los campamentos por igual** en cada fotograma, lleva
+   `time_scale` y la pausa de todos, decide la noche acelerada con
+   `nadie_trabaja` de **todos**, y gira estación y año **una vez**.
+   `SettlementSim._process` deja de dar pasos por su cuenta; `_advance` y el
+   contrato de §3.1 y §3.2 no cambian —mismo tamaño de paso, mismas señales—.
+   `_advance_local_season` deja de escribir `GameState` y lo pide al reloj.
+4. **`scripts/sim/Viaje.gd`, nuevo — los que están en camino.** Un grupo con sus
+   personas, lo que carga, origen, destino y jornada de llegada; avanza por
+   jornadas del reloj, no por pasos, porque fuera del mapa no hay monte que
+   simular. Al llegar llama a `Campamentos` para **fundar, reocupar o sumar**.
+5. **`Expedicion` y `Traslado`**, lo que se reutiliza: la salida por la puerta
+   del valle (`Expedicion.puerta_del_valle`) y cargar lo que cabe (`Traslado._cargar`).
+   No se copian: se llaman.
+6. **`Guardado` y `Partidas`**: un `sitio_<n>.sav` por campamento, abandonados
+   incluidos, y en la cabecera de la partida **los viajes y la fecha**. Se sube
+   `Guardado.VERSION`: un fichero de una sola banda se sigue abriendo como
+   partida de un campamento.
+7. **`GameUI` y `BarraSuperior`**: las decisiones se escuchan de **todos** los
+   campamentos y paran el reloj de la partida, con el nombre del campamento en la
+   tarjeta. Las ventanas de INTERFAZ §4 —lista de campamentos, ficha para migrar y
+   mover gente— son un panel nuevo, `PanelCampamentos`.
+8. **`RegionMap`**: entrar en un mapa con campamento es mirarlo; sin campamento,
+   una visita **con el reloj corriendo**. `Expedition.visita` y
+   `DemoMain._montar_la_visita` dejan de parar el reloj.
+
+**Decisiones del usuario (2026-09-14).**
+
+- **Se hace la fase 1 y se para en la puerta**: sacar el campamento de la escena,
+  el reloj único y dos campamentos vivos, y enseñar la firma y el coste antes de
+  construir la migración encima.
+- **Las jornadas de viaje salen del andar de siempre**: se recorre el relieve
+  regional con el mismo coste por metro del valle (`Traversal.pace_fraction`) y
+  las horas útiles de una jornada. No se inventa una cifra de kilómetros.
+- **Los percances del camino son un riesgo propio del viaje**, no el de la caza:
+  una probabilidad por persona y jornada de camino. **Decidido al llegar a la
+  fase 2 (2026-09-14)**: la misma cuenta que una jornada de expedición
+  (`Mishap.chance`) —4 % de base, ×2,2 si el tramo del día es canchal o roca,
+  ×1,8 con cansancio—; se llega herido, no se muere.
+- **El valle de destino se prepara al mandar el viaje** (2026-09-14): si su
+  relieve fino no está horneado, la ficha lo descarga y lo hornea antes de
+  confirmar, como fundar hoy. Al llegar, el campamento se monta sin red.
+- **Las tareas 7 a 16, todas seguidas** (2026-09-14).
+- **Se miden las tres corridas** de la puerta: 1, 2 y 4 campamentos.
+
+**Orden de dependencias.**
+
+1. **Primero, medir si cabe** —la recomendación del ROADMAP, y es la puerta del
+   resto—: sacar `Campamento` de `DemoMain`, el reloj único, y **dos campamentos
+   vivos a la vez**, uno mirado y otro no. Con eso se miden la firma (el criterio
+   de «lo que no se mira es la misma partida») y el coste con 1, 2 y 4. Si un
+   campamento sin mirar cuesta lo que hoy cuesta la escena entera, **se para y se
+   pregunta** antes de construir migración encima.
+2. Después, el viaje y la llegada.
+3. Después, guardar y cargar con varios campamentos y viajes.
+4. Al final, las ventanas y la visita con el reloj corriendo.
+
+**Lo que cambió al implementarlo (2026-09-14).**
+
+- **Había una cuarta cosa de partida en la escena**: `_on_dia_para_el_paisaje`
+  fijaba el caudal del río junto a la nieve y el color. Va al campamento.
+- **La tarea 3 cupo en la 2**: mudar la lógica de partida era parte de sacar el
+  campamento, y la firma igual la cubre.
+- **La pausa no tiene dueño aparte.** La interfaz y las decisiones siguen tocando
+  la velocidad de una simulación, y el reloj adopta lo que cambie en cualquiera.
+  Así la barra de arriba no se entera de que hay varios.
+- **La estación se gira con una marca, no con un contador.** `gira_la_estacion`
+  la tiene sólo el primer campamento del reloj; los demás hacen lo suyo con la
+  estación ya girada. **Deuda para la fase 2**: esto supone que todos cumplen
+  estación la misma jornada, y un campamento fundado a mitad de estación
+  llevaría su `season_day` desfasado. Al fundar, `season_day` tiene que salir de
+  la fecha de la partida.
+- **`DemoMain` todavía monta su propio campamento como hijo**: mirar un
+  campamento que ya existe —entrar desde el regional o desde la lista— necesita
+  montar la vista sobre un campamento ya montado, y eso es la tarea 14. Para la
+  puerta basta la sonda, que monta campamentos sin vista colgados de la raíz.
+- **En la suite no hay árbol** (`Engine.get_main_loop()` es nulo mientras corre
+  el `_init` de `RunTests`), así que lo que necesita la raíz —el registro, el
+  cambio de escena— se comprueba en `CampamentosProbe`, no en una prueba.
+- **La sonda reproduce a `TironAnualProbe` paso a paso**, incluida la resolución
+  del relieve que pone la escena (825, no el 513 del script): comparar contra
+  otro instrumento es comparar dos partidas (§22).
+
+- **La vista decidía partida en un sitio más, y lo cazó la firma**:
+  `Cumbres._find_peaks()` es perezoso y la primera vez apunta en la crónica «hay
+  un alto que nadie sabe cómo subir». Lo llamaba primero el alfiler de cima al
+  montar la escena; sin escena, nadie en diez jornadas. Ahora lo llama el
+  campamento (`mirar_las_cumbres`) en el mismo momento.
+- **Y el reloj tenía que respetar la pausa del arranque**: `setup` deja la
+  simulación parada, y el primer `dirigir` le ponía la velocidad del reloj.
+- **`dirigido` y `gira_la_estacion` no entran en la firma** (`Instantanea.FUERA`):
+  son cómo se lleva el reloj, y con ellas dentro un campamento mirado y el mismo
+  sin mirar darían firmas distintas siempre.
+
+- **La puerta dio que la partida es la misma y que la CPU no cabe** (ESTADO §2):
+  memoria ~130 MB por campamento, pero cada uno es una simulación entera en un
+  solo núcleo, y a ×5 no caben dos. Quitar lo que sobraba —el agua de la casa
+  recordada, no pintar cuerpos sin mirar— dio un 8 %. **El riesgo de la memoria
+  resultó no ser el gordo; el gordo es la CPU.**
+
+**Riesgos técnicos.**
+
+- **La memoria.** La sonda anual marca 1,3 GB de RAM con un mapa; la malla, el
+  agua y la colisión se construyen dentro de `generate`. Si cuatro campamentos
+  son cuatro veces eso, «no hay tope» choca con la máquina. La fase 1 lo mide;
+  si hace falta un `generate` sin malla para lo que no se mira, es una tarea
+  nueva y se dice.
+- **Construir un mapa tarda segundos** (`terrain.generate` con caché), y fundar al
+  llegar lo haría a mitad de partida: un tirón. Se mide en la misma corrida.
+- **Todo lo que la escena hace por la partida** hay que encontrarlo. Hay tres
+  localizados; puede haber más, y la firma de dos corridas es lo que los caza.
+- **Las decisiones** se levantan desde dentro de un paso y la interfaz para el
+  reloj ahí mismo (SPECS §4.6). Con el reloj único, parar a todos a mitad de la
+  vuelta de campamentos tiene que cortar igual que hoy corta a mitad de fotograma.
+- **La visita con niebla** (punto 9) depende de la spec de la niebla de §4, que
+  no está hecha: aquí la visita corre el reloj y se ve como hoy.
+- **Deuda heredada**: `GameState.home`, `population` y `food` son de una sola
+  banda. Con varios campamentos dejan de tener sentido como globales; se
+  retiran donde estorben, y lo que los lea se apunta.
+
+### Plan técnico: un hilo por campamento
+
+> `/plan-tarea`, 2026-09-14, **decisión del usuario tras la puerta**: la partida
+> sin mirar es la misma, pero cada campamento es una simulación entera en un
+> solo núcleo y a ×5 no caben dos (ESTADO §2). Con doce núcleos, la salida que
+> cumple «no hay tope» es que cada campamento dé su paso en su hilo. **Aún sin
+> código**: esto es lo que hay que resolver antes.
+
+**Decisiones del usuario (2026-09-14)**: se hacen las tareas 1b-1 a 1b-4 —sacar
+del paso lo compartido, con el reloj todavía en serie— y se para antes de meter
+hilos; y **las decisiones se contestan en la barrera entre pasos**, aunque cambie
+la partida de las sondas, porque es lo que hace un jugador.
+
+**La regla que lo hace posible, y la que se rompería en silencio.** Un paso en
+paralelo sólo da la misma partida si **nada de lo que hace un campamento en su
+paso lo lee ni lo escribe otro**. GDScript no avisa de una carrera: dos
+campamentos que se pisan un número dan partidas que no se repiten, y la firma es
+lo único que lo ve.
+
+**Lo que hoy comparte un paso con otros**, buscado en `scripts/`:
+
+| Qué | Dónde | Por qué rompe | Qué se hace |
+|---|---|---|---|
+| **La estación y el año** | `GameState.season` (64 lecturas en la simulación) y `year` (12); los escribe `_advance_local_season` | Un campamento lee la estación mientras otro la gira | Cada simulación lleva **su copia** (`sim.estacion`, `sim.anyo`) y la gira ella; el reloj publica la del primero en `GameState` **entre pasos** |
+| **El presupuesto de caminos** | `Wayfinder.last_nodes`, estático que escribe cada búsqueda y que `Marcha` suma a `_path_nodes_this_frame` | **Decide partida**: con ese número se corta el buscar caminos en el paso, y otro campamento lo pisaría | La búsqueda devuelve sus nodos; nada de estático |
+| **Lo descubierto de la comarca** | `GameState.discover` desde `Expedicion` | Un diccionario compartido escrito desde dos hilos | Se apunta en el campamento y el reloj lo junta entre pasos, en orden |
+| `GameState.last_report` | `_advance_local_season` | Idem | Por campamento |
+| **Las señales del paso** | `day_passed`, `hour_passed`, `paso_cerrado`, `season_changed`, `moment_raised`, `tecnica_aprendida`, `campamento_trasladado` | Quien las escucha corre **en el hilo del paso**: la vista, la interfaz y la barra no pueden | Las del campamento (`Campamento`) siguen en su hilo, que es el suyo; las de vista van diferidas al hilo principal |
+| **Las decisiones** | `moment_raised` → `BarraSuperior` | La barra encola en una lista compartida, y las sondas contestan dentro del paso | Se encolan por campamento y se entregan **en la barrera entre pasos**, en orden de campamento. Es lo que hace un jugador, que nunca contesta a mitad de paso; **cambia el instrumento** y la firma de referencia se toma de nuevo con contestación en la barrera |
+| **La malla de la fauna al nacer** | `Poblaciones` → `WildlifeHerds.nacer` → `_spawn`, dentro del paso | Toca un nodo del árbol desde otro hilo | Verificar si añade instancias a la malla; si sí, diferirlo |
+| **Los cuerpos pintados** | `_pintar_a` | Malla de la multitud | Sólo en el campamento que se mira (`se_mira`), y ése en el hilo principal |
+| **El cepo** | `Cronometro.tramo`/`cierra`, estáticos | Diccionarios compartidos | No cuenta fuera del hilo principal; el coste por campamento lo mide el reloj |
+| Contadores de diagnóstico | `Wayfinder.busquedas` | Sólo los lee `AtascoProbe` | Por instancia, o se aceptan perdidos y se dice |
+
+**Módulos afectados.** `SettlementSim` y los 64 sitios que leen la estación
+(sustitución mecánica), `Wayfinder` y `Marcha` (el presupuesto de caminos),
+`Expedicion` (descubrir), `RelojDeLaPartida` (el paso en paralelo con
+`WorkerThreadPool.add_group_task` y la barrera), `Campamento` (las señales),
+`BarraSuperior` (las decisiones en la barrera), `WildlifeHerds` (nacer),
+`Cronometro`. Contrato nuevo en SPECS §3: **nada de lo que corre en un paso toca
+el árbol de escena ni un estático**, con su invariante en §7.
+
+**Orden de dependencias.**
+
+1. **Primero lo que no necesita hilos**: sacar del paso todo lo compartido —la
+   estación por campamento, el presupuesto de caminos, descubrir, la barra en la
+   barrera—, **con el reloj todavía en serie**. Cada cambio se coteja con un
+   campamento: la partida no puede moverse. La contestación en la barrera sí la
+   mueve, y por eso la firma de referencia se toma otra vez justo ahí.
+2. Después, el reloj en paralelo con un interruptor, para poder cotejar el mismo
+   código **en serie y en paralelo**.
+3. Y la comprobación que caza las carreras: **dos corridas en paralelo del mismo
+   código tienen que dar la misma firma**, y las dos la de en serie.
+
+**Riesgos.**
+
+- **Las carreras no dan error.** Una que se escape da partidas que casi se
+  repiten; por eso el cotejo es de dos corridas en paralelo, no de una.
+- **El árbol de escena**: los campamentos cuelgan de él para que les llegue
+  `_process`, pero el paso sólo lee datos suyos. Godot no garantiza leer un nodo
+  del árbol desde otro hilo; si da problemas, los campamentos que no se miran
+  salen del árbol y los mueve sólo el reloj.
+- **Puede escalar menos de lo que parece**: GDScript crea y suelta muchos
+  `Variant` y diccionarios por tick, y el reparto de memoria entre hilos tiene
+  su coste. La ganancia se mide, no se supone.
+- **Se hereda**: `GameState.home` sigue siendo de una sola banda (fase 2).
+
+**Lo que salió al hacerlo (2026-09-14).**
+
+- **La salida del árbol no era un plan B: era la única.** La primera corrida en
+  paralelo con los campamentos dentro del árbol dio 46 000 errores de Godot y
+  ninguna firma. Fuera del árbol, cero.
+- **La carrera que se temía no existe; lo que había era `exp`.** Dos corridas en
+  paralelo coincidían entre sí; lo que no coincidía con la serie era el último bit
+  de `exp` y `pow`, que dependen del hilo. Con `Calculo`, serie y paralelo dan la
+  misma firma en los dos campamentos. Y eso vale también para lo que pide §23: el
+  campamento que se mira da su paso en el hilo principal y los demás en el pool.
+- **Lo que queda de la fase 1b**: `Huella` y los ayudantes estáticos de nombres de
+  `Parajes` leen la estación global, sin carrera porque sólo cambia en el giro,
+  que va en serie. La malla de la fauna al nacer se toca desde el pool a través
+  del `RenderingServer`, que admite hilos; en diez jornadas no dio ni un error.
+
+### Cómo quedó: migrar, varios campamentos y la visita con reloj (fases 2 a 4, 2026-09-14)
+
+**El viaje** (`Viaje`). Las jornadas salen de recorrer la recta sobre el relieve
+regional a tramos de 250 m, con el andar de Tobler de `Traversal.pace_fraction`,
+la carga y 11 horas útiles por jornada. Las raciones de todo el camino se cobran
+**al salir**, y `Viaje.lo_que_cuesta` es la misma cuenta que se enseña antes de
+confirmar. Por jornada, cada persona tira `Mishap.chance` con el suelo más duro
+del tramo del día —decisión del usuario—, con un azar propio sembrado por
+partida, jornada, destino y grupo, que no pide tiradas al de ningún campamento.
+**Se llega herido, no se muere.** Mientras viaja, el grupo no está en ningún
+campamento: sale de uno con `SettlementSim.despedir` y entra en el otro con
+`recibir`, con ids nuevos y lo que carga a la despensa.
+
+**Llegar** (`Campamentos._llegar`). Con gente, **se suman**; vacío, **se
+reocupa** con todo lo que se dejó; sin campamento, **se funda**:
+`Campamento.montar` levanta el valle sin vista, en la fecha de la partida, y lo da
+de alta sin mirar. Reocupar y fundar ponen el campamento en la jornada, la hora y
+el **día de estación** del reloj (`Campamentos.a_la_fecha`): sin el día de
+estación giraría la estación en otra jornada que los demás. No estaba en el plan.
+
+**El campamento vacío** no da pasos. Si todos van de camino, la fecha la lleva el
+reloj solo (`RelojDeLaPartida._andar_la_fecha_sola`).
+
+**Las decisiones** llevan su origen (`Moment.desde`); con más de un campamento la
+tarjeta dice de cuál. Los avisos de uno que no se mira van a la crónica del que se
+mira, con su nombre. Una decisión que sale sin interfaz delante —en el mapa
+regional— **para la partida** y se enseña al entrar en cualquier mapa
+(`Campamentos.sin_ver`). **Efecto a saber**: la firma cuenta las entradas de la
+crónica, así que la del campamento que se mira depende de los avisos de los otros;
+la crónica no la lee ninguna regla.
+
+**La escena adopta, no monta.** Entrar en un mapa con campamento vivo lo mete en
+la escena y le pone la vista encima (`DemoMain._montar_el_campamento`); montar
+otro sería una segunda simulación del mismo valle. Al irse, la escena guarda la
+partida y lo suelta (`_dejar_la_escena`), y sigue simulando fuera del árbol. Se
+entra desde el mapa regional o se salta desde la lista de campamentos
+(`Campamentos.traspaso_de`). **La visita, con campamentos vivos, va con el reloj**:
+su simulación sin gente la toma el reloj —los botones de velocidad mueven la
+partida— y copia la fecha en cada fotograma.
+
+**Guardar** es guardar la partida: un `sitio_<n>.sav` por campamento y
+`partida.sav` con la fecha y los grupos de camino. El contrato, en
+[SPECS.md](SPECS.md) §6.4. Las personas de un grupo se guardan en una instantánea
+de una simulación de paso: `Instantanea` recorre simulaciones y un grupo no está
+en ninguna.
+
+**Preparar el valle** salió del mapa regional a `PreparaValle`, que usan el mapa,
+la ficha de mover gente y `RehacerSitio`: una sola receta para los tres.
+
+**Lo que salió al hacerlo.**
+
+- `Campamento.montar` **pisaba el traspaso de la escena** (`Expedition`): fundar
+  con el jugador mirando otro mapa le cambiaba el relieve con el que luego se
+  guardaba. Ahora lo devuelve como estaba, y cada campamento guarda su relieve y
+  su recuadro.
+- **Fundar bloquea el fotograma** lo que tarda en montarse un valle: medido en
+  `MigracionProbe`, 16,6 s de `terrain.generate` y 1,6 s de la rejilla de
+  navegación en esta máquina y sin ventana, más lo que no se cronometra. Pasa una
+  vez por campamento nuevo, en la barrera de la jornada.
+
+**Deuda que queda, dicha.**
+
+- **Se sale sin andar hasta el borde del valle**: el grupo desaparece del
+  campamento al mandarlo y aparece en el otro al llegar.
+- **Fundar al llegar bloquea** el fotograma (arriba). Troceado en varios
+  fotogramas o en otro hilo, es trabajo aparte.
+- **Tras cerrar el juego, los campamentos vuelven al entrar en el mapa de la
+  banda**, no al abrir el mapa regional: una visita antes de eso sigue con el
+  reloj parado, como antes de esta spec.
+- **El mapa regional no enseña la decisión pendiente**: la partida se para y la
+  tarjeta sale al entrar en un mapa.
+- `Huella` y los ayudantes estáticos de nombres de `Parajes` leen la estación
+  global; `GameState.home` sigue siendo una sola cueva.
+

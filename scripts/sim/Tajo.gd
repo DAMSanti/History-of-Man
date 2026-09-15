@@ -70,7 +70,7 @@ func _rank_known_spots() -> void:
 					continue
 
 				var value := sim.knowledge.believed_abundance(
-					sim.field, act, centre, GameState.season)
+					sim.field, act, centre, sim.estacion)
 				if value <= 0.05:
 					continue
 
@@ -125,18 +125,75 @@ func _rank_known_spots() -> void:
 				# encontrado y al que le había puesto nombre. Y un sitio con
 				# nombre es un sitio que la banda CONOCE de verdad: sabe qué da,
 				# por dónde se entra y cuándo conviene.
+				var paraje := sim._paraje_at(centre)
 				var named := 1.0
-				if sim._paraje_at(centre) != null:
+				if paraje != null:
 					named = SettlementSim.PARAJE_BONUS
 				spots.append({
 					"pos": centre,
-					"score": value * usable * stock * named,
+					"score": value * usable * stock * named
+						* _peso_de_prioridad(paraje, act),
 				})
 
 		spots.sort_custom(func(a, b): return float(a["score"]) > float(b["score"]))
 		# Solo interesan los mejores: con veinte hay de sobra para repartir a
 		# una banda de quince
 		sim._known_spots[activity] = spots.slice(0, mini(spots.size(), 20))
+
+
+## Si esto se recoge del monte en algun momento del año.
+##
+## Es lo que decide que materiales llevan prioridad en la ventana del almacen:
+## priorizar la carne seca o la piel curtida no significa nada, porque no se
+## recogen, se hacen. La lista NO se escribe a mano —seria una segunda copia de
+## las tablas de rendimiento, y se separarian—: sale de las tablas mismas.
+func se_recoge(kind: Materia.Kind) -> bool:
+	for speciality_key: int in SettlementSim.SPECIALITY_YIELDS:
+		if (SettlementSim.SPECIALITY_YIELDS[speciality_key] as Dictionary).has(int(kind)):
+			return true
+	for estacion: int in Subsistence.Season.values():
+		if _gathering_yields_of(estacion as Subsistence.Season).has(int(kind)):
+			return true
+	for activity: int in [Subsistence.Activity.CAZA, Subsistence.Activity.PESCA,
+			Subsistence.Activity.MARISQUEO, Subsistence.Activity.MATERIA_PRIMA]:
+		if _yield_materials(activity as Subsistence.Activity).has(int(kind)):
+			return true
+	return false
+
+
+## Cuánto tira de la banda lo que este paraje tiene, según lo que el jugador
+## haya priorizado. Uno quiere decir «como siempre».
+##
+## Es un peso sobre la puntuación de siempre y no un orden aparte: entre dos
+## sitios igual de alcanzables se va al que tiene más de lo prioritario, pero
+## uno el doble de rico en lo demás todavía puede ganarle. Los pesos —×2 lo
+## alto, ×0,5 lo bajo, ×0 lo de nunca— son [Prioridades.PESO], decisión del
+## usuario del 2026-09-14, no una medida. Ver SISTEMAS §22.
+##
+## **Sólo cuenta lo que la banda SABE que hay ahí.** Lo que aún es «???» no
+## puede tirar de nadie: pesar con ello delataría el sitio bueno antes de ir a
+## mirarlo, que es justo lo que [Paraje.listing] evita al ordenar.
+##
+## **Y no vale para la caza**: la prioridad de especie manda sobre qué pieza se
+## persigue, no sobre adónde se va -SISTEMAS §22-.
+func _peso_de_prioridad(paraje: Paraje, act: Subsistence.Activity) -> float:
+	if act == Subsistence.Activity.CAZA or paraje == null:
+		return 1.0
+	if not sim.prioridades.hay_algo_puesto():
+		return 1.0
+	var total := 0.0
+	var pesado := 0.0
+	for kind: int in paraje.contents:
+		var entry: Dictionary = paraje.contents[kind]
+		if not bool(entry["sabido"]):
+			continue
+		var abundancia := float(entry["abundancia"])
+		total += abundancia
+		pesado += abundancia * Prioridades.peso(
+			sim.prioridades.de_material(kind as Materia.Kind))
+	if total <= 0.0:
+		return 1.0
+	return pesado / total
 
 
 ## Arrima un punto a la orilla: tierra firme con agua justo al lado.
@@ -427,7 +484,7 @@ func _search_target(person: Inhabitant) -> Vector3:
 		var promise := 0.0
 		if sim.field:
 			promise = sim.field.seasonal_abundance_at(
-				person.activity, candidate, GameState.season)
+				person.activity, candidate, sim.estacion)
 
 		# Se premia lo que esta sin batir y se penaliza la distancia
 		var unknown := 1.0
@@ -631,6 +688,19 @@ const RENDIMIENTO_DE_REFERENCIA := HARVEST_SCALE * PERICIA_DE_REFERENCIA
 const ALCANCE_DEL_TAJO := 80.0
 
 
+## La celda de la que saca quien trabaja aquí: la más rica al alcance, o -1.
+##
+## **Ninguna de un paraje en descanso**, llegue quien llegue y por el camino que
+## llegue. Que no se mande a nadie a un sitio que descansa lo cuida
+## `SettlementSim._work_candidates`; esto cuida lo otro, el que ya está allí
+## —buscando, tanteando, de paso—, que sacaba peces del tramo en descanso igual
+## que de uno sano. Queja del usuario del 2026-09-13.
+func celda_trabajada(person: Inhabitant) -> int:
+	if sim.field == null or sim._is_resting(person.activity, person.position):
+		return -1
+	return sim.field.best_cell(person.activity, person.position, ALCANCE_DEL_TAJO)
+
+
 func _harvest(person: Inhabitant, hours: float) -> void:
 	# Fraccion de la jornada trabajada en este tick
 	var fraction := hours / SettlementSim.HORAS_UTILES
@@ -642,7 +712,7 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 
 	# La estacion, que hasta ahora no entraba en la cosecha: sin esto el otono
 	# no se notaba y toda la estacionalidad era decorativa
-	var season := ResourceField.seasonal_factor(person.activity, GameState.season)
+	var season := ResourceField.seasonal_factor(person.activity, sim.estacion)
 
 	# El agotamiento del paraje. Devuelve lo que quedaba, de 0 a 1, asi que el
 	# segundo recolector del dia saca menos que el primero.
@@ -665,8 +735,7 @@ func _harvest(person: Inhabitant, hours: float) -> void:
 	var left := 1.0
 	var worked_cell := -1
 	if sim.field:
-		worked_cell = sim.field.best_cell(person.activity, person.position,
-			ALCANCE_DEL_TAJO)
+		worked_cell = celda_trabajada(person)
 		left = sim.field.stock_of_cell(person.activity, worked_cell)
 
 	# El filo disponible. Un cazador sin azagaya sigue trayendo algo -trampa,
@@ -739,7 +808,7 @@ func _fill_the_basket(person: Inhabitant, hours: float, fraction: float,
 	var food := 0.0
 	# Lo que de verdad sale del sitio en este tick, para restarselo despues.
 	var taken := 0.0
-	for kind: int in yields:
+	for kind: int in _por_prioridad(yields):
 		var per_day: float = yields[kind]
 		var units := per_day * multiplier
 		if units <= 0.0:
@@ -761,7 +830,7 @@ func _fill_the_basket(person: Inhabitant, hours: float, fraction: float,
 		# entraban en el zurron en marzo, asi que el jugador las veia en el
 		# almacen sin verlas en ningun paraje. Una de las dos cosas sobraba,
 		# y la que sobra es coger en marzo lo que no hay en marzo.
-		if not Parajes.in_season(kind as Materia.Kind, GameState.season):
+		if not Parajes.in_season(kind as Materia.Kind, sim.estacion):
 			continue
 
 		# Tope puesto por el jugador: si ya hay bastante de esto, se deja en el
@@ -778,9 +847,19 @@ func _fill_the_basket(person: Inhabitant, hours: float, fraction: float,
 		# que los recipientes importen: sin cesto se llena antes y la jornada
 		# se acaba a media manana.
 		var room_kg := person.carry_limit_kg() - person.load_kg()
+		var kg_unidad := maxf(Materia.kg_per_unit(kind as Materia.Kind), 0.001)
+		# Y SI LO QUE VIENE ES MAS IMPORTANTE QUE LO QUE SE LLEVA, se hace
+		# sitio. Sin esto, ordenar el recorrido no bastaria: la carga se llena
+		# tick a tick, asi que al llenarse el zurron llevaria un poco de todo y
+		# «vuelve con avellana hasta llenar» no seria verdad. Ver SISTEMAS §22.
+		if sim.prioridades.hay_algo_puesto():
+			var quiero_kg := units * kg_unidad
+			if room_kg < quiero_kg:
+				room_kg += _soltar_lo_de_menos_nivel(person,
+					kind as Materia.Kind, quiero_kg - room_kg, worked_cell)
 		if room_kg <= 0.0:
 			break
-		var fits := minf(units, room_kg / maxf(Materia.kg_per_unit(kind as Materia.Kind), 0.001))
+		var fits := minf(units, room_kg / kg_unidad)
 		if fits <= 0.0:
 			continue
 
@@ -806,6 +885,83 @@ func _fill_the_basket(person: Inhabitant, hours: float, fraction: float,
 	if sim.field and taken > 0.0:
 		sim.field.take_from_cell(person.activity, worked_cell,
 			taken * SettlementSim.DEPLETION_PER_UNIT)
+
+
+## El orden en que se va llenando el zurron: primero lo de mas nivel.
+##
+## Sin ninguna prioridad puesta devuelve la tabla TAL CUAL, y ese es el camino
+## por el que una partida sin tocar nada se comporta exactamente igual que
+## antes de que esto existiera. Ver SISTEMAS §22.
+##
+## Lo que esta en NUNCA no sale en la lista: se deja en el monte, igual que lo
+## que tiene el tope lleno.
+func _por_prioridad(yields: Dictionary) -> Array:
+	if not sim.prioridades.hay_algo_puesto():
+		return yields.keys()
+	var orden: Array = []
+	# Por nivel, y dentro del nivel el orden de la tabla: `sort_custom` no es
+	# estable, asi que el desempate se escribe en vez de confiarlo al orden de
+	# llegada.
+	var puesto := 0
+	for kind: int in yields:
+		var nivel := sim.prioridades.de_material(kind as Materia.Kind)
+		if nivel == Prioridades.Nivel.NUNCA:
+			continue
+		orden.append({"kind": kind, "nivel": int(nivel), "puesto": puesto})
+		puesto += 1
+	orden.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a["nivel"]) != int(b["nivel"]):
+			return int(a["nivel"]) < int(b["nivel"])
+		return int(a["puesto"]) < int(b["puesto"]))
+	var claves: Array = []
+	for fila: Dictionary in orden:
+		claves.append(int(fila["kind"]))
+	return claves
+
+
+## Suelta lo que se lleva de menos nivel para hacerle sitio a lo que viene.
+##
+## **Lo soltado vuelve al paraje** —decision del usuario del 2026-09-14, ver
+## SISTEMAS §22—: se le devuelve a la celda lo que se le habia restado y el
+## libro de trabajo deja de apuntarlo, o sea que es como si no se hubiera
+## cogido. Devuelve los kilos que se han liberado.
+##
+## Solo se suelta lo ESTRICTAMENTE por debajo del nivel de lo que entra: dos
+## materiales del mismo nivel conviven en el zurron por orden de llegada, que
+## es lo que hace que priorizar no sea una cola de uno en uno.
+func _soltar_lo_de_menos_nivel(person: Inhabitant, entra: Materia.Kind,
+		kg_que_faltan: float, worked_cell: int) -> float:
+	var nivel_entra := sim.prioridades.de_material(entra)
+	var liberado := 0.0
+	# De lo peor a lo mejor: lo de nunca -que el jugador puso despues de
+	# cogerlo- antes que lo bajo, y lo bajo antes que lo normal.
+	for nivel: int in [Prioridades.Nivel.NUNCA, Prioridades.Nivel.BAJA,
+			Prioridades.Nivel.NORMAL]:
+		if nivel <= int(nivel_entra):
+			continue
+		for kind: int in person.load.keys():
+			if liberado >= kg_que_faltan:
+				return liberado
+			if int(sim.prioridades.de_material(kind as Materia.Kind)) != nivel:
+				continue
+			var llevaba: float = float(person.load[kind])
+			if llevaba <= 0.0:
+				continue
+			var kg_unidad := maxf(Materia.kg_per_unit(kind as Materia.Kind), 0.001)
+			var unidades := minf(llevaba, (kg_que_faltan - liberado) / kg_unidad)
+			if unidades <= 0.0:
+				continue
+			person.load[kind] = llevaba - unidades
+			if person.load[kind] <= 0.0001:
+				person.load.erase(kind)
+			person.log_gain(person.current_task(), kind, -unidades)
+			if Materia.is_food(kind as Materia.Kind):
+				person.carrying -= unidades * Materia.nutrition(kind as Materia.Kind)
+			if sim.field:
+				sim.field.give_back_to_cell(person.activity, worked_cell,
+					unidades * SettlementSim.DEPLETION_PER_UNIT)
+			liberado += unidades * kg_unidad
+	return liberado
 
 
 ## Que trae cada actividad en una JORNADA COMPLETA de trabajo, en unidades de
@@ -852,7 +1008,7 @@ func _yield_materials(activity: Subsistence.Activity) -> Dictionary:
 			# asta: se iba a por cuerna y se volvia con cantos. La misma cifra
 			# que la recoleccion de invierno, que es la otra forma de
 			# recogerla, porque es la misma cuerna del mismo suelo.
-			if GameState.season == Subsistence.Season.INVIERNO:
+			if sim.estacion == Subsistence.Season.INVIERNO:
 				duro[Materia.Kind.ASTA] = ASTA_DE_DESMOGUE
 			return duro
 		_:
@@ -892,6 +1048,16 @@ func _yield_materials(activity: Subsistence.Activity) -> Dictionary:
 ## despensa clavada en su tope y mas de la mitad del trabajo tirandose a la
 ## puerta del abrigo. Ver `BandaProbe`.
 func _gathering_yields() -> Dictionary:
+	return _gathering_yields_of(sim.estacion as Subsistence.Season)
+
+
+## Lo mismo, para una estacion cualquiera.
+##
+## Existe aparte para poder preguntar «¿esto se recoge en algun momento del
+## año?» sin tocar el reloj -ver [se_recoge]-: la ventana del almacen necesita
+## saber que materiales llevan prioridad, y en invierno la avellana no sale en
+## ninguna tabla aunque sea lo mas recolectado del año.
+func _gathering_yields_of(estacion: Subsistence.Season) -> Dictionary:
 	# Lo que se coge DE PASO, vaya uno a lo que vaya. A la mitad de lo que era:
 	# esto es lo que se recoge sin buscarlo, no una cosecha.
 	#
@@ -912,7 +1078,7 @@ func _gathering_yields() -> Dictionary:
 		Materia.Kind.CORTEZA: 0.5,
 	}
 
-	match GameState.season:
+	match estacion:
 		Subsistence.Season.PRIMAVERA:
 			# Todo brota y todo cria: poca caloria, mucha materia prima. Es la
 			# estacion mas floja de la recoleccion y tiene que serlo -entre la

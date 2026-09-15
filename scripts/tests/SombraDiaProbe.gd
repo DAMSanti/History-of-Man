@@ -80,7 +80,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	if terrain == null:
 		print("sin terreno"); quit(); return
 
@@ -228,12 +228,4 @@ func _find_setup(node: Node) -> Node3D:
 		var found := _find_setup(child)
 		if found != null:
 			return found
-	return null
-
-
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
 	return null

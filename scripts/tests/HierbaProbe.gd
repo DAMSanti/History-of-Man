@@ -58,7 +58,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	var cover: Node = demo.get_node_or_null("Hierba")
 	if terrain == null:
 		print("sin terreno"); quit(); return
@@ -147,11 +147,3 @@ func _find_meadow(terrain: Node, around: Vector3) -> Vector3:
 		best.x, best.z, terrain.get_slope_at(best),
 		terrain.get_humidity_at(best)])
 	return best
-
-
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
-	return null

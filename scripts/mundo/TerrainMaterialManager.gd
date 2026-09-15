@@ -106,10 +106,21 @@ func _configure_shader_params() -> void:
 
 	# La rugosidad ya no es una constante por material: la trae el canal verde
 	# del ORM. Aquí sólo queda el margen para retocarla en bloque.
-	_material.set_shader_parameter("use_orm", true)
+	# Encendido o no según la configuración: es uno de sus ajustes sueltos
+	# (INTERFAZ §8). Ver [aplicar_configuracion].
+	aplicar_configuracion()
 	_material.set_shader_parameter("roughness_scale", 1.0)
 	_material.set_shader_parameter("ao_strength", 0.8)
 	_material.set_shader_parameter("terrain_specular", 0.08)
+
+
+## Los dos ajustes de gráficos que son del relieve: los mapas de normales y el
+## ORM. Se aplican en caliente: son dos interruptores del shader.
+func aplicar_configuracion() -> void:
+	if _material == null:
+		return
+	_material.set_shader_parameter("use_orm", bool(Configuracion.graficos["orm"]))
+	_material.set_shader_parameter("use_normal_maps", bool(Configuracion.graficos["normales"]))
 
 
 ## Obtiene el material
@@ -145,10 +156,29 @@ func set_region_mask_texture(texture: Texture2D, world_size: Vector2) -> void:
 	_material.set_shader_parameter("region_world_size", world_size)
 
 
+## La niebla del mapa regional: la textura de lo visto, el tamaño del mundo que
+## cubre y la cota del mar para el trazo de costa. Sin textura, apagada. Ver
+## SISTEMAS §4.
+func set_fog(texture: Texture2D, world_size: Vector2, sea_height: float) -> void:
+	if _material == null:
+		return
+	_material.set_shader_parameter("use_fog", texture != null)
+	_material.set_shader_parameter("fog_tex", texture)
+	_material.set_shader_parameter("fog_world_size", world_size)
+	_material.set_shader_parameter("fog_sea_height", sea_height)
+
+
 ## Actualiza la altura máxima del mundo en el shader
 func set_max_world_height(height: float) -> void:
 	if _material:
 		_material.set_shader_parameter("max_world_height", height)
+
+
+## Desde qué cota —en unidades de mundo— cuentan las bandas. Ver `cota_base` en
+## `shaders/triplanar.gdshader`.
+func set_cota_base(cota: float) -> void:
+	if _material:
+		_material.set_shader_parameter("cota_base", cota)
 
 
 ## Reescala las bandas por un factor.

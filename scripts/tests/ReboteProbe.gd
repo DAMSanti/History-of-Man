@@ -61,7 +61,7 @@ func _init() -> void:
 		await process_frame
 
 	var demo := current_scene
-	var terrain: Node = _first(demo, "TerrainGenerator")
+	var terrain: Node = demo.terrain
 	if terrain == null:
 		print("sin terreno"); quit(); return
 
@@ -148,14 +148,6 @@ func _find_light(node: Node) -> DirectionalLight3D:
 	return null
 
 
-func _first(root_node: Node, type_name: String) -> Node:
-	for child in root_node.get_children():
-		var script: Variant = child.get_script()
-		if child.get_class() == type_name:
-			return child
-		if script != null and String(script.resource_path).ends_with(type_name + ".gd"):
-			return child
-	return null
 
 
 func _shoot(demo: Node, path: String, from_point: Vector3, at: Vector3) -> void:
