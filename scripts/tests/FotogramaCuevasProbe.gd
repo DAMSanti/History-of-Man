@@ -58,7 +58,8 @@ func _init() -> void:
 	var arranque := await _alternar(simas, cuevas)
 
 	# 2. A treinta metros de la cueva de la banda, mirándola.
-	var casa: CaveMouth = demo._cave_at(sim.home_position)
+	# La busca el campamento, que es de quien son las cuevas.
+	var casa: CaveMouth = demo.campamento.cueva_en(sim.home_position)
 	if casa != null:
 		demo.camera.set_target(casa.pick_position())
 		demo.camera.set_distance(30.0)

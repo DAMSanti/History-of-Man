@@ -641,3 +641,228 @@ static func tech_name(tech: Tech) -> String:
 
 static func tech_desc(tech: Tech) -> String:
 	return CATALOGUE[tech]["desc"]
+
+
+# --- QUÉ DA CADA TÉCNICA (INTERFAZ §10) --------------------------------------
+#
+# El tooltip decía qué es una técnica, cuánto falta y de qué cuelga, pero no qué
+# cambia en la partida al tenerla: el jugador elegía hacia dónde practicar sin
+# saber qué ganaba.
+#
+# **Ninguna cifra se escribe a mano aquí.** Todas se leen del mismo sitio del
+# que las lee la partida —[Trap.INFO], [Hunting.MEJORAS], [Fishing.CATALOGUE],
+# [Tool.recipe], [Pasarelas]—, para que no puedan discrepar. Si mañana la
+# azagaya deja de multiplicar por 1,60, el tooltip lo dice solo.
+
+
+## Una cifra como se escribe en castellano: con coma.
+static func _coma(valor: float, decimales: int = 2) -> String:
+	return String.num(valor, decimales).pad_decimals(decimales).replace(".", ",")
+
+
+## La trampa que abre esta técnica, o -1. Se busca en la tabla de trampas, que
+## es quien sabe cuál pide cuál.
+static func _trampa_de(tech: Tech) -> int:
+	for kind: int in Trap.INFO:
+		if int((Trap.INFO[kind] as Dictionary).get("tech", -1)) == int(tech):
+			return kind
+	return -1
+
+
+## La manera de pescar que abre esta técnica, o -1.
+static func _manera_de(tech: Tech) -> int:
+	for metodo: int in Fishing.CATALOGUE:
+		if int((Fishing.CATALOGUE[metodo] as Dictionary).get("tech", -1)) == int(tech):
+			return metodo
+	return -1
+
+
+## Lo que esta técnica multiplica en la caza, rama por rama.
+static func _factores_de_caza(tech: Tech) -> Array[String]:
+	var out: Array[String] = []
+	for especialidad: int in Hunting.MEJORAS:
+		for mejora: Dictionary in (Hunting.MEJORAS[especialidad] as Array):
+			if int(mejora["tech"]) != int(tech):
+				continue
+			out.append("multiplica por %s la %s" % [
+				_coma(float(mejora["factor"])),
+				Profession.speciality_name(
+					especialidad as Profession.Speciality).to_lower()])
+	return out
+
+
+## Las piezas que esta técnica deja fabricar, por su nombre.
+static func _piezas_de(tech: Tech) -> Array[String]:
+	var out: Array[String] = []
+	for kind: int in Tool.Kind.values():
+		if Tool.tech_of(kind as Tool.Kind) == int(tech):
+			out.append(Tool.kind_name(kind as Tool.Kind).to_lower())
+	return out
+
+
+## Las otras técnicas que cuelgan de ésta.
+static func abre(tech: Tech) -> Array[String]:
+	var out: Array[String] = []
+	for otra: int in CATALOGUE:
+		var pide: Array = (CATALOGUE[otra] as Dictionary)["needs"]
+		if pide.has(tech):
+			out.append(tech_name(otra as Tech).to_lower())
+	return out
+
+
+## QUÉ CAMBIA en la partida al tener esta técnica. Una línea o dos.
+##
+## Sale en TODAS las técnicas, aprendidas o no (decisión del usuario del
+## 2026-09-15): las que faltan dicen qué darán, que es lo que ayuda a decidir
+## hacia dónde practicar.
+static func efecto(tech: Tech) -> Array[String]:
+	var lineas: Array[String] = []
+
+	match tech:
+		Tech.LASCA:
+			lineas.append("El filo del primer día: la banda ya lo trae sabido, "
+				+ "y de él salen las demás maneras de tallar.")
+		Tech.NUCLEO:
+			lineas.append(("Lo que se talla en piedra no baja de %s de calidad, "
+				+ "lo talle quien lo talle. Sin ella sale de la pericia del "
+				+ "artesano, y un novato da %s.") % [
+					_coma(Tool.CALIDAD_CON_NUCLEO), _coma(0.7 + 0.2 * 0.6)])
+		Tech.HOJA:
+			var suelta := float(Tool.recipe(Tool.Kind.LASCA).get(
+				Materia.Kind.PIEDRA, 1.0))
+			lineas.append(("Cada pieza de piedra o de sílex cuesta la mitad: "
+				+ "una lasca pasa de %s a %s de materia.") % [
+					_coma(suelta, 1), _coma(suelta * Tool.AHORRO_LAMINAR, 1)])
+		Tech.PASARELA:
+			lineas.append(("Permite armar pasarelas de troncos: salvan hasta "
+				+ "%d m de cauce, y se cruzan en las cuatro estaciones.")
+				% int(Pasarelas.CELDAS_DE_ANCHO * Navgrid.CELL))
+			lineas.append("Cada una cuesta %d de leña y %d jornadas de trabajo."
+				% [int(Pasarelas.LENA), int(Pasarelas.JORNADAS)])
+		Tech.ARTE:
+			lineas.append("Permite pintar la cueva: hace falta el hogar, una "
+				+ "lámpara y %d de ocre." % int(SettlementSim.PINTURA_OCRE))
+			lineas.append("Lo pintado fija lo que la banda sabe: es lo que "
+				+ "guarda el relato de una generación a la siguiente.")
+		Tech.AGUJA:
+			lineas.append(("Permite coser: un vestido quita hasta el %d %% del "
+				+ "frío a quien lo lleve.")
+				% int(SettlementSim.VESTIDO_COLD_MITIGATION * 100.0))
+		_:
+			pass
+
+	# LAS TRAMPAS, leídas de la tabla de trampas.
+	var trampa := _trampa_de(tech)
+	if trampa >= 0:
+		var info: Dictionary = Trap.INFO[trampa]
+		lineas.append("Trampa nueva, %s: cobra una pieza cada %s jornadas y "
+			% [Trap.trap_name(trampa as Trap.Kind).to_lower(),
+				_coma(float(info["cada"]), 1)]
+			+ "aguanta %d puesta." % int(info["aguanta"]))
+		# Las presas, POR SU NOMBRE y no por la clave con que las apunta la
+		# tabla: en la ficha «jabali» sin tilde se lee como una errata.
+		var presas: Array[String] = []
+		for especie: String in (info["caza"] as Array):
+			presas.append(Fauna.species_name(especie).to_lower())
+		lineas.append("Cae en ella: %s." % ", ".join(presas))
+
+	# LA CAZA, leída de la tabla de mejoras.
+	var factores := _factores_de_caza(tech)
+	if not factores.is_empty():
+		lineas.append("Lo que se cobra en una jornada: %s." % ", y ".join(factores))
+	if tech == Tech.PROPULSOR:
+		lineas.append("Y la azagaya llega %s veces más lejos."
+			% _coma(Hunt.PROPULSOR_ALCANCE, 1))
+
+	# LA PESCA, leída de la tabla de maneras de pescar.
+	var manera := _manera_de(tech)
+	if manera >= 0:
+		var ficha: Dictionary = Fishing.CATALOGUE[manera]
+		var a_mano := float((Fishing.CATALOGUE[Fishing.Method.MANO]
+			as Dictionary)["yields"][Materia.Kind.PESCADO])
+		var suyo := float((ficha["yields"] as Dictionary).get(
+			Materia.Kind.PESCADO, 0.0))
+		lineas.append("Abre %s: %d de pescado por jornada, donde a mano se sacan %d."
+			% [String(ficha["name"]).to_lower(), int(suyo), int(a_mano)])
+		if int(ficha["party"]) > 1:
+			lineas.append("Hacen falta %d manos a la vez." % int(ficha["party"]))
+		if tech == Tech.NASA:
+			lineas.append("Y pesca sola: se cala por la tarde y se levanta por "
+				+ "la mañana, sin nadie en el río.")
+
+	var piezas := _piezas_de(tech)
+	if not piezas.is_empty():
+		lineas.append("Deja fabricar: %s." % ", ".join(piezas))
+
+	var otras := abre(tech)
+	if not otras.is_empty():
+		lineas.append("Y abre el paso a: %s." % ", ".join(otras))
+	return lineas
+
+
+## LO DE HOY: qué supone esta técnica para la banda ahora mismo.
+##
+## Sólo en las APRENDIDAS —una técnica que no se tiene no tiene «lo de hoy»— y
+## sólo con lo que ya se puede contar: si la cifra no está en la partida, no se
+## inventa una, se calla.
+static func lo_de_hoy(tech: Tech, sim: SettlementSim) -> String:
+	if sim == null or sim.techs == null or not sim.techs.has(tech):
+		return ""
+
+	var trampa := _trampa_de(tech)
+	if trampa >= 0 and sim.trampas != null:
+		var puestas := 0
+		for trap: Trap in sim.trampas.traps:
+			if int(trap.kind) == trampa:
+				puestas += 1
+		return "Hoy: %d %s puestas en el valle." % [puestas,
+			Trap.trap_name(trampa as Trap.Kind).to_lower()]
+
+	match tech:
+		Tech.NUCLEO:
+			if sim.toolkit == null:
+				return ""
+			var de_piedra := 0
+			for pieza: Tool in sim.toolkit.pieces:
+				if not pieza.is_spent() and (pieza.stuff == Tool.Stuff.CUARCITA
+						or pieza.stuff == Tool.Stuff.SILEX):
+					de_piedra += 1
+			return "Hoy: %d piezas de piedra en el utillaje." % de_piedra
+		Tech.HOJA:
+			if sim.store == null:
+				return ""
+			var materia := sim.store.amount(Materia.Kind.PIEDRA) \
+				+ sim.store.amount(Materia.Kind.SILEX)
+			var cada := float(Tool.recipe(Tool.Kind.LASCA, sim.techs).get(
+				Materia.Kind.PIEDRA, 1.0))
+			return "Hoy: %d de piedra y sílex en el abrigo, para %d piezas." % [
+				int(materia), int(materia / maxf(cada, 0.001))]
+		Tech.NASA:
+			if sim.nasas_line == null:
+				return ""
+			return "Hoy: %d nasas caladas en el río." % sim.nasas_line.nasas.size()
+		Tech.PASARELA:
+			if sim.pasarelas == null:
+				return ""
+			return "Hoy: %d pasarelas armadas." % sim.pasarelas.puentes.size()
+		Tech.ARTE:
+			if sim.pinturas == null:
+				return ""
+			return "Hoy: %d figuras pintadas." % sim.pinturas.elementos.size()
+		Tech.AGUJA:
+			return "Hoy: vestido para el %d %% de la banda." % int(
+				sim.vestido_coverage() * 100.0)
+		_:
+			pass
+
+	var piezas: Array[int] = []
+	for kind: int in Tool.Kind.values():
+		if Tool.tech_of(kind as Tool.Kind) == int(tech):
+			piezas.append(kind)
+	if not piezas.is_empty() and sim.toolkit != null:
+		var partes: Array[String] = []
+		for kind: int in piezas:
+			partes.append("%d %s" % [sim.toolkit.count(kind as Tool.Kind),
+				Tool.kind_name(kind as Tool.Kind).to_lower()])
+		return "Hoy: %s en el utillaje." % ", ".join(partes)
+	return ""

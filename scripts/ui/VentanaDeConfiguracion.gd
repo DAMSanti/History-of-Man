@@ -25,10 +25,13 @@ const ETIQUETA := 260
 const ESCALAS: Array[float] = [0.5, 0.6, 0.77, 0.9, 1.0]
 const VEGETACIONES: Array[float] = [0.25, 0.5, 0.75, 1.0]
 const PASOS_DE_NUBE: Array[int] = [0, 6, 12, 20, 32]
+## Los escalones del agua, con el nombre del nivel que los pone. GRAFICOS §7.3.
+const NIVELES_DE_AGUA: Array[String] = ["Bajo", "Medio", "Alto", "Ultra"]
 ## Las paradas del slider de la distancia del 3D: las de los niveles y las de en medio,
-## más finas de cerca, donde cada metro cuenta, y el último, sin límite.
+## más finas de cerca, donde cada metro cuenta, y el último, el máximo. Ver
+## [Configuracion.RADIO_3D_MAXIMO]: el «sin límite» que acababa el slider rompía el motor.
 const DISTANCIAS_3D: Array[float] = [10.0, 20.0, 30.0, 40.0, 50.0, 70.0, 100.0, 120.0,
-	150.0, 200.0, 300.0, 500.0, 1000.0, Configuracion.RADIO_3D_SIN_LIMITE]
+	150.0, 200.0, 300.0, 500.0, Configuracion.RADIO_3D_MAXIMO]
 
 var _pestanas: TabContainer
 var _pantalla: VBoxContainer
@@ -273,6 +276,11 @@ func _pintar_graficos() -> void:
 	# sí entra en caliente.
 	_nota(_graficos, "La vegetación y los árboles cambian al volver a entrar en un mapa: montar el bosque de nuevo para la pantalla unos segundos.")
 	_distancia_3d(g)
+	_opciones(_graficos, "Agua", NIVELES_DE_AGUA, int(g["agua"]),
+		func(i: int) -> void: elegir_ajuste("agua", i))
+	_casilla(_graficos, "Clima: lluvia, nieve y niebla", bool(g["clima"]),
+		func(si: bool) -> void: elegir_ajuste("clima", si),
+		"Apagado no se dibuja el tiempo, pero sigue haciendo lo que hace: la lluvia moja a la banda aunque no se vea.")
 	_casilla(_graficos, "Mapas de normales del terreno", bool(g["normales"]),
 		func(si: bool) -> void: elegir_ajuste("normales", si))
 	_casilla(_graficos, "Oclusión y rugosidad del terreno (ORM)", bool(g["orm"]),
@@ -308,16 +316,18 @@ func _distancia_3d(g: Dictionary) -> void:
 		elegir_ajuste("radio_3d", DISTANCIAS_3D[int(barra.value)]))
 	if int(g["arboles"]) <= 0:
 		_nota(_graficos, "Con los árboles en Mínimo no hay 3D: la distancia no se usa.")
-	elif float(g["radio_3d"]) >= Configuracion.RADIO_3D_SIN_LIMITE:
-		_nota(_graficos, AVISO_SIN_LIMITE)
+	elif float(g["radio_3d"]) >= Configuracion.RADIO_3D_MAXIMO:
+		_nota(_graficos, AVISO_AL_MAXIMO)
 
 
-## Lo que dice la ventana con la distancia sin límite. La cifra es la medida.
-const AVISO_SIN_LIMITE := "Sin límite: todos los árboles del mapa en 3D. Sólo para equipos muy potentes o para capturas."
+## Lo que dice la ventana con la distancia al máximo. La cifra es la medida:
+## `GpuProfile ARBOLES=1 ESCALON=1 RADIO=1000`, GTX 1070 a 1080p, 2026-09-15 —el bosque
+## 34-67 ms de GPU contra 3,5 a 40 m, 54 millones de triángulos, 57 s en montar el mapa—.
+const AVISO_AL_MAXIMO := "1000 m: sólo el bosque pasa de 3 ms a 34-67 ms por fotograma en una GTX 1070, y el mapa tarda un minuto en montarse. Para capturas."
 
 
 static func texto_de_distancia(metros: float) -> String:
-	return "sin límite" if metros >= Configuracion.RADIO_3D_SIN_LIMITE else "%d m" % int(metros)
+	return "%d m" % int(metros)
 
 
 func _pintar_sonido() -> void:
@@ -355,11 +365,15 @@ func _opciones(donde: VBoxContainer, texto: String, opciones: Array, elegida: in
 	return selector
 
 
-func _casilla(donde: VBoxContainer, texto: String, puesta: bool, al_cambiar: Callable) -> void:
+func _casilla(donde: VBoxContainer, texto: String, puesta: bool, al_cambiar: Callable,
+		ayuda: String = "") -> void:
 	var casilla := CheckButton.new()
 	casilla.button_pressed = puesta
+	casilla.tooltip_text = ayuda
 	casilla.toggled.connect(al_cambiar)
-	_fila(donde, texto).add_child(casilla)
+	var fila := _fila(donde, texto)
+	fila.tooltip_text = ayuda
+	fila.add_child(casilla)
 
 
 func _barra(donde: VBoxContainer, texto: String, valor: float, al_cambiar: Callable) -> void:

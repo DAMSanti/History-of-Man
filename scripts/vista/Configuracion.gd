@@ -44,11 +44,17 @@ const AL_MONTAR_EL_MAPA: Array[String] = ["vegetacion", "arboles"]
 
 ## Los ajustes de gráficos sueltos, en el orden en que salen en la ventana.
 const AJUSTES: Array[String] = ["sombras", "oclusion", "niebla", "nubes", "escala",
-	"vegetacion", "arboles", "radio_3d", "normales", "orm"]
+	"vegetacion", "arboles", "radio_3d", "agua", "clima", "normales", "orm"]
 
-## La distancia del 3D que quiere decir «sin límite»: más que la diagonal de cualquier
-## mapa (4 km de lado). Un número y no infinito para que se guarde y se compare.
-const RADIO_3D_SIN_LIMITE := 100000.0
+## La distancia del 3D más larga que se ofrece. **Había «sin límite»** (100 km, todo el
+## mapa en 3D), decisión del usuario del 2026-09-15, y **rompía el motor**: el 3D va por
+## bloques de 32 m con un grupo de árboles por especie, variante y nivel de detalle, y
+## los 16 384 bloques del mapa son cientos de miles de grupos. Godot dejó de crearlos
+## («Element limit reached», `GpuProfile ARBOLES=1 RADIO=100000`, más de 7 000 errores y
+## 5,2 GB de RAM). A 1000 m monta —57 s— y cuesta 34-67 ms de GPU de bosque. Que quepa
+## el mapa entero es otro trabajo, por /spec: agrupar lejos en bloques mayores
+## (ROADMAP).
+const RADIO_3D_MAXIMO := 1000.0
 
 ## LO QUE FIJA CADA NIVEL. Decisiones del usuario del 2026-09-14 (INTERFAZ §8.5):
 ## **Medio es el de «1070 a 60 fps»** —lo que el juego llevaba hasta ahora—, Alto
@@ -65,7 +71,17 @@ const RADIO_3D_SIN_LIMITE := 100000.0
 ## bosque de siempre, de láminas; 1 Medio, 2 Alto y 3 Ultra— y `radio_3d` hasta dónde
 ## llega el 3D, en metros. Cada nivel pone el escalón de su mismo nombre, y Bajo el
 ## Mínimo, que es «los gráficos mínimos». El jugador mueve la distancia en un slider,
-## de 10 m a sin límite ([RADIO_3D_SIN_LIMITE]).
+## de 10 m a 1000 ([RADIO_3D_MAXIMO]).
+##
+## **El agua** (GRAFICOS §7.3, INTERFAZ §8.8): `agua` es el escalón del agua del valle
+## —0 Bajo, el río de siempre; 1 Medio, la orilla; 2 Alto, la lámina propia; 3 Ultra,
+## salpicaduras y reflejos—, y cada nivel pone el de su mismo nombre. Decisión del
+## usuario del 2026-09-15.
+##
+## **El clima** (GRAFICOS §7.4, INTERFAZ §8.8): `clima` enciende lo que el tiempo dibuja
+## —lluvia y nieve, suelo mojado y nieve cuajada, niebla de valle, la luz del temporal—.
+## Encendido en Medio, Alto y Ultra y apagado en Bajo, decisión del usuario del
+## 2026-09-15. Apagado, el tiempo sigue haciendo en la partida lo que hace.
 ##
 ## **Las distancias, medidas con `GpuProfile ARBOLES=1`** (2026-09-15, dos corridas): el
 ## 3D sólo cuesta en los encuadres de juego —desde la vista de medida no hay un árbol a
@@ -75,14 +91,33 @@ const RADIO_3D_SIN_LIMITE := 100000.0
 ## de Medio aunque no la use: así ningún ajuste baja al subir de nivel.
 const NIVELES := {
 	Nivel.BAJO: {"sombras": Sombras.BAJAS, "oclusion": Oclusion.NADA, "niebla": false,
-		"nubes": 0, "escala": 0.6, "vegetacion": 0.25, "arboles": 0, "radio_3d": 40.0, "normales": false, "orm": false},
+		"nubes": 0, "escala": 0.6, "vegetacion": 0.25, "arboles": 0, "radio_3d": 40.0, "agua": 0, "clima": false, "normales": false, "orm": false},
 	Nivel.MEDIO: {"sombras": Sombras.MEDIAS, "oclusion": Oclusion.SSAO, "niebla": true,
-		"nubes": 12, "escala": 1.0, "vegetacion": 1.0, "arboles": 1, "radio_3d": 40.0, "normales": true, "orm": true},
+		"nubes": 12, "escala": 1.0, "vegetacion": 1.0, "arboles": 1, "radio_3d": 40.0, "agua": 1, "clima": true, "normales": true, "orm": true},
 	Nivel.ALTO: {"sombras": Sombras.ALTAS, "oclusion": Oclusion.SSAO, "niebla": true,
-		"nubes": 20, "escala": 1.0, "vegetacion": 1.0, "arboles": 2, "radio_3d": 70.0, "normales": true, "orm": true},
+		"nubes": 20, "escala": 1.0, "vegetacion": 1.0, "arboles": 2, "radio_3d": 70.0, "agua": 2, "clima": true, "normales": true, "orm": true},
 	Nivel.ULTRA: {"sombras": Sombras.ULTRA, "oclusion": Oclusion.SSAO_Y_SSIL, "niebla": true,
-		"nubes": 32, "escala": 1.0, "vegetacion": 1.0, "arboles": 3, "radio_3d": 120.0, "normales": true, "orm": true},
+		"nubes": 32, "escala": 1.0, "vegetacion": 1.0, "arboles": 3, "radio_3d": 120.0, "agua": 3, "clima": true, "normales": true, "orm": true},
 }
+
+## Cuántos pasos de relieve (parallax con oclusión) admite lo que hay puesto.
+##
+## **Sale del nivel y no de un ajuste propio**: decisión del usuario del
+## 2026-09-16 —«parallax de verdad en Alto y Ultra»—, no un interruptor más en una
+## ventana que ya tiene doce. En Personalizado se toma el agua como medida del
+## equipo: quien pone la lámina del río de Alto tiene GPU para esto, y quien la
+## quita, no. La altura sale del color, así que no depende del ORM.
+static func pasos_de_relieve() -> int:
+	match nivel:
+		Nivel.ULTRA:
+			return 24
+		Nivel.ALTO:
+			return 12
+		Nivel.PERSONALIZADO:
+			return 12 if int(graficos.get("agua", 0)) >= 2 else 0
+		_:
+			return 0
+
 
 ## Lo que es cada escalón de sombras: cortes de la direccional, lado del atlas y
 ## calidad del suavizado. MEDIAS es lo que había —cuatro cortes, el atlas por
@@ -191,6 +226,8 @@ static func cargar() -> bool:
 	var del_nivel: Dictionary = NIVELES.get(guardado, NIVELES[Nivel.MEDIO])
 	for nombre: String in AJUSTES:
 		graficos[nombre] = fichero.get_value("graficos", nombre, del_nivel[nombre])
+	# La distancia «sin límite» de antes rompe el motor: se lee como el máximo.
+	graficos["radio_3d"] = minf(float(graficos["radio_3d"]), RADIO_3D_MAXIMO)
 	# El nivel se deduce de los ajustes y no se cree lo escrito: si alguien edita
 	# el fichero a mano, lo que manda es lo que se aplica.
 	nivel = _nivel_que_encaja()

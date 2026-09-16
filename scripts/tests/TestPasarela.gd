@@ -504,3 +504,83 @@ func test_un_cruce_mas_lejos_del_limite_no_se_mira() -> void:
 	assert_true(cruce.is_empty(),
 		"a %d m de casa no se arma nada, y armó %d celdas"
 			% [int(mas_cercano), cruce.size()])
+
+
+# --------------------------------------- y en Obras, como una obra más
+
+## La pasarela en la lista de Obras: fila, ficha y sitio (INTERFAZ §10).
+##
+## Iban aparte, como un párrafo encima de la lista, y por eso una pasarela
+## armada no se podía ir a mirar con la cámara. Se comprueba el CENSO, que es
+## quien decide qué sale; la ventana sólo lo pinta.
+
+
+func test_sin_ninguna_pasarela_no_hay_fila_en_obras() -> void:
+	var sim := _sim()
+	var censo := CensoDeObras.new(sim)
+	for grupo: Dictionary in censo.groups():
+		assert_true(String(grupo["key"]) != "obra:pasarela",
+			"sin pasarelas no sale la fila")
+	assert_true(censo.entries("obra:pasarela", Vector3.ZERO).is_empty(),
+		"y no hay ninguna ficha")
+
+
+func test_la_pasarela_armada_sale_como_una_obra_con_su_ficha() -> void:
+	var sim := _sim()
+	sim.day = 42
+	var celda := Pasarelas._centro_de_la_celda(Vector3(220.0, 0.0, 300.0))
+	sim.pasarelas.levantar([celda], sim.day)
+	var censo := CensoDeObras.new(sim)
+
+	var fila := {}
+	for grupo: Dictionary in censo.groups():
+		if String(grupo["key"]) == "obra:pasarela":
+			fila = grupo
+	assert_false(fila.is_empty(), "sale la fila de pasarelas")
+	assert_eq(int(fila["count"]), 1, "y dice cuántas hay")
+	assert_eq(String(fila["family"]), "Obras", "en la familia de las demás obras")
+
+	var fichas := censo.entries("obra:pasarela", Vector3.ZERO)
+	assert_eq(fichas.size(), 1, "una ficha por pasarela")
+	var ficha: Dictionary = fichas[0]
+	assert_true(Vector2(ficha["pos"].x - celda.x, ficha["pos"].z - celda.z)
+		.length() < 1.0, "la cámara va a la pasarela")
+	var texto := "\n".join(ficha["lines"] as Array[String])
+	assert_true(texto.contains("%d m" % int(Navgrid.CELL)), "dice cuánto salva")
+	assert_true(texto.contains("jornada 42"), "y en qué jornada se remató")
+
+
+func test_la_que_se_esta_armando_sale_tambien() -> void:
+	# Es la misma obra en otro momento, y se quiere mirar igual.
+	var sim := _sim()
+	var celda := Pasarelas._centro_de_la_celda(Vector3(220.0, 0.0, 300.0))
+	sim.pasarelas.obra = [celda]
+	sim.pasarelas.jornadas_puestas = 2.0
+	var censo := CensoDeObras.new(sim)
+
+	var cuantas := 0
+	for grupo: Dictionary in censo.groups():
+		if String(grupo["key"]) == "obra:pasarela":
+			cuantas = int(grupo["count"])
+	assert_eq(cuantas, 1, "la de en marcha cuenta como una")
+
+	var fichas := censo.entries("obra:pasarela", Vector3.ZERO)
+	assert_eq(fichas.size(), 1, "y tiene su ficha")
+	var texto := "\n".join(fichas[0]["lines"] as Array[String])
+	assert_true(texto.contains("2 de %d jornadas" % int(Pasarelas.JORNADAS)),
+		"con lo que lleva puesto")
+	assert_true(texto.contains("%d de leña" % int(Pasarelas.LENA)),
+		"y lo que gastará al rematarla")
+
+
+func test_la_riada_se_lleva_tambien_la_jornada_apuntada() -> void:
+	# Si las dos listas se descuadran, la ficha de una pasarela enseña la fecha
+	# de otra: es el fallo que tiene una lista paralela, y por eso se prueba.
+	var sim := _sim()
+	var una := Pasarelas._centro_de_la_celda(Vector3(220.0, 0.0, 100.0))
+	var otra := Pasarelas._centro_de_la_celda(Vector3(220.0, 0.0, 300.0))
+	sim.pasarelas.levantar([una], 10)
+	sim.pasarelas.levantar([otra], 20)
+	assert_true(sim.pasarelas.llevarsela(0), "se la lleva la crecida")
+	assert_eq(sim.pasarelas.rematadas.size(), 1, "queda una jornada apuntada")
+	assert_eq(sim.pasarelas.rematadas[0], 20, "la de la que sigue en pie")

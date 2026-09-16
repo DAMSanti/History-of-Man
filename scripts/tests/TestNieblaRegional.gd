@@ -199,7 +199,7 @@ var _estado: Array = []
 
 func _guardar_estado() -> void:
 	_estado = [GameState.niebla, GameState.discovered.duplicate(), GameState.home,
-		GameState.started]
+		GameState.started, GameState.avistados.duplicate()]
 
 
 func _devolver_estado() -> void:
@@ -207,6 +207,7 @@ func _devolver_estado() -> void:
 	GameState.discovered = _estado[1]
 	GameState.home = _estado[2]
 	GameState.started = _estado[3]
+	GameState.avistados = _estado[4]
 
 
 func test_al_empezar_se_ve_el_recuadro_del_primer_campamento() -> void:
@@ -388,7 +389,9 @@ func test_la_flecha_cubre_el_mismo_pasillo_que_se_descubre() -> void:
 	var ficha := FichaDeRumbo.new()
 	var dibujados: Array[Pasillo] = []
 	ficha.cambiada.connect(func(recorrido: Pasillo) -> void: dibujados.append(recorrido))
-	ficha.abrir(sim, 60.0, "prueba")
+	# Apunta sola al primero de los ocho que se ofrecen: desde el 2026-09-16 no se
+	# sale hacia otro.
+	ficha.abrir(sim, "prueba")
 	ficha.elegir_jornadas(8)
 	ficha.elegir_jornadas(13)
 	var sin_bloqueo := ficha.bloqueo()
@@ -412,7 +415,7 @@ func test_la_ficha_dice_por_que_no_se_puede_mandar() -> void:
 	var sitios := load("res://data/sites/cantabria_sites.res") as SiteSet
 	var sim := _banda_en(sitios.available_in(-120.0, Site.Era.PALEOLITICO)[0])
 	var ficha := FichaDeRumbo.new()
-	ficha.abrir(sim, 0.0, "prueba")
+	ficha.abrir(sim, "prueba")
 	ficha.marcar(ficha.marcados[0], false)
 	var pocos := ficha.bloqueo()
 	var salio := ficha.mandar()
@@ -526,4 +529,113 @@ func test_la_malla_regional_tiene_caché_aunque_el_relieve_sea_una_copia() -> vo
 	assert_eq(sin_origen, "", "una copia sin origen no tiene dónde guardarse")
 	assert_true(paleolitico.begins_with("res://data/dem/cantabria_region_mar-120"), "con origen, sí: %s" % paleolitico)
 	assert_true(paleolitico != hoy, "y el mar de otra época es otra caché")
+
+
+# ------------------------------------------------ lo avistado (2026-09-16) --
+
+func test_una_simulacion_dirigida_avista_en_la_barrera() -> void:
+	_guardar_estado()
+	GameState.avistados = {}
+	GameState.discovered = {}
+	var sim := SettlementSim.new()
+	var reloj := RelojDeLaPartida.new()
+	reloj.dirigir(sim)
+	var lejos := Site.new()
+	lejos.id = 424242
+	sim.avistar(lejos)
+	var antes := GameState.avistado(lejos)
+	reloj._un_paso_a_todos()
+	var despues := GameState.avistado(lejos)
+	var cola := sim.avistamientos.size()
+	_devolver_estado()
+	reloj.free()
+	sim.free()
+	assert_false(antes, "dentro del paso no toca la partida")
+	assert_true(despues, "la barrera lo apunta")
+	assert_eq(cola, 0, "y vacía la cola")
+
+
+func test_descubrir_un_avistado_lo_deja_como_cualquier_otro() -> void:
+	_guardar_estado()
+	GameState.avistados = {}
+	GameState.discovered = {}
+	var s := Site.new()
+	s.id = 424243
+	GameState.avistar(s)
+	var avistado := GameState.avistado(s)
+	GameState.discover(s)
+	var tras_descubrirlo := GameState.avistado(s)
+	_devolver_estado()
+	assert_true(avistado, "avistado y sin descubrir")
+	assert_false(tras_descubrirlo, "descubierto ya no es un avistado")
+
+
+func test_un_avistado_se_dibuja_pero_no_se_pincha_ni_sale_en_listas() -> void:
+	_guardar_estado()
+	GameState.started = true
+	GameState.niebla = _niebla()
+	var visto := Site.new()
+	visto.id = 424250
+	visto.lon = -4.5
+	visto.lat = 43.3
+	var avistado := Site.new()
+	avistado.id = 424251
+	avistado.lon = -4.2
+	avistado.lat = 43.5
+	var nada := Site.new()
+	nada.id = 424252
+	nada.lon = -4.3
+	nada.lat = 43.4
+	GameState.discovered = {visto.id: true}
+	GameState.niebla.levantar_recuadro(visto.lon, visto.lat, 4096.0)
+	GameState.avistados = {avistado.id: true}
+	# `RegionMap` no tiene `class_name`: se llama por su script, como en la prueba de la caché.
+	var repartidos: Dictionary = (load("res://scripts/region/RegionMap.gd") as GDScript).call(
+		"sitios_que_se_dibujan", [visto, avistado, nada] as Array[Site])
+	var bajo_la_niebla := not GameState.niebla.levantada(avistado.lon, avistado.lat)
+	_devolver_estado()
+	assert_true(bajo_la_niebla, "el avistado está bajo la niebla")
+	assert_eq(repartidos["vistos"], [visto] as Array[Site], "se pincha y sale en listas sólo el descubierto")
+	assert_eq(repartidos["avistados"], [avistado] as Array[Site], "el avistado se dibuja aparte")
+
+
+# ------------------------------------------- el viento de las nubes (2026-09-16) --
+
+func test_el_viento_corre_con_el_reloj_de_la_partida_y_no_con_el_de_pared() -> void:
+	var a_las_siete := Viento.recorrido(3, 7.0, 120.0)
+	var otra_vez := Viento.recorrido(3, 7.0, 120.0)
+	var a_las_ocho := Viento.recorrido(3, 8.0, 120.0)
+	var al_dia_siguiente := Viento.recorrido(4, 7.0, 120.0)
+	assert_eq(a_las_siete, otra_vez, "la misma hora, el mismo recorrido: en pausa no se mueven")
+	assert_gt(a_las_ocho, a_las_siete, "una hora después, más")
+	assert_gt(al_dia_siguiente, a_las_ocho, "y al día siguiente, más todavía")
+	# A x5 la partida da cinco veces más horas por segundo de reloj: el viento las sigue.
+	assert_near(Viento.recorrido(3, 12.0, 120.0) - a_las_siete,
+		(Viento.recorrido(3, 8.0, 120.0) - a_las_siete) * 5.0, 0.001,
+		"cinco horas corren cinco veces lo que una")
+
+
+func test_sin_reloj_de_partida_las_nubes_del_regional_no_se_mueven() -> void:
+	var antes := Campamentos.reloj
+	Campamentos.reloj = null
+	var quieto := Viento.recorrido_del_reloj()
+	Campamentos.reloj = antes
+	assert_eq(quieto, 0.0, "sin reloj, el viento no corre")
+
+
+func test_la_losa_de_nubes_va_por_encima_del_relieve_y_no_pegada() -> void:
+	# La capa está entre 800 y 3 200 m sobre el mar de la época, pasados a unidades del
+	# mundo regional: 100 m por unidad y 2,5 de exageración.
+	var terreno := TerrainGenerator.new()
+	terreno.terrain_size = Vector2i(2000, 1430)
+	var nubes := NubesDeLaNiebla.new()
+	nubes.montar(terreno, null, 100.0, 2.5)
+	var caja := nubes.mesh as BoxMesh
+	var base := nubes.position.y - caja.size.y * 0.5
+	var techo := nubes.position.y + caja.size.y * 0.5
+	nubes.free()
+	terreno.free()
+	assert_near(base, NubesDeLaNiebla.BASE_M / 100.0 * 2.5, 0.01, "la base, a 800 m")
+	assert_near(techo, NubesDeLaNiebla.TECHO_M / 100.0 * 2.5, 0.01, "y el techo, a 3 200 m")
+	assert_gt(caja.size.x, 1999.0, "y cubre la comarca entera")
 

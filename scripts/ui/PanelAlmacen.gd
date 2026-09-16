@@ -718,7 +718,7 @@ func _uses_of(kind: Materia.Kind) -> String:
 
 	for tool_key: int in Tool.Kind.values():
 		var tool_kind := tool_key as Tool.Kind
-		if Tool.recipe(tool_kind).has(kind):
+		if Tool.recipe(tool_kind, ui.sim.techs).has(kind):
 			uses.append(Tool.kind_name(tool_kind).to_lower())
 
 	var works: Array[String] = []
@@ -765,7 +765,7 @@ func _uses_of(kind: Materia.Kind) -> String:
 func _how_and_what_for(kind: Tool.Kind) -> String:
 	var lines: Array[String] = []
 
-	var recipe := Tool.recipe(kind)
+	var recipe := Tool.recipe(kind, ui.sim.techs)
 	if recipe.is_empty():
 		lines.append("No se fabrica.")
 	else:
@@ -930,8 +930,9 @@ func _pintar_prioridad(button: Button, kind: Materia.Kind) -> void:
 ## que lo que faltaba era el asta.
 func _recipe_text(kind: Tool.Kind) -> String:
 	var parts: Array[String] = []
-	for material: int in Tool.recipe(kind):
-		parts.append("%.0f %s" % [float(Tool.recipe(kind)[material]),
+	var receta := Tool.recipe(kind, ui.sim.techs)
+	for material: int in receta:
+		parts.append("%.1f %s" % [float(receta[material]),
 			Materia.material_name(material as Materia.Kind).to_lower()])
 	if parts.is_empty():
 		return "nada: se hace con las manos"

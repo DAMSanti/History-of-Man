@@ -343,8 +343,8 @@ var escalon := 0
 ## se cambia en caliente con [aplicar_configuracion].
 var radio_3d := 40.0
 
-## Hasta dónde se reparte el nivel de detalle del 3D, por escalón: con el slider en
-## «sin límite», repartir los niveles sobre 100 km dejaba todo el valle en el nivel 0.
+## Hasta dónde se reparte el nivel de detalle del 3D, por escalón: con el slider lejos,
+## repartir los niveles sobre toda la distancia dejaba el valle entero en el nivel 0.
 const DETALLE_HASTA := [0.0, 40.0, 70.0, 120.0]
 
 ## Hasta dónde mezcla el impostor sus cuatro vistas, por escalón; más lejos lee la más
@@ -931,8 +931,8 @@ func _replan() -> void:
 	var order: Array[Vector2i] = []
 	var desde := Vector2i(-reach, -reach)
 	var hasta := Vector2i(reach, reach)
-	# SIN SALIRSE DEL MAPA: con la distancia del 3D «sin límite» el recorrido eran
-	# millones de bloques vacíos por cada cambio de bloque de la cámara.
+	# SIN SALIRSE DEL MAPA: con la distancia del 3D larga el recorrido pasaba por
+	# bloques vacíos de fuera del mapa en cada cambio de bloque de la cámara.
 	var bloques := bloques_del_mapa()
 	if bloques != Vector2i.ZERO:
 		desde = Vector2i(maxi(desde.x, -_centre.x), maxi(desde.y, -_centre.y))

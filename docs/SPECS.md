@@ -90,7 +90,7 @@ queda cargado igual y no obliga a tocar `project.godot`:
 | Clase | Qué guarda | Contrato |
 |---|---|---|
 | `Expedition` (`region/`) | El traspaso regional → local: qué `Site`, qué relieve, qué recuadro, qué cota del mar, qué época | Lo escribe el mapa regional al fundar y lo lee `DemoMain._ready`. `is_active()` decide si la capa local arranca de una partida o de sus valores de demo |
-| `GameState` (`region/`) | La partida: emplazamiento de arranque, población inicial, estación, qué se lleva la banda, lo descubierto y **la niebla del mapa regional** (`niebla`, una `NieblaRegional`, desde el 2026-09-14) | Constantes de diseño (`HOME_LAT`, `START_POPULATION := 15`) más el estado que cruza escenas. La niebla se levanta sólo con `levantar_niebla(forma)`, que **descubre los sitios de dentro**; y un sitio se enseña si `se_ve(site)` —descubierto y fuera de la niebla— (SISTEMAS §4) |
+| `GameState` (`region/`) | La partida: emplazamiento de arranque, población inicial, estación, qué se lleva la banda, lo descubierto, **la niebla del mapa regional** (`niebla`, una `NieblaRegional`, desde el 2026-09-14) y **lo avistado** desde las cumbres (`avistados`, desde el 2026-09-16, SISTEMAS §4) | Constantes de diseño (`HOME_LAT`, `START_POPULATION := 15`) más el estado que cruza escenas. La niebla se levanta sólo con `levantar_niebla(forma)`, que **descubre los sitios de dentro**; y un sitio se enseña si `se_ve(site)` —descubierto y fuera de la niebla— (SISTEMAS §4) |
 | `Configuracion` (`vista/`) | La configuración del equipo: pantalla, gráficos por nivel y sueltos, volúmenes (desde el 2026-09-14) | **No es de la partida**: su propio fichero, `user://configuracion.cfg`, con la ruta conmutable para pruebas como `Guardado.carpeta`. Los niveles viven en `Configuracion.NIVELES` y sólo ahí. Se aplica al abrir el juego (`MenuPrincipal`) y en caliente por el grupo `configuracion_grafica` (INTERFAZ §8) |
 | `Carga` (`ui/`) | La pantalla de carga abierta y la barra (desde el 2026-09-15) | La abre quien va a cambiar de escena, **antes** de pedirlo; la escena que llega declara sus etapas, cede entre cuadros (`Carga.ceder`) y la cierra al terminar. **Sin pantalla abierta no se reparte nada** y la escena se monta de un tirón. Con ella abierta, el reloj de la partida no anda (§3.1). La pantalla cuelga de la raíz del árbol, como los campamentos. INTERFAZ §9 |
 | `Forest._siembra_guardada` (`vista/`) | La última siembra del bosque, con la huella de lo que la decidió (desde el 2026-09-15) | **Es caché, no estado**: volver al mismo valle con la misma huella —relieve, humedad, ríos, recuadro, bocas, densidad y `VERSION_DE_LA_SIEMBRA`— reutiliza los árboles; cualquier otra cosa siembra y la sustituye. Una sola, la del último valle (35 MB). Quien cambie las reglas de `_sow` sube la versión. INTERFAZ §9 |
@@ -556,6 +556,11 @@ El contrato de hoy:
   pasos a todos (§3.1). La escena local **adopta** el campamento del mapa en que
   entra (`DemoMain._montar_el_campamento`) y lo suelta al irse
   (`DemoMain._dejar_la_escena`); no monta otro ni vuelca el guardado encima.
+  **Y lo suelta aunque se vaya sin avisar** (2026-09-15): `DemoMain._exit_tree` llama a
+  `Campamentos.soltar_de_la_escena`, así que un camino nuevo que cambie de escena sin
+  pasar por `_dejar_la_escena` no se lleva la banda con el mapa —pierde el
+  autoguardado de ese viaje, no el campamento—. `TestViaje`, y `TransitoProbe A_PELO=1`
+  sin un `SCRIPT ERROR`.
 - **Una sola fecha**: la del reloj. Lo que no se mira se simula igual y sólo deja
   de dibujarse; la firma de un campamento no depende de que se mire (§3.2, §7).
 - **La visita no para el reloj** si hay campamentos vivos: su simulación, sin

@@ -138,7 +138,7 @@ func _init() -> void:
 				nodo.global_position.distance_to(sim.home_forecourt)])
 		# Lo pedido el 2026-09-14: el paraviento a 5–6 m del BORDE del pozo, y el
 		# conchero junto a la boca y no a veinte metros.
-		var cueva: CaveMouth = demo._cave_at(sim.home_position)
+		var cueva: CaveMouth = demo.campamento.cueva_en(sim.home_position)
 		if cueva != null:
 			var boca := cueva.boca()
 			var paraviento: Node3D = obras.get_node_or_null("Paraviento")

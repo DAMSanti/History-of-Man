@@ -354,3 +354,30 @@ func test_no_se_manda_a_un_valle_sin_preparar() -> void:
 	assert_true(Viaje.ultimo_motivo.contains("no está preparado"), "y se dice por qué: %s" % Viaje.ultimo_motivo)
 	assert_eq(origen.sim.people.size(), 6, "y nadie se ha ido")
 	_soltar_el_registro()
+
+
+## SPECS §6.4: el campamento vive fuera de las escenas. Si una escena se va sin soltar
+## el suyo —un camino que se olvida de `DemoMain._dejar_la_escena`—, al liberarla se
+## llevaba el campamento, y el reloj y el índice se quedaban con un objeto liberado:
+## los `SCRIPT ERROR` de cada viaje de `TransitoProbe`, que cambiaba de escena a pelo.
+##
+## Sin árbol —la suite corre en `_init` y no tiene—: se llama lo que la escena llama al
+## salir del árbol, y se libera. Que se pueda llamar DURANTE la salida lo comprueba
+## `TransitoProbe A_PELO=1`, sin un `SCRIPT ERROR`.
+func test_una_escena_que_se_va_no_se_lleva_su_campamento() -> void:
+	var reloj := _registro_limpio()
+	var campamento := _campamento(_sim(3), 56)
+	Campamentos.vivos.append(campamento)
+	reloj.dirigir(campamento.sim)
+	var escena := Node.new()
+	escena.add_child(campamento)
+	Campamentos.soltar_de_la_escena(escena, campamento)
+	escena.free()
+	var sigue := is_instance_valid(campamento)
+	var suelto := sigue and campamento.get_parent() == null
+	var sin_mirar := sigue and not campamento.sim.se_mira
+	_soltar_el_registro()
+	assert_true(sigue, "el campamento sobrevive a la escena")
+	assert_true(suelto, "suelto, sin padre: sigue simulando fuera del árbol")
+	assert_true(sin_mirar, "y ya no se mira")
+

@@ -16,23 +16,15 @@ var _antes: Array = []
 
 ## `GameState` es estático: lo que se toque aquí se devuelve.
 func _guardar() -> void:
-	_antes = [GameState.discovered.duplicate(), GameState.niebla, GameState.home]
+	_antes = [GameState.discovered.duplicate(), GameState.niebla, GameState.home,
+		GameState.avistados.duplicate()]
 
 
 func _devolver() -> void:
 	GameState.discovered = _antes[0]
 	GameState.niebla = _antes[1]
 	GameState.home = _antes[2]
-
-
-## Un sitio lejos de la comarca, donde el pasillo no encuentra nada: las pruebas
-## de coste no deben descubrir ni tocar la niebla de la partida.
-func _en_ninguna_parte() -> Site:
-	var s := Site.new()
-	s.id = 99999
-	s.lon = 0.0
-	s.lat = 0.0
-	return s
+	GameState.avistados = _antes[3]
 
 
 ## Una banda de adultos en casa, con despensa de sobra.
@@ -51,22 +43,37 @@ func _sim(gente: int = 8, comida: float = 400.0) -> SettlementSim:
 		p.age_group = Inhabitant.Age.ADULTO
 		sim.people.append(p)
 	sim.day = 10
-	sim.sitio = _en_ninguna_parte()
+	con_algo_al_lado(sim)
 	return sim
 
 
-## Un sitio de la comarca con otro a unos kilómetros, y el rumbo hacia él: un
-## pasillo en el que seguro hay algo. Se busca y no se escribe, que los ids
-## cambian en cada horneado.
+## Pone la simulación en ninguna parte con un yacimiento sin descubrir a cien metros:
+## desde ahí el pasillo no anda nada, así que los ocho rumbos se ofrecen y una prueba
+## que no mira adónde va puede mandar una expedición. Desde el 2026-09-16 sólo se sale
+## hacia un rumbo con algo al alcance ([Expedicion.se_ofrece]). La usan otras suites.
+static func con_algo_al_lado(sim: SettlementSim) -> void:
+	sim.sitio = Site.new()
+	sim.sitio.id = 99999
+	var vecino := Site.new()
+	vecino.id = 99998
+	vecino.lon = 0.0009
+	sim.expedicion.comarca = SiteSet.new()
+	sim.expedicion.comarca.sites.append(vecino)
+
+
+## Un sitio de la comarca y uno de los ocho rumbos con otro sitio a unos kilómetros
+## dentro de su pasillo de doce jornadas: una salida en la que seguro hay algo. Se busca
+## y no se escribe, que los ids cambian en cada horneado. Desde el 2026-09-16 el rumbo
+## es de los ocho (SISTEMAS §4): antes era el ángulo exacto hacia el otro sitio.
 func _salida_con_algo() -> Dictionary:
 	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
 	for desde: Site in comarca.available_in(-120.0, Site.Era.PALEOLITICO):
-		for hasta: Site in comarca.available_in(-120.0, Site.Era.PALEOLITICO):
-			var x := (hasta.lon - desde.lon) * Viaje.METROS_POR_GRADO * cos(deg_to_rad(desde.lat))
-			var z := (hasta.lat - desde.lat) * Viaje.METROS_POR_GRADO
-			var lejos := sqrt(x * x + z * z)
-			if lejos > 3000.0 and lejos < 12000.0:
-				return {"desde": desde, "rumbo": rad_to_deg(atan2(x, z)), "hasta": hasta}
+		for hacia: float in Expedicion.RUMBOS:
+			var pasillo := Pasillo.trazar(desde.lon, desde.lat, hacia, 12)
+			for hasta: Site in comarca.sites:
+				if hasta.id != desde.id and _lejos_de(desde, hasta) > 3000.0 \
+						and pasillo.contiene(hasta.lon, hasta.lat):
+					return {"desde": desde, "rumbo": hacia, "hasta": hasta}
 	return {}
 
 
@@ -133,6 +140,7 @@ func test_la_que_vuelve_sin_nada_cuesta_igual() -> void:
 	var salida := _salida_con_algo()
 	var con_algo := _sim()
 	con_algo.sitio = salida["desde"]
+	con_algo.expedicion.comarca = null
 	var sin_nada := _sim()
 	var antes_con := con_algo.store.food_rations()
 	var antes_sin := sin_nada.store.food_rations()
@@ -323,6 +331,7 @@ func test_al_volver_descubre_todo_lo_del_pasillo_y_nada_mas() -> void:
 	assert_false(salida.is_empty(), "hay una salida con algo a la vista")
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	GameState.niebla = NieblaRegional.de_la_comarca()
 	GameState.discovered = {sim.sitio.id: true}
@@ -361,6 +370,7 @@ func test_lo_ya_conocido_no_se_vuelve_a_contar() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	GameState.niebla = NieblaRegional.de_la_comarca()
 	GameState.discovered = {sim.sitio.id: true}
@@ -381,6 +391,7 @@ func test_rumbos_opuestos_descubren_cosas_distintas() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	var uno := _del_pasillo(sim, float(salida["rumbo"]), 12)
 	var otro := _del_pasillo(sim, float(salida["rumbo"]) + 180.0, 12)
 	var comunes := 0
@@ -407,6 +418,7 @@ func test_alcanzar_un_sitio_con_gente_deja_contacto() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	var dentro := _del_pasillo(sim, float(salida["rumbo"]), 12)
 	var con_gente: Site = dentro[0]
@@ -424,6 +436,7 @@ func test_la_primera_expedicion_encuentra_gente_en_lo_mas_lejano() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	var dentro := _del_pasillo(sim, float(salida["rumbo"]), 12)
 	var lejano: Site = dentro[0]
@@ -444,6 +457,7 @@ func test_un_sitio_vacio_no_deja_contacto() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	sim.expedicion.mandar(3, float(salida["rumbo"]))
 	sim.day += Expedicion.JORNADAS_PROPUESTAS
@@ -452,6 +466,9 @@ func test_un_sitio_vacio_no_deja_contacto() -> void:
 	for s: Site in _del_pasillo(sim, float(salida["rumbo"]), 12):
 		sim.contacto.ocupados.erase(s.id)
 	sim.contacto.trato.clear()
+	# Y se olvida lo descubierto: desde el 2026-09-16 un rumbo sin nada por descubrir
+	# no se ofrece (SISTEMAS §4), y aquí se prueba el contacto, no el descubrimiento.
+	GameState.discovered = {sim.sitio.id: true}
 	var salio := sim.expedicion.mandar(3, float(salida["rumbo"]))
 	sim.day += Expedicion.JORNADAS_PROPUESTAS
 	sim.expedicion.nuevo_dia()
@@ -467,6 +484,7 @@ func test_el_contacto_sigue_ahi_una_estacion_despues() -> void:
 	var salida := _salida_con_algo()
 	var sim := _sim()
 	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
 	_guardar()
 	sim.expedicion.mandar(3, float(salida["rumbo"]))
 	sim.day += Expedicion.JORNADAS_PROPUESTAS
@@ -583,3 +601,308 @@ func test_la_tienda_es_de_piel_curtida() -> void:
 	sim.store.add(Materia.Kind.PIEL, 10.0)
 	assert_false(sim.expedicion.mandar(3, 90.0), "con piel cruda no hay tienda")
 	assert_eq(sim.store.amount(Materia.Kind.PIEL), 10.0, "y la cruda no se toca")
+
+
+# ------------------------------------------------------- los ocho rumbos --
+
+## Un sitio de la comarca lejos de la costa y del borde, para que los pasillos anden.
+func _origen_de_dentro() -> Site:
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var mejor: Site = null
+	var mas_cerca := INF
+	for s: Site in comarca.sites:
+		var d := absf(s.lon - GameState.HOME_LON) + absf(s.lat - GameState.HOME_LAT)
+		if d < mas_cerca:
+			mas_cerca = d
+			mejor = s
+	return mejor
+
+
+## Un yacimiento puesto a mano a `metros` del origen hacia un rumbo.
+func _hacia(desde: Site, rumbo: float, metros: float, id: int) -> Site:
+	var s := Site.new()
+	s.id = id
+	s.lon = desde.lon + sin(deg_to_rad(rumbo)) * metros / (Viaje.METROS_POR_GRADO * cos(deg_to_rad(desde.lat)))
+	s.lat = desde.lat + cos(deg_to_rad(rumbo)) * metros / Viaje.METROS_POR_GRADO
+	return s
+
+
+func test_un_rumbo_se_ofrece_si_y_solo_si_su_pasillo_tiene_algo() -> void:
+	# A dos kilómetros por su rumbo cada uno: del eje del rumbo de al lado quedan a
+	# 1,4 km, fuera de sus 700 m. Así cada yacimiento enciende uno solo.
+	var sim := _sim()
+	sim.sitio = _origen_de_dentro()
+	_guardar()
+	GameState.discovered = {sim.sitio.id: true}
+	var comarca := SiteSet.new()
+	for rumbo: float in [0.0, 90.0, 225.0]:
+		comarca.sites.append(_hacia(sim.sitio, rumbo, 2000.0, 900000 + int(rumbo)))
+	sim.expedicion.comarca = comarca
+	var con_los_tres := sim.expedicion.rumbos_posibles()
+	GameState.discover(comarca.sites[1])
+	var sin_el_este := sim.expedicion.rumbos_posibles()
+	_devolver()
+	assert_eq(con_los_tres, [0.0, 90.0, 225.0] as Array[float], "se ofrecen los tres que tienen algo")
+	assert_eq(sin_el_este, [0.0, 225.0] as Array[float], "y el este se apaga al descubrir lo suyo")
+
+
+func test_un_avistado_enciende_su_rumbo() -> void:
+	# Un avistado está sin descubrir: saberlo ahí es justo para elegir hacia dónde.
+	var sim := _sim()
+	sim.sitio = _origen_de_dentro()
+	_guardar()
+	GameState.discovered = {sim.sitio.id: true}
+	var comarca := SiteSet.new()
+	comarca.sites.append(_hacia(sim.sitio, 180.0, 2000.0, 900180))
+	sim.expedicion.comarca = comarca
+	var posibles := sim.expedicion.rumbos_posibles()
+	_devolver()
+	assert_eq(posibles, [180.0] as Array[float], "el sur, y sólo el sur")
+
+
+func test_el_yacimiento_mas_al_este_no_ofrece_el_este() -> void:
+	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var este: Site = null
+	for s: Site in comarca.sites:
+		if este == null or s.lon > este.lon:
+			este = s
+	var sim := _sim()
+	sim.sitio = este
+	sim.expedicion.comarca = null
+	_guardar()
+	GameState.discovered = {este.id: true}
+	var posibles := sim.expedicion.rumbos_posibles()
+	_devolver()
+	assert_false(posibles.has(90.0), "desde el más al este, el este no: %s" % str(posibles))
+
+
+func test_solo_se_manda_hacia_uno_de_los_ocho_que_se_ofrecen() -> void:
+	var torcida := _sim()
+	var sin_nada := _sim()
+	sin_nada.sitio = _origen_de_dentro()
+	var comarca := SiteSet.new()
+	comarca.sites.append(_hacia(sin_nada.sitio, 90.0, 2000.0, 900090))
+	sin_nada.expedicion.comarca = comarca
+	_guardar()
+	GameState.discovered = {sin_nada.sitio.id: true}
+	var con_ochenta := torcida.expedicion.mandar(3, 80.0)
+	var al_oeste := sin_nada.expedicion.mandar(3, 270.0)
+	var al_este := sin_nada.expedicion.mandar(3, 90.0)
+	_devolver()
+	assert_false(con_ochenta, "un ángulo que no es de los ocho no sale")
+	assert_false(al_oeste, "uno de los ocho sin nada al alcance tampoco")
+	assert_true(al_este, "el que se ofrece, sí")
+	assert_true(Expedicion.es_un_rumbo(sin_nada.expedicion.rumbo), "y el rumbo que lleva es de los ocho")
+
+
+func test_por_los_ocho_rumbos_descubre_todo_lo_del_pasillo_y_nada_mas() -> void:
+	# La prueba de pasillo de siempre, con cada rumbo que se ofrece desde un sitio real:
+	# lo que se descubre no cambia por ser uno de ocho.
+	var desde := _origen_de_dentro()
+	var comprobados := 0
+	var mal: Array[String] = []
+	for rumbo: float in Expedicion.RUMBOS:
+		var sim := _sim()
+		sim.sitio = desde
+		sim.expedicion.comarca = null
+		_guardar()
+		GameState.niebla = NieblaRegional.de_la_comarca()
+		GameState.discovered = {desde.id: true}
+		if not sim.expedicion.se_ofrece(rumbo):
+			_devolver()
+			continue
+		var esperados := _del_pasillo(sim, rumbo, 12)
+		sim.expedicion.mandar(3, rumbo)
+		sim.day += Expedicion.JORNADAS_PROPUESTAS
+		sim.expedicion.nuevo_dia()
+		var sobran := GameState.discovered.size() - 1
+		var faltan := 0
+		for s: Site in esperados:
+			if not GameState.is_discovered(s):
+				faltan += 1
+			else:
+				sobran -= 1
+		_devolver()
+		comprobados += 1
+		if faltan != 0 or sobran != 0:
+			mal.append("%s: faltan %d, sobran %d" % [Expedicion.nombre_del_rumbo(rumbo), faltan, sobran])
+	assert_gt(float(comprobados), 0.0, "algún rumbo se ofrece desde casa: %d" % comprobados)
+	assert_true(mal.is_empty(), "todos los del pasillo y ninguno más, por cada rumbo: %s" % str(mal))
+
+
+# ------------------------------------ el botón: lo que falta para la más corta --
+
+func test_la_mas_corta_sale_con_todo_y_dice_por_que_no_sin_cada_cosa() -> void:
+	# La más corta: tres personas y cuatro jornadas. Cada caso quita UNA cosa.
+	var corta := Expedicion.new(null).hace_falta_para(Expedicion.MINIMO_PARA_SALIR,
+		Pasillo.JORNADAS_MINIMAS)
+	var con_todo := _sim()
+	var sin_pieles := _sim()
+	sin_pieles.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	sin_pieles.store.add(Materia.Kind.PIEL_CURTIDA, float(corta["piel"]) - 1.0)
+	var sin_comida := _sim(8, float(corta["raciones"]) * 0.2)
+	var sin_lena := _sim()
+	sin_lena.store.take(Materia.Kind.LENA, 200.0)
+	var sin_gente := _sim(Expedicion.MINIMO_PARA_SALIR - 1)
+	var con_una_fuera := _sim()
+	_guardar()
+	con_una_fuera.expedicion.mandar(3, 90.0)
+	_devolver()
+	assert_eq(con_todo.expedicion.por_que_no_sale(), "", "con todo, sale")
+	assert_true(sin_pieles.expedicion.por_que_no_sale().contains("pieles curtidas"),
+		"sin tres pieles curtidas, lo dice: %s" % sin_pieles.expedicion.por_que_no_sale())
+	assert_true(sin_comida.expedicion.por_que_no_sale().contains("raciones"),
+		"sin raciones, lo dice: %s" % sin_comida.expedicion.por_que_no_sale())
+	assert_true(sin_lena.expedicion.por_que_no_sale().contains("leña"),
+		"sin leña, lo dice: %s" % sin_lena.expedicion.por_que_no_sale())
+	assert_true(sin_gente.expedicion.por_que_no_sale().contains("adultos"),
+		"sin gente, lo dice: %s" % sin_gente.expedicion.por_que_no_sale())
+	assert_true(con_una_fuera.expedicion.por_que_no_sale().contains("fuera"),
+		"con una fuera, lo dice: %s" % con_una_fuera.expedicion.por_que_no_sale())
+
+
+func test_la_mas_corta_cuesta_lo_de_tres_aunque_puedan_ir_mas() -> void:
+	# Ocho que pueden ir y las pieles justas para tres: el botón se enciende.
+	var sim := _sim(8)
+	var corta := sim.expedicion.hace_falta_para(Expedicion.MINIMO_PARA_SALIR,
+		Pasillo.JORNADAS_MINIMAS)
+	sim.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	sim.store.add(Materia.Kind.PIEL_CURTIDA, float(corta["piel"]))
+	assert_eq(sim.expedicion.por_que_no_sale(), "", "con las de tres, sale: no pide ocho")
+
+
+func test_la_ficha_bloquea_con_los_mismos_motivos() -> void:
+	var sim := _sim()
+	sim.store.take(Materia.Kind.PIEL_CURTIDA, 10.0)
+	var ficha := FichaDeRumbo.new()
+	ficha.abrir(sim, "casa")
+	var bloqueo := ficha.bloqueo()
+	ficha.free()
+	assert_eq(bloqueo, sim.expedicion.motivo_para(Expedicion.MINIMO_PARA_SALIR,
+		Expedicion.JORNADAS_PROPUESTAS), "la ficha dice lo mismo que la expedición")
+	assert_true(bloqueo.contains("pieles curtidas"), "y es el de las pieles: %s" % bloqueo)
+
+
+func test_la_expedicion_que_pasa_por_un_avistado_lo_descubre_y_la_que_no_no() -> void:
+	var salida := _salida_con_algo()
+	var sim := _sim()
+	sim.sitio = salida["desde"]
+	sim.expedicion.comarca = null
+	_guardar()
+	GameState.niebla = NieblaRegional.de_la_comarca()
+	GameState.discovered = {sim.sitio.id: true}
+	var dentro: Site = salida["hasta"]
+	# Uno de fuera del pasillo: el primero de la comarca que no cae en él.
+	var fuera: Site = null
+	var pasillo := sim.expedicion.pasillo_hacia(float(salida["rumbo"]), 12)
+	for s: Site in (load("res://data/sites/cantabria_sites.res") as SiteSet).sites:
+		if s.id != sim.sitio.id and not pasillo.contiene(s.lon, s.lat):
+			fuera = s
+			break
+	GameState.avistar(dentro)
+	GameState.avistar(fuera)
+	sim.expedicion.mandar(3, float(salida["rumbo"]))
+	sim.day += Expedicion.JORNADAS_PROPUESTAS
+	sim.expedicion.nuevo_dia()
+	var dentro_descubierto := GameState.is_discovered(dentro)
+	var dentro_avistado := GameState.avistado(dentro)
+	var fuera_avistado := GameState.avistado(fuera)
+	_devolver()
+	assert_true(dentro_descubierto and not dentro_avistado,
+		"el avistado del pasillo queda descubierto como cualquiera")
+	assert_true(fuera_avistado, "y el de fuera sigue avistado, sin descubrir")
+
+
+# ---------------------------------------------- la ficha de los ocho rumbos --
+
+## Una simulación en un sitio real con un yacimiento sin descubrir hacia cada rumbo dado.
+func _sim_con_rumbos(rumbos: Array[float]) -> SettlementSim:
+	var sim := _sim()
+	sim.sitio = _origen_de_dentro()
+	var comarca := SiteSet.new()
+	for rumbo: float in rumbos:
+		comarca.sites.append(_hacia(sim.sitio, rumbo, 2000.0, 910000 + int(rumbo)))
+	sim.expedicion.comarca = comarca
+	return sim
+
+
+func _textos_de_botones(nodo: Node) -> Array[String]:
+	var textos: Array[String] = []
+	for hijo: Node in nodo.get_children():
+		if hijo is Button and not (hijo as Button).toggle_mode:
+			textos.append((hijo as Button).text)
+		textos.append_array(_textos_de_botones(hijo))
+	return textos
+
+
+func test_la_ficha_solo_apunta_a_los_rumbos_que_se_ofrecen() -> void:
+	var sim := _sim_con_rumbos([45.0, 180.0])
+	_guardar()
+	GameState.discovered = {sim.sitio.id: true}
+	var ficha := FichaDeRumbo.new()
+	ficha.abrir(sim, "casa")
+	var de_entrada := ficha.rumbo
+	ficha.apuntar(90.0)
+	var tras_el_este := ficha.rumbo
+	ficha.apuntar(180.0)
+	var tras_el_sur := ficha.rumbo
+	var posibles := ficha.posibles.duplicate()
+	var salio := ficha.mandar()
+	_devolver()
+	ficha.free()
+	assert_eq(posibles, [45.0, 180.0] as Array[float], "ofrece los dos que tienen algo")
+	assert_eq(de_entrada, 45.0, "y apunta de entrada al primero")
+	assert_eq(tras_el_este, 45.0, "el este, apagado, no se elige")
+	assert_eq(tras_el_sur, 180.0, "el sur, sí")
+	assert_true(salio, "y manda hacia él")
+	assert_eq(sim.expedicion.rumbo, 180.0, "con ese rumbo")
+
+
+func test_sin_nada_al_alcance_la_ficha_lo_dice_y_no_manda() -> void:
+	var sim := _sim_con_rumbos([])
+	_guardar()
+	GameState.discovered = {sim.sitio.id: true}
+	var ficha := FichaDeRumbo.new()
+	ficha.abrir(sim, "casa")
+	var bloqueo := ficha.bloqueo()
+	var recorrido := ficha.pasillo()
+	var salio := ficha.mandar()
+	_devolver()
+	ficha.free()
+	assert_true(bloqueo.contains("nada por descubrir"), "lo dice: %s" % bloqueo)
+	assert_true(recorrido == null, "sin rumbo no hay pasillo que dibujar")
+	assert_false(salio, "y no manda")
+
+
+func test_desde_el_valle_se_elige_volver_o_quedarse() -> void:
+	var sim := _sim_con_rumbos([90.0])
+	_guardar()
+	GameState.discovered = {sim.sitio.id: true}
+	var desde_el_regional := FichaDeRumbo.new()
+	desde_el_regional.abrir(sim, "casa")
+	var del_regional := _textos_de_botones(desde_el_regional)
+	var desde_el_valle := FichaDeRumbo.new()
+	desde_el_valle.abrir(sim, "casa", true)
+	var del_valle := _textos_de_botones(desde_el_valle)
+	var cierres: Array = []
+	desde_el_valle.cerrada.connect(func(mandada: bool, volver: bool) -> void:
+		cierres.append([mandada, volver]))
+	desde_el_valle.mandar(true)
+	_devolver()
+	desde_el_regional.free()
+	desde_el_valle.free()
+	assert_eq(del_regional, ["Mandar", "Cancelar"] as Array[String], "desde el regional, mandar y cancelar")
+	assert_eq(del_valle, ["Mandar y volver al valle", "Mandar y quedarse", "Cancelar"] as Array[String],
+		"desde el valle, volver o quedarse")
+	assert_eq(cierres, [[true, true]], "y al mandar y volver, lo dice al cerrarse")
+
+
+func test_no_queda_forma_de_pinchar_un_rumbo() -> void:
+	# El rumbo libre de 2026-09-14 se pinchaba en el regional y en el valle.
+	var sueltas: Array[String] = []
+	for ruta: String in ["res://scripts/region/RegionMap.gd", "res://scripts/DemoMain.gd"]:
+		for metodo: Dictionary in (load(ruta) as GDScript).get_script_method_list():
+			if String(metodo["name"]) in ["_apuntar_a", "_empezar_a_apuntar", "empezar_a_apuntar"]:
+				sueltas.append("%s.%s" % [ruta.get_file(), metodo["name"]])
+	assert_true(sueltas.is_empty(), "ni en el regional ni en el valle: %s" % str(sueltas))
+

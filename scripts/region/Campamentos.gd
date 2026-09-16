@@ -96,6 +96,23 @@ static func dejar_de_mirar(campamento: Campamento) -> void:
 		campamento.get_parent().remove_child(campamento)
 
 
+## Suelta el campamento de una escena que se va, **aunque se vaya sin avisar**. Lo
+## hacen `DemoMain._dejar_la_escena` y, por si un camino se olvida de ella, su
+## `_exit_tree`: la escena se libera con todo lo que cuelga de ella, y un campamento
+## vivo dentro se iba con ella —la banda entera— dejando al reloj y a [vivos] con un
+## objeto liberado. Así salían los `SCRIPT ERROR` de `TransitoProbe` (2026-09-15).
+##
+## Sirve durante la salida del árbol: los hijos ya han salido y el padre ya no está
+## ocupado, así que se puede quitar el hijo. `TestViaje`.
+static func soltar_de_la_escena(escena: Node, campamento: Campamento) -> void:
+	if campamento == null or not is_instance_valid(campamento) or not vivos.has(campamento):
+		return
+	if campamento.sim != null:
+		campamento.sim.se_mira = false
+	if campamento.get_parent() == escena:
+		escena.remove_child(campamento)
+
+
 ## Da de baja un campamento: su simulación deja de llevarla el reloj. No lo
 ## destruye —abandonar un campamento no borra lo que se dejó, §23 punto 6—.
 static func baja(campamento: Campamento) -> void:

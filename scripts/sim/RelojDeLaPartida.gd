@@ -225,6 +225,9 @@ func _un_paso_a_todos() -> void:
 		for site: Site in sim.descubrimientos:
 			GameState.discover(site)
 		sim.descubrimientos.clear()
+		for site: Site in sim.avistamientos:
+			GameState.avistar(site)
+		sim.avistamientos.clear()
 		# Y la niebla que levantó, que descubre lo de dentro. Ver
 		# [SettlementSim.levantar_niebla].
 		for forma: Dictionary in sim.niebla_por_levantar:

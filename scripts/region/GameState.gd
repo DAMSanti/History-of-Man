@@ -43,6 +43,11 @@ static var raw_material: float = 0.0
 ## Ids de emplazamientos descubiertos. Al empezar, solo el propio.
 static var discovered: Dictionary = {}
 
+## Ids de yacimientos AVISTADOS desde una cumbre: se ven en el mapa regional aunque
+## estén bajo la niebla, pero no se visitan ni se funda en ellos hasta que una
+## expedición pasa y los descubre. SISTEMAS §4, spec del 2026-09-15. Ver [avistado].
+static var avistados: Dictionary = {}
+
 ## Lo que se ha visto de la comarca: la niebla del mapa regional. Ver
 ## [NieblaRegional] y SISTEMAS §4. Null hasta que empieza una partida.
 static var niebla: NieblaRegional = null
@@ -148,6 +153,7 @@ static func begin(sites: SiteSet) -> void:
 	food = Subsistence.consumption(population) * START_FOOD_RATIO
 	raw_material = 0.0
 	discovered = {home.id: true}
+	avistados = {}
 	# LA NIEBLA, levantada sólo en el recuadro del primer campamento: es lo que la
 	# banda conoce al empezar. SISTEMAS §4, primer criterio.
 	niebla = null
@@ -174,6 +180,18 @@ static func se_ve(site: Site) -> bool:
 
 static func discover(site: Site) -> void:
 	discovered[site.id] = true
+
+
+## Apunta un yacimiento avistado desde una cumbre.
+static func avistar(site: Site) -> void:
+	avistados[site.id] = true
+
+
+## Si un yacimiento está avistado **y todavía sin descubrir**. Descubrirlo —sólo lo hace
+## una expedición cuyo pasillo lo cubre— lo deja como cualquier otro descubierto, sin
+## borrarlo de la lista: una sola pregunta, y lo guardado no depende del orden.
+static func avistado(site: Site) -> bool:
+	return avistados.has(site.id) and not is_discovered(site)
 
 
 ## Emplazamiento mas cercano a las coordenadas de arranque.

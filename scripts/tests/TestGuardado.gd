@@ -58,6 +58,7 @@ func _guardar_estado(sitio: int = SITIO) -> Dictionary:
 	var antes := {
 		"home": GameState.home,
 		"discovered": GameState.discovered.duplicate(),
+		"avistados": GameState.avistados.duplicate(),
 		"season": GameState.season,
 		"year": GameState.year,
 		"site": Expedition.site,
@@ -71,6 +72,7 @@ func _guardar_estado(sitio: int = SITIO) -> Dictionary:
 func _devolver_estado(antes: Dictionary) -> void:
 	GameState.home = antes["home"]
 	GameState.discovered = antes["discovered"]
+	GameState.avistados = antes["avistados"]
 	GameState.season = antes["season"]
 	GameState.year = antes["year"]
 	Expedition.site = antes["site"]
@@ -140,6 +142,7 @@ func test_una_expedicion_a_medias_se_guarda_entera() -> void:
 	var sim := _sim(6)
 	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
+	TestExpedicion.con_algo_al_lado(sim)
 	assert_true(sim.expedicion.mandar(3, 90.0), "sale la expedición")
 	var vuelve := sim.expedicion.vuelve_el_dia
 	Guardado.borrar()
@@ -467,3 +470,27 @@ func test_un_guardado_sin_niebla_ve_lo_que_ya_conocia() -> void:
 	_devolver_estado(antes)
 	assert_true(preparo, "se prepara")
 	assert_true(se_ve, "y lo que ya conocía se ve")
+
+
+func test_lo_avistado_se_guarda_y_se_suma() -> void:
+	var antes := _guardar_estado()
+	var sim := _sim()
+	GameState.discovered = {SITIO: true}
+	GameState.avistados = {201: true, 202: true}
+	Guardado.borrar()
+	Guardado.guardar(sim)
+	var leido := Guardado.leer()
+	var sitios := SiteSet.new()
+	var casa := Site.new()
+	casa.id = SITIO
+	sitios.sites.append(casa)
+	GameState.avistados = {203: true}
+	var preparado := Guardado.preparar_la_escena(leido, sitios)
+	var tras_cargar := GameState.avistados.duplicate()
+	_devolver_estado(antes)
+	Guardado.borrar()
+	assert_eq((leido.get("avistado", []) as Array).size(), 2, "se guardan los dos avistados")
+	assert_true(preparado, "se carga")
+	assert_true(tras_cargar.has(201) and tras_cargar.has(202) and tras_cargar.has(203),
+		"y al cargar se suman a lo que ya había: %s" % str(tras_cargar.keys()))
+

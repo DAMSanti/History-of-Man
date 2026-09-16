@@ -44,6 +44,14 @@ func _init(settlement: SettlementSim) -> void:
 ## centro de cada celda en coordenadas de mundo.
 var puentes: Array = []
 
+## La jornada en que se remató cada pasarela, en el mismo orden que [puentes].
+##
+## Va aparte y no dentro de `puentes` porque ahí cada entrada es la lista de
+## celdas que salva, y eso lo leen la rejilla, el andador y la vista
+## ([Navgrid], [Marcha], [PasarelaView]): meterle un número dentro las rompería
+## a las tres. Es para la ficha de Obras (INTERFAZ §10).
+var rematadas: Array[int] = []
+
 ## Sube cada vez que se levanta o se pierde una. Es lo que hace que las
 ## rejillas sepan que están viejas sin tener que compararse celda a celda.
 var version: int = 0
@@ -79,11 +87,12 @@ func celdas() -> Array:
 ##
 ## No cobra: cobra quien la manda levantar. Esto es el registro, y lo que
 ## avisa a las rejillas de que ya no valen.
-func levantar(celdas_del_cauce: Array) -> bool:
+func levantar(celdas_del_cauce: Array, jornada: int = 0) -> bool:
 	if celdas_del_cauce.is_empty() \
 			or celdas_del_cauce.size() > CELDAS_DE_ANCHO:
 		return false
 	puentes.append(celdas_del_cauce.duplicate())
+	rematadas.append(jornada)
 	version += 1
 	return true
 
@@ -93,6 +102,8 @@ func llevarsela(indice: int) -> bool:
 	if indice < 0 or indice >= puentes.size():
 		return false
 	puentes.remove_at(indice)
+	if indice < rematadas.size():
+		rematadas.remove_at(indice)
 	version += 1
 	return true
 
@@ -128,7 +139,7 @@ func nuevo_dia() -> void:
 			"La pasarela está a falta de leña: hacen falta %.0f haces." % LENA, 0)
 		return
 	sim.store.take(Materia.Kind.LENA, LENA)
-	if levantar(obra):
+	if levantar(obra, sim.day):
 		sim._note(Chronicle.Kind.TIERRA,
 			"Queda armada una pasarela de troncos: ese paso se cruza todo el año.", 2)
 	obra = []

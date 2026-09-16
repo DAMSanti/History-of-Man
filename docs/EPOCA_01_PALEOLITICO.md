@@ -221,6 +221,29 @@ afloja; lo que no cambia es la **forma** del nudo —una cadena de
 prerrequisitos entre dos oficios distintos—, y eso hay que volver a medirlo con
 un año antes de darlo por resuelto.
 
+> **El núcleo preparado y la talla laminar no hacían nada** —comprobado el 2026-09-15,
+> buscando dónde lee la partida cada técnica—: sólo abrían otras técnicas, aunque su
+> descripción prometía «menos desperdicio de sílex y filos repetibles» y «multiplica los
+> metros de filo por kilo». **Hecho el 2026-09-16** ([INTERFAZ.md](INTERFAZ.md) §10),
+> con las cifras que decidió el usuario, que son una decisión y no una medida:
+>
+> - **Núcleo preparado**: lo que se talla en piedra o en sílex sale con **calidad no
+>   menor de 0,90** —`Tool.CALIDAD_CON_NUCLEO`—, la talle quien la talle. Sin él sigue
+>   siendo `0,7 + 0,6 × pericia`, o sea 0,82 para un novato. **Se aplica al fabricar**
+>   (decisión al implementar): una pieza tallada antes de aprenderlo sigue siendo lo
+>   que era. Lo de hueso, asta, piel o fibra no cambia: el nódulo que se prepara es de
+>   piedra.
+> - **Talla laminar**: cada pieza de piedra o de sílex cuesta **la mitad**
+>   —`Tool.AHORRO_LAMINAR`—, y nada más: el asta, la fibra y la piel se pagan igual.
+>   Lo pregunta `Tool.recipe(kind, techs)`, que es el único sitio donde vive la cuenta:
+>   quien cobra la materia, quien mira si alcanza y quien la enseña en el almacén leen
+>   de ahí.
+>
+> **Lo que mueve en la partida**, medido con `GastoLiticoProbe` el 2026-09-16: una
+> tanda del utillaje lítico que pide el trabajo de una banda de quince —siete lascas,
+> dos raederas, dos buriles, dos puntas y una lámpara— pasa de **14,0 a 7,0 de piedra
+> o sílex**. Ver [ESTADO.md](ESTADO.md) §2.
+
 **Lo que falta de instalación, no de técnica:** `CampProjects.Kind` tiene
 `HOGAR`, `SECADERO`, `LAVADERO` y `PARAVIENTO`. Es la lista correcta para esta
 época —el hogar abierto es el techo térmico de todo el Paleolítico— y **no debe
@@ -1104,7 +1127,9 @@ evitar, cada una con su coste **escrito en la opción antes de elegir**:
 > Consecuencia aceptada al escribir la spec. **Quitada el 2026-09-14**: desde ese
 > día son **tres decisiones al año**, y la primavera no tiene ninguna. La
 > expedición se manda desde la ficha de rumbo, con las jornadas que se elijan (de
-> 4 a 24) y la regla de coste de siempre. `TestDecisiones` lo comprueba.
+> 4 a 24) y la regla de coste de siempre. `TestDecisiones` lo comprueba. **Desde el
+> 2026-09-16, hacia uno de ocho rumbos** y sólo los que tienen algo sin descubrir al
+> alcance; las tres cumbres más altas de cada valle avistan yacimientos (SISTEMAS §4).
 
 **Y salen en el segundo mes de su estación, no el primer día** (2026-09-13,
 tanda 3, frente 9). Cada una cae en una jornada sorteada entre la **16 y la 30**

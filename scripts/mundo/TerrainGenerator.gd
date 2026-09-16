@@ -177,6 +177,10 @@ enum HeightSource {
 ## Dibujar el plano de agua
 @export var show_water: bool = true
 
+## Si el agua sigue el ajuste «Agua» de la configuración. El mapa regional lo apaga: su
+## agua se queda como estaba (GRAFICOS §7.3).
+@export var agua_con_niveles: bool = true
+
 ## Color del agua
 @export var water_color: Color = Color(0.09, 0.22, 0.32, 0.88)
 
@@ -486,6 +490,12 @@ func generate(ceder: Callable = Callable()) -> void:
 	var t3 := Time.get_ticks_msec()
 	_create_water()
 	print("[TIMING] TerrainGenerator._create_water: %d ms" % (Time.get_ticks_msec() - t3))
+	# La lámina del río, para Alto y Ultra. Se hace siempre que el agua siga el ajuste,
+	# para poder encenderla en caliente. Ver GRAFICOS §7.3.
+	if agua_con_niveles:
+		var t4 := Time.get_ticks_msec()
+		await malla.construir_la_lamina(ceder)
+		print("[TIMING] lamina del rio: %d ms" % (Time.get_ticks_msec() - t4))
 
 	print("[TIMING] TerrainGenerator.generate TOTAL: %d ms" % (Time.get_ticks_msec() - t0))
 	generation_complete.emit()
@@ -858,6 +868,7 @@ func _apply_terrain_material() -> void:
 		var manager_script := load("res://scripts/mundo/TerrainMaterialManager.gd")
 		if manager_script:
 			_material_manager = manager_script.new()
+			_material_manager.agua_con_niveles = agua_con_niveles
 			var shader_material: ShaderMaterial = _material_manager.create_terrain_material()
 			if shader_material:
 				_apply_shader_height_setup()
@@ -1016,6 +1027,26 @@ func set_fog_texture(texture: Texture2D, sea_height: float) -> void:
 func aplicar_configuracion() -> void:
 	if _material_manager != null:
 		_material_manager.aplicar_configuracion()
+	malla.aplicar_la_lamina()
+	_aplicar_el_mar()
+
+
+## Los materiales del AGUA que se ve: la lámina del río y el mar, si los hay.
+##
+## Los pide el clima para picar el agua cuando llueve (GRAFICOS §7.4). Van juntos
+## porque la pregunta es una —«¿dónde se ve agua?»— y estaban en dos sitios: la
+## lámina la monta [MallaDelTerreno] y el mar, esta clase.
+func materiales_del_agua() -> Array[ShaderMaterial]:
+	var fuera: Array[ShaderMaterial] = []
+	if malla != null and malla.lamina != null:
+		var lamina := malla.lamina.material_override as ShaderMaterial
+		if lamina != null:
+			fuera.append(lamina)
+	if _water_mesh != null:
+		var mar := _water_mesh.material_override as ShaderMaterial
+		if mar != null:
+			fuera.append(mar)
+	return fuera
 
 
 func get_terrain_material() -> ShaderMaterial:
@@ -1279,8 +1310,10 @@ func _create_water() -> void:
 
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(float(terrain_size.x), float(terrain_size.y))
-	plane.subdivide_width = 32
-	plane.subdivide_depth = 32
+	# Con niveles, el mar ondula en el vértice: a 32 divisiones cada cuadro eran 128 m y
+	# la ola no se veía. 128 divisiones son 32 m en el valle.
+	plane.subdivide_width = 128 if agua_con_niveles else 32
+	plane.subdivide_depth = 128 if agua_con_niveles else 32
 
 	_water_mesh = MeshInstance3D.new()
 	_water_mesh.name = "Water"
@@ -1292,15 +1325,37 @@ func _create_water() -> void:
 	_water_mesh.position = Vector3(
 		float(terrain_size.x) * 0.5, water_y + epsilon, float(terrain_size.y) * 0.5)
 
-	var material := StandardMaterial3D.new()
-	material.albedo_color = water_color
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.metallic = 0.25
-	material.roughness = 0.06
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_water_mesh.material_override = material
+	if agua_con_niveles:
+		# EL MAR DEL VALLE, con sus niveles (GRAFICOS §7.3). Bajo es el de siempre.
+		var mar := ShaderMaterial.new()
+		mar.shader = load("res://shaders/agua_mar.gdshader") as Shader
+		var texturas := ProceduralTextureGenerator.get_water_textures()
+		if texturas.has("water_normal"):
+			mar.set_shader_parameter("water_normal_tex", texturas["water_normal"])
+		if texturas.has("water_foam"):
+			mar.set_shader_parameter("water_foam_tex", texturas["water_foam"])
+		mar.set_shader_parameter("color_de_siempre", water_color)
+		mar.set_shader_parameter("metros_por_unidad", meters_per_unit / maxf(vertical_exaggeration, 0.0001))
+		_water_mesh.material_override = mar
+	else:
+		var material := StandardMaterial3D.new()
+		material.albedo_color = water_color
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.metallic = 0.25
+		material.roughness = 0.06
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_water_mesh.material_override = material
 
 	add_child(_water_mesh)
+	_aplicar_el_mar()
+
+
+## El nivel del agua, al mar del valle. En caliente.
+func _aplicar_el_mar() -> void:
+	if _water_mesh == null or not (_water_mesh.material_override is ShaderMaterial):
+		return
+	(_water_mesh.material_override as ShaderMaterial).set_shader_parameter("nivel_de_agua",
+		int(Configuracion.graficos.get("agua", 1)))
 
 
 ## Obtiene la humedad en una posición del mundo (0-1)

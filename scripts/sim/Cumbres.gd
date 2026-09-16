@@ -101,10 +101,35 @@ func _find_peaks() -> Array[Dictionary]:
 	if _peak_found:
 		return _peaks
 	_peak_found = true
-	_peaks = []
-
+	_peaks = _barrer(true)
 	if sim._terrain == null:
 		return _peaks
+
+	# De la mas dura a la mas suave: asi elegir «la mejor que me atrevo» es
+	# recorrer la lista y quedarse con la primera
+	_peaks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["hard"]) > float(b["hard"]))
+
+	print("Cumbres al alcance: %d" % _peaks.size())
+
+	# Si la mas alta pide equipo, se dice una vez. No es un aviso de error: es
+	# una promesa de que hay mas juego mas adelante, y de las que dan ganas.
+	if not _peaks.is_empty() and Ascent.needs_gear(float(_peaks[0]["hard"])):
+		sim._note(Chronicle.Kind.TIERRA,
+			"Hay un alto %s que nadie de la banda sabe como subir. Haria falta "
+				% Parajes.bearing(sim.home_position, _peaks[0]["pos"])
+			+ "cuerda de verdad y algo que agarre en la roca. Todavia no.", 2)
+
+	return _peaks
+
+
+## Las cumbres del recuadro. Con `quitar_coronadas`, sin las ya coronadas, que es la
+## lista de adónde subir; sin quitarlas, la que no cambia al coronar y de la que salen
+## [tres_mas_altas].
+func _barrer(quitar_coronadas: bool) -> Array[Dictionary]:
+	var cumbres: Array[Dictionary] = []
+	if sim._terrain == null:
+		return cumbres
 
 	# Los candidatos se recortan al recuadro del mapa. Fuera de el
 	# `get_height_at` devuelve la altura del BORDE, no la real, asi que sin
@@ -153,7 +178,7 @@ func _find_peaks() -> Array[Dictionary]:
 			continue
 		if summit.y - home_height < PEAK_MIN_RISE:
 			continue
-		if _already_climbed(summit):
+		if quitar_coronadas and _already_climbed(summit):
 			continue
 
 		# --- 3. y tiene que DOMINAR lo que hay alrededor -----------------
@@ -168,7 +193,7 @@ func _find_peaks() -> Array[Dictionary]:
 			continue
 
 		var repeated := false
-		for other: Dictionary in _peaks:
+		for other: Dictionary in cumbres:
 			var seen: Vector3 = other["pos"]
 			if Vector2(summit.x - seen.x, summit.z - seen.z).length() \
 					< PEAK_MIN_DISTANCE * 0.5:
@@ -177,7 +202,7 @@ func _find_peaks() -> Array[Dictionary]:
 		if repeated:
 			continue
 
-		_peaks.append({
+		cumbres.append({
 			"pos": summit,
 			"rise": summit.y - home_height,
 			"command": command,
@@ -185,22 +210,7 @@ func _find_peaks() -> Array[Dictionary]:
 				sim._terrain.get_slope_at(summit), away),
 		})
 
-	# De la mas dura a la mas suave: asi elegir «la mejor que me atrevo» es
-	# recorrer la lista y quedarse con la primera
-	_peaks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a["hard"]) > float(b["hard"]))
-
-	print("Cumbres al alcance: %d" % _peaks.size())
-
-	# Si la mas alta pide equipo, se dice una vez. No es un aviso de error: es
-	# una promesa de que hay mas juego mas adelante, y de las que dan ganas.
-	if not _peaks.is_empty() and Ascent.needs_gear(float(_peaks[0]["hard"])):
-		sim._note(Chronicle.Kind.TIERRA,
-			"Hay un alto %s que nadie de la banda sabe como subir. Haria falta "
-				% Parajes.bearing(sim.home_position, _peaks[0]["pos"])
-			+ "cuerda de verdad y algo que agarre en la roca. Todavia no.", 2)
-
-	return _peaks
+	return cumbres
 
 
 ## Sube desde un punto hasta el alto que lo domina.
@@ -579,6 +589,9 @@ func _do_ascent(person: Inhabitant) -> void:
 		if geo != Vector2.INF:
 			sim.levantar_niebla({"forma": "circulo", "lon": geo.x, "lat": geo.y,
 				"radio": ASCENT_SIGHT_RANGE})
+	# Y SI ES DE LAS TRES MÁS ALTAS, AVISTA fuera del valle: lo que ayuda a elegir hacia
+	# dónde mandar la expedición. Ver [_avistar_desde].
+	var avistados := _avistar_desde(person.position)
 	ascents += 1
 	person.fatigue = clampf(person.fatigue + 15.0, 0.0, 100.0)
 
@@ -626,6 +639,76 @@ func _do_ascent(person: Inhabitant) -> void:
 		+ "dónde abunda la caza, por dónde va el agua y qué queda por explorar."
 		+ frase_de_lo_visto(vistos),
 		person.position, sim.day, person.current_task()))
+
+
+## Cuántas cumbres de cada valle avistan yacimientos: las más altas. Decisión del
+## usuario (SISTEMAS §4, spec del 2026-09-15).
+const CUMBRES_QUE_AVISTAN := 3
+
+## Cuántos yacimientos avista cada una como mucho: los más lejanos a la vista. Decisión
+## del usuario.
+const AVISTA_HASTA := 2
+
+## Las [CUMBRES_QUE_AVISTAN] más altas del valle, contando las coronadas. **Es caché** y
+## no estado: sale sólo del relieve, así que al cargar la partida da lo mismo, y por eso
+## no se guarda (`Instantanea.FUERA`).
+var _mas_altas: Array[Vector3] = []
+var _mas_altas_buscadas := false
+
+
+func tres_mas_altas() -> Array[Vector3]:
+	if not _mas_altas_buscadas:
+		_mas_altas_buscadas = true
+		_mas_altas = las_mas_altas(_barrer(false), CUMBRES_QUE_AVISTAN)
+	return _mas_altas
+
+
+## Las posiciones de las `cuantas` cumbres de más cota, de la más alta a la más baja.
+static func las_mas_altas(cumbres: Array[Dictionary], cuantas: int) -> Array[Vector3]:
+	var ordenadas := cumbres.duplicate()
+	ordenadas.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return (a["pos"] as Vector3).y > (b["pos"] as Vector3).y)
+	var altas: Array[Vector3] = []
+	for cumbre: Dictionary in ordenadas:
+		if altas.size() >= cuantas:
+			break
+		altas.append(cumbre["pos"])
+	return altas
+
+
+## Si quien corona en `cima` está en una de las [tres_mas_altas]: a la distancia a la que
+## dos cumbres se cuentan como la misma.
+func avista_desde(cima: Vector3) -> bool:
+	for alta: Vector3 in tres_mas_altas():
+		if Vector2(cima.x - alta.x, cima.z - alta.z).length() < PEAK_MIN_DISTANCE * 0.5:
+			return true
+	return false
+
+
+## Lo que se avista al coronar una de las tres más altas: de los yacimientos sin
+## descubrir que se ven de verdad desde la cima sobre el relieve regional
+## ([Avistamiento]), los [AVISTA_HASTA] más lejanos. Por la barrera
+## ([SettlementSim.avistar]). Devuelve cuántos.
+##
+## Los yacimientos son los que el mapa regional puede enseñar en la época
+## (`SiteSet.available_in`): un avistado que no se dibuja no sirve para elegir rumbo.
+func _avistar_desde(cima: Vector3) -> int:
+	if sim._terrain == null or not avista_desde(cima):
+		return 0
+	var geo := sim._terrain.world_to_geo(cima)
+	if geo == Vector2.INF:
+		return 0
+	var candidatos: Array[Site] = []
+	for site: Site in sim.expedicion._la_comarca().available_in(GameState.sea_level_m, GameState.era):
+		if not sim.descubierto(site):
+			candidatos.append(site)
+	var relieve := load("res://data/dem/cantabria_region.res") as HeightmapData
+	var vistos := Avistamiento.a_la_vista(geo.x, geo.y, sim._terrain.get_height_at(cima),
+		candidatos, relieve)
+	var avistados := Avistamiento.los_mas_lejanos(geo.x, geo.y, vistos, AVISTA_HASTA)
+	for site: Site in avistados:
+		sim.avistar(site)
+	return avistados.size()
 
 
 ## Lo que la cumbre ha dejado con nombre, dicho en UNA frase. Vacío si nada.

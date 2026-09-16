@@ -323,21 +323,74 @@ func show_places() -> void:
 			+ "para volver a él sin pensarlo.", true)
 		return
 
-	ui._heading(body, "%d PARAJES CONOCIDOS" % places.size())
+	# El filtro se recuerda mientras dura la partida y se vacía al cambiar de
+	# una a otra: eso lo decide [FiltroDeParajes.para], no la ventana.
+	FiltroDeParajes.para(ui.sim)
+	var sorted := FiltroDeParajes.filtrar(places, ui.sim.home_position)
+
+	ui._heading(body, FiltroDeParajes.titulo(sorted.size(), places.size()))
 	ui._text(body, "Ordenados por cercanía. Pincha uno para verlo y mandar gente.",
 		true)
+	_fila_de_oficios(body)
+	_fila_de_tramos(body)
 
-	# Por cercanía: el que está a diez minutos importa más que el que está a
-	# dos horas, y es como los tiene ordenados la cabeza de cualquiera
-	var sorted: Array[Paraje] = []
-	sorted.assign(places)
-	sorted.sort_custom(func(a: Paraje, b: Paraje) -> bool:
-		return a.distance_from(ui.sim.home_position) < b.distance_from(ui.sim.home_position))
+	if sorted.is_empty():
+		ui._text(body, FiltroDeParajes.aviso_de_vacio(places.size()), true)
+		return
 
 	var index := 0
 	for paraje: Paraje in sorted:
 		_place_row(body, paraje, index)
 		index += 1
+
+
+## Los cinco oficios, que se encienden y se apagan.
+##
+## Un paraje sale si allí se hace CUALQUIERA de los encendidos, aunque no sea el
+## que le da nombre (INTERFAZ §10.2): por eso son interruptores sueltos y no una
+## lista de la que se elige uno.
+func _fila_de_oficios(body: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	body.add_child(row)
+	for oficio: int in FiltroDeParajes.OFICIOS:
+		var boton := Button.new()
+		boton.text = Subsistence.activity_name(oficio as Subsistence.Activity)
+		boton.toggle_mode = true
+		boton.button_pressed = FiltroDeParajes.encendido(
+			oficio as Subsistence.Activity)
+		boton.add_theme_font_size_override("font_size", 10)
+		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton.pressed.connect(func() -> void:
+			FiltroDeParajes.alternar(oficio as Subsistence.Activity)
+			show_places())
+		row.add_child(boton)
+
+
+## Los tramos de distancia al campamento. Uno a la vez, que es como se pregunta:
+## «¿qué hay a menos de un kilómetro?».
+func _fila_de_tramos(body: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	body.add_child(row)
+
+	var etiqueta := Label.new()
+	etiqueta.text = "a menos de"
+	etiqueta.add_theme_font_size_override("font_size", 10)
+	etiqueta.add_theme_color_override("font_color", UISkin.INK_FAINT)
+	row.add_child(etiqueta)
+
+	for metros: float in FiltroDeParajes.TRAMOS:
+		var boton := Button.new()
+		boton.text = FiltroDeParajes.nombre_del_tramo(metros)
+		boton.toggle_mode = true
+		boton.button_pressed = is_equal_approx(FiltroDeParajes.tramo, metros)
+		boton.add_theme_font_size_override("font_size", 10)
+		boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		boton.pressed.connect(func() -> void:
+			FiltroDeParajes.poner_tramo(metros)
+			show_places())
+		row.add_child(boton)
 
 
 ## Una fila de paraje: qué es, a cuánto está y cómo anda de existencias.

@@ -2,13 +2,15 @@ class_name FlechaDeRumbo
 extends MeshInstance3D
 ## La flecha del rumbo de una expedición, antes de mandarla.
 ##
-## INTERFAZ §4: «sale una flecha con el pasillo que se va a recorrer». En el mapa
-## regional se dibuja **el pasillo mismo** —el [Pasillo] de la ficha, que es el
-## que se descubrirá—; en el valle, donde el pasillo no cabe, la dirección desde
-## la cueva hasta la puerta por la que saldrían.
+## INTERFAZ §4: «sale una flecha con el pasillo que se va a recorrer». Se dibuja en
+## el mapa regional **el pasillo mismo** —el [Pasillo] de la ficha, que es el que se
+## descubrirá— y, tenue, el eje de los demás rumbos que se ofrecen. Desde el
+## 2026-09-16 no se dibuja en el valle: el botón del valle lleva al regional.
 
 const COLOR := Color(0.851, 0.588, 0.267, 0.45)
 const COLOR_DEL_EJE := Color(0.851, 0.588, 0.267, 0.95)
+## Los demás rumbos que se ofrecen, sólo el eje y tenue: se ven sin competir.
+const COLOR_DE_OTRO := Color(0.851, 0.588, 0.267, 0.35)
 
 ## El pasillo que se dibujó por última vez en el mapa regional.
 var pasillo: Pasillo = null
@@ -24,12 +26,15 @@ func _init() -> void:
 	material_override = material
 
 
-## El pasillo sobre el relieve regional: la franja de su ancho, el eje y la punta.
-## `alzado`, en unidades del mundo, por encima del relieve.
-func trazar_pasillo(terreno: TerrainGenerator, recorrido: Pasillo, alzado: float) -> void:
+## El pasillo sobre el relieve regional: la franja de su ancho, el eje y la punta; y de
+## `otros`, sólo el eje. `alzado`, en unidades del mundo, por encima del relieve.
+func trazar_pasillo(terreno: TerrainGenerator, recorrido: Pasillo, alzado: float,
+		otros: Array[Pasillo] = []) -> void:
 	pasillo = recorrido
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for otro: Pasillo in otros:
+		_eje(st, terreno, otro, alzado, COLOR_DE_OTRO)
 	var tramos := maxi(int(recorrido.largo_m / 1000.0), 1)
 	var coseno := cos(deg_to_rad(recorrido.lat))
 	var este := sin(deg_to_rad(recorrido.rumbo))
@@ -52,34 +57,16 @@ func trazar_pasillo(terreno: TerrainGenerator, recorrido: Pasillo, alzado: float
 	mesh = st.commit()
 
 
-## La dirección en el valle: de la cueva a la puerta del valle, con punta.
-func trazar_rumbo(terreno: TerrainGenerator, desde: Vector3, hasta: Vector3) -> void:
-	pasillo = null
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var plano := Vector3(hasta.x - desde.x, 0.0, hasta.z - desde.z)
-	var largo := plano.length()
-	if largo < 1.0:
-		mesh = null
-		return
-	var direccion := plano / largo
-	var lado := Vector3(-direccion.z, 0.0, direccion.x) * 6.0
-	var tramos := maxi(int(largo / 40.0), 1)
+func _eje(st: SurfaceTool, terreno: TerrainGenerator, recorrido: Pasillo, alzado: float,
+		color: Color) -> void:
+	var tramos := maxi(int(recorrido.largo_m / 1000.0), 1)
+	var coseno := cos(deg_to_rad(recorrido.lat))
+	var eje := Vector2(cos(deg_to_rad(recorrido.rumbo)) * Pasillo.MEDIO_ANCHO_M * 0.12
+		/ (Viaje.METROS_POR_GRADO * coseno),
+		-sin(deg_to_rad(recorrido.rumbo)) * Pasillo.MEDIO_ANCHO_M * 0.12 / Viaje.METROS_POR_GRADO)
 	for i in range(tramos):
-		var a := desde + plano * float(i) / float(tramos)
-		var b := desde + plano * float(i + 1) / float(tramos)
-		a.y = terreno.get_height_at(a) + 3.0
-		b.y = terreno.get_height_at(b) + 3.0
-		_quad(st, a - lado, a + lado, b + lado, b - lado, COLOR_DEL_EJE)
-	var punta := hasta + direccion * 40.0
-	punta.y = terreno.get_height_at(punta) + 3.0
-	var base := hasta
-	base.y = terreno.get_height_at(base) + 3.0
-	st.set_color(COLOR_DEL_EJE)
-	st.add_vertex(base - lado * 3.0)
-	st.add_vertex(base + lado * 3.0)
-	st.add_vertex(punta)
-	mesh = st.commit()
+		_franja(st, terreno, _punto(recorrido, float(i) / float(tramos)),
+			_punto(recorrido, float(i + 1) / float(tramos)), eje, alzado, color)
 
 
 static func _punto(recorrido: Pasillo, t: float) -> Vector2:

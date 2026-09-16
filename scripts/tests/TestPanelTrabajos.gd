@@ -39,6 +39,7 @@ func test_sin_nadie_fuera_la_lista_esta_vacia() -> void:
 
 func test_los_de_la_expedicion_salen_con_el_dia_de_vuelta() -> void:
 	var sim := _sim()
+	TestExpedicion.con_algo_al_lado(sim)
 	assert_true(sim.expedicion.mandar(3, 90.0), "sale la expedición")
 	var fuera := PanelTrabajos.ausentes(sim)
 	assert_eq(fuera.size(), 3, "los tres que se fueron")
@@ -62,7 +63,12 @@ func test_el_herido_sale_con_el_dia_en_que_se_cura() -> void:
 
 func test_quien_anda_hacia_el_borde_se_distingue_del_que_ya_esta_fuera() -> void:
 	var sim := _sim()
-	sim.expedicion.mandar(3, 90.0)
+	TestExpedicion.con_algo_al_lado(sim)
+	# Que salga de verdad: sin esto, al no salir, la prueba reventaba en `[0]` antes de
+	# su primer assert y contaba como pasada (suite del 2026-09-16).
+	assert_true(sim.expedicion.mandar(3, 90.0), "sale la expedición")
+	if PanelTrabajos.ausentes(sim).is_empty():
+		return
 	var yendo: Dictionary = PanelTrabajos.ausentes(sim)[0]
 	assert_true(String(yendo["donde"]).contains("camino"),
 		"mientras anda, va de camino: %s" % str(yendo["donde"]))

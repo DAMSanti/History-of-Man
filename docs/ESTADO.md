@@ -813,6 +813,27 @@ para ser eso, pero el 60 % y el 30 % pueden moverse. Y **son tres, no cuatro**:
 el cuarto sitio con relieve horneado (9000) no tiene ficha en la comarca, y
 medir un cuarto pedía hornear otro.
 
+### La talla laminar deja el utillaje lítico en la mitad: 14,0 → 7,0
+
+Medido el 2026-09-16 con `GastoLiticoProbe`, al darle efecto de verdad al núcleo
+preparado y a la talla laminar (INTERFAZ §10, EPOCA_01 §7). **No es una corrida**:
+el gasto de un tramo de taller es lo que piden las piezas que el trabajo pide
+—`Taller.tool_natural_demand`, la misma tabla con la que el taller decide qué hacer—
+por lo que cuesta cada una, y eso se pregunta en segundos.
+
+Una banda de quince pide por tanda **siete lascas, dos raederas, dos buriles, dos
+puntas y una lámpara**: **14,0 de piedra o sílex sin la talla laminar y 7,0 con ella**.
+
+Lo que esto abre, y que **no se ha medido**: la piedra deja de ser un freno del
+taller a la mitad de precio, y con el cantizal a mano la banda puede tener el utillaje
+lítico cubierto con la mitad de acarreo. Si eso desequilibra algo —el taller
+adelantando a la caza, la cantera sobrando— saldrá en la siguiente corrida larga; aquí
+no se ha reequilibrado nada a ojo.
+
+Y con el **núcleo preparado**, lo tallado en piedra sale con calidad 0,90 en vez de
+0,82 para un novato: un 10 % más de vida útil por pieza (`Tool.durability` es la vida
+del material por la calidad), lo que baja la reposición sin tocar ninguna otra cifra.
+
 ## 3. Lo que está construido y funciona
 
 Para no perderlo de vista mientras se habla de lo que falta.
@@ -832,7 +853,44 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**1 483 pruebas y 8 142 comprobaciones en verde (2026-09-15, con la pantalla de
+**1 584 pruebas y 8 523 comprobaciones en verde (2026-09-16, depurar de la noche).**
+Suben de 1 577 y 8 496 con la cámara de la cueva en `TestPared` y el relieve por nivel en
+`TestConfiguracion`.
+
+Antes: **1 577 pruebas y 8 496 comprobaciones en verde (2026-09-16, con los filtros de Parajes,
+las pasarelas en Obras y el efecto de cada técnica).** Suben de 1 544 y 8 379 con
+`TestTecnicas` (nueva: que las dieciocho digan qué dan, y que la cifra sea la de la tabla
+de la que la lee la partida), nueve pruebas de filtros en `TestParajes`, cuatro de la
+pasarela como obra en `TestPasarela` y siete del núcleo y la laminar en `TestTaller`.
+Sigue el `SCRIPT ERROR` de `TestTaller` de abajo.
+
+Antes: **1 544 pruebas y 8 379 comprobaciones en verde (2026-09-16, con las nubes con volumen).** Suben de 1 541 y 8 371 con las dos pruebas del viento de la partida en
+`TestNieblaRegional`.
+
+Antes: **1 541 pruebas y 8 371 comprobaciones en verde (2026-09-16, con el clima en pantalla).**
+Suben de 1 522 y 8 262 con `TestClima` (nueva, suite `ClimaEnPantalla`: la tabla, el suelo,
+la niebla de valle, la condensación, la luz, el apagado y que la partida no cambia) y el
+ajuste «Clima» en `TestConfiguracion`. Sigue el `SCRIPT ERROR` de `TestTaller`.
+
+Antes: **1 522 pruebas y 8 262 comprobaciones en verde (2026-09-16, con la expedición por ocho
+rumbos).** Suben de 1 498 y 8 197 con `TestExpedicion` (los rumbos, el motivo del botón, la
+ficha), `TestAvistamiento` (nueva: línea de vista y las tres cumbres), `TestNieblaRegional`
+y `TestGuardado` (lo avistado), y `TestPanelTrabajos`, que tenía una prueba que reventaba
+antes de su primer assert. Sigue el `SCRIPT ERROR` de `TestTaller` de abajo.
+
+Antes: **1 498 pruebas y 8 197 comprobaciones en verde (2026-09-16, con el agua del valle).**
+Suben de 1 485 y 8 148 con `TestAgua` (11 pruebas y 31 comprobaciones: rápido, orilla,
+piedras, corriente para dibujar, la lámina topada y la diagonal de cada cuadro) y el ajuste
+«Agua» en `TestConfiguracion`. Sale un `SCRIPT ERROR` de `TestTaller`
+(`test_la_partida_nueva_arranca_con_los_topes_puestos` monta la simulación sin relieve) que
+no hace fallar la prueba y es anterior a este trabajo.
+
+Antes: **1 485 pruebas y 8 148 comprobaciones en verde (2026-09-15, tras depurar el cambio de
+mapa y la distancia del 3D).** Suben de 1 483 y 8 142 con `TestViaje` (la escena que se
+va no se lleva su campamento) y `TestConfiguracion` (la distancia «sin límite» guardada
+se lee como el máximo).
+
+Antes: **1 483 pruebas y 8 142 comprobaciones en verde (2026-09-15, con la pantalla de
 carga).** Suben de 1 468 y 8 051 con `TestCarga` (el reparto de la barra, sus textos,
 el reloj parado mientras carga), `TestNieblaRegional` (la clave de la caché de la malla
 regional) y `TestBosque` (la vuelta al valle no siembra).
@@ -871,23 +929,27 @@ figura recalca mejor que el **100 % de los sitios libres**. Entrar en la sala cu
 comentario dice que «es lo que se puede dejar en la pared». El del lobo sí la lleva.
 Pendiente de `/depurar`.
 
-**Lo que cuesta ir al mapa regional y volver: 20 s de ida y 15 de vuelta la primera
-vez, y 1,3 y 5,4 desde la segunda** (2026-09-15, con la pantalla de carga, INTERFAZ §9).
-Medido con `TransitoProbe` (sin ventana, o sea sólo el coste de construir las escenas),
-sitio 56, bosque en su nivel; el primer viaje en frío —sin malla regional en caché ni
-siembra guardada—:
+**Lo que cuesta ir al mapa regional y volver: 20-22 s de ida y 12,5-13 de vuelta la
+primera vez, y 1,3-1,4 y 2,8 desde la segunda** (2026-09-15, con la pantalla de carga,
+INTERFAZ §9). Medido con `TransitoProbe` por el camino del juego (sin ventana, o sea sólo
+el coste de construir las escenas), sitio 56, bosque en su nivel; el primer viaje en
+frío —sin malla regional en caché ni siembra guardada—:
 
-| Tramo | Con pantalla (dos corridas) | Sin pantalla, la misma tarde (dos) | Dónde se va |
+| Tramo | Con pantalla, como el juego (dos corridas) | A pelo, sin pantalla (una) | Dónde se va |
 |---|---|---|---|
-| Montar la banda la primera vez | **16,2-16,3 s** | 15,6-16,1 s | sembrar el bosque, 9,5-9,8 s |
-| Ida al regional, en frío | **20,2-20,3 s** | 19,2-19,6 s | la malla regional, y guardarla |
-| Vuelta a la banda, en frío | **15,0-15,1 s** | 14,5-15,7 s | sembrar el bosque |
-| Ida al regional, segunda vez | **1,3 s** | 1,3-1,5 s | la malla sale de la caché |
-| Vuelta a la banda, segunda vez | **5,4 s** | 5,1-6,0 s | el bosque de lejos, 3,6-3,9 s; no se siembra |
+| Montar la banda la primera vez | **16,5-16,9 s** | 15,9 s | sembrar el bosque, 9,5-9,8 s |
+| Ida al regional, en frío | **20,3-21,6 s** | 20,1 s | la malla regional, y guardarla |
+| Vuelta a la banda, en frío | **12,5-13,0 s** | 12,7 s | sembrar el bosque; el campamento se adopta |
+| Ida al regional, segunda vez | **1,3-1,4 s** | 1,3 s | la malla sale de la caché |
+| Vuelta a la banda, segunda vez | **2,8 s** | 2,5 s | no se siembra |
 
-**Trocear la carga cuesta un 3-5 %** (el criterio pedía no pasar del 10 %). Retomar el
-campamento en el que se estaba, con ventana (`CargaProbe`): 5,5 s frente a 15. La
-siembra guardada ocupa **35 MB**.
+> **Esta tabla corrige la que se escribió horas antes el mismo día** —vuelta 15,0 s en
+> frío y 5,4 la segunda—: aquella sonda cambiaba de escena a pelo, se llevaba el
+> campamento con la escena y la vuelta montaba otro en vez de adoptar el vivo. Medía
+> una carga que el juego no hace (ARQUITECTURA §5.1). Trocear la carga cuesta **un
+> 0-7 %** frente al viaje a pelo (el criterio pedía no pasar del 10 %). Retomar el
+> campamento en el que se estaba, con ventana (`CargaProbe`): 5,5 s frente a 15. La
+> siembra guardada ocupa **35 MB**.
 
 > *Lo que había antes de la pantalla de carga*, que esta tabla sustituye: ida **27,1 s**
 > —la malla regional, regenerada entera cada vez, 24,6— y vuelta **18,4 s** —sembrar el
@@ -919,13 +981,16 @@ eran distintas, y las dos se arreglaron en INTERFAZ §9 (tareas 7 y 8):
   eso se aplica al montar el mapa y no en caliente, ver GRAFICOS— pero no que
   fueran 13,8 s de cada vuelta.
 
-Y de paso: al cambiar de escena **quedan vivos objetos de la anterior**.
-`Campamentos` sigue llamando al `GameUI` liberado
-(`GameUI._escuchar_los_campamentos`) y `RelojDeLaPartida` escribe sobre una
-simulación liberada. Salen como `SCRIPT ERROR` en cada viaje. **Siguen igual con la
-pantalla de carga** —16-17 por `TransitoProbe`, los mismos con ella y sin ella, en
-`RelojDeLaPartida._process`, `_repartir_el_giro`, `Campamentos.de_sitio` y
-`GameUI._escuchar_los_campamentos`—; quedaron fuera de su alcance.
+Y de paso: al cambiar de escena **quedaban vivos objetos de la anterior**.
+`Campamentos` seguía llamando al `GameUI` liberado
+(`GameUI._escuchar_los_campamentos`) y `RelojDeLaPartida` escribía sobre una
+simulación liberada: 16-17 `SCRIPT ERROR` por corrida de `TransitoProbe`.
+> **Resuelto el 2026-09-15 (`/depurar`), y no era del juego**: salían sólo en esa sonda,
+> que cambiaba de escena sin pasar por `DemoMain._dejar_la_escena`, y la escena se
+> llevaba el campamento. Por el camino del juego —`CargaProbe`, y jugando— salían cero.
+> La sonda viaja ya como el juego, y además la escena suelta su campamento al salir del
+> árbol pase por donde pase (SPECS §6.4). `TransitoProbe`, las tres corridas —dos por el
+> juego y una a pelo—: **0 `SCRIPT ERROR`**.
 
 **Los atascos, medidos y de acuerdo con lo que ve el jugador.** Queja: «se quedó
 sin camino a donde iba» y «llegó y el estado no se enteró», 22 y 6 en 113

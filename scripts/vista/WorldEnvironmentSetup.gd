@@ -463,7 +463,8 @@ func _place_sun(hour: float, season: int, season_day: int) -> void:
 	# ámbar; eso es lo que hace esta franja de los ocho grados.
 	var above := rad_to_deg(elevation)
 	var daylight := smoothstep(-3.0, 8.0, above)
-	_directional_light.light_energy = sun_energy * daylight
+	_directional_light.light_energy = sun_energy * daylight * float(luz_del_tiempo["sol"])
+	_directional_light.shadow_opacity = float(luz_del_tiempo["sombra"])
 	_directional_light.light_color = sun_color.lerp(Color(1.0, 0.72, 0.45),
 		1.0 - smoothstep(3.0, 25.0, above))
 	_directional_light.visible = daylight > 0.001
@@ -569,22 +570,10 @@ func _mover_las_nubes() -> void:
 	var sim := _find_sim()
 	if sim == null or not ("day" in sim):
 		return
-	var segundos := (float(sim.day) * 24.0 + float(sim.hour)) / 24.0 \
-		* float(sim.seconds_per_day)
-	# Envuelto muy lejos: el ruido del shader ya no pierde precisión hasta el
-	# millón —el hash no usa seno—, y a esa cifra se llega en miles de jornadas.
+	# La cuenta está en [Viento], de donde la lee también la niebla del mapa regional
+	# (GRAFICOS §3): una sola velocidad de viento para las dos.
 	_sky_material.set_shader_parameter("viento_recorrido",
-		fmod(segundos * VIENTO * VIENTO_A_RUIDO, 1.0e6))
-
-
-## De metros de viento a unidades del ruido de las nubes. Es el 40 que usaba el
-## shader con `TIME`, y se deja igual para que a x1 corran como corrían.
-const VIENTO_A_RUIDO := 40.0
-
-## Lo que corre el viento de las nubes. Es el `viento` por defecto del shader; se
-## lee de aquí y no del material porque `get_shader_parameter` devuelve nulo
-## mientras nadie lo haya fijado.
-const VIENTO := 0.012
+		Viento.recorrido(sim.day, float(sim.hour), float(sim.seconds_per_day)))
 
 
 ## Cuánto tapan hoy. Se guarda porque el color del cielo depende de ello: un
@@ -686,7 +675,7 @@ func _update_ambient(sun_above_deg: float) -> void:
 	_environment.ambient_light_sky_contribution = ambient_sky_share
 	_environment.ambient_light_color = fill_color
 	_environment.ambient_light_energy = ambient_energy * lerpf(
-		ambient_night_floor, 1.0, twilight)
+		ambient_night_floor, 1.0, twilight) * float(luz_del_tiempo["ambiente"])
 
 
 ## Pone el relleno enfrente del sol. Se llama cada vez que el sol se mueve.
@@ -748,8 +737,34 @@ func _find_sim() -> Node:
 	return _sim
 
 
+## LA LUZ DEL TIEMPO (GRAFICOS §7.4): factores sobre el sol, las sombras y el ambiente que
+## pone la hora —luz plana con nublado, más oscura con temporal—, de
+## [ClimaEnPantalla.luz]. `luz_del_tiempo` es la de ahora, que va hacia `_luz_objetivo` en
+## unos segundos: un temporal no apaga el sol de un cuadro a otro.
+var luz_del_tiempo: Dictionary = ClimaEnPantalla.LUZ_SIN_CLIMA.duplicate()
+var _luz_objetivo: Dictionary = ClimaEnPantalla.LUZ_SIN_CLIMA.duplicate()
+
+
+## La luz del tiempo que hace. La llama la escena con el tiempo, como las nubes.
+func luz_por_el_tiempo(kind: int) -> void:
+	_luz_objetivo = ClimaEnPantalla.luz(kind as Weather.Kind).duplicate()
+
+
+## Sin clima, la luz de la hora sin tocar, al momento.
+func luz_sin_clima() -> void:
+	_luz_objetivo = ClimaEnPantalla.LUZ_SIN_CLIMA.duplicate()
+	luz_del_tiempo = _luz_objetivo.duplicate()
+
+
+func _suavizar_la_luz(delta: float) -> void:
+	for clave: String in luz_del_tiempo:
+		luz_del_tiempo[clave] = move_toward(float(luz_del_tiempo[clave]),
+			float(_luz_objetivo[clave]), delta * 0.3)
+
+
 func _process(_delta: float) -> void:
 	Cronometro.tramo_raiz("vista: entorno")
+	_suavizar_la_luz(_delta)
 	if not follow_time_of_day:
 		Cronometro.cierra("vista: entorno")
 		return

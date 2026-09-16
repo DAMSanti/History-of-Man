@@ -327,7 +327,25 @@ El mecanismo, en [SISTEMAS.md](SISTEMAS.md) §4; cómo se ve la niebla, en
 |---|---|
 | **Mapa regional, tecla R** | Se apunta desde el campamento seleccionado, o el primero; el clic da el rumbo y abre la ficha, y cada clic siguiente lo cambia. La flecha dibuja **el pasillo mismo**: franja de su ancho, eje y punta donde se da la vuelta |
 | **Valle, botón Rumbo** bajo el de la comarca en el minimapa | El clic en el valle da el rumbo desde la cueva; la flecha va de la cueva a la puerta del valle por la que saldrían, porque el pasillo no cabe. Aquí y no en la barra de abajo, que no cabe a 1280×720; y no con la R, que en el valle cambia la capa del minimapa. ESC cierra la ficha |
+| **Cambia con la spec del 2026-09-15** ([SISTEMAS.md](SISTEMAS.md) §4) | El rumbo deja de ser libre: **ocho rumbos**, sólo los que tienen algo al alcance, iguales en los dos mapas. **El botón del valle lleva al regional** con la ficha abierta, y está **apagado** —con el motivo— sin tres pieles curtidas, raciones, leña o gente para la expedición más corta. Sin la R en el regional para un rumbo libre. Visto por el usuario el 2026-09-14: el botón «Rumbo» del valle no hacía nada visible |
 | **`FichaDeRumbo`**, la misma en los dos | Desde dónde y hacia dónde, los km de ida, quién puede ir (marcados los tres primeros), jornadas de 4 a 24, lo que se llevan —raciones y leña que no vuelven, pieles que sí— y, en rojo, por qué no se puede. No cuenta nada por su cuenta: todo sale de `Expedicion` |
+
+> **Construido el 2026-09-16: las dos filas de arriba de «Mapa regional» y «Valle» ya no
+> valen.** Lo de hoy:
+>
+> | Dónde | Qué hay |
+> |---|---|
+> | **Mapa regional, tecla R** | Abre la ficha para el campamento seleccionado, o el primero. **No hay clic de rumbo**: el clic vuelve a ser elegir un sitio |
+> | **Valle, botón «Rumbo»** bajo el de la comarca en el minimapa | **Apagado**, con el motivo en la ayuda, mientras no pueda salir la expedición más corta —tres personas y cuatro jornadas— o haya una fuera (`Expedicion.por_que_no_sale`). Al pulsarlo sale a la comarca con la pantalla de carga y el regional abre la ficha de ese campamento (`Expedition.ficha_de_rumbo_desde`) |
+> | **`FichaDeRumbo`** | Arriba, **la rosa de los ocho rumbos**: apagados los que no tienen nada al alcance y marcado el elegido; de entrada, el primero que se ofrece. Sin ninguno, lo dice y no manda. Abierta desde el valle, **«Mandar y volver al valle»** y **«Mandar y quedarse»**; con la R, «Mandar» y se queda en el regional (decisión aceptada por el usuario) |
+> | **`FlechaDeRumbo`** | El pasillo elegido como antes, y **tenue, el eje de los demás rumbos** que se ofrecen, hasta donde llegarían en 24 jornadas. En el valle ya no se dibuja |
+> | **Los avistados** | Marcas pardas apagadas, aunque estén bajo la niebla; no se pinchan ni salen en listas (`RegionMap.sitios_que_se_dibujan`) |
+>
+> Comprobado con `TestExpedicion` (la ficha, sin ventana) y `RumboProbe` por el camino del
+> juego: el botón apagado sin pieles y encendido con ellas, el regional con la ficha abierta
+> viniendo del valle y los avistados dibujados sin poderse pinchar, y «Mandar y volver al
+> valle» de vuelta en el valle con tres fuera. `NieblaCaptura` ya no captura la ficha en el
+> valle.
 
 #### La cueva por dentro, y pintar lo de antes (2026-09-15)
 
@@ -1152,10 +1170,43 @@ Criterios:
 > habría quedado en el nivel más detallado—, y **el plan de bloques no se sale del
 > mapa**. `TestConfiguracion`, `TestBosque`, `ConfiguracionCaptura`.
 >
-> **Pendiente: el coste de «sin límite» no está medido.** La corrida coincidió con una
-> partida abierta en la misma máquina y sus tiempos no valen; el aviso de la ventana
-> dice que es para equipos muy potentes o capturas, sin cifra todavía. Se mide con
-> `GpuProfile ARBOLES=1 ESCALON=1 RADIO=100000`, con la máquina libre.
+> **«Sin límite» se quitó el 2026-09-15: rompía el motor** (`/depurar`). Medido con la
+> máquina libre (`GpuProfile ARBOLES=1 ESCALON=1 RADIO=100000`), Godot dejó de crear
+> los grupos de árboles 3D —«Element limit reached», más de 7 000 errores y 5,2 GB de
+> RAM—: cada bloque de 32 m monta uno por especie, variante y nivel de detalle, y el mapa
+> son 16 384 bloques. **El slider acaba en 1000 m** (`Configuracion.RADIO_3D_MAXIMO`),
+> que monta, y **el aviso lleva la cifra**: el bosque pasa de 3 ms a 34-67 ms y el mapa
+> tarda un minuto en montarse (GRAFICOS §7.1). Una configuración guardada con «sin
+> límite» se lee como 1000 m (`TestConfiguracion`). Lo que pedía el usuario —el mapa
+> entero en 3D— necesita agrupar los bloques lejanos, y va por `/spec` (ROADMAP).
+> Decisión suya, con la medida delante.
+
+### 8.8. El agua y el clima en la ventana (spec, 2026-09-15)
+
+Lo que se ve, en [GRAFICOS.md](GRAFICOS.md) §7.3 y §7.4. Aquí, dónde van:
+
+- **«Agua»**, un selector con **Bajo, Medio, Alto y Ultra**. Cada nivel general pone el
+  suyo —el de su mismo nombre— y moverlo deja la configuración en Personalizado.
+- **«Clima»**, un interruptor. **Encendido en Medio, Alto y Ultra; apagado en Bajo.**
+  La ayuda dice que apagado el tiempo sigue haciendo lo que hace, sólo que no se ve.
+- Los dos en la pestaña **Gráficos**, con los demás; si alguno se aplica al montar el
+  mapa y no en caliente, lo dice su nota, como la vegetación y los árboles.
+
+Criterios: prueba de que cada nivel pone su agua y su clima y de que moverlos
+personaliza; un fichero de configuración de antes, sin estos ajustes, abre en su
+nivel y no en Personalizado (como con los árboles); la pestaña cabe a 1280×720
+(`ConfiguracionCaptura`).
+
+> **«Agua», construido el 2026-09-16.** El selector va detrás de la distancia del 3D, con
+> los cuatro niveles, y **se aplica en caliente**: cambiarlo con el valle abierto tarda lo
+> mismo que montarlo con ese nivel. Lo comprueba `TestConfiguracion`. Lo que pone cada
+> nivel, en GRAFICOS §7.3, «Cómo quedó». **«Clima» sigue pendiente**, con su spec en
+> GRAFICOS §7.4.
+
+> **«Clima», construido el 2026-09-16.** Casilla «Clima: lluvia, nieve y niebla» en
+> Gráficos, antes de los mapas de normales, **en caliente**: apagada en Bajo y encendida en
+> Medio, Alto y Ultra. Su ayuda dice que apagado el tiempo sigue haciendo lo que hace. Un
+> fichero de antes abre en su nivel. `TestConfiguracion`. Lo que se ve, en GRAFICOS §7.4.
 
 ---
 
@@ -1393,17 +1444,317 @@ Como la etapa de sembrar pesaba sus 9,6 s, la barra la da por hecha con lo que t
 | Preparar un valle, con red (tarea 6) | 96 s | 33 ms | — (esperas de red) |
 
 Ningún cuadro de más de 500 ms, la barra sin retroceder y quieta como mucho 0,8 s. En
-el viaje en frío (`TransitoProbe`, sin ventana), la pantalla alarga la carga un 3-5 %
-frente a la misma carga de un tirón; el segundo viaje, 1,3 s de ida y 5,4 de vuelta
-(ESTADO §2). **Al retomar, el peso del bosque de lejos se quedó corto**: era de antes de
+el viaje en frío (`TransitoProbe`, sin ventana), la pantalla alarga la carga un 0-7 %
+frente a la misma carga de un tirón; el segundo viaje, 1,3 s de ida y 2,8 de vuelta
+(ESTADO §2, corregido el mismo día: la primera medida de la vuelta, 5,4 s, era de una
+sonda que no viajaba como el juego). **Al retomar, el peso del bosque de lejos se quedó corto**: era de antes de
 cargar sus modelos en un hilo —2,6 s contra 3,6-3,9 medidos— y, sin sembrar delante, a
 media barra había pasado sólo el 36 % del tiempo; con el peso medido, el 42-44 %. La
 pantalla se lee a 1920×1080 y a 1280×720 (`CargaCaptura`). La huella de la partida con y
 sin pantalla (`CargaHuellaProbe`) se midió en la tarea 4 y no se repitió: lo tocado
 después no toca la partida.
 
-**Lo que no se hizo.** Los `SCRIPT ERROR` de los objetos que quedan vivos al cambiar de
-escena siguen igual (fuera de alcance, ESTADO §2). Queda en disco una caché vieja del
+**Lo que no se hizo.** Los `SCRIPT ERROR` de los objetos que quedaban vivos al cambiar de
+escena (fuera de alcance, ESTADO §2) se miraron después, en `/depurar`: eran de la sonda,
+no del juego. Queda en disco una caché vieja del
 regional con el nombre de antes (`data/dem/cantabria_region_mesh_r1025.res`, 106 MB) que
 ya no lee nadie; es un fichero ignorado por git y se puede borrar.
+
+---
+
+## 10. Buscar un paraje, ver una pasarela y saber qué da una técnica (spec, 2026-09-15)
+
+> **Spec escrita con `/spec` el 2026-09-15**, a partir de tres quejas del `/depurar` de
+> la noche del 2026-09-14 que no eran fallos sino cosas que faltaban (ROADMAP). Las
+> decisiones las tomó el usuario con preguntas; están marcadas donde salen. El efecto
+> del núcleo preparado y de la talla laminar es un cambio de la partida, no sólo de la
+> ventana: su mecanismo está en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §7.
+
+### 10.1. Qué problema cierra
+
+Tres ventanas que responden a medias a la pregunta con la que se abren.
+
+- **Parajes** es una lista ordenada por cercanía y nada más. Con decenas de parajes,
+  «¿dónde hay caza a menos de un kilómetro?» obliga a leerla entera, y un paraje con
+  varios oficios sólo enseña el icono del principal: el recodo donde también se saca
+  raíz no se encuentra buscando raíz.
+- **Obras** trata las pasarelas aparte, como un párrafo de texto encima de todo, sin
+  el botón «ver» ni la ficha que tienen las trampas, las nasas y las obras del
+  abrigo. Una pasarela armada no se puede ir a mirar desde la ventana, que es para lo
+  que existe la ventana (§4, «Obras»).
+- **El tooltip de una técnica** dice qué es, cuánto falta y de qué cuelga, pero no
+  **qué cambia en el juego** al tenerla. El jugador elige hacia dónde practicar sin
+  saber qué gana. Y al mirarlo apareció algo peor: **el núcleo preparado y la talla
+  laminar no hacen nada** salvo abrir otras técnicas, aunque su descripción promete
+  «menos desperdicio de sílex» y «más filo por kilo». La descripción mentía.
+
+### 10.2. Lo que se pide
+
+**Parajes: filtrar por oficio y por distancia.**
+
+- **Cinco filtros de oficio** —caza, pesca, marisqueo, recolección y materia prima—
+  que se encienden y se apagan, de uno en uno o varios. **Un paraje sale si allí se
+  hace cualquiera de los oficios encendidos**, aunque no sea el que le da nombre e
+  icono (decisión del usuario). Con todos apagados o todos encendidos, salen todos.
+- **Tramos de distancia al campamento**: hasta 500 m, hasta 1 km, hasta 2 km, o todos
+  (decisión del usuario). Uno a la vez.
+- La lista **sigue ordenada por cercanía**, dice cuántos parajes enseña de cuántos
+  conoce, y si el filtro deja la lista vacía lo dice con esas palabras, no con la
+  ventana en blanco.
+- **Se recuerdan mientras dura la partida** (decisión del usuario): cerrar y abrir la
+  ventana los conserva; cargar otra partida o abrir el juego otra vez vuelve a «todo».
+  No se guardan en disco.
+- Los parajes que esta estación no se pueden trabajar siguen saliendo con su marco
+  rojo: filtrarlos no es parte de esto.
+
+**Obras: las pasarelas como las demás obras** (decisión del usuario).
+
+- **Una fila «Pasarela de troncos»** en la lista, con cuántas hay y el botón «ver», en
+  su familia como el resto.
+- **«ver» abre la ficha de cada una** con ◀ ▶, «llevar la cámara» y «◀ todas las
+  obras», igual que una trampa: dónde está —el nombre del paraje, como hoy—, cuánto
+  mide y la jornada en que se remató.
+- **La que se está armando sale también**, como una ficha más de la misma fila, con
+  las jornadas puestas de las que pide y la leña que gastará al rematarla.
+- **Si no hay ninguna, ni armada ni en marcha, la fila no sale** y queda la nota de
+  por qué no se arma ninguna, la que hay hoy, con las mismas causas en el mismo orden.
+- El párrafo aparte de hoy desaparece: una sola forma de enseñar una obra.
+
+**El tooltip de cada técnica: su efecto, y lo que supone hoy para la banda.**
+
+- **En todas las técnicas del árbol**, aprendidas o no (decisión del usuario): las que
+  faltan dicen qué darán, que es lo que ayuda a decidir hacia dónde practicar.
+- **El efecto, con la cifra que usa el juego.** Qué cambia —«la azagaya multiplica
+  por 1,25 la caza menor y por 1,60 la mayor», «la nasa pesca sola, sin nadie en el río»— y qué abre:
+  piezas que se pueden hacer, trampas que se pueden poner, maneras de pescar, otras
+  técnicas. **Ninguna cifra se escribe a mano en el texto**: sale del mismo sitio del
+  que la lee la partida, para que no puedan decir cosas distintas.
+- **Lo de hoy, sólo en las aprendidas: el uso de ahora** (decisión del usuario). Lo
+  que la partida ya sabe sin contadores nuevos: cuántos de la banda la usan hoy,
+  cuántas piezas de lo que abre hay en el utillaje, cuántas trampas o nasas hay
+  puestas. **Lo que no se pueda contar sin inventar, no sale**; no se promete «lo que
+  ha ganado la banda desde que la aprendió».
+- **La descripción no promete lo que la técnica no hace.** Si una descripción y el
+  efecto no casan, se arregla la descripción o el efecto, no se deja.
+
+**El núcleo preparado y la talla laminar, con efecto de verdad** (decisión del usuario,
+con las cifras delante; son una decisión, no una medida):
+
+- **Núcleo preparado: filos repetibles.** Lo que se talla en piedra —lasca, raedera,
+  buril, punta— sale con **calidad no menor de 0,9**. Hoy es 0,7 + 0,6 × el
+  rendimiento de quien talla, así que un novato saca piezas de vida corta; con el
+  núcleo, el novato talla como alguien a media pericia y el experto sigue igual.
+- **Talla laminar: la mitad de piedra.** Cada pieza tallada gasta **0,5 de piedra o de
+  sílex en vez de 1**. Donde se nota es en el sílex, que no hay en el valle y llega por
+  trueque (SISTEMAS §5). Leroi-Gourhan da unas diez veces más filo por kilo que la
+  lasca; aquí se toma mucho menos para no romper la escalera.
+- Su tooltip dice las dos cifras como cualquier otra técnica.
+
+### 10.3. Criterios de aceptación
+
+**Parajes**
+
+- **El filtro de oficio mira todos los oficios del paraje**: con un paraje de caza que
+  también tiene recolección, encender sólo recolección lo enseña. Prueba sobre lo que
+  pinta la ventana, con parajes construidos.
+- **Los tramos cortan donde dicen**: un paraje a 499 m sale en «hasta 500 m» y uno a
+  501 no. Prueba.
+- **Todo apagado es todo**, y **un filtro que no deja nada dice que no hay parajes que
+  lo cumplan** y cuántos se conocen. Prueba.
+- **Se conservan al cerrar y abrir la ventana, y vuelven a «todo» al cargar otra
+  partida.** Prueba.
+- **Cabe a 1280×720**: la fila de filtros no saca nada de la ventana, captura.
+
+**Obras**
+
+- **Con dos pasarelas armadas y una en marcha, la fila dice 3 y la ficha recorre las
+  tres** con ◀ ▶, cada una con su sitio y su medida, y la de en marcha con sus
+  jornadas. Prueba con pasarelas construidas, sin simular hasta que la banda las arme.
+- **«llevar la cámara» lleva la cámara a la pasarela**, a su primera celda. Prueba.
+- **Sin pasarelas, no hay fila y sí la nota**, con la misma causa que da hoy para cada
+  estado —sin técnica, sin cruce, sin exploradores, sin leña—. Prueba por causa.
+- **No queda el párrafo aparte.** Prueba de que no se escribe dos veces.
+
+**El tooltip de las técnicas**
+
+- **Las dieciocho técnicas tienen efecto escrito**: una prueba recorre el árbol y
+  ninguna sale sin su línea de efecto.
+- **Las cifras del tooltip son las del juego**: una prueba cambia la cifra de una
+  técnica en el sitio del que la lee la partida y el tooltip cambia con ella. Al
+  menos una técnica de cada oficio.
+- **Lo de hoy cuenta lo que hay**: con tres azagayas en el utillaje y dos cazadores,
+  el tooltip de la azagaya dice 3 y 2. Estado construido, prueba.
+- **Las no aprendidas no dicen «lo de hoy»**, y sí su efecto. Prueba.
+- **Se lee**: captura de un tooltip con efecto y lo de hoy, a 1280×720, sin salirse de
+  la pantalla.
+
+**El núcleo y la laminar**
+
+- **Con el núcleo, ninguna pieza tallada sale por debajo de 0,9 de calidad** aunque la
+  talle alguien con rendimiento 0,2; sin él, sale 0,82 como hoy. Prueba.
+- **Con la laminar, tallar diez piezas gasta 5 de piedra, o 5 de sílex**; sin ella, 10.
+  Prueba.
+- **El resto de piezas no cambia**: el asta, la fibra y la piel gastan lo mismo con y
+  sin las dos técnicas. Prueba.
+- **La partida se mueve y se dice cuánto**: el cambio de gasto de piedra y sílex en
+  un tramo de taller construido, antes y después, en ESTADO §2. No es un criterio de
+  balance que cumplir, es una cifra que dejar escrita.
+
+### 10.4. Fuera de alcance
+
+- **Contar lo ganado por cada técnica** desde que se aprendió —piezas cazadas gracias
+  al propulsor, pescado de la nasa—. Decisión del usuario: «lo de hoy» es el uso de
+  ahora.
+- **Filtrar por material**, por alcanzable hoy o por nombre, y **ordenar Parajes** de
+  otra manera que por cercanía.
+- **Guardar los filtros en disco** o en la configuración.
+- **Cambiar qué hace cualquier otra técnica**, sus jornadas o su coste de aprendizaje:
+  sólo el núcleo y la laminar ganan efecto. Si el tooltip destapa otra que no hace lo
+  que dice, se apunta y va por `/depurar`.
+- **Pinchar una pasarela en el mundo** para abrir su ficha: hoy no se pincha, y sigue
+  sin pincharse.
+- **Otras obras nuevas en Obras** y cualquier cambio a cómo se arma una pasarela
+  (SISTEMAS §20).
+
+### 10.5. Plan técnico (2026-09-16)
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+- **Parajes** lo pinta `PanelSitios.show_places`: ordena `sim.parajes.list` por cercanía y
+  saca una fila por paraje (`_place_row`). No hay filtros de ninguna clase. Cada `Paraje`
+  ya sabe **todos** sus oficios (`Paraje.activities`, `Paraje.serves`), que es lo que el
+  filtro necesita.
+- **Obras** lo pinta `PanelObras`: las familias con su botón «ver» y una ficha con ◀ ▶ y
+  «llevar la cámara» (`_ficha`, `_boton_volver`), **y las pasarelas aparte**, en
+  `_pasarelas`, como párrafo, con su explicación de por qué no hay ninguna
+  (`_por_que_no_hay_pasarela`). Los datos están en `Pasarelas.puentes` —las celdas de agua
+  que salva cada una— y en `Pasarelas.obra` y `jornadas_puestas` para la que se arma.
+- **El tooltip de una técnica** lo compone `TechGraph._tooltip`: nombre, descripción,
+  jornadas del oficio, coste de aprendizaje y qué la frena. **No dice qué hace**.
+  `PanelTecnicas._improvement_factor` ya lee un efecto de caza de `Hunting.MEJORAS`: ése es
+  el patrón, leer la cifra de donde la lee la partida.
+- **La calidad de una pieza** sale de `Tool.make`: `0.7 + pericia * 0.6`. **El gasto de
+  materia** lo paga `Taller` con `Tool.recipe(kind)`, prefiriendo sílex a piedra cuando lo
+  hay. Ni el núcleo ni la talla laminar tocan nada de esto.
+
+**Módulos afectados.**
+
+1. **`FiltroDeParajes` (`ui/`, nuevo)**: qué oficios están encendidos y qué tramo de
+   distancia, y `pasa(paraje, casa)`. **Estático**, porque tiene que sobrevivir a cerrar la
+   ventana pero no a cargar otra partida, que lo vacía; no se guarda en disco (decisión del
+   usuario). Sin nodos: se prueba sin ventana.
+2. **`PanelSitios`**: la fila de filtros —cinco oficios y cuatro tramos—, el recuento «de N
+   que se conocen» y el aviso de lista vacía.
+3. **`PanelObras`**: la familia «Pasarela de troncos» como una más, con su ficha; y fuera el
+   párrafo aparte. La nota de por qué no hay ninguna se queda tal cual, sin tocar sus causas.
+4. **`TechTree`**: `efecto(tech)` —qué cambia y qué abre, **leyendo las cifras de donde las
+   lee la partida**— y `lo_de_hoy(tech, sim)` —el uso de ahora, sólo con lo que ya se puede
+   contar—. `TechGraph._tooltip` las pinta. **Ninguna cifra se escribe a mano.**
+5. **`Tool` y `Taller`**, que es lo único que cambia la partida: con el núcleo preparado, lo
+   tallado en piedra sale con calidad no menor de 0,9; con la talla laminar, cada pieza de
+   piedra o sílex gasta la mitad. Las dos preguntan por la técnica al `TechTree` de la
+   simulación, que es quien sabe lo aprendido.
+6. **`VentanasCaptura` (`tests/`, nueva)**: las dos capturas que la spec pide a 1280×720
+   —Parajes con filtros y un tooltip con efecto y lo de hoy—.
+
+**Decisiones que tomo, y se dicen.**
+
+- **El filtro vive en la interfaz**, no en `Parajes`: es una preferencia de lectura, no
+  estado de la partida, y por eso no entra en la instantánea ni en el guardado.
+- **La calidad mínima del núcleo se aplica al fabricar** (`Tool.make` recibe si hay núcleo),
+  no al usar la pieza: así una pieza tallada antes de aprenderlo sigue siendo lo que era.
+- **La laminar abarata piedra y sílex, y nada más**: el asta, la fibra y la piel se pagan
+  igual, como pide la spec.
+
+**Orden de dependencias.** El filtro antes que la ventana que lo usa; el efecto de las
+técnicas antes que «lo de hoy», que se apoya en la misma tabla; el núcleo y la laminar antes
+de medir el gasto; y las capturas al final.
+
+**Qué contrato cambia**: ninguno nuevo. El núcleo y la laminar cambian la partida —la
+calidad y el gasto—, así que **las firmas de las sondas se desplazan una vez** y se dice.
+
+**Riesgos técnicos.**
+
+- **El efecto de una técnica sale de dieciocho sitios distintos** (caza, pesca, trampas,
+  taller, obras). Si alguna no tiene una cifra que leer, el tooltip lo dirá con palabras y
+  se apuntará como deuda, en vez de inventar un número.
+- **Al escribir los efectos puede aparecer otra técnica que no hace lo que promete**: se
+  apunta y va por `/depurar`, como dice la spec; aquí sólo cambian el núcleo y la laminar.
+- **El gasto de piedra cae a la mitad con la laminar**: la piedra deja de ser un freno y el
+  taller puede acelerar. Se mide el tramo y se escribe en ESTADO; no se reequilibra nada.
+
+### 10.6. Cómo quedó (2026-09-16)
+
+**Parajes.** Dos filas de botones debajo del encabezado: los cinco oficios, que se
+encienden sueltos, y los cuatro tramos de distancia, de los que manda uno. El
+encabezado pasa a «1 DE 13 PARAJES CONOCIDOS» en cuanto algo filtra, y con la lista
+vacía lo dice con palabras —«ninguno de los 13 parajes conocidos pasa este filtro»—
+en vez de quedarse en blanco. Quién sale y en qué orden lo decide
+`FiltroDeParajes.filtrar`, no la ventana: por eso se comprueba sin montar ningún nodo
+(`TestParajes`, nueve pruebas nuevas). El filtro **es estático y vive en la interfaz**
+—no entra en la instantánea ni en el guardado— y se vacía solo al cambiar de partida,
+que es lo que mira `FiltroDeParajes.para(sim)` comparando de quién era.
+
+**Obras.** Las pasarelas son una familia más de la lista —«Pasarela de troncos», con
+cuántas hay y su botón «ver»— y su ficha tiene ◀ ▶, «llevar la cámara» y el sitio, la
+medida y la jornada en que se remató. La que se está armando sale como una ficha más,
+con las jornadas puestas y la leña que gastará. El párrafo aparte desapareció; queda
+una sola línea, la de por qué no se arma ninguna, y sólo cuando no hay ninguna. Para
+poder decir la jornada hubo que **apuntarla**: `Pasarelas.rematadas`, una lista
+paralela a `puentes`, porque cada entrada de `puentes` son las celdas que salva y eso
+lo leen la rejilla, el andador y la vista. Que las dos listas no se descuadren al
+llevarse una riada una pasarela es una prueba de `TestPasarela`.
+
+**El tooltip de una técnica.** Debajo de la descripción va **qué da**, y en las
+aprendidas, **qué supone hoy**. Ejemplos tal cual salen:
+
+- Azagaya de asta: «Lo que se cobra en una jornada: multiplica por 1,25 la caza menor,
+  y multiplica por 1,60 la caza mayor. Deja fabricar: azagaya. Y abre el paso a: ojeo,
+  propulsor. Hoy: 3 azagaya en el utillaje.»
+- Foso: «Trampa nueva, foso: cobra una pieza cada 9,0 jornadas y aguanta 70 puesta.
+  Cae en ella: jabalí, ciervo, corzo.»
+- Arpón de asta: «Abre arpón de asta: 105 de pescado por jornada, donde a mano se
+  sacan 12.»
+- Talla laminar: «Cada pieza de piedra o de sílex cuesta la mitad: una lasca pasa de
+  1,0 a 0,5 de materia.»
+
+**Ninguna de esas cifras está escrita en el texto**: `TechTree.efecto` las lee de
+`Trap.INFO`, `Hunting.MEJORAS`, `Fishing.CATALOGUE`, `Tool.recipe` y las constantes de
+`Pasarelas`, que es de donde las lee la partida, y `TechTree.lo_de_hoy` cuenta lo que
+hay en el utillaje, en el río o en el valle. Las dieciocho técnicas dicen qué dan
+—`TestTecnicas`, doce pruebas—, y las presas salen por su nombre (`Fauna.species_name`)
+y no por la clave con que las apunta la tabla, que en la ficha se leía como una errata.
+
+**El núcleo preparado y la talla laminar ya hacen algo**, que era la mitad de la queja:
+calidad mínima 0,90 en lo tallado en piedra y media piedra o sílex por pieza. El
+mecanismo y la cifra medida están en EPOCA_01 §7 y en ESTADO §2 —una tanda del utillaje
+lítico de una banda de quince pasa de 14,0 a 7,0 de piedra—.
+
+**Capturas** (`ParajesCaptura`, a 1280×720): `parajes.png` la lista entera,
+`parajes_filtrados.png` la misma con pesca y marisqueo encendidos a menos de 500 m —uno
+de trece— y `obras_pasarela.png` la ficha de una pasarela: «Armada en El pasto del picón.
+Salva un paso de 40 m. Rematada la jornada 3. A 100 m del abrigo», con ◀ ▶, «llevar la
+cámara» y «◀ todas las obras». Para capturarlas hay que **poner la ventana en modo ventana antes de pedir
+la medida**: la partida arranca con lo que diga la configuración del jugador, y a
+pantalla completa `window_set_size` se ignora sin decir nada.
+
+**Lo que no se consiguió capturar: el aviso emergente.** `tecnica_tooltip.png` enseña
+el árbol de caza, pero el globo no sale. Godot sólo lo abre con un ratón de verdad
+posado encima: ni `Input.warp_mouse`, ni un `InputEventMouseMotion` metido por la cola,
+ni traer la ventana al frente lo levantan —cuatro intentos el 2026-09-16, incluido el
+de pasar el punto a coordenadas de ventana, que era un fallo de verdad y está
+arreglado, porque el juego estira un lienzo de 1920×1080 sobre la ventana—. El texto
+**sí** queda comprobado: `TestTecnicas` lo contrasta contra las tablas del juego, y la
+sonda lo imprime entero en su salida. Queda como deuda de instrumentación, no de la
+ventana.
+
+**Corregido el 2026-09-16 (depurar): la ficha se queda.** El usuario pidió que lo que
+dice una técnica se quedara abierto «hasta que el jugador quiera», y un aviso emergente
+no puede: Godot lo cierra al mover el ratón. **Pinchar una casilla abre su ficha dentro
+de la ventana, debajo del árbol** (`PanelTecnicas._ficha`), y se queda hasta que se
+cierra con su aspa o se pincha otra. Lleva la descripción, **«EFECTO:»** delante de lo
+que da —así lo pidió: «EFECTO: lo que haga exactamente»—, lo de hoy, qué la frena y, si
+ya se sabe, el botón del vídeo del hito, que es lo que hacía antes el clic. El aviso
+emergente sigue saliendo al pasar por encima, con el mismo «EFECTO:». Comprobado en
+pantalla con `ParajesCaptura` (`tecnica_ficha.png`).
 

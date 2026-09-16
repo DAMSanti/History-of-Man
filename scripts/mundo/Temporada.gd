@@ -127,6 +127,12 @@ func cota_de_nieve() -> float:
 	return _cota
 
 
+## La misma cota de nieve de hoy, en metros de relieve: para lo que no sabe la fracción
+## del relieve, las peñas (GRAFICOS §7.4). Una sola cuenta, pasada a metros.
+func cota_de_nieve_en_metros() -> float:
+	return relieve.x + _cota * (relieve.y - relieve.x)
+
+
 func encharcamiento() -> float:
 	return _charca
 

@@ -20,8 +20,17 @@ extends SceneTree
 ## dibujarlas. Si alguna vez hace falta el coste de dibujo, eso es otra sonda y
 ## necesita ventana (ver [sondas-de-captura-necesitan-ventana]).
 ##
-## **Con la pantalla de carga**, como viaja el juego (INTERFAZ §9), y esperando a que la
-## escena diga `montado`; `PANTALLA=0` viaja de un tirón, como antes. El primer viaje es
+## **Por el camino del juego**: la ida con `DemoMain._return_to_region`, que guarda y
+## suelta el campamento, y la vuelta con `RegionMap._entrar_en_el_campamento`, que lo
+## adopta. Hasta el 2026-09-15 cambiaba de escena a pelo: la escena se llevaba el
+## campamento y salían 16-17 `SCRIPT ERROR` por corrida que el juego no da, y la vuelta
+## montaba un campamento nuevo en vez de adoptar el vivo. `A_PELO=1` viaja todavía así,
+## y sirve para comprobar que la escena no se lleva el campamento aunque se vaya sin
+## soltarlo ([Campamentos.soltar_de_la_escena]).
+##
+## **Con la pantalla de carga**, que es como viaja el juego (INTERFAZ §9), y esperando a
+## que la escena diga `montado`. `A_PELO=1` va además sin pantalla, de un tirón: es la
+## carga sin trocear, para comparar lo que cuesta trocearla. El primer viaje es
 ## EN FRÍO: sin la malla regional en caché —se borra antes— y sin la siembra guardada,
 ## que es lo que se compara con lo de antes de la pantalla. El segundo, con las dos, y
 ## dice si la ida encontró la malla y si la vuelta sembró.
@@ -38,13 +47,14 @@ func _init() -> void:
 	Engine.max_fps = 0
 	_preparar()
 
-	var pantalla := OS.get_environment("PANTALLA") != "0"
+	var a_pelo := OS.get_environment("A_PELO") == "1"
+	var pantalla := not a_pelo
 	# Durante `_init` el árbol todavía no es el bucle principal, y la carga en hilo espera
 	# cuadros de `Engine.get_main_loop()`.
 	await process_frame
 	_borrar_la_malla_regional()
 	var t0 := Time.get_ticks_msec()
-	if not await _montar(Expedition.LOCAL_SCENE, pantalla):
+	if not await _montar(Expedition.LOCAL_SCENE, pantalla, true, ""):
 		print("no arrancó el mapa de la banda")
 		quit(1)
 		return
@@ -58,7 +68,7 @@ func _init() -> void:
 	for i in range(VIAJES):
 		mallas.append(_hay_malla_regional())
 		var t_ida := Time.get_ticks_msec()
-		if not await _montar(Expedition.REGION_SCENE, pantalla):
+		if not await _montar(Expedition.REGION_SCENE, pantalla, a_pelo, "ida"):
 			print("no arrancó el mapa regional")
 			quit(1)
 			return
@@ -73,7 +83,7 @@ func _init() -> void:
 			memoria_de_la_siembra = con_ella - OS.get_static_memory_usage()
 		var sembradas := Forest.siembras
 		var t_vuelta := Time.get_ticks_msec()
-		if not await _montar(Expedition.LOCAL_SCENE, pantalla):
+		if not await _montar(Expedition.LOCAL_SCENE, pantalla, a_pelo, "vuelta"):
 			print("no volvió al mapa de la banda")
 			quit(1)
 			return
@@ -82,7 +92,7 @@ func _init() -> void:
 
 	print("")
 	print("=== LO QUE CUESTA EL VIAJE (reloj de pared, sin ventana, %s) ===" % (
-		"con pantalla de carga" if pantalla else "sin pantalla"))
+		"a pelo" if a_pelo else "con pantalla de carga" if pantalla else "sin pantalla"))
 	print("  montar el mapa de la banda la primera vez   %5d ms" % local_inicial)
 	for i in range(VIAJES):
 		print("  viaje %d:  ida al regional %5d ms (malla %s) · vuelta a la banda %5d ms (%s)"
@@ -98,12 +108,23 @@ func _init() -> void:
 
 
 ## Monta una escena y espera a que esté de verdad en pie —`montado`—, no sólo cargada.
-## Con pantalla, por el mismo camino que el juego: se abre, y la escena se lee en un hilo.
-func _montar(escena: String, pantalla: bool) -> bool:
+##
+## `tramo` dice por dónde: «ida» y «vuelta» por las funciones del juego, que abren su
+## pantalla; vacío o `a_pelo`, cambiando de escena desde aquí —el primer montaje no
+## tiene escena de antes que lo haga—.
+func _montar(escena: String, pantalla: bool, a_pelo: bool, tramo: String) -> bool:
 	# La de antes también dice `montado`, y con la escena leída en un hilo sigue ahí unos
 	# cuadros: sin esto, la ida medía 20 ms.
 	var antes := current_scene
-	if pantalla:
+	if not a_pelo and tramo == "ida":
+		antes.call("_return_to_region")
+	elif not a_pelo and tramo == "vuelta":
+		var campamento := Campamentos.de_sitio(SITE_ID)
+		if campamento == null:
+			print("no hay campamento vivo al que volver")
+			return false
+		antes.call("_entrar_en_el_campamento", campamento)
+	elif pantalla:
 		Carga.abrir(self, "Viajando")
 		Carga.cambiar_de_escena(self, escena)
 	else:
@@ -141,6 +162,9 @@ func _borrar_la_malla_regional() -> void:
 
 ## La partida mínima para que las dos escenas tengan de dónde tirar.
 func _preparar() -> void:
+	# La ida guarda, como en el juego: una sonda no escribe en los mapas del jugador.
+	Guardado.carpeta = "user://sondas/mapas"
+	DirAccess.make_dir_recursive_absolute(Guardado.carpeta)
 	var local: HeightmapData = load("res://data/dem/local/site_%d.res" % SITE_ID)
 	var sites: SiteSet = load("res://data/sites/cantabria_sites.res")
 	var site: Site = null

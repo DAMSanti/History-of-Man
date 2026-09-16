@@ -53,8 +53,9 @@ func add(tool: Tool) -> void:
 
 
 ## Fabrica y guarda una pieza de una vez.
-func craft(kind: Tool.Kind, stuff: Tool.Stuff, skill: float = 0.5) -> Tool:
-	var tool := Tool.make(kind, stuff, skill)
+func craft(kind: Tool.Kind, stuff: Tool.Stuff, skill: float = 0.5,
+		con_nucleo: bool = false) -> Tool:
+	var tool := Tool.make(kind, stuff, skill, con_nucleo)
 	add(tool)
 	return tool
 

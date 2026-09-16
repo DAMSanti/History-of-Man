@@ -131,13 +131,36 @@ static func default_stuff(kind_value: Kind) -> Stuff:
 			return Stuff.FIBRA
 
 
-static func make(kind_value: Kind, stuff_value: Stuff, maker_skill: float = 0.5) -> Tool:
+## Por debajo de esto no baja lo que se talla en piedra con el NÚCLEO PREPARADO.
+##
+## Es lo que la técnica prometía y no hacía: «se prepara el nódulo antes de
+## extraer, de modo que la lasca sale como se quiere». Sale como se quiere = sale
+## siempre buena, aunque la talle un novato. Cifra de la spec (INTERFAZ §10.2,
+## EPOCA_01 §7), decisión del usuario del 2026-09-15, no una medida.
+const CALIDAD_CON_NUCLEO := 0.9
+
+## Lo que cuesta una pieza de piedra o de sílex con la TALLA LAMINAR, sobre lo
+## que costaba: la mitad.
+##
+## «Multiplica el filo por kilo de sílex», que es literalmente lo que hace un
+## núcleo prismático: de un nódulo salen muchas más hojas que lascas. Decisión
+## del usuario del 2026-09-15.
+const AHORRO_LAMINAR := 0.5
+
+
+static func make(kind_value: Kind, stuff_value: Stuff, maker_skill: float = 0.5,
+		con_nucleo: bool = false) -> Tool:
 	var tool := Tool.new()
 	tool.kind = kind_value
 	tool.stuff = stuff_value
 	# La pericia del artesano se nota en la vida útil, no en el rendimiento:
 	# una hoja bien sacada tiene el filo más regular y se reaviva mejor
 	tool.quality = 0.7 + maker_skill * 0.6
+	# Y el núcleo preparado pone un suelo: la lasca sale como se quiere, la
+	# saque quien la saque. Sólo en lo tallado en piedra —el nódulo es de
+	# piedra—, así que una aguja de hueso no mejora por saber preparar núcleos.
+	if con_nucleo and (stuff_value == Stuff.CUARCITA or stuff_value == Stuff.SILEX):
+		tool.quality = maxf(tool.quality, CALIDAD_CON_NUCLEO)
 	return tool
 
 
@@ -226,7 +249,23 @@ static func horas_de_trabajo(kind_value: Kind) -> float:
 ##
 ## Es la receta: sin la materia prima no hay pieza, y por eso la manufactura
 ## depende de que la recolección y la caza traigan lo suyo.
-static func recipe(kind_value: Kind) -> Dictionary:
+## Lo que cuesta una pieza, con lo que la banda SEPA.
+##
+## La talla laminar deja la piedra y el sílex a la mitad ([AHORRO_LAMINAR]), y
+## eso se pregunta aquí y en un solo sitio: quien cobra la materia, quien mira
+## si alcanza y quien lo enseña en el almacén tienen que decir lo mismo, o el
+## taller se queda esperando una piedra que ya no hace falta.
+static func recipe(kind_value: Kind, techs: TechTree = null) -> Dictionary:
+	var receta := _receta_base(kind_value).duplicate()
+	if techs == null or not techs.has(TechTree.Tech.HOJA):
+		return receta
+	for material: int in [int(Materia.Kind.PIEDRA), int(Materia.Kind.SILEX)]:
+		if receta.has(material):
+			receta[material] = float(receta[material]) * AHORRO_LAMINAR
+	return receta
+
+
+static func _receta_base(kind_value: Kind) -> Dictionary:
 	match kind_value:
 		Kind.BURIL, Kind.RAEDERA, Kind.LASCA, Kind.PUNTA:
 			# La materia se decide al fabricar segun lo que haya en el abrigo:

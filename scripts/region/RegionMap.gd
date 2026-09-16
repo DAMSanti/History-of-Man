@@ -87,13 +87,19 @@ var _era_index: int = -1
 ## Fronteras ya trazadas, por indice de epoca: trazar cuesta segundos
 var _border_cache: Dictionary = {}
 
+## Las nubes con volumen sobre lo no descubierto. Ver [NubesDeLaNiebla].
+var _nubes: NubesDeLaNiebla = null
+
+## Si hay nubes sobre lo no descubierto o sólo la calima lisa del relieve. **Es para
+## medir**: el criterio de la spec compara las dos en la misma corrida (GRAFICOS §3).
+var con_nubes := true
+
 ## La niebla que se pinta: la textura, la versión de [NieblaRegional] con la que se
 ## hizo, y el material que comparten el mar y la frontera. Ver [_poner_la_niebla].
 var _niebla_tex: ImageTexture = null
 
-## Mandar una expedición desde aquí: si se está apuntando el rumbo, desde qué
-## campamento, la ficha y la flecha. Ver [FichaDeRumbo] y SISTEMAS §4.
-var _apuntando := false
+## Mandar una expedición desde aquí: desde qué campamento, la ficha y la flecha. Ver
+## [FichaDeRumbo] y SISTEMAS §4.
 var _campamento_del_rumbo: Campamento = null
 var _ficha_de_rumbo: FichaDeRumbo = null
 var _flecha: FlechaDeRumbo = null
@@ -238,6 +244,13 @@ func _ready() -> void:
 	if cargando:
 		process_mode = Node.PROCESS_MODE_INHERIT
 		Carga.cerrar()
+	# Y SI SE VIENE DEL BOTÓN «Rumbo» DEL VALLE, con la ficha abierta para ese
+	# campamento. Ver [Expedition.ficha_de_rumbo_desde].
+	if Expedition.ficha_de_rumbo_desde >= 0:
+		var pedido := Campamentos.de_sitio(Expedition.ficha_de_rumbo_desde)
+		Expedition.ficha_de_rumbo_desde = -1
+		if pedido != null:
+			abrir_la_ficha(pedido, true)
 	se_monto.emit()
 
 
@@ -343,6 +356,21 @@ func _apply_era(sea_level_m: float, ceder: Callable = Callable()) -> void:
 ##
 ## Antes de empezar partida no hay niebla: el mapa regional se ve entero, que es
 ## como se elige dónde asentarse.
+## Nubes o calima lisa, para medir una contra otra. Rehace los uniformes y enciende o apaga
+## la losa de nubes con volumen.
+func poner_las_nubes(hay: bool) -> void:
+	con_nubes = hay
+	if _nubes != null:
+		_nubes.visible = hay
+	_poner_la_niebla(true)
+
+
+## Lo que ha corrido el viento de la partida, a las nubes. Se llama cada cuadro.
+func _mover_las_nubes() -> void:
+	if _nubes != null:
+		_nubes.mover(Viento.recorrido_del_reloj())
+
+
 func _poner_la_niebla(forzar: bool = false) -> void:
 	if terrain == null or not GameState.started:
 		return
@@ -358,6 +386,15 @@ func _poner_la_niebla(forzar: bool = false) -> void:
 		return
 	var mar := (_sea_level_m / meters_per_unit) * vertical_exaggeration
 	terrain.set_fog_texture(_niebla_tex, mar)
+	# LAS NUBES CON VOLUMEN, sobre la comarca: el relieve se queda con la calima lisa, que
+	# es la que tapa (GRAFICOS §3, petición del usuario del 2026-09-16).
+	if _nubes == null:
+		_nubes = NubesDeLaNiebla.new()
+		add_child(_nubes)
+		_nubes.montar(terrain, _niebla_tex, meters_per_unit, vertical_exaggeration)
+		_nubes.visible = con_nubes
+	else:
+		_nubes.poner_la_niebla(_niebla_tex)
 	var mundo := Vector2(float(terrain.terrain_size.x), float(terrain.terrain_size.y))
 	var water := terrain.get_node_or_null("Water") as MeshInstance3D
 	if water != null:
@@ -380,12 +417,13 @@ func _poner_la_niebla(forzar: bool = false) -> void:
 			frontera.set_shader_parameter("fog_world_size", mundo)
 
 
-## Empieza a apuntar el rumbo de una expedición: desde el campamento seleccionado,
-## o desde el primero si el seleccionado no lo es. Sin campamentos vivos no hay
-## quien salga —se retoman al entrar en el mapa de la banda—.
-func _empezar_a_apuntar() -> void:
-	var desde: Campamento = null
-	if _selected != null:
+## Abre la ficha de la expedición para un campamento: el que se pide —el del botón
+## «Rumbo» del valle—, el seleccionado o el primero. Sin campamentos vivos no hay quien
+## salga: se retoman al entrar en el mapa de la banda.
+##
+## **El rumbo ya no se pincha en el mapa** (2026-09-16): es uno de los ocho de la ficha.
+func abrir_la_ficha(desde: Campamento = null, viene_del_valle: bool = false) -> void:
+	if desde == null and _selected != null:
 		desde = Campamentos.de_sitio(_selected.id)
 	if desde == null and not Campamentos.vivos.is_empty():
 		desde = Campamentos.vivos[0]
@@ -394,28 +432,6 @@ func _empezar_a_apuntar() -> void:
 			+ "mapa de la banda y vuelve.")
 		return
 	_campamento_del_rumbo = desde
-	_apuntando = true
-	_detail.text = "Pincha en el mapa hacia dónde sale la expedición desde %s." % desde.nombre()
-
-
-## El rumbo hacia el punto pinchado, desde el campamento, y la ficha abierta.
-func _apuntar_a(pantalla: Vector2) -> void:
-	var desde := _campamento_del_rumbo
-	if desde == null or desde.sitio == null or camera == null:
-		return
-	# Contra el plano de la cota del campamento: para un rumbo basta, y el mapa
-	# regional no tiene colisión.
-	var casa := terrain.geo_to_world(desde.sitio.lon, desde.sitio.lat)
-	var origen := camera.project_ray_origin(pantalla)
-	var normal := camera.project_ray_normal(pantalla)
-	if absf(normal.y) < 0.0001:
-		return
-	var t := (casa.y - origen.y) / normal.y
-	if t <= 0.0:
-		return
-	var geo := terrain.world_to_geo(origen + normal * t)
-	var rumbo := rad_to_deg(atan2((geo.x - desde.sitio.lon) * cos(deg_to_rad(desde.sitio.lat)),
-		geo.y - desde.sitio.lat))
 	if _flecha == null:
 		_flecha = FlechaDeRumbo.new()
 		_flecha.name = "FlechaDeRumbo"
@@ -424,32 +440,39 @@ func _apuntar_a(pantalla: Vector2) -> void:
 		_ficha_de_rumbo = FichaDeRumbo.new()
 		_ficha_de_rumbo.name = "FichaDeRumbo"
 		_ficha_de_rumbo.cambiada.connect(func(recorrido: Pasillo) -> void:
-			if recorrido != null:
-				_flecha.trazar_pasillo(terrain, recorrido, 1.5))
+			if recorrido == null:
+				_flecha.mesh = null
+			else:
+				_flecha.trazar_pasillo(terrain, recorrido, 1.5, _ficha_de_rumbo.los_otros_rumbos()))
 		_ficha_de_rumbo.cerrada.connect(_cerrar_el_rumbo)
 		get_node("UI").add_child(_ficha_de_rumbo)
-		_ficha_de_rumbo.abrir(desde.sim, rumbo, desde.nombre())
-	else:
-		_ficha_de_rumbo.apuntar(rumbo)
+	_ficha_de_rumbo.abrir(desde.sim, desde.nombre(), viene_del_valle)
 
 
-func _cerrar_el_rumbo(mandada: bool) -> void:
-	_apuntando = false
+func _cerrar_el_rumbo(mandada: bool, volver_al_valle: bool = false) -> void:
+	var desde := _campamento_del_rumbo
+	_campamento_del_rumbo = null
 	if _ficha_de_rumbo != null:
 		_ficha_de_rumbo.queue_free()
 		_ficha_de_rumbo = null
 	if _flecha != null:
 		_flecha.queue_free()
 		_flecha = null
-	if mandada and _campamento_del_rumbo != null:
-		_detail.text = ("Sale la expedición desde %s. Lo que vean se sabrá cuando "
-			+ "vuelvan.") % _campamento_del_rumbo.nombre()
-	_campamento_del_rumbo = null
+	if not mandada or desde == null:
+		return
+	# DESDE EL VALLE SE ELIGE (SISTEMAS §4, punto 3): volver a él o quedarse aquí.
+	if volver_al_valle:
+		_entrar_en_el_campamento(desde)
+		return
+	_detail.text = ("Sale la expedición desde %s. Lo que vean se sabrá cuando "
+		+ "vuelvan.") % desde.nombre()
 
 
 ## La niebla cambia sola con el mapa regional abierto: los campamentos siguen y
 ## las expediciones vuelven. Se mira una vez por segundo si hay algo nuevo.
 func _process(_delta: float) -> void:
+	# Las nubes de la niebla corren con el reloj de la partida (GRAFICOS §3).
+	_mover_las_nubes()
 	if Engine.get_process_frames() % 60 == 0:
 		_poner_la_niebla()
 		if GameState.niebla != null and GameState.niebla.version != _sitios_con_version:
@@ -553,18 +576,36 @@ func _marker_mesh() -> ArrayMesh:
 	return st.commit()
 
 
+## El color de un yacimiento avistado: pardo oscuro apagado, el mismo para todos, porque
+## de un avistado no se sabe de qué tipo es. Oscuro y no gris claro: sobre la niebla, que
+## es clara, el gris no se distinguía (`RumboProbe`, 2026-09-16).
+const COLOR_DE_AVISTADO := Color(0.30, 0.28, 0.26)
+
+
+## Reparte los sitios de la época en los que se ven —descubiertos y fuera de la niebla,
+## `GameState.se_ve`: se pinchan y salen en las listas— y los **avistados**, que sólo
+## se dibujan. Sin partida empezada se ve todo, como antes.
+static func sitios_que_se_dibujan(sitios: Array[Site]) -> Dictionary:
+	var vistos: Array[Site] = []
+	var avistados: Array[Site] = []
+	for site: Site in sitios:
+		if not GameState.started or GameState.se_ve(site):
+			vistos.append(site)
+		elif GameState.avistado(site):
+			avistados.append(site)
+	return {"vistos": vistos, "avistados": avistados}
+
+
 ## Rellena el MultiMesh con los emplazamientos disponibles a la cota actual
 func _refresh_sites() -> void:
 	if _markers == null or _site_set == null or terrain == null:
 		return
 
 	# Solo lo DESCUBIERTO. Al empezar es la propia cueva y nada mas: el mapa se
-	# gana explorando, no se regala.
-	_visible_sites = []
-	for site: Site in _site_set.available_in(_sea_level_m, _era):
-		if GameState.started and not GameState.se_ve(site):
-			continue
-		_visible_sites.append(site)
+	# gana explorando, no se regala. Y aparte, lo AVISTADO desde las cumbres.
+	var repartidos := sitios_que_se_dibujan(_site_set.available_in(_sea_level_m, _era))
+	_visible_sites = repartidos["vistos"]
+	var avistados: Array[Site] = repartidos["avistados"]
 	var visible_sites := _visible_sites
 	_legend_counts.clear()
 	var mm := _markers.multimesh
@@ -579,7 +620,7 @@ func _refresh_sites() -> void:
 		if site.fidelity == Site.Fidelity.ATESTIGUADO:
 			marked.append(site)
 
-	mm.instance_count = marked.size()
+	mm.instance_count = marked.size() + avistados.size()
 	for i in range(marked.size()):
 		var site: Site = marked[i]
 		var world := terrain.geo_to_world(site.lon, site.lat)
@@ -588,6 +629,16 @@ func _refresh_sites() -> void:
 		xform.origin = world
 		mm.set_instance_transform(i, xform)
 		mm.set_instance_color(i, KIND_COLORS.get(site.kind_at(_era_index), Color.WHITE))
+	# LOS AVISTADOS, MÁS APAGADOS Y AUNQUE ESTÉN BAJO LA NIEBLA (SISTEMAS §4, spec del
+	# 2026-09-15): se sabe que están ahí, no qué son. Van al MultiMesh pero NO a
+	# `_visible_sites`, que es lo que se pincha y lo que sale en las listas: no se
+	# visitan ni se funda en ellos hasta que pase una expedición.
+	for j in range(avistados.size()):
+		var site: Site = avistados[j]
+		var xform := Transform3D().scaled(Vector3.ONE * 1.2)
+		xform.origin = terrain.geo_to_world(site.lon, site.lat)
+		mm.set_instance_transform(marked.size() + j, xform)
+		mm.set_instance_color(marked.size() + j, COLOR_DE_AVISTADO)
 
 	_update_legend()
 
@@ -1003,11 +1054,7 @@ func _enter_local(local: HeightmapData) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed 			and event.button_index == MOUSE_BUTTON_LEFT:
-		# APUNTANDO, el clic es un rumbo y no una selección.
-		if _apuntando:
-			_apuntar_a(event.position)
-		else:
-			_select_site(_pick_site(event.position))
+		_select_site(_pick_site(event.position))
 		get_viewport().set_input_as_handled()
 
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1033,7 +1080,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_F:
 				_found_settlement()
 			KEY_R:
-				_empezar_a_apuntar()
+				abrir_la_ficha()
 			KEY_E:
 				_era = ((_era + 1) % (Site.Era.HISTORICA + 1)) as Site.Era
 				_refresh_sites()
@@ -1102,6 +1149,8 @@ func _setup_terrain() -> void:
 	# Sin colision: nada camina por el mapa regional, y el recuadro no es
 	# cuadrado, asi que exigiria un trimesh caro
 	terrain.generate_collision = false
+	# Su agua no sigue el ajuste «Agua»: el agua del regional se queda como estaba.
+	terrain.agua_con_niveles = false
 
 	terrain.sea_level = 0.0
 	terrain.band_sea_level_m = 0.0

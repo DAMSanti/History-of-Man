@@ -11,7 +11,12 @@ extends Resource
 ## una vez y se guarda aqui. Ver [TerrainSurround], [TerrainGenerationCache].
 
 const CACHE_VERSION := 1
-@export var version: int = CACHE_VERSION
+## **El valor por defecto es 0, no la versión, y no se toca** (2026-09-15): Godot no escribe
+## en el fichero una propiedad que vale su valor por defecto. Con `= CACHE_VERSION`, la
+## versión se guardaba igual al defecto de entonces —no quedaba escrita— y al leerla con
+## la versión subida valía el defecto nuevo: **subir la versión no invalidaba nada**.
+## Visto en `TerrainGenerationCache` al pasar a v5; aquí, el mismo fallo.
+@export var version: int = 0
 
 ## Version del heightmap de contorno (region.pipeline_version) con el que se
 ## construyo. Si se rehace el contorno, esto cambia y la cache deja de servir.

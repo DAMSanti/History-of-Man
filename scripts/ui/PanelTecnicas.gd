@@ -34,6 +34,10 @@ var ui: GameUI
 ## Qué oficio se está mirando.
 var _tab: int = Profession.Job.MANUFACTURA
 
+## Qué técnica tiene la ficha abierta, o -1. Se queda entre repintados: la ventana
+## se rehace sola cada poco y la ficha tiene que sobrevivir a eso.
+var _elegida: int = -1
+
 ## Qué se practica para aprender lo de cada oficio, dicho en corto. Va aquí y
 ## no en [TechTree] porque es un rótulo de interfaz, no un dato de la partida.
 const SE_APRENDE := {
@@ -67,6 +71,7 @@ func show_tech() -> void:
 	_pestanas(body)
 	_escrito(body, String(SE_APRENDE.get(_tab, "")), true)
 	_arbol(body)
+	_ficha(body)
 	_leyenda(body)
 	_lo_del_oficio(body)
 
@@ -108,11 +113,72 @@ func _arbol(body: VBoxContainer) -> void:
 	var graph := TechGraph.new()
 	scroll.add_child(graph)
 	graph.tech_selected.connect(func(tech: TechTree.Tech) -> void:
-		ui.show_tech_video(tech)
+		# ABRE LA FICHA, y la ficha se queda hasta que se pinche otra o se cierre.
+		# El aviso emergente no puede quedarse —Godot lo cierra al mover el ratón—
+		# y el jugador lo quería fijo para poder leerlo con calma (2026-09-16).
+		_elegida = int(tech)
+		show_tech()
 	)
-	graph.build(ui.tech, _tab, _util())
+	graph.build(ui.tech, _tab, _util(), ui.sim)
 	# Doce más de la barra horizontal, que si no tapa la fila de abajo.
 	scroll.custom_minimum_size = Vector2(0, graph.custom_minimum_size.y + 12.0)
+
+
+## La ficha de la técnica que se ha pinchado, y que **se queda abierta**.
+##
+## Va debajo del árbol, dentro de la misma ventana: así se puede mirar la casilla
+## y leer lo que da a la vez. Se cierra con su aspa o pinchando otra.
+func _ficha(body: VBoxContainer) -> void:
+	if _elegida < 0 or not TechTree.CATALOGUE.has(_elegida):
+		return
+	var tech := _elegida as TechTree.Tech
+
+	var marco := PanelContainer.new()
+	marco.add_theme_stylebox_override("panel", UISkin.row_box(UISkin.SURFACE))
+	body.add_child(marco)
+	var dentro := VBoxContainer.new()
+	dentro.add_theme_constant_override("separation", 4)
+	marco.add_child(dentro)
+
+	var arriba := HBoxContainer.new()
+	dentro.add_child(arriba)
+	var titulo := Label.new()
+	titulo.text = TechTree.tech_name(tech).to_upper()
+	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Pigmento.escribir(titulo, UISkin.OCHRE, 20, Pigmento.ocre())
+	arriba.add_child(titulo)
+	var cerrar := Button.new()
+	cerrar.text = "✕"
+	cerrar.custom_minimum_size = Vector2(28, 24)
+	cerrar.pressed.connect(func() -> void:
+		_elegida = -1
+		show_tech())
+	arriba.add_child(cerrar)
+
+	_escrito(dentro, TechTree.tech_desc(tech), true)
+
+	# EL EFECTO, con esa palabra delante: es lo que el jugador venía a leer
+	# —«quiero algo así como EFECTO: lo que haga exactamente», 2026-09-16—.
+	var lineas := TechTree.efecto(tech)
+	if not lineas.is_empty():
+		_escrito(dentro, "EFECTO: %s" % lineas[0])
+		for i in range(1, lineas.size()):
+			_escrito(dentro, "· %s" % lineas[i])
+	var hoy := TechTree.lo_de_hoy(tech, ui.sim)
+	if not hoy.is_empty():
+		_escrito(dentro, hoy, true)
+
+	var causa := ui.tech.causa(tech)
+	if not causa.is_empty():
+		_escrito(dentro, "Ahora mismo: %s." % causa, true)
+
+	# El vídeo del hito, que es lo que hacía el clic antes de esto.
+	if ui.tech.has(tech):
+		var video := Button.new()
+		video.text = "ver el hito en acción"
+		video.pressed.connect(func() -> void:
+			ui.show_tech_video(tech))
+		dentro.add_child(video)
 
 
 ## Cómo se lee una casilla. Va DEBAJO del árbol y no encima: quien abre la
@@ -123,7 +189,8 @@ func _leyenda(body: VBoxContainer) -> void:
 		+ "fuera de alcance. Y con el filo en hematites, PARADA: no sube "
 		+ "aunque se practique, porque falta el material que se gasta "
 		+ "aprendiendo. Cada casilla dice qué la frena. "
-		+ "Haz clic sobre una técnica dominada para ver su hito en acción.", true)
+		+ "Pincha una técnica para abrir su ficha aquí abajo, con lo que da; "
+		+ "se queda abierta hasta que la cierres.", true)
 
 
 ## Lo que sólo le pasa a este oficio y no cabe en el árbol.

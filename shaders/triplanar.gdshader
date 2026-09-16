@@ -61,6 +61,55 @@ group_uniforms material_properties;
 // una grieta y la misma piedra al sol no tienen el mismo acabado, y con una
 // constante por capa eso no se puede decir.
 uniform bool use_orm = true;
+
+group_uniforms relieve;
+// EL RELIEVE DE LA TEXTURA (parallax con oclusion), con la altura sacada del color.
+//
+// Hasta el 2026-09-16 no habia ninguno. GRAFICOS §4 decia que el canal A del ORM
+// -«altura→A»- «alimenta el parallax», y NO LO ALIMENTABA: se muestreaba, se
+// guardaba en `surface_height` y nadie lo miraba. Lo unico que daba relieve era el
+// mapa de normales, que no tapa nada porque no mueve nada. La primera version leyo
+// ese canal; el usuario la vio y pidio que se hundiera lo oscuro del dibujo, asi
+// que la altura sale del brillo del color (ver `altura_de_la_capa`).
+//
+// 0 pasos = apagado, que es lo que se queda en Bajo y Medio.
+uniform int relieve_pasos : hint_range(0, 32) = 0;
+// Cuanto hunde, COMO PARTE DE LA TESELA y no en metros: la roca y la hierba no miden
+// lo mismo -una tesela de roca son cuatro metros con piedras de medio metro, una de
+// hierba es un palmo de briznas- y el relieve tiene que ir con lo que se dibuja.
+// Estuvo en 6 cm fijos y sobre una tesela de 4 m no se veia nada (2026-09-16).
+// «Levemente», dijo el usuario: lo claro sube un poco, no se hace un monte.
+uniform float relieve_de_la_tesela : hint_range(0.0, 0.3) = 0.05;
+// Cuanto brillo hace falta para ir de lo mas hondo a lo mas alto. Con 2,5 una
+// diferencia de 0,2 de brillo sobre la media ya es media altura.
+uniform float contraste_del_relieve : hint_range(0.5, 6.0) = 1.8;
+// EL BULTO CON LUZ: cuanto inclina la normal la cuesta del brillo. Es lo que se ve
+// desde la orbita de juego. El desplazamiento solo mueve unos pixeles a 30-80 m y
+// el usuario, mirando la sonda, no noto nada -«no se nota nada», 2026-09-16-: lo
+// que dice «esto tiene bulto» a esa distancia es que la cara al sol se aclare y la
+// de la sombra se oscurezca.
+// «Demasiada diferencia entre picos y valles» (usuario, 2026-09-16, con 7): a la
+// mitad larga.
+uniform float fuerza_del_bulto : hint_range(0.0, 20.0) = 3.0;
+// Cada cuantos texeles se mide la cuesta. Tiene que ir con el desenfoque: medir a
+// tres texeles sobre una textura desenfocada a ocho es medir dentro de una mancha.
+uniform float texeles_del_bulto : hint_range(1.0, 32.0) = 22.0;
+// CUANTO SE DESENFOCA EL DIBUJO antes de leer la altura, en niveles de mipmap.
+// «Cualquier minima mancha hace un bulto... detecta las piedras en la textura, no
+// las manchas de las piedras» (usuario, 2026-09-16): con la textura a su tamaño
+// cada mota y cada liquen de la roca salian como un grano. Tres niveles son ocho
+// texeles por uno, y a esa escala las motas desaparecen y la piedra queda. Y cuatro y
+// medio la dejan REDONDEADA: «deben ser bumps suavizados, como si fuesen las piedras
+// del suelo» (usuario, 2026-09-16) —con tres la piedra salia con arista—.
+uniform float desenfoque_de_la_piedra : hint_range(0.0, 6.0) = 4.5;
+// Cuanto se oscurece el fondo de las juntas. Sin esto el parallax mueve el dibujo
+// pero con sol no se lee hondo: lo que dice «aqui hay un hueco» es que el hueco
+// este mas oscuro (captura del canchal, 2026-09-16).
+uniform float hondura_de_las_juntas : hint_range(0.0, 1.0) = 0.12;
+// Desde donde deja de calcularse. Tiene que pasar de la orbita con la que se juega
+// -unos 80 m- o el relieve solo existe con la camara pegada al suelo, que es donde
+// casi nunca se esta. Estuvo en 60 m (2026-09-16).
+uniform float relieve_hasta_m = 160.0;
 // Margen para retocar lo que traiga la textura sin volver a ingerirla.
 uniform float roughness_scale : hint_range(0.2, 2.0) = 1.0;
 uniform float ao_strength : hint_range(0.0, 1.0) = 0.8;
@@ -135,6 +184,33 @@ uniform float fog_sea_height = 0.0;
 uniform float fog_blur = 3.0;
 
 group_uniforms rivers;
+// El agua del cauce, encendida o apagada entera. Existe para medirla: con ella se
+// alterna agua sí y no en la misma corrida (`AguaCaptura GPU=1`, GRAFICOS §7.3).
+uniform bool use_rivers = true;
+// El escalón del agua de la configuración: 0 Bajo, 1 Medio, 2 Alto, 3 Ultra. Cada uno
+// incluye lo del de abajo (GRAFICOS §7.3). Lo pone `TerrainMaterialManager`.
+uniform int nivel_de_agua : hint_range(0, 3) = 1;
+// Pinta la espuma en rojo y nada más: para comprobar en captura dónde sale
+// (`AguaCaptura MASCARA=1`). Nunca encendido en el juego.
+uniform bool ver_espuma = false;
+// Para buscar fallos: pinta en gris un termino del agua y nada mas. 1 la caida horneada,
+// 2 la espuma viva, 3 la estela, 4 la espuma final, 5 la corriente, 6 el agua quieta, 7 la
+// orilla horneada. Lo usa `AguaCaptura TERMINO=n`; nunca encendido en el juego.
+uniform int ver_termino = 0;
+
+// EL TIEMPO EN EL SUELO (GRAFICOS §7.4): lo mojado y la nieve cuajada de `ClimaEnPantalla`,
+// y la cota de nieve de hoy en la MISMA fraccion del relieve que `snow_min_height`
+// (`Temporada.cota_de_nieve`). Los pone `WeatherView`; con el clima apagado, a cero.
+uniform float clima_mojado : hint_range(0.0, 1.0) = 0.0;
+uniform float clima_nieve : hint_range(0.0, 1.0) = 0.0;
+uniform float clima_cota_de_nieve = 2.0;
+// Cuanto se hunde el lecho bajo la lamina, en unidades de mundo; lo pone la malla.
+uniform float lecho_hondo = 0.0;
+// Medio: cuanto deja ver el fondo el agua somera -la fraccion de lamina que cubre
+// donde la lamina es mas fina- y cuanto se oscurece lo hondo. Decisiones mirando
+// capturas contra las fotos del Nansa (CREDITOS).
+uniform float somera_cubre : hint_range(0.0, 1.0) = 0.45;
+uniform float honda_oscurece : hint_range(0.0, 1.0) = 0.45;
 // Color y acabado del agua de los cauces. Llega por COLOR.a desde la malla:
 // un plano de agua horizontal solo puede representar el tramo a nivel del mar,
 // asi que el rio aguas arriba se pinta sobre el propio terreno.
@@ -153,14 +229,20 @@ uniform float water_tile_m : hint_range(1.0, 60.0) = 12.0;
 uniform float water_normal_strength : hint_range(0.0, 2.0) = 0.6;
 // Segunda capa, mas grande y mas lenta: da oleaje de fondo bajo el rizado
 uniform float water_swell_tile_m : hint_range(4.0, 200.0) = 46.0;
-// Espuma en los rapidos. Se mide como CAIDA AGUAS ABAJO -cuanto desciende el
-// cauce en la direccion de la corriente- y no como pendiente del terreno: la
-// orilla de un cauce encajado siempre es empinada, asi que con la pendiente a
-// secas salia una franja blanca continua pegada a la ribera, que es justo lo
-// que no es la espuma.
-uniform float foam_fall : hint_range(0.0, 1.0) = 0.06;
+// Espuma en los rapidos. Donde rompe llega horneado en UV.x, medido como CAIDA
+// AGUAS ABAJO entre celdas de cauce (`AguaDelCauce`): ni la pendiente del terreno
+// ni su normal, que en la margen de un cauce encajado siempre es empinada.
+// Los umbrales de la caida, los de `AguaDelCauce`, que los pone `TerrainMaterialManager`.
+uniform float caida_de_rapido = 0.08;
+// La estela de espuma detras de las piedras del rapido, y la espuma viva: comunes con la
+// lamina.
+#include "res://shaders/espuma_viva.gdshaderinc"
+#include "res://shaders/estela_de_piedras.gdshaderinc"
+uniform float veces_para_romper = 5.0;
+// La linea del agua de `AguaDelCauce`: por debajo, la mascara es ribera mojada y no se
+// pinta agua. Pintando desde 0,005 la orilla se metia metros en tierra (2026-09-15).
+uniform float linea_del_agua = 0.5;
 uniform vec3 foam_color : source_color = vec3(0.82, 0.88, 0.90);
-uniform sampler2D water_foam_tex : filter_linear_mipmap, repeat_enable;
 // Tamano de las manchas de espuma, en metros
 uniform float foam_tile_m : hint_range(1.0, 40.0) = 8.0;
 // Lo rapido que baja la espuma respecto al agua. Por encima de 1 porque la
@@ -244,6 +326,12 @@ varying vec3 world_normal;
 varying float vertex_height_normalized;
 
 void vertex() {
+	// Alto y Ultra: el lecho del rio se hunde bajo la lamina SOLO AL DIBUJAR, en
+	// proporcion a lo entero de la lamina (`AguaDelCauce.LECHO_M`). Los mapas de alturas
+	// no se tocan: la banda anda y vadea con los de siempre. Cero sin lamina encima.
+	if (lecho_hondo > 0.0) {
+		VERTEX.y -= lecho_hondo * smoothstep(linea_del_agua, 0.95, COLOR.a);
+	}
 	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vertex_height_normalized = clamp((world_position.y - cota_base)
@@ -491,6 +579,135 @@ vec4 uniplanar_orm(float layer, float tile, vec3 pos, vec3 dpdx, vec3 dpdy,
 	return uniplanar(terrain_orm, layer, tile, pos, dpdx, dpdy, weights);
 }
 
+// La ALTURA de la capa en un punto, SACADA DEL DIBUJO: lo oscuro se hunde y lo
+// claro sube.
+//
+// Peticion del usuario del 2026-09-16, despues de ver la primera version: «las
+// partes oscuras de la textura se hundan, mientras las mas claras se eleven
+// levemente». La primera leia el canal A del ORM, el mapa de altura empaquetado,
+// y ese mapa no casa siempre con lo que se ve: una junta que en el color es negra
+// podia estar a media altura. Con el brillo del color, lo que parece hondo ES hondo.
+//
+// Contra la MEDIA DE LA ZONA y no contra un gris fijo: una roca oscura entera no
+// es un agujero, lo son sus juntas. La media sale de un mipmap alto, que es la
+// textura promediada y cuesta una muestra.
+//
+// Una sola muestra por paso y sin tesela hexagonal: la marcha pregunta hasta
+// veinticuatro veces por pixel y la tesela estocastica cuesta tres cada vez.
+vec2 uv_de_la_capa(float tile, vec3 pos, vec3 weights) {
+	float s = 1.0 / max(tile, 0.001);
+	vec2 uv = pos.xz * s;
+	if (weights.y < max(weights.x, weights.z)) {
+		uv = weights.x >= weights.z ? pos.zy * s : pos.xy * s;
+	}
+	return uv;
+}
+
+const vec3 BRILLO = vec3(0.299, 0.587, 0.114);
+
+// La cuesta del brillo en la capa, en el plano dominante, lista para sumarla a la
+// normal de `triplanar_normal`: cada plano mete las dos componentes en los mismos
+// ejes de mundo que mete ahi las de su textura de normales.
+//
+// Diferencias finitas sobre la textura DESENFOCADA (`desenfoque_de_la_piedra`): dos
+// muestras mas, y la cuesta es la de la piedra y no la de sus motas.
+vec3 bulto_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
+	float s = 1.0 / max(tile, 0.001);
+	float e = texeles_del_bulto / float(textureSize(terrain_albedo, 0).x);
+	vec2 uv;
+	int plano;
+	if (weights.y >= weights.x && weights.y >= weights.z) {
+		uv = pos.xz * s;
+		plano = 1;
+	} else if (weights.x >= weights.z) {
+		uv = pos.zy * s;
+		plano = 0;
+	} else {
+		uv = pos.xy * s;
+		plano = 2;
+	}
+	float h = dot(texture(terrain_albedo, vec3(uv, layer), desenfoque_de_la_piedra).rgb, BRILLO);
+	float hu = dot(texture(terrain_albedo, vec3(uv + vec2(e, 0.0), layer), desenfoque_de_la_piedra).rgb, BRILLO);
+	float hv = dot(texture(terrain_albedo, vec3(uv + vec2(0.0, e), layer), desenfoque_de_la_piedra).rgb, BRILLO);
+	// Normal de una cuesta: (-dh/du, -dh/dv). La escala va por texel, no por uv,
+	// para que la fuerza no cambie con la resolucion de la textura.
+	vec2 cuesta = -vec2(hu - h, hv - h) * fuerza_del_bulto;
+	if (plano == 1) {
+		return vec3(cuesta.x, 0.0, cuesta.y);
+	} else if (plano == 0) {
+		return vec3(0.0, cuesta.y, cuesta.x);
+	}
+	return vec3(cuesta.x, cuesta.y, 0.0);
+}
+
+// La media de la zona: bastante mas ancha que una piedra, para que la piedra
+// entera suba sobre ella y no solo su mitad clara.
+float media_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
+	return dot(textureLod(terrain_albedo, vec3(uv_de_la_capa(tile, pos, weights), layer),
+		7.5).rgb, BRILLO);
+}
+
+float altura_de_la_capa(float layer, float tile, vec3 pos, vec3 weights, float media) {
+	float brillo = dot(texture(terrain_albedo,
+		vec3(uv_de_la_capa(tile, pos, weights), layer), desenfoque_de_la_piedra).rgb, BRILLO);
+	return clamp(0.5 + (brillo - media) * contraste_del_relieve, 0.0, 1.0);
+}
+
+// Lo que hay que desplazar la textura para que se vea el relieve.
+//
+// Es parallax CON OCLUSION: se recorre el rayo de la vista por dentro de la capa
+// hasta topar con la altura. Al topar, lo alto tapa lo bajo -una piedra esconde el
+// canto de detras- y eso es lo que no puede dar un mapa de normales.
+//
+// Va en MUNDO y no en UV a proposito: aqui se textura desde la posicion de mundo
+// con tres planos, asi que un desplazamiento en UV habria que hacerlo tres veces y
+// no casaria en las mezclas. Proyectando la vista sobre la superficie sale uno solo
+// que vale para el suelo y para la pared.
+vec3 relieve_desplazado(float layer, float tile, vec3 pos, vec3 normal_mundo,
+		vec3 hacia_el_ojo, vec3 weights, float fuerza, inout float altura) {
+	vec3 vista = -hacia_el_ojo;
+	vec3 tangente = vista - normal_mundo * dot(vista, normal_mundo);
+	float largo = length(tangente);
+	if (fuerza <= 0.0) {
+		return vec3(0.0);
+	}
+	// Mirando de frente no hay nada que desplazar, pero la junta sigue siendo
+	// honda: se devuelve la altura igual.
+	if (largo < 0.001) {
+		altura = altura_de_la_capa(layer, tile, pos, weights,
+			media_de_la_capa(layer, tile, pos, weights));
+		return vec3(0.0);
+	}
+	// Cuanto mas rasante se mira, mas se desplaza: es el mismo triangulo de
+	// siempre, la tangente partida por la componente que mira de frente.
+	float de_frente = max(abs(dot(vista, normal_mundo)), 0.15);
+	vec3 paso_total = tangente / de_frente * tile * relieve_de_la_tesela * fuerza;
+	float paso = 1.0 / float(relieve_pasos);
+	float rayo = 0.0;
+	float media = media_de_la_capa(layer, tile, pos, weights);
+	float alto = altura_de_la_capa(layer, tile, pos, weights, media);
+	float rayo_antes = 0.0;
+	float alto_antes = alto;
+	for (int i = 0; i < relieve_pasos; i++) {
+		if (rayo >= 1.0 - alto) {
+			break;
+		}
+		rayo_antes = rayo;
+		alto_antes = alto;
+		rayo += paso;
+		alto = altura_de_la_capa(layer, tile, pos + paso_total * rayo, weights, media);
+	}
+	// SIN ESCALONES: el rayo se para en el primer paso que queda por debajo, y eso
+	// dibuja la piedra en terrazas, una por paso. Se busca el cruce entre ese paso y
+	// el anterior, en linea recta, que es lo que la deja lisa.
+	float debajo = (1.0 - alto) - rayo;
+	float encima = (1.0 - alto_antes) - rayo_antes;
+	float donde = clamp(encima / max(encima - debajo, 0.0001), 0.0, 1.0);
+	rayo = mix(rayo_antes, rayo, donde);
+	altura = mix(alto_antes, alto, donde);
+	return paso_total * rayo;
+}
+
 // Devuelve DOS canales de una vez. La version anterior llamaba tres veces a un
 // ruido escalar para armar el desplazamiento, y eso -mas un tinte por ruido a
 // dos escalas- costaba 3,3 ms medidos. Con dos canales por llamada y sin el
@@ -599,8 +816,16 @@ void fragment() {
 	// no cubre- es donde se acumulan los CANTOS, y por eso es una capa de
 	// material y ya no un tinte falso sobre la hierba.
 	float river = clamp(COLOR.a, 0.0, 1.0);
+	// La inclinacion de la CARA, no la de la normal suavizada: en una margen encajada
+	// el triangulo que va del vertice de agua al de tierra es una pared, y la humedad
+	// interpolada por el repartia cantos y agua talud arriba en DIENTES DE SIERRA
+	// (capturas de Medio y Ultra, 2026-09-15). Ni los cantos ni el agua se quedan en una
+	// pared. Aqui arriba y fuera de ramas: las derivadas dentro de un `if` no estan
+	// garantizadas.
+	vec3 normal_de_la_cara = normalize(cross(dFdy(world_position), dFdx(world_position)));
+	float en_pared = smoothstep(0.15, 0.5, 1.0 - abs(normal_de_la_cara.y));
 	float shore = smoothstep(0.02, 0.30, river)
-		* (1.0 - smoothstep(0.35, 0.70, river));
+		* (1.0 - smoothstep(0.35, 0.70, river)) * (1.0 - en_pared);
 
 	// --- Reparto entre las ocho capas ------------------------------------
 	//
@@ -715,12 +940,40 @@ void fragment() {
 	float tile0 = layer_tile_m[i0];
 	float tile1 = layer_tile_m[i1];
 
+	// EL RELIEVE, antes de muestrear nada: desplaza la posicion con la que se
+	// textura, asi que el color, la normal y el ORM salen ya del sitio correcto.
+	// Se apaga con la distancia -de lejos no se distingue y es lo que cuesta- y
+	// tambien donde el agua cubre, que ahi lo que manda es la lamina.
+	float altura_del_relieve = 1.0;
+	float hondo_del_relieve = 0.0;
+	if (relieve_pasos > 0) {
+		float cerca = 1.0 - smoothstep(relieve_hasta_m * 0.45, relieve_hasta_m,
+			length(VERTEX));
+		if (cerca > 0.01) {
+			vec3 ojo = INV_VIEW_MATRIX[3].xyz;
+			vec3 hacia_el_ojo = normalize(ojo - world_position);
+			tex_position += relieve_desplazado(layer0, tile0, tex_position,
+				world_normal, hacia_el_ojo, triplanar_weights, cerca, altura_del_relieve);
+			hondo_del_relieve = cerca;
+		}
+	}
+
 	vec3 final_color = grade(triplanar_texture(terrain_albedo, layer0, tile0,
 		tex_position, dpdx, dpdy, triplanar_weights).rgb, i0) * w0;
+	// El fondo de las juntas, mas oscuro. Va en el COLOR y no en la oclusion a
+	// proposito: la oclusion de aqui solo toca la luz indirecta (ver abajo) y a
+	// pleno sol no se veria.
+	final_color *= mix(1.0, mix(1.0 - hondura_de_las_juntas, 1.0, altura_del_relieve),
+		hondo_del_relieve);
 	vec3 final_normal = vec3(0.0);
 	if (use_normal_maps) {
 		final_normal = triplanar_normal(terrain_normal, layer0, tile0,
 			tex_position, dpdx, dpdy, triplanar_weights) * w0;
+		// Y el bulto que sale del dibujo, con la misma distancia que el relieve.
+		if (hondo_del_relieve > 0.0) {
+			final_normal += bulto_de_la_capa(layer0, tile0, tex_position,
+				triplanar_weights) * w0 * hondo_del_relieve;
+		}
 	}
 
 	float final_roughness = roughness_fallback;
@@ -783,8 +1036,13 @@ void fragment() {
 	// corriente, b si el agua esta quieta, a la lamina. `river` ya se calculo
 	// arriba, porque de el sale la orilla de cantos.
 	float specular_out = terrain_specular;
+	// El termino de depuracion, SIN LUZ: con la iluminacion encima no se distingue un
+	// dibujo del termino de un brillo de la geometria. Ver `ver_termino`.
+	float termino_sin_luz = -1.0;
+	// Cuanto de este pixel es agua del rio: ahi no se moja ni cuaja. Lo pone el bloque del rio.
+	float es_agua = 0.0;
 
-	if (river > 0.005) {
+	if (use_rivers && river > 0.005) {
 		vec2 flow = COLOR.rg * 2.0 - 1.0;
 		float still = COLOR.b;
 		float flow_len = length(flow);
@@ -803,22 +1061,31 @@ void fragment() {
 		// galones y espinas de pescado, porque la direccion de la corriente se
 		// interpola por fragmento y en la orilla, donde los vertices tienen
 		// flujo cero, la fase pegaba bandazos de un pixel al siguiente.
-		float cycle = TIME * speed / max(water_tile_m, 1.0);
-		float phase_a = fract(cycle);
-		float phase_b = fract(cycle + 0.5);
+		// PERIODO FIJO Y DESPLAZAMIENTO VARIABLE: la fase no puede ser `fract(TIME * speed)`.
+		// `speed` se interpola y cambia de un pixel al siguiente -sobre todo junto al agua
+		// quieta-, y con unos segundos de TIME dos pixeles vecinos dan la vuelta al ciclo en
+		// sitios distintos: el dibujo se cortaba por lineas que siguen los triangulos de la
+		// malla (captura de cerca, 2026-09-15). Todos giran a la vez y la velocidad solo dice
+		// cuanto se desplaza el dibujo dentro del ciclo.
+		float periodo = 4.0;
+		float phase_a = fract(TIME / periodo);
+		float phase_b = fract(TIME / periodo + 0.5);
 		float cross_fade = abs(1.0 - 2.0 * phase_a);
+		vec2 recorrido = flow * speed * periodo / max(water_tile_m, 1.0);
 
 		vec2 base_uv = world_position.xz / max(water_tile_m, 1.0);
-		vec3 n_a = texture(water_normal_tex, base_uv - dir * phase_a).rgb * 2.0 - 1.0;
-		vec3 n_b = texture(water_normal_tex, base_uv - dir * phase_b).rgb * 2.0 - 1.0;
+		vec3 n_a = texture(water_normal_tex, base_uv - recorrido * phase_a).rgb * 2.0 - 1.0;
+		vec3 n_b = texture(water_normal_tex, base_uv - recorrido * phase_b + 0.37).rgb * 2.0 - 1.0;
 		vec3 ripple = mix(n_a, n_b, cross_fade);
 
 		// Oleaje de fondo: misma tesela mucho mas grande y mas lenta, para que
-		// el rio no sea un patron unico repetido
-		float swell_cycle = TIME * speed * 0.35 / max(water_swell_tile_m, 1.0);
+		// el rio no sea un patron unico repetido. El mismo ciclo, y un tercio del recorrido.
 		vec2 swell_uv = world_position.xz / max(water_swell_tile_m, 1.0);
-		vec3 swell = texture(water_normal_tex,
-			swell_uv - dir * fract(swell_cycle)).rgb * 2.0 - 1.0;
+		vec2 recorrido_lento = flow * speed * 0.35 * periodo / max(water_swell_tile_m, 1.0);
+		vec3 swell = mix(
+			texture(water_normal_tex, swell_uv - recorrido_lento * phase_a).rgb,
+			texture(water_normal_tex, swell_uv - recorrido_lento * phase_b + 0.53).rgb,
+			cross_fade) * 2.0 - 1.0;
 
 		vec3 water_normal = normalize(vec3(
 			(ripple.xy + swell.xy * 0.7) * water_normal_strength, 1.0));
@@ -827,12 +1094,11 @@ void fragment() {
 		float depth = smoothstep(0.15, 0.85, river);
 		vec3 water_color = mix(river_shallow_color, river_color, depth);
 
-		// Rapidos: cuanto DESCIENDE el cauce en la direccion de la corriente.
-		// Se saca de la normal del terreno proyectada sobre el flujo, asi que
-		// no cuesta ningun dato extra en la malla.
-		float fall = -(world_normal.x * dir.x + world_normal.z * dir.y)
-			/ max(abs(world_normal.y), 0.05);
-		float rapids = smoothstep(foam_fall, foam_fall * 4.0, fall)
+		// Rapidos: cuanto DESCIENDE el cauce en la direccion de la corriente. Viene
+		// horneado en UV.x (`AguaDelCauce.rapido`). Se sacaba aqui de la normal
+		// del terreno, y la normal no distingue un escalon del cauce de la ladera
+		// de la margen: la espuma salia en vetas pegadas a la orilla (GRAFICOS §7.3).
+		float rapids = smoothstep(caida_de_rapido, caida_de_rapido * veces_para_romper, UV.x)
 			* (1.0 - still) * depth;
 
 		// La espuma VIAJA. Antes era una funcion fija de la pendiente, o sea
@@ -843,30 +1109,137 @@ void fragment() {
 		//
 		// Dos capas a distinta escala y velocidad: una sola se lee como un
 		// patron repetido desfilando.
-		vec2 foam_uv = world_position.xz / max(foam_tile_m, 1.0);
-		float drift = TIME * speed * foam_drift / max(foam_tile_m, 1.0);
-		float churn_a = texture(water_foam_tex, foam_uv - dir * fract(drift)).r;
-		float churn_b = texture(water_foam_tex,
-			foam_uv * 1.9 - dir * fract(drift * 1.7 + 0.37)).r;
-		float churn = clamp(churn_a * 0.65 + churn_b * 0.55, 0.0, 1.0);
+		// Ya no es una textura arrastrada: ver `espuma_viva`.
+		// EL RUIDO VIVO, SOLO DONDE SE USA. Calculado en todo pixel de rio, el agua de
+		// Medio paso de 0,1-0,6 ms a 1,5-4,6 ms de GPU (AguaCaptura GPU=1, 2026-09-16), por
+		// encima del tope de 1 ms: la espuma viva son tres ruidos de cuatro octavas.
+		// Y en Alto y Ultra el terreno no pinta el agua -la pinta la lamina, ver
+		// `lecho_hondo` abajo-: ahi la espuma no se calcula.
+		bool pinta_el_agua = lecho_hondo <= 0.0 || ver_espuma || ver_termino > 0;
+		float churn = 0.0;
+		if (rapids > 0.0 && pinta_el_agua) {
+			churn = espuma_viva(world_position.xz, flow, speed * foam_drift, foam_tile_m * 0.35, 1.0, 2);
+		}
 
 		// En el rapido fuerte la espuma cubre casi entero; en el suave solo
 		// asoman las vetas. Por eso la turbulencia no multiplica sin mas: se
 		// mezcla hacia 1 segun crece el rapido.
-		float foam = rapids * mix(churn, 1.0, rapids * 0.55);
-		water_color = mix(water_color, foam_color, foam * 0.80);
+		// Vetas y no manta: medida la caida en el cauce, un torrente entero es rapido,
+		// y mezclando hacia blanco segun crecia el rapido salia blanco de punta a punta
+		// (AguaCaptura, 2026-09-15). Como en el Pas, agua oscura con la espuma rota
+		// en manchas que crecen con la caida.
+		float foam = rapids * smoothstep(0.55, 0.85, churn + rapids * 0.2);
+		if (con_piedras) {
+			// LA ESPUMA DETRAS DE LAS PIEDRAS, y el resto del rapido casi limpio: vuelta del
+			// usuario del 2026-09-15 mirando el Pas. La estela se busca aguas ARRIBA: este
+			// punto tiene espuma si hay una piedra a una, dos o tres celdas contra corriente.
+			// Las piedras sólo están en los rápidos (`AguaDelCauce.RAPIDO_CON_PIEDRAS`): fuera
+			// de donde el cauce cae, ni se buscan. Ver `churn`.
+			float estela = 0.0;
+			float cerca_de_piedras = smoothstep(caida_de_rapido * 0.25, caida_de_rapido * 0.6, UV.x);
+			if (cerca_de_piedras > 0.0 && flow_len > 0.05 && pinta_el_agua) {
+				estela = estela_viva(world_position.xz, dir, flow, speed * foam_drift, 2, churn)
+					* smoothstep(0.05, 0.3, flow_len) * cerca_de_piedras;
+			}
+			// Donde la corriente se anula, `dir` salta a un eje fijo: sin apagarla ahi, la
+			// estela y la espuma salian en triangulos sueltos junto a la orilla.
+			float suelta = smoothstep(0.70, 0.86, churn) * 0.45;
+			foam = max(estela, rapids * suelta);
+		}
+		water_color = mix(water_color, foam_color, foam * 0.75);
+
+		// --- Medio: la orilla (GRAFICOS §7.3) ---
+		// Lo hondo, mas oscuro; lo somero deja ver el fondo de cantos, que ya es la
+		// capa CANTOS de la ribera; y una franja de espuma donde el agua lame la
+		// tierra, horneada en UV.y (`AguaDelCauce.orilla`), que respira un poco.
+		// EL AGUA EMPIEZA EN LA LINEA DEL AGUA, y se funde un poco a cada lado de ella.
+		// EN UNA CARA EMPINADA, LA LINEA SUBE HACIA EL AGUA DE VERDAD. En una margen
+		// encajada el vertice de tierra esta metros por encima del de agua, y la
+		// humedad interpolada pintaba agua talud arriba en dientes de sierra, con una
+		// mancha de espuma en cada punta (capturas de Medio, 2026-09-15). El agua no se
+		// queda en una pared: ahi solo cuenta lo que es agua casi entera.
+		float linea_aqui = mix(linea_del_agua, 0.9, en_pared);
+		float agua = smoothstep(linea_aqui - 0.08, linea_aqui + 0.05, river);
+		es_agua = agua;
+		float cubre = agua;
+		float espuma_de_orilla = 0.0;
+		if (nivel_de_agua >= 1) {
+			water_color = mix(water_color, river_color * 0.55,
+				smoothstep(0.75, 1.0, river) * honda_oscurece);
+			cubre = agua * mix(somera_cubre, 1.0, depth);
+			// UNA BANDA FINA JUSTO POR DENTRO DE LA LINEA DEL AGUA. La orilla horneada
+			// (UV.y) solo dice que la celda toca tierra, y va por celda de 5 m: repartida
+			// por el triangulo, en un rio estrecho cubria casi todo el ancho. Donde cae la
+			// linea dentro del triangulo lo sabe la mascara interpolada, y ahi va la
+			// espuma. Y la textura, grande y cruzada consigo misma girada: a 4 m se leia
+			// un dibujo de galones repetido.
+			float orilla = step(0.01, UV.y) * agua
+				* (1.0 - smoothstep(linea_aqui + 0.04, linea_aqui + 0.16, river));
+			// La orilla LAME: espuma viva, casi quieta pero que se forma y se deshace
+			// deprisa. Con la textura fija eran manchas constantes de forma irreal (queja
+			// del usuario del 2026-09-15).
+			if (orilla > 0.0 && pinta_el_agua) {
+				float lamido = espuma_viva(world_position.xz, flow, 0.15, 1.2, 2.5, 2);
+				espuma_de_orilla = orilla * smoothstep(0.52, 0.74, lamido) * 0.8;
+			}
+			water_color = mix(water_color, foam_color, espuma_de_orilla * 0.75);
+			// La espuma no deja ver el fondo: donde la hay, el agua cubre.
+			cubre = mix(cubre, agua, espuma_de_orilla);
+			foam = max(foam, espuma_de_orilla);
+		}
+		if (ver_espuma) {
+			water_color = vec3(foam, 0.0, 0.0);
+			cubre = agua > 0.0 ? 1.0 : 0.0;
+		}
+		if (ver_termino > 0) {
+			float t = ver_termino == 1 ? clamp(UV.x * 4.0, 0.0, 1.0)
+				: ver_termino == 2 ? churn
+				: ver_termino == 3 ? (con_piedras ? estela_de_piedras(world_position.xz, dir) : 0.0)
+				: ver_termino == 4 ? foam
+				: ver_termino == 5 ? flow_len
+				: ver_termino == 6 ? still
+				: clamp(UV.y, 0.0, 1.0);
+			water_color = vec3(t);
+			termino_sin_luz = agua > 0.0 ? t : -1.0;
+			cubre = agua > 0.0 ? 1.0 : 0.0;
+		}
 
 		// Aqui habia un tinte que aclaraba el pasto de la ribera para fingir
 		// grava. Ya no hace falta: la orilla es la capa CANTOS, con su
 		// fotogrametria de canto rodado, y se reparte con las demas como
 		// cualquier otro material.
 
-		final_color = mix(final_color, water_color, river);
-		// La espuma es aire y agua batidos: mucho mas mate que la lamina lisa
-		final_roughness = mix(final_roughness,
-			mix(river_roughness, 0.70, foam), river);
-		specular_out = mix(specular_out, river_specular, river);
-		final_normal = mix(final_normal, water_normal, river);
+		if (lecho_hondo > 0.0 && !ver_espuma) {
+			// Alto y Ultra: el agua la dibuja la lamina. Aqui solo el lecho, mojado:
+			// mas oscuro y algo verdoso bajo el agua, y liso de brillo.
+			float mojado = agua;
+			final_color = mix(final_color, final_color * vec3(0.52, 0.60, 0.56), mojado);
+			final_roughness = mix(final_roughness, 0.4, mojado);
+		} else {
+			final_color = mix(final_color, water_color, cubre);
+			// La espuma es aire y agua batidos: mucho mas mate que la lamina lisa
+			final_roughness = mix(final_roughness,
+				mix(river_roughness, 0.70, foam), agua);
+			specular_out = mix(specular_out, river_specular, agua);
+			final_normal = mix(final_normal, water_normal, agua);
+		}
+	}
+
+	// EL TIEMPO EN EL SUELO. Mojado: mas oscuro, liso y con brillo. Nevado: blanco encima de
+	// la cota de nieve y mas en lo tendido, la regla de `ClimaEnPantalla.cuaja` con la cota
+	// en fraccion del relieve (el margen de 2 m de alli, aqui 0,01 del relieve).
+	if (clima_mojado > 0.001 || clima_nieve > 0.001) {
+		float seco = 1.0 - es_agua;
+		float cuaja = clima_nieve * seco
+			* smoothstep(clima_cota_de_nieve - 0.01, clima_cota_de_nieve + 0.01, height)
+			* smoothstep(0.35, 0.75, world_normal.y);
+		float moja = clima_mojado * seco * (1.0 - cuaja);
+		final_color = mix(final_color, final_color * 0.58, moja);
+		final_roughness = mix(final_roughness, 0.22, moja);
+		specular_out = mix(specular_out, 0.65, moja);
+		final_color = mix(final_color, vec3(0.93, 0.95, 0.98), cuaja);
+		final_roughness = mix(final_roughness, 0.85, cuaja);
+		final_normal = mix(final_normal, vec3(0.0, 0.0, 1.0), cuaja * 0.7);
 	}
 
 	// Fuera de la region jugable: desaturar y oscurecer
@@ -899,6 +1272,8 @@ void fragment() {
 			float cerca = abs(world_position.y - fog_sea_height);
 			float grueso = fwidth(world_position.y) * 1.5 + 0.0001;
 			float costa = 1.0 - smoothstep(0.0, grueso, cerca);
+			// La calima lisa: lo que TAPA lo no descubierto. Las nubes con volumen van
+			// aparte, en una losa sobre la comarca (`NubesDeLaNiebla`, GRAFICOS §3).
 			vec3 calima = mix(fog_color, fog_coast_color, costa);
 			final_color = mix(final_color, calima, niebla);
 			final_roughness = mix(final_roughness, 1.0, niebla);
@@ -943,6 +1318,12 @@ void fragment() {
 	ROUGHNESS = final_roughness;
 	METALLIC = 0.0;
 	SPECULAR = specular_out;
+	if (termino_sin_luz >= 0.0) {
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(termino_sin_luz);
+		SPECULAR = 0.0;
+		ROUGHNESS = 1.0;
+	}
 	// Bajo la niebla la luz no dibuja el relieve: la normal mira al cielo y la
 	// calima sale lisa. Si no, las laderas se leían a través de ella.
 	if (niebla > 0.001) {

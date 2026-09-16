@@ -1871,3 +1871,136 @@ func test_lo_que_esta_en_el_agua_no_se_nombra_por_un_paraje_de_tierra() -> void:
 	parajes.list.append(pesca)
 	assert_eq(parajes.place_name_en_el_agua(nasa, Vector3.ZERO), pesca.name_text,
 		"y con un paraje de pesca al alcance, por él")
+
+
+# --- Los filtros de la ventana de Parajes (INTERFAZ §10) -----------------------
+#
+# El filtro no es de la simulación: es de la ventana, y por eso se prueba aquí
+# sin montar ninguna. Lo que hay que asegurar es que un paraje se encuentre por
+# CUALQUIERA de sus oficios y que los tramos corten donde dicen.
+
+
+func test_el_filtro_de_oficio_mira_todos_los_oficios_del_paraje() -> void:
+	# El recodo donde además se saca raíz tiene que salir buscando raíz, aunque
+	# lo bautizara la caza: es la queja que abrió la spec.
+	var pasto := _paraje(1, 1, Materia.Kind.CARNE, Subsistence.Activity.CAZA)
+	pasto.add_activity(Subsistence.Activity.RECOLECCION)
+	FiltroDeParajes.todo()
+	FiltroDeParajes.alternar(Subsistence.Activity.RECOLECCION)
+	assert_true(FiltroDeParajes.pasa(pasto, Vector3.ZERO),
+		"sale por el oficio que no le da nombre")
+	FiltroDeParajes.alternar(Subsistence.Activity.RECOLECCION)
+	FiltroDeParajes.alternar(Subsistence.Activity.PESCA)
+	assert_false(FiltroDeParajes.pasa(pasto, Vector3.ZERO),
+		"y no sale por uno que allí no se hace")
+	FiltroDeParajes.todo()
+
+
+func test_varios_oficios_encendidos_son_una_suma_y_no_una_resta() -> void:
+	var remanso := _paraje(2, 2, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	var cantizal := _paraje(3, 3, Materia.Kind.PIEDRA,
+		Subsistence.Activity.MATERIA_PRIMA)
+	FiltroDeParajes.todo()
+	FiltroDeParajes.alternar(Subsistence.Activity.PESCA)
+	FiltroDeParajes.alternar(Subsistence.Activity.MATERIA_PRIMA)
+	assert_true(FiltroDeParajes.pasa(remanso, Vector3.ZERO), "el de pesca sale")
+	assert_true(FiltroDeParajes.pasa(cantizal, Vector3.ZERO), "y el de piedra también")
+	FiltroDeParajes.todo()
+
+
+func test_los_tramos_de_distancia_cortan_donde_dicen() -> void:
+	var cerca := _paraje(1, 1)
+	cerca.position = Vector3(499.0, 0.0, 0.0)
+	var lejos := _paraje(2, 2)
+	lejos.position = Vector3(501.0, 0.0, 0.0)
+	FiltroDeParajes.todo()
+	FiltroDeParajes.poner_tramo(500.0)
+	assert_true(FiltroDeParajes.pasa(cerca, Vector3.ZERO), "499 m entra en el tramo")
+	assert_false(FiltroDeParajes.pasa(lejos, Vector3.ZERO), "501 m, no")
+	FiltroDeParajes.poner_tramo(1000.0)
+	assert_true(FiltroDeParajes.pasa(lejos, Vector3.ZERO), "y en el de un kilómetro sí")
+	FiltroDeParajes.todo()
+
+
+func test_la_distancia_se_mide_en_plano_y_no_por_la_cota() -> void:
+	# La trampa de siempre: restar un punto con cota de otro mide la altura de
+	# más. Un paraje a 400 m pero doscientos metros más arriba sigue estando a
+	# cuatrocientos.
+	var alto := _paraje(1, 1)
+	alto.position = Vector3(400.0, 200.0, 0.0)
+	FiltroDeParajes.todo()
+	FiltroDeParajes.poner_tramo(500.0)
+	assert_true(FiltroDeParajes.pasa(alto, Vector3.ZERO), "la cota no cuenta")
+	FiltroDeParajes.todo()
+
+
+func test_sin_oficios_marcados_o_con_todos_salen_todos() -> void:
+	var remanso := _paraje(2, 2, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	FiltroDeParajes.todo()
+	assert_true(FiltroDeParajes.pasa(remanso, Vector3.ZERO), "con ninguno marcado, sale")
+	assert_false(FiltroDeParajes.hay_filtro(), "y no hay filtro que contar")
+	for oficio: int in FiltroDeParajes.OFICIOS:
+		FiltroDeParajes.alternar(oficio as Subsistence.Activity)
+	assert_true(FiltroDeParajes.pasa(remanso, Vector3.ZERO), "con todos, también")
+	assert_false(FiltroDeParajes.hay_filtro(), "y tampoco filtra nada")
+	FiltroDeParajes.todo()
+
+
+func test_el_filtro_se_vacia_al_cambiar_de_partida() -> void:
+	# Se recuerda mientras dura la partida y no más: cargar otra construye otra
+	# simulación, y con ella la ventana vuelve a «todo».
+	var una := SettlementSim.new()
+	var otra := SettlementSim.new()
+	FiltroDeParajes.para(una)
+	FiltroDeParajes.alternar(Subsistence.Activity.CAZA)
+	FiltroDeParajes.poner_tramo(500.0)
+	FiltroDeParajes.para(una)
+	assert_true(FiltroDeParajes.encendido(Subsistence.Activity.CAZA),
+		"en la misma partida se conserva")
+	assert_eq(FiltroDeParajes.tramo, 500.0, "y el tramo también")
+	FiltroDeParajes.para(otra)
+	assert_false(FiltroDeParajes.encendido(Subsistence.Activity.CAZA),
+		"en otra partida, no")
+	assert_eq(FiltroDeParajes.tramo, 0.0, "y sin tope de distancia")
+	una.free()
+	otra.free()
+	FiltroDeParajes.para(null)
+
+
+func test_los_tramos_se_leen_como_los_dice_la_ventana() -> void:
+	assert_eq(FiltroDeParajes.nombre_del_tramo(500.0), "500 m", "en metros")
+	assert_eq(FiltroDeParajes.nombre_del_tramo(1000.0), "1 km", "y en kilómetros")
+	assert_eq(FiltroDeParajes.nombre_del_tramo(0.0), "todos", "el sin tope")
+
+
+func test_la_lista_filtrada_sigue_yendo_de_mas_cerca_a_mas_lejos() -> void:
+	var lejos := _paraje(1, 1, Materia.Kind.CARNE, Subsistence.Activity.CAZA)
+	lejos.position = Vector3(900.0, 0.0, 0.0)
+	var cerca := _paraje(2, 2, Materia.Kind.CARNE, Subsistence.Activity.CAZA)
+	cerca.position = Vector3(100.0, 0.0, 0.0)
+	var pescado := _paraje(3, 3, Materia.Kind.PESCADO, Subsistence.Activity.PESCA)
+	pescado.position = Vector3(50.0, 0.0, 0.0)
+	FiltroDeParajes.todo()
+	FiltroDeParajes.alternar(Subsistence.Activity.CAZA)
+	var salen := FiltroDeParajes.filtrar([lejos, cerca, pescado], Vector3.ZERO)
+	assert_eq(salen.size(), 2, "sólo los dos de caza")
+	assert_true(salen[0] == cerca, "y el más cercano primero")
+	FiltroDeParajes.todo()
+
+
+func test_la_ventana_dice_cuantos_ensena_de_cuantos_conoce() -> void:
+	FiltroDeParajes.todo()
+	assert_eq(FiltroDeParajes.titulo(9, 9), "9 PARAJES CONOCIDOS",
+		"sin filtro, los que hay")
+	FiltroDeParajes.poner_tramo(500.0)
+	assert_eq(FiltroDeParajes.titulo(3, 9), "3 DE 9 PARAJES CONOCIDOS",
+		"con filtro, de cuántos")
+	FiltroDeParajes.todo()
+
+
+func test_el_filtro_que_no_deja_ninguno_lo_dice_con_palabras() -> void:
+	# La ventana en blanco se leía como «la banda no conoce nada», que es
+	# justo lo contrario de lo que pasa.
+	var aviso := FiltroDeParajes.aviso_de_vacio(12)
+	assert_true(aviso.contains("12"), "dice cuántos hay de verdad")
+	assert_true(aviso.contains("filtro"), "y que es el filtro quien los tapa")

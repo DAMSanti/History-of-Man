@@ -29,6 +29,17 @@ func _init(settlement: SettlementSim) -> void:
 ## del oficio y caben dos o tres al año. Las que se pueden elegir, en [Pasillo].
 const JORNADAS_PROPUESTAS := 12
 
+## Los ocho rumbos hacia los que se sale, en grados desde el norte.
+##
+## **Ocho y no cualquier ángulo** (decisión del usuario del 2026-09-15, SISTEMAS §4):
+## con el rumbo libre se pinchaba al azar y muchos pasillos no llevaban a ningún
+## sitio. Y de los ocho, sólo se ofrecen los que tienen algo: [rumbos_posibles].
+const RUMBOS: Array[float] = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+
+## Los yacimientos entre los que se busca: la comarca horneada si nadie pone otra.
+## Las pruebas ponen su catálogo a mano. Ver [_la_comarca].
+var comarca: SiteSet = null
+
 ## Cuánta gente hace falta para que salga una expedición.
 ##
 ## Tres: sola no se sale —el criterio del vivac ya dice que dormir fuera es
@@ -96,6 +107,37 @@ func lo_que_falta(cuantos: int, dias: int = JORNADAS_PROPUESTAS) -> Array[String
 	if sim.store.amount(Materia.Kind.LENA) < float(hace_falta["lena"]):
 		falta.append("%.0f de leña" % float(hace_falta["lena"]))
 	return falta
+
+
+## Por qué no puede salir **la expedición más corta** —[MINIMO_PARA_SALIR] personas y
+## [Pasillo.JORNADAS_MINIMAS]—, dicho como se diría; vacío si puede. Es lo que apaga el
+## botón «Rumbo» del valle y lo que dice su ayuda (SISTEMAS §4, spec del 2026-09-15:
+## «se sabe antes de pulsar»). No mira los rumbos: ésos se eligen en la ficha.
+func por_que_no_sale() -> String:
+	var pueden := 0
+	for person: Inhabitant in sim.people:
+		if puede_ir(person):
+			pueden += 1
+	# El coste, el de TRES aunque puedan ir más: con el de todos los que pueden, una
+	# banda de ocho pedía ocho pieles para poder pulsar (`RumboProbe`, 2026-09-16).
+	return motivo_para(mini(pueden, MINIMO_PARA_SALIR), Pasillo.JORNADAS_MINIMAS)
+
+
+## Por qué no saldrían `pueden` personas que pueden ir durante `dias`, o vacío. Una
+## sola lista de motivos para el botón y para la ficha ([FichaDeRumbo.bloqueo]).
+##
+## **Con una expedición fuera, tampoco** (decisión del 2026-09-16, aceptada por el
+## usuario): [mandar_a] no deja, y un botón encendido que no manda es lo que motivó la
+## spec.
+func motivo_para(pueden: int, dias: int) -> String:
+	if en_marcha():
+		return "ya hay una expedición fuera"
+	if pueden < MINIMO_PARA_SALIR:
+		return "hacen falta %d adultos que puedan ir" % MINIMO_PARA_SALIR
+	var falta := lo_que_falta(pueden, dias)
+	if not falta.is_empty():
+		return "falta " + ", ".join(falta)
+	return ""
 
 
 ## Las pieles que se llevaron puestas de tienda, para devolverlas al volver.
@@ -197,6 +239,37 @@ func andar(person: Inhabitant, index: int, hours: float, delta: float) -> void:
 	sim._pintar_a(person, index)
 
 
+## Si `grados` es uno de los ocho [RUMBOS].
+static func es_un_rumbo(grados: float) -> bool:
+	return RUMBOS.has(fposmod(grados, 360.0))
+
+
+## Si hacia `hacia` hay algo que descubrir: **un yacimiento sin descubrir dentro del
+## pasillo de la expedición más larga posible**, la de [Pasillo.JORNADAS_MAXIMAS]
+## (decisión del usuario). Un avistado está sin descubrir, así que cuenta. Los sitios
+## son los mismos que descubre la vuelta ([_sitios_del_pasillo]): una sola regla.
+func se_ofrece(hacia: float) -> bool:
+	if not es_un_rumbo(hacia):
+		return false
+	var recorrido := pasillo_hacia(hacia, Pasillo.JORNADAS_MAXIMAS)
+	if recorrido == null:
+		return false
+	for site: Site in _sitios_del_pasillo(recorrido):
+		if not sim.descubierto(site):
+			return true
+	return false
+
+
+## Los rumbos que se ofrecen desde el campamento, en el orden de [RUMBOS]. Vacío si
+## no queda nada al alcance.
+func rumbos_posibles() -> Array[float]:
+	var posibles: Array[float] = []
+	for hacia: float in RUMBOS:
+		if se_ofrece(hacia):
+			posibles.append(hacia)
+	return posibles
+
+
 ## Manda a los primeros `cuantos` que puedan ir. Lo usan las pruebas y las sondas;
 ## el jugador elige a quién en la ficha, con [mandar_a].
 func mandar(cuantos: int, hacia: float, dias: int = JORNADAS_PROPUESTAS) -> bool:
@@ -220,10 +293,15 @@ func mandar(cuantos: int, hacia: float, dias: int = JORNADAS_PROPUESTAS) -> bool
 ##
 ## Comprueba que cada uno siga pudiendo ir: entre que se marca en la ficha y se
 ## confirma pueden pasar cosas.
+##
+## **Y sólo hacia uno de los ocho rumbos que se ofrecen** ([se_ofrece]): no queda
+## forma de dar un rumbo libre, ni desde la ficha ni desde fuera de ella.
 func mandar_a(quienes: Array[int], hacia: float, dias: int = JORNADAS_PROPUESTAS) -> bool:
 	if en_marcha() or quienes.size() < MINIMO_PARA_SALIR:
 		return false
 	if not Pasillo.jornadas_validas(dias):
+		return false
+	if not se_ofrece(hacia):
 		return false
 	var pueden: Array[int] = []
 	for person: Inhabitant in sim.people:
@@ -388,14 +466,19 @@ func _volver() -> void:
 ## Los sitios de la comarca cuyo punto cae dentro del pasillo, sin el propio.
 func _sitios_del_pasillo(recorrido: Pasillo) -> Array[Site]:
 	var dentro: Array[Site] = []
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
 	var desde := origen()
-	for site: Site in comarca.sites:
+	for site: Site in _la_comarca().sites:
 		if desde != null and site.id == desde.id:
 			continue
 		if recorrido.contiene(site.lon, site.lat):
 			dentro.append(site)
 	return dentro
+
+
+func _la_comarca() -> SiteSet:
+	if comarca == null:
+		comarca = load("res://data/sites/cantabria_sites.res") as SiteSet
+	return comarca
 
 
 static func _el_mas_lejano(sitios: Array[Site], recorrido: Pasillo) -> Site:

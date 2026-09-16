@@ -334,12 +334,12 @@ func test_el_bloque_3d_esta_a_la_altura_de_sus_arboles() -> void:
 		assert_between(y, 299.0, 303.0, "el nodo, a la cota de los pies y no a cero")
 
 
-## Con la distancia del 3D «sin límite», el plan de bloques no pasa de los que tiene el
-## mapa: si no, cada cambio de bloque de la cámara recorría millones de bloques vacíos.
-func test_sin_limite_el_plan_no_se_sale_del_mapa() -> void:
+## Con la distancia del 3D al máximo, el plan de bloques no pasa de los que tiene el
+## mapa: si no, cada cambio de bloque de la cámara recorría bloques vacíos por fuera.
+func test_al_maximo_el_plan_no_se_sale_del_mapa() -> void:
 	var bosque := _bosque_de_prueba(_pies())
 	bosque.escalon = 3
-	bosque.radio_3d = Configuracion.RADIO_3D_SIN_LIMITE
+	bosque.radio_3d = Configuracion.RADIO_3D_MAXIMO
 	bosque._extension = Vector2(640.0, 320.0)
 	bosque._centre = Vector2i(3, 2)
 	bosque._replan()

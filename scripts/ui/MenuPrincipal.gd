@@ -102,6 +102,7 @@ func _nueva() -> void:
 	Partidas.nueva()
 	GameState.started = false
 	GameState.discovered = {}
+	GameState.avistados = {}
 	GameState.niebla = null
 	Expedition.clear()
 	Carga.abrir(get_tree(), "Saliendo a la comarca")

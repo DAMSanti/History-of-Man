@@ -25,8 +25,22 @@ extends Resource
 ## piden subirla: entran en `carvings_hash` con [Bocas.REGLAS].
 ## v4 (2026-09-13): la boca de una cueva hunde el relieve cincuenta metros, como
 ## una sima. Una cache de v3 tiene el terreno sin hundir.
-const CACHE_VERSION := 4
-@export var version: int = CACHE_VERSION
+## v5 (2026-09-15): el UV del terreno lleva dónde rompe el agua —el rápido y la orilla,
+## ver [AguaDelCauce]— y no coordenadas de mundo. Una de v4 no tiene espuma.
+## v6 (2026-09-15): el UV.x lleva la caída en bruto y no el rápido ya umbralizado; los
+## umbrales pasan al shader.
+## v7 (2026-09-15): la orilla se hornea por dentro de la línea del agua
+## (`AguaDelCauce.LINEA_DEL_AGUA`), no en la ribera mojada.
+## v8 (2026-09-15): la caída se hornea suavizada con sus vecinas (`AguaDelCauce.caida_suave`).
+## v9 (2026-09-15): y la corriente del color de vértice también (`AguaDelCauce.corriente_suave`).
+## v10 (2026-09-16): cada cuadro se parte por su diagonal (`MallaDelTerreno.diagonal_principal`).
+const CACHE_VERSION := 10
+## **El valor por defecto es 0, no la versión, y no se toca** (2026-09-15): Godot no escribe
+## en el fichero una propiedad que vale su valor por defecto. Con `= CACHE_VERSION`, la
+## versión se guardaba igual al defecto de entonces —no quedaba escrita— y al leerla con
+## la versión subida valía el defecto nuevo: **subir la versión no invalidaba nada**.
+## Visto al pasar a v5: una caché de v4 del sitio 56 leía `version` 5 y se usaba.
+@export var version: int = 0
 
 ## Version del heightmap fuente (HeightmapData.pipeline_version) con el que se
 ## genero. Si RegionMap rehace el recuadro -mismo fichero, contenido nuevo-

@@ -333,3 +333,83 @@ func test_todas_las_piezas_del_taller_tienen_sus_horas() -> void:
 			if not Tool.HORAS_DE_TRABAJO.has(kind):
 				sin_horas.append(Tool.kind_name(kind as Tool.Kind))
 	assert_eq(sin_horas.size(), 0, "piezas sin horas puestas: %s" % str(sin_horas))
+
+
+# --- El núcleo preparado y la talla laminar, que antes no hacían nada --------
+#
+# Las dos prometían algo en su descripción —«la lasca sale como se quiere»,
+# «multiplica el filo por kilo de sílex»— y no cambiaban nada de la partida:
+# sólo abrían otras técnicas. INTERFAZ §10, EPOCA_01 §7.
+
+
+func test_sin_el_nucleo_la_calidad_es_la_de_la_pericia() -> void:
+	var pieza := Tool.make(Tool.Kind.LASCA, Tool.Stuff.CUARCITA, 0.2)
+	assert_near(pieza.quality, 0.82, 0.001, "0,7 más la pericia")
+
+
+func test_con_el_nucleo_lo_de_piedra_no_baja_de_su_suelo() -> void:
+	var pieza := Tool.make(Tool.Kind.LASCA, Tool.Stuff.CUARCITA, 0.2, true)
+	assert_near(pieza.quality, Tool.CALIDAD_CON_NUCLEO, 0.001,
+		"la lasca sale como se quiere, la saque quien la saque")
+	var buena := Tool.make(Tool.Kind.LASCA, Tool.Stuff.SILEX, 0.9, true)
+	assert_near(buena.quality, 1.24, 0.001,
+		"y al que ya tallaba mejor que eso no le quita nada")
+
+
+func test_el_nucleo_no_mejora_lo_que_no_es_de_piedra() -> void:
+	# El nódulo que se prepara es de piedra: una aguja de hueso no sale mejor
+	# por saber preparar núcleos.
+	var aguja := Tool.make(Tool.Kind.AGUJA, Tool.Stuff.HUESO, 0.2, true)
+	assert_near(aguja.quality, 0.82, 0.001, "el hueso se talla igual")
+
+
+func test_la_laminar_deja_la_piedra_a_la_mitad() -> void:
+	var techs := TechTree.new()
+	var sin_ella := Tool.recipe(Tool.Kind.LASCA)
+	var con_ella := Tool.recipe(Tool.Kind.LASCA, techs)
+	assert_eq(float(con_ella[Materia.Kind.PIEDRA]),
+		float(sin_ella[Materia.Kind.PIEDRA]),
+		"sin saberla, cuesta lo de siempre")
+	techs.known[TechTree.Tech.HOJA] = true
+	var barata := Tool.recipe(Tool.Kind.LASCA, techs)
+	assert_near(float(barata[Materia.Kind.PIEDRA]),
+		float(sin_ella[Materia.Kind.PIEDRA]) * Tool.AHORRO_LAMINAR, 0.001,
+		"con ella, la mitad")
+
+
+func test_la_laminar_no_abarata_el_asta_ni_la_fibra() -> void:
+	var techs := TechTree.new()
+	techs.known[TechTree.Tech.HOJA] = true
+	var azagaya := Tool.recipe(Tool.Kind.AZAGAYA, techs)
+	assert_near(float(azagaya[Materia.Kind.ASTA]), 0.5, 0.001, "el asta, igual")
+	assert_near(float(azagaya[Materia.Kind.FIBRA]), 0.5, 0.001, "la fibra, igual")
+	var odre := Tool.recipe(Tool.Kind.ODRE, techs)
+	for material: int in odre:
+		assert_true(material != int(Materia.Kind.PIEDRA), "el odre no lleva piedra")
+
+
+func test_diez_piezas_gastan_la_mitad_de_piedra_con_la_laminar() -> void:
+	# La cuenta que le importa al jugador: lo que se va del almacén.
+	var receta := Tool.recipe(Tool.Kind.LASCA)
+	var techs := TechTree.new()
+	techs.known[TechTree.Tech.HOJA] = true
+	var con_laminar := Tool.recipe(Tool.Kind.LASCA, techs)
+	assert_near(float(receta[Materia.Kind.PIEDRA]) * 10.0, 10.0, 0.001,
+		"diez lascas costaban diez de piedra")
+	assert_near(float(con_laminar[Materia.Kind.PIEDRA]) * 10.0, 5.0, 0.001,
+		"y con la talla laminar, cinco")
+
+
+func test_el_taller_paga_lo_que_dice_la_receta_que_sabe() -> void:
+	# Y lo paga de verdad: la receta barata tiene que llegar hasta el almacén,
+	# no quedarse en la ventana.
+	var sim := _sim(1)
+	sim.techs = TechTree.new()
+	sim.techs.known[TechTree.Tech.HOJA] = true
+	sim.store.add(Materia.Kind.PIEDRA, 10.0)
+	var antes := sim.store.amount(Materia.Kind.PIEDRA)
+	var receta := Tool.recipe(Tool.Kind.LASCA, sim.techs)
+	for material: int in receta:
+		sim.store.take(material as Materia.Kind, float(receta[material]))
+	assert_near(antes - sim.store.amount(Materia.Kind.PIEDRA), 0.5, 0.001,
+		"media piedra por lasca")

@@ -17,6 +17,11 @@ var _material: ShaderMaterial
 var _arrays: TerrainTextureArrays
 var _water: Dictionary = {}
 
+## Si el agua de este terreno sigue el ajuste «Agua». El del mapa regional no: se queda
+## como el río de siempre (GRAFICOS §7.3, fuera de alcance). Ver
+## [TerrainGenerator.agua_con_niveles].
+var agua_con_niveles := true
+
 
 ## Crea el material del terreno con shader triplanar
 func create_terrain_material() -> ShaderMaterial:
@@ -68,8 +73,7 @@ func _load_water_textures() -> void:
 	_water = ProceduralTextureGenerator.get_water_textures()
 	if _water.has("water_normal"):
 		_material.set_shader_parameter("water_normal_tex", _water["water_normal"])
-	if _water.has("water_foam"):
-		_material.set_shader_parameter("water_foam_tex", _water["water_foam"])
+	# La espuma ya no lleva textura: es ruido del shader (`espuma_viva.gdshaderinc`).
 
 
 func _configure_shader_params() -> void:
@@ -114,13 +118,24 @@ func _configure_shader_params() -> void:
 	_material.set_shader_parameter("terrain_specular", 0.08)
 
 
-## Los dos ajustes de gráficos que son del relieve: los mapas de normales y el
-## ORM. Se aplican en caliente: son dos interruptores del shader.
+## Los ajustes de gráficos que son del relieve: los mapas de normales, el ORM y el agua
+## del cauce, que va pintada en el mismo shader. Se aplican en caliente: son uniformes.
 func aplicar_configuracion() -> void:
 	if _material == null:
 		return
 	_material.set_shader_parameter("use_orm", bool(Configuracion.graficos["orm"]))
 	_material.set_shader_parameter("use_normal_maps", bool(Configuracion.graficos["normales"]))
+	# El escalón del agua del cauce: cada uno enciende lo suyo en el shader (GRAFICOS §7.3).
+	_material.set_shader_parameter("nivel_de_agua",
+		int(Configuracion.graficos.get("agua", 1)) if agua_con_niveles else 0)
+	# EL RELIEVE DE LAS TEXTURAS: el canal de altura que ya estaba empaquetado y
+	# que no leía nadie (GRAFICOS §4). Sólo en Alto y Ultra, ver
+	# [Configuracion.pasos_de_relieve].
+	_material.set_shader_parameter("relieve_pasos", Configuracion.pasos_de_relieve())
+	# Y los umbrales de la espuma de rápido: una sola cifra, la de [AguaDelCauce].
+	_material.set_shader_parameter("caida_de_rapido", AguaDelCauce.CAIDA_DE_RAPIDO)
+	_material.set_shader_parameter("veces_para_romper", AguaDelCauce.VECES_PARA_ROMPER_ENTERA)
+	_material.set_shader_parameter("linea_del_agua", AguaDelCauce.LINEA_DEL_AGUA)
 
 
 ## Obtiene el material

@@ -583,6 +583,9 @@ func _build_block(block: Vector2i) -> void:
 			String(spec.get("model", "?")), int(spec.get("variant", 0))]
 		node.multimesh = multi
 		node.position = centre
+		# Las piedras se mojan y se nievan por encima (GRAFICOS §7.4).
+		if ClimaEnPantalla.MODELOS_DE_PIEDRA.has(String(spec.get("model", ""))):
+			node.material_overlay = ClimaEnPantalla.material_encima()
 		# La materia va en los METADATOS, no sólo en el nombre. Godot renombra
 		# los nodos repetidos -cada bloque crea su `Recurso_Cuarcita_canto0`, y
 		# del segundo en adelante pasan a `@Recurso_...@2`-, así que leer la

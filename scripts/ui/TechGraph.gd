@@ -38,6 +38,12 @@ const ARROW_WIDTH := 1.5
 const ARROW_HEAD := 6.5
 
 var _tech: TechTree
+
+## La banda, para poder decir qué supone HOY cada técnica que ya se sabe
+## (INTERFAZ §10). Puede ser nula: entonces el tooltip dice qué da la técnica y
+## se calla lo de hoy, que es lo que toca en una ventana sin partida.
+var _sim: SettlementSim = null
+
 var _techs: Array[int] = []
 var _at: Dictionary = {}
 
@@ -45,8 +51,10 @@ var _at: Dictionary = {}
 ## Monta el árbol de un oficio. `tree` es el estado de la banda, y `hueco` el
 ## ancho del que se dispone: el árbol se centra en él en vez de quedarse pegado
 ## a la izquierda con medio panel vacío al lado.
-func build(tree: TechTree, job: int, hueco: float = 0.0) -> void:
+func build(tree: TechTree, job: int, hueco: float = 0.0,
+		settlement: SettlementSim = null) -> void:
 	_tech = tree
+	_sim = settlement
 	_techs.clear()
 	_at.clear()
 	for child: Node in get_children():
@@ -211,6 +219,23 @@ func _state_line(tech: TechTree.Tech) -> String:
 func _tooltip(tech: TechTree.Tech) -> String:
 	var lines: Array[String] = [TechTree.tech_name(tech), ""]
 	lines.append(TechTree.tech_desc(tech))
+	lines.append("")
+
+	# QUÉ DA, con la cifra que usa la partida. Lo compone [TechTree.efecto], que
+	# la lee de donde la lee el juego: aquí no se escribe ningún número
+	# (INTERFAZ §10). Sale en todas, aprendidas o no: es lo que ayuda a decidir
+	# hacia dónde practicar.
+	var efecto := TechTree.efecto(tech)
+	if not efecto.is_empty():
+		# CON LA PALABRA DELANTE, que es como el jugador la busca al leer deprisa
+		# (petición del 2026-09-16).
+		lines.append("[b]EFECTO:[/b] %s" % efecto[0])
+		for i in range(1, efecto.size()):
+			lines.append("· %s" % efecto[i])
+	# Y lo que supone HOY para esta banda, sólo en las que ya se saben.
+	var hoy := TechTree.lo_de_hoy(tech, _sim)
+	if not hoy.is_empty():
+		lines.append(hoy)
 	lines.append("")
 
 	var entry: Dictionary = TechTree.CATALOGUE[tech]

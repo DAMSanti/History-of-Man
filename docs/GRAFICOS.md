@@ -31,6 +31,9 @@ encima y **Ultra sin límite**. Ver §7.)*
 | Los cuatro niveles de gráficos, y por qué SDFGI está fuera de todos | §7 |
 | **El bosque: árboles 3D de cerca, impostores de lejos, sin aros** (spec) | §7.1 |
 | La sala de la cueva y la pared pintada (spec en SISTEMAS §13) | §7.2 |
+| **El agua: ríos con rápidos y espuma, y el mar del valle** (spec) | §7.3 |
+| **El clima en pantalla: lluvia, nieve que cuaja, niebla de valle** (spec) | §7.4 |
+| La niebla del mapa regional como nubes (spec) | §3 |
 | **Las tres veces que la medida estaba mal antes que el juego** | **§8** |
 | Qué queda fuera a propósito | §9 |
 
@@ -81,7 +84,15 @@ Lo que falta por hacer está en [ROADMAP.md](ROADMAP.md) «En curso» → Los gr
 > tangentes**, así que no puede llevar mapa de normales —lo pintaba negro—; y la
 > caché del terreno guarda la malla ya recortada, así que **las reglas de la sima
 > van en su clave** (`TerrainGenerator.SIMA_REGLAS`) o se carga la de antes.
-> **Fotograma sin medir.**
+>
+> **El fotograma, medido el 2026-09-15** con `FotogramaCuevasProbe` —las nueve cuevas
+> del valle y sus 27 simas cosidas, con y sin ellas en la misma corrida, dos vueltas
+> alternando, mediana de 400 cuadros—: **desde la cámara de arranque no cuestan nada**
+> (49,4 ms con, 49,4-49,9 sin) y **a 30 m de la cueva de la banda, unos 2 ms** (52,1-52,2
+> con, 50,1-50,2 sin). La sonda no fija la ventana a 1080p (abre más grande, §1), así que
+> vale la diferencia y no el total. Estaba aparcada, y al retomarla **no arrancaba**:
+> buscaba la cueva con `DemoMain._cave_at`, que ya no existe desde que las cuevas son
+> del campamento (`Campamento.cueva_en`); `AbrigoProbe` y `TrasladoProbe` tenían lo mismo.
 
 > **El humo (2026-09-13)**: `Bonfire._build_humo`, partículas en la GPU que
 > sólo salen mientras el fuego arde. Medido en `HumoCaptura`: el fotograma no
@@ -325,6 +336,160 @@ ríos y sitios. **GPU de render alternando niebla sí y no en la misma corrida,
 mínimo de cuatro vueltas: +0,24, −0,02, +0,08, +0,11 y +0,06 ms** en cinco
 corridas —ruido alrededor de cero—, dentro de 1 ms.
 
+> **Spec (2026-09-15): la niebla del mapa regional, como nubes.** Salió del `/depurar`
+> de la noche del 2026-09-14. La calima de hoy se lee como una capa de pintura: lo
+> que no se ha visto tiene que parecer **tapado por nubes**, no borrado.
+>
+> - **Sigue tapando lo mismo**: sitios, ríos, frontera y relieve bajo lo no visto, y
+>   **se intuye el trazo de costa** de la época para no perder la orientación
+>   (decisión del usuario). Los yacimientos **avistados** desde una cima se ven por
+>   encima, apagados (SISTEMAS §4).
+> - **Se mueven con el viento** (decisión del usuario), **con el reloj de la
+>   partida**, como las nubes del cielo del valle: paradas si la partida está en
+>   pausa, más deprisa a ×5. El reloj sigue corriendo con el regional abierto.
+> - **El borde con lo visto se deshilacha** como el de una nube, no como un fundido
+>   liso.
+> - **Primero se mide y se enseña, luego se elige**: dos o tres aspectos —por
+>   ejemplo, capas de ruido animado sobre la calima; nubes con altura y sombra
+>   falsa; y una marcha volumétrica ligera—, cada uno con **captura del mismo
+>   encuadre** y **su coste medido**, y el usuario elige uno antes de pulir nada.
+>
+> Criterios: la captura de partida recién empezada **sigue sin enseñar ni un píxel
+> de sitio, río o frontera** fuera del recuadro, y sí el trazo de costa; entre dos
+> capturas con la partida corriendo, las nubes **se han movido** y con la partida en
+> pausa **no**; **coste no mayor de 1 ms de GPU** a 1080p, alternando nubes y calima
+> de hoy en la misma corrida (decisión del usuario). Fuera de alcance: nubes en el
+> mapa de la banda —eso es el clima, §7.4—, que la niebla vuelva con el tiempo, y
+> cambiar qué la levanta.
+
+**Plan técnico (2026-09-16).**
+
+*Lo que hay hoy en el código.* La calima es un grupo `fog` de `triplanar.gdshader`: la
+textura de lo visto (`NieblaRegional.imagen`) con un borde de cinco muestras, mezcla hacia
+un color liso y pinta el trazo de costa con la cota del mar de la época. **El mar y la
+frontera** son mallas con `bajo_la_niebla.gdshader`, que repite la misma lectura de la
+textura. `RegionMap._poner_la_niebla` pone la textura. **Nada se mueve**. Las nubes del
+cielo del valle sí avanzan con el reloj: `WorldEnvironmentSetup._mover_las_nubes` pasa las
+horas de la partida a metros de viento (`VIENTO`, `VIENTO_A_RUIDO`). Con el regional
+abierto, el reloj es `Campamentos.reloj` (`dia`, `hora`) y no hay simulación de escena.
+
+*Módulos afectados.*
+
+1. **El viento de la partida, en un sitio**: una función estática que da el recorrido del
+   viento a partir de la jornada y la hora —la cuenta que hoy hace `_mover_las_nubes`—; la
+   usan el cielo del valle y la niebla regional. `RegionMap` la lee de `Campamentos.reloj`
+   cada cuadro y la pasa al shader; sin reloj, quieta.
+2. **`shaders/nubes_de_la_niebla.gdshaderinc` (nuevo)**: lo que se pinta donde no se ha
+   visto, **una sola vez** para el relieve (`triplanar.gdshader`) y para el mar y la
+   frontera (`bajo_la_niebla.gdshader`), con un `estilo` para enseñar los aspectos:
+   - **0, la calima de hoy**, para comparar;
+   - **1, ruido animado**: capas de ruido que derivan con el viento sobre la calima, con
+     claros y oscuros, y el borde deshilachado por el mismo ruido;
+   - **2, nubes con altura y sombra falsa**: la misma nube desplazada por la vista —como si
+     estuviera a cierta altura sobre el relieve—, con luz de un lado y su sombra oscura en
+     el borde, sobre lo visto;
+   - **3, marcha ligera**: pocos pasos por una capa de nube encima del relieve, con
+     densidad de ruido 3D.
+   El trazo de costa se queda encima de las tres, tenue.
+3. **`NieblaCaptura`** saca, con el mismo encuadre de partida recién empezada, una captura
+   por aspecto, otra del borde de cerca y **la GPU de cada uno contra la calima** en la
+   misma corrida.
+4. **Tras la elección**: se pule el elegido y **se quitan los otros** —no se deja código
+   muerto—; y la sonda comprueba los criterios: fuera del recuadro, ni sitio ni río ni
+   frontera, y sí costa; con la partida corriendo, dos capturas distintas; en pausa,
+   iguales; y el coste.
+
+*Decisiones.* Ninguna de diseño antes de que el usuario elija aspecto: la spec lo pide así.
+El ruido 3D y 2D llevan la celda acotada antes del hash (la lección del agua, GRAFICOS §7.3).
+
+*Orden.* El viento antes que nada que se mueva; el include con los tres estilos antes que la
+sonda; la sonda y las capturas antes de preguntar; y el pulido, la limpieza y los criterios
+después de la elección.
+
+*Qué contrato cambia*: ninguno; es vista, y avanza con el reloj de la partida (SPECS §3.2).
+
+*Riesgos.* **La marcha** puede pasar de 1 ms a 1080p: se mide y, si pasa, se dice al
+enseñarla. **Tapar del todo**: las nubes tienen claros y sombras, pero donde no se ha visto
+tienen que seguir sin dejar ver ni un río; se mira en la captura de partida recién
+empezada. **Lo avistado** son marcas aparte, por encima: no debería cambiar, y se mira.
+
+### Cómo quedó: la niebla como nubes (2026-09-16)
+
+**Se le enseñaron tres aspectos al usuario**, con captura del mismo encuadre —de lejos y el
+borde de cerca— y coste medido (`NieblaCaptura ESTILOS=1`): ruido animado sobre la calima
+(+1,56 ms), nubes con altura y sombra falsa (+2,10) y una marcha ligera por capas (+2,71).
+**Los tres pasaban el tope de 1 ms** con la pantalla llena de niebla. **Eligió el segundo.**
+
+**Lo que quedó** (`shaders/nubes_de_la_niebla.gdshaderinc`, que incluyen el relieve y el mar
+y la frontera, para que la niebla sea la misma en los tres):
+
+- Las nubes se fingen a **900 m sobre el relieve**: mirando de lado se ven corridas
+  respecto del suelo que tapan, que es lo que las despega del mapa.
+- Cada bulto **se ilumina por el lado de la luz y hace sombra por el contrario**, con dos
+  lecturas del ruido.
+- **El borde con lo visto se deshilacha** con el mismo ruido, en vez de fundirse liso.
+- **El trazo de costa va entero por encima**, que es lo que da la orientación.
+- **Se mueven con el reloj de la partida** ([Viento], la misma cuenta que las nubes del
+  cielo del valle): paradas en pausa, más deprisa a ×5. `RegionMap` se lo pasa al shader
+  cada cuadro.
+- El ruido va **en una textura sin costuras** de 512 hecha una vez, de 55 km de tesela, y no
+  calculado por píxel: así cuesta lo que cuesta.
+
+**Medido con `NieblaCaptura`**, 1920×1080, alternando nubes y calima en la misma corrida,
+dos corridas: **+0,22 y +0,27 ms**, dentro del tope de 1 ms. La niebla entera contra no
+tener niebla: +0,46 ms. **Los criterios**: en la partida recién empezada sólo se ve el
+recuadro del primer campamento y el trazo de costa, y tras el pasillo su franja; con la
+partida en pausa dos capturas seguidas son iguales (diferencia 0,0005) y con la hora corrida
+no (0,037).
+
+**Lo que salió al hacerlo.**
+
+- **`absf` no existe en GLSL** —es de GDScript—, y **el tamaño de la nube iba en metros**
+  cuando el shader trabaja en unidades del mundo, que en el regional son 111 m: salían nubes
+  de dos mil kilómetros, o sea una mancha lisa.
+- **Con teselas de 18 km** la nube se repetía once veces sobre la comarca y se leía como
+  papel pintado: 55 km.
+- **La sonda medía el viento a mano** y `RegionMap` lo reescribía con el del reloj cada
+  cuadro, así que decía que las nubes no se movían. Ahora mueve el reloj, que es el camino
+  de verdad.
+- **El trazo de costa desapareció** bajo el bulto de la nube al principio: va con todo su
+  peso por encima.
+
+### Y con volumen de verdad (2026-09-16, misma tarde)
+
+**El usuario lo vio y lo rechazó**: «las nubes son un plano sobre el mapa regional, quiero
+que tengan volumen, altura». Tenía razón: por muy bien que se fingieran la altura y la
+sombra, se pintaban EN el relieve y por eso se leían pegadas al suelo.
+
+**Lo que hay ahora** (`NubesDeLaNiebla`, `shaders/nubes_con_volumen.gdshader`): **una losa
+de aire sobre la comarca**, de 800 a 3 200 m sobre el mar de la época, que el shader
+recorre en 48 pasos. La densidad sale de un ruido 3D sin costuras a dos escalas —la forma
+del banco y el detalle que le come el borde—, por lo que queda por descubrir y por un
+perfil de base plana y cima redonda. Cada muestra mira hacia la luz con tres catas, así
+que **la base sale oscura y la cima encendida**: las nubes se tapan entre ellas y dan
+sombra. Los montes altos asoman por encima de la capa, y por los claros se ve la calima y
+el trazo de costa.
+
+**Debajo se queda la calima lisa del relieve**, que es la que garantiza que de lo no
+descubierto no se vea ni un río: las nubes son el aspecto, no el tapado. Por eso el dibujo
+plano de nubes en el shader del terreno **se quitó entero** —el `nubes_de_la_niebla`
+que duró unas horas— y `triplanar.gdshader` y `bajo_la_niebla.gdshader` vuelven a pintar
+sólo calima.
+
+**Medido**: **+4,4 y +5,6 ms** a 1080p con la pantalla llena de niebla, contra la calima,
+en dos corridas. **Pasa del tope de 1 ms de la spec, y el usuario lo aceptó**: «no me
+importa el coste» (2026-09-16). Sigue cumpliéndose lo demás: en pausa dos capturas seguidas
+son iguales (0,0002) y con la hora corrida no (0,032).
+
+**Lo que costó afinarlo**, todo con captura delante: con el ruido a 26 km se veía la tesela
+en cuadrícula; con la extinción a escala equivocada —el paso de la marcha mide decenas de
+unidades— la primera muestra ya tapaba del todo y la nube salía como una sábana; y con el
+manto de fondo alto, el mapa entero quedaba blanco y liso. Quedó en 50 km de banco,
+extinción 0,05 por unidad y un manto del 7 %.
+
+**Deuda que queda, dicha.** Es una sola losa, así que no hay nubes a distintas alturas ni
+nubes por debajo de la cámara cuando se baja mucho el zoom.
+
 ---
 
 ## 4. Las texturas
@@ -351,9 +516,51 @@ tiene.
 **Ingesta reproducible** (`tools/TerrainTextureIngest.gd`): llama a la API,
 descarga, **empaqueta en un solo RGBA** (AO→R, rugosidad→G, metálico→B,
 **altura→A**), reescala y escribe en `textures/terrain/`. Lo que se versiona es
-el script y el `.import`, no dos gigas de PNG. El canal de altura no es relleno:
+el script y el `.import`, no dos gigas de PNG. ~~El canal de altura no es relleno:
 BC7 trae alfa sin coste extra y alimenta el parallax que tapa el hueco de escala
-del §2.
+del §2.~~
+
+> **Corregido el 2026-09-16: no había parallax.** El canal A se muestreaba, se
+> guardaba en `surface_height` y no lo leía nadie; el único relieve era el mapa de
+> normales. Lo destapó la queja del usuario —«las texturas no tienen height map, o no
+> es suficiente; quiero relieve en las rocas y en las briznas»—. **Lo que hay ahora**
+> no usa ese canal: ver «El relieve de las texturas», abajo.
+
+### El relieve de las texturas (depurar del 2026-09-16)
+
+Sólo en **Alto (12 pasos) y Ultra (24)**, decisión del usuario; en Personalizado, si
+el agua está en Alto o más (`Configuracion.pasos_de_relieve`). Todo en
+`triplanar.gdshader`, sobre la capa dominante. **Se ajustó mirando con el usuario**, que
+seguía la ventana de la sonda, en seis vueltas; lo que queda, y por qué:
+
+- **La altura sale del dibujo, desenfocado**: lo claro sube y lo oscuro se hunde
+  —«las partes oscuras se hundan y las claras se eleven levemente»—, leído **cuatro
+  niveles y medio de mipmap por debajo** (`desenfoque_de_la_piedra`). A su tamaño cada
+  mota de liquen hacía un bulto —«detecta las piedras, no las manchas de las
+  piedras»—, y con tres niveles la piedra salía con arista —«deben ser bumps
+  suavizados, como las piedras del suelo»—. Se mide contra la media de una zona más
+  ancha que una piedra, para que una roca oscura entera no sea un agujero.
+- **Parallax con oclusión** (`relieve_desplazado`), en mundo y no en UV porque aquí se
+  textura con tres planos, y **sin escalones**: el cruce se interpola entre los dos
+  últimos pasos. La hondura es un 5 % de la tesela.
+- **El bulto con luz** (`bulto_de_la_capa`): la cuesta de esa altura inclina la normal y
+  la cara al sol se aclara. Es lo que se ve desde lejos —con sólo el desplazamiento el
+  usuario «no notó nada»—. Fuerza 3, y las juntas un 12 % más oscuras: con 7 y 25 %
+  había «demasiada diferencia entre picos y valles».
+
+La primera versión leía el canal A del ORM; se cambió al color porque ese mapa no casa
+siempre con lo que se ve. Se apaga a partir de 160 m de la cámara (con 60 no llegaba a
+la órbita de juego).
+
+**Lo que cuesta**, `ClimaCaptura SOLO=relieve`, 1920×1080, alternando 0/12/24 pasos en
+la misma corrida y el mínimo de tres vueltas, con la versión final: **+0,6–0,7 ms en
+Alto y +0,6–0,9 ms en Ultra** (28 y 80 m de órbita). **Una sola corrida limpia**: las
+de en medio se tomaron con el usuario moviendo la ventana y dieron bases de 32 a 46 ms,
+que se descartaron. Falta la segunda.
+
+**Hasta dónde llega**: de cerca los cantos del canchal se separan unos de otros con su
+luz; a 80 m se nota mucho menos, y es un límite del tamaño y no del efecto: una piedra
+de medio metro ocupa ahí unos pocos píxeles.
 
 **Resolución: 2K, y no más.** A la distancia mínima de cámara (~30 m) 1920 px
 cubren unos 30 m de suelo, o sea 64 px/m; una textura 2K con tesela de 4 m da
@@ -592,6 +799,8 @@ discreparan, gana el código.
 | Escala de render | FSR2 0,6 | 1,0 | 1,0 | 1,0 | sí |
 | Densidad de vegetación | 25 % | 100 % | 100 % | 100 % | **no: al montar el mapa** |
 | Árboles (§7.1) | Mínimo, láminas | Medio, 3D de cerca | Alto | Ultra | **no: al montar el mapa** |
+| Agua (§7.3) | el río pintado en el terreno | orilla, piedras y estela | lámina transparente sobre el lecho | lámina con reflejos y salpicaduras | sí |
+| Clima (§7.4) | apagado | encendido | encendido | encendido | sí |
 | Mapas de normales del terreno | no | sí | sí | sí | sí |
 | ORM del terreno | no | sí | sí | sí | sí |
 | **GPU a 1080p, dos corridas** | **7,8 ms** | **18,1 ms** | **21,0–21,2 ms** | **37,7–39,9 ms** | |
@@ -877,6 +1086,14 @@ hipótesis: la spec pide medirlo, no darlo por hecho.
 > | Alto | 5,3-5,4 ms | 3,8-3,9 ms | 4,8 ms | 19,0 s | 1 384 MB |
 > | Ultra | 9,7 ms | 6,4-6,8 ms | 9,5-9,8 ms | 18,2-18,9 s | 1 385 MB |
 >
+> - **La distancia del 3D al máximo** (slider de INTERFAZ §8.7), `RADIO=1000`, una
+>   corrida: el bosque **34 ms en el juego alto, 54 en el bajo y 67 en la medida**, con
+>   32-54 millones de triángulos, y **57 s en montar el mapa**. **Y «sin límite» no se
+>   puede**: con `RADIO=100000` Godot deja de crear los grupos de árboles
+>   («Element limit reached», más de 7 000 errores y 5,2 GB de RAM). El 3D va por
+>   bloques de 32 m con un grupo por especie, variante y nivel de detalle, y el mapa
+>   entero son 16 384 bloques. El slider acaba en 1000 m desde el 2026-09-15; que quepa
+>   el mapa entero —agrupar lejos en bloques mayores— va por `/spec` (ROADMAP).
 > - **Medio no cabe en 3,0 ms: 3,4-3,5.** El usuario lo dio por bueno —«3,8 ms en lugar
 >   de 3 es aceptable»—.
 > - **Lo caro no era el 3D, eran los impostores.** La primera medida dio 14,3 ms en
@@ -1034,6 +1251,12 @@ que toca a este documento, y hay que cumplir allí:
   casan— hace que la figura se curve con el bulto.
 - **Cámara**: arranca a 3,2 m de la pared —a 5,5 una mano no se leía—, mirando al
   centro de lo pintado, se acerca con la rueda y se desplaza arrastrando.
+  **Corregido el 2026-09-16: se veía el borde de la pared.** El tope estaba en el
+  punto al que se mira —un metro antes del borde— y a 7,5 m con 55° de campo el
+  encuadre se come 3,9 m más a cada lado. Ahora el límite sale de lo que **cabe en
+  pantalla** (`SalaDeLaCueva.encuadre`): no se aleja más de lo que deja la pared llenar
+  el alto —unos 4,6 m, la pared mide 4,8— y no se desplaza más allá de donde el borde
+  entraría. Cinco pruebas en `TestPared`.
 - **Con la sala abierta se apaga el 3D de la ventana de debajo**: la tapaba entera,
   pero el valle seguía dibujándose.
 
@@ -1048,6 +1271,477 @@ que toca a este documento, y hay que cumplir allí:
 **Cumple las dos cosas de la spec**: entrar por debajo de 2 s (la primera vez de la
 partida, 1,5 s, porque se descomprime la roca y se compila el shader) y bastante
 menos GPU que los 18,1 ms del valle en Medio.
+
+---
+
+## 7.3. El agua (spec, 2026-09-15)
+
+> **Spec escrita con `/spec` el 2026-09-15**, con las decisiones del usuario sacadas
+> a preguntas. El ajuste en la ventana, en [INTERFAZ.md](INTERFAZ.md) §8.8.
+
+### Qué problema cierra
+
+El agua del valle es lo más pobre de lo que se ve. **Los ríos** son una cinta de
+color pintada sobre el terreno con un movimiento de normales: el mismo aspecto en
+un remanso que en una cascada, sin espuma, sin rápidos y sin fondo. **El mar y la
+ría** son un plano liso semitransparente a la cota del mar, sin oleaje ni espuma de
+orilla. En un juego que va de una banda que vive de la ribera —pesca, marisqueo,
+agua, nasas, pasarelas—, el río se tiene que leer como río.
+
+### Lo que se pide
+
+- **Qué agua**: **los ríos del valle** y **el mar y la ría del valle** (decisión del
+  usuario). El agua del mapa regional se queda como está.
+- **Un selector «Agua» con cuatro niveles** en la configuración gráfica (decisión del
+  usuario), y **cada nivel general pone el suyo**, como las sombras o los árboles;
+  moverlo deja la configuración en Personalizado.
+
+  > **Corregido al planear, el mismo día** (decisión del usuario): la primera
+  > escalera ponía la corriente en Medio y la espuma de rápidos en Alto, pero **el río
+  > de hoy ya tiene las dos** —la dirección del cauce sale de OSM, dos capas de ondas
+  > bajan con el agua y la espuma sale donde el cauce desciende—, así que «Bajo como
+  > hoy» y «Alto añade la espuma» se contradecían. La escalera sube desde lo de hoy:
+
+  - **Bajo**: **el río de hoy, tal cual**: corriente por el cauce y espuma en los
+    rápidos, pintados sobre el terreno.
+  - **Medio**: lo de Bajo y **la orilla**: una franja de espuma donde el agua lame la
+    tierra, el fondo de cantos que se ve en lo somero y el color según lo hondo.
+  - **Alto**: lo de Medio y **una superficie de agua propia** sobre el cauce, **con
+    transparencia y el lecho debajo**, y espuma más rica que **se acumula en los
+    remansos**.
+  - **Ultra**: **«que parezca agua de río real»** (petición del usuario): lo de Alto,
+    con **salpicaduras** en los rápidos y **reflejos** del cielo y la orilla, todo al
+    máximo.
+- **El mar y la ría**, con **oleaje** y **espuma de orilla** —de rompiente en Alto y
+  Ultra—. **En el Paleolítico no se ven en ningún valle preparado**: el mar está a
+  −120 m, el relieve local no trae fondo marino y la cota más baja de los valles es
+  10,8 m (sitio 0). **Se comprueban con un valle costero de prueba**, subiendo el mar
+  en una sonda (decisión del usuario). Que haya yacimientos con costa en el
+  Paleolítico —sobre la plataforma emergida— es otro trabajo, por `/spec` (ROADMAP).
+- **Si se aplica en caliente o al montar el mapa se mide** y se escribe en la tabla de
+  §7, como la vegetación y los árboles.
+
+### Criterios de aceptación
+
+- **Se da por bueno con fotos y con el visto bueno del usuario** (decisión suya), como
+  el bosque: **fotos de referencia de ríos cantábricos** —Nansa, Deva, un rápido, un
+  remanso y una orilla de ría—, con su licencia en [CREDITOS.md](CREDITOS.md), y
+  **capturas del juego en el mismo encuadre** al lado, en Medio y en Ultra. Sin su
+  visto bueno, Ultra no está hecho.
+- **La espuma de rápido sale donde el cauce tiene pendiente o piedras, y no en un
+  tramo llano**: con un cauce construido, llano y con un escalón, la espuma es cero en
+  el llano y está en el escalón. Prueba sobre lo que decide la espuma.
+- **La corriente va aguas abajo** en cada tramo: la dirección del flujo apunta hacia
+  donde baja el cauce. Prueba sobre un cauce construido que gira.
+- **La orilla tiene espuma y el centro del río no**, en Medio y más: captura con la
+  máscara de espuma.
+- **Cada nivel pone su agua** y moverla personaliza: prueba, como la de los árboles.
+- **Coste: Medio no más de 1 ms de GPU** sobre Bajo, a 1080p, con un río en pantalla,
+  alternando en la misma corrida (decisión del usuario). **Alto y Ultra, sin tope**
+  —«haz el mejor río que puedas y si hace falta reducimos»—: se miden igual y se
+  escriben en la tabla de §7.
+- **No toca la partida**: dónde hay agua, qué se pesca y por dónde se cruza no cambian
+  con el nivel. La firma de una partida es la misma en Bajo y en Ultra.
+
+### Fuera de alcance
+
+- **El agua del mapa regional.**
+- **Simular el agua**: caudal que cambia, crecidas visibles, ríos que se desbordan con
+  la lluvia, objetos que flotan.
+- **Cambiar por dónde van los ríos** o su anchura: son datos del relieve (§2).
+- **Sonido** del agua.
+- **Cascadas verticales** con geometría propia: los rápidos son lo que el cauce da.
+- **Yacimientos con costa en el Paleolítico** para ver el mar jugando: pendiente de
+  `/spec` (ROADMAP).
+
+### Plan técnico (2026-09-15)
+
+**Lo que ya hay, leído en el código** —y que la spec suponía que no—: el río es
+color de vértice sobre la malla del terreno (`MallaDelTerreno`: `rg` la corriente de
+OSM, `b` agua quieta, `a` la lámina), pintado en `shaders/triplanar.gdshader` con dos
+fases de normales que bajan con la corriente, color por hondura (`river_shallow_color`)
+y espuma de rápido por **caída aguas abajo** calculada en el shader con la normal. El
+mar es un `PlaneMesh` de 32×32 con un `StandardMaterial3D` a la cota del mar
+(`TerrainGenerator._create_water`), y sólo se crea si el relieve baja de esa cota. El
+entorno tiene `enable_ssr` apagado (`WorldEnvironmentSetup`).
+
+**Módulos.**
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| **El ajuste** «agua» 0-3, en `AJUSTES` y `NIVELES`, con el valor de su nivel para un fichero de antes | `scripts/vista/Configuracion.gd`, `scripts/ui/VentanaDeConfiguracion.gd` | vista; INTERFAZ §8 |
+| **Lo que decide la espuma de rápido y la de orilla, en la CPU** y horneado en la malla, para que se pueda probar | `scripts/mundo/MallaDelTerreno.gd` (canal de vértice propio), nuevo `scripts/mundo/AguaDelCauce.gd` (funciones puras) | mundo, SPECS §4.3 |
+| **Medio**: orilla, fondo de cantos y hondura | `shaders/triplanar.gdshader` (grupo `rivers`) | shader |
+| **Alto**: la lámina propia sobre el cauce, transparente, y el lecho hundido **sólo al dibujar** | nuevo `shaders/agua_rio.gdshader`; la malla de la lámina en `MallaDelTerreno`; el hundido en el vértice de `triplanar.gdshader` | mundo / shader |
+| **Ultra**: salpicaduras en los rápidos y reflejos | nuevo `scripts/vista/SalpicadurasDelRio.gd` (partículas en los puntos de más rápido cerca de la cámara); ~~SSR del entorno en Ultra~~ reflejos en el shader de la lámina —ver «Riesgos»— | vista |
+| **El mar** con oleaje y espuma de orilla | nuevo `shaders/agua_mar.gdshader` en `TerrainGenerator._create_water` | mundo / shader |
+| **Aplicar en caliente** lo que se pueda | `TerrainMaterialManager.aplicar_configuracion`, `TerrainGenerator.aplicar_configuracion`, `WorldEnvironmentSetup.aplicar_configuracion` | grupo `configuracion_grafica` |
+| **Las sondas** | nueva `scripts/tests/AguaCaptura.gd` (encuadres de rápido, remanso y orilla elegidos por los datos, y la costa de prueba con `MAR=`), `GpuProfile.gd` modo `AGUA=1` | ARQUITECTURA §5.1 |
+| **Las pruebas** | nueva `scripts/tests/TestAgua.gd` | — |
+
+**Decisiones de arquitectura, sólo las que la spec obliga a tomar.**
+
+1. **Lo que decide dónde hay espuma se calcula en la CPU y se hornea en la malla**, no
+   en el shader: la spec pide probar que la espuma sale en el escalón y no en el llano,
+   y la suite no ejecuta shaders (va sin ventana). `AguaDelCauce` da, por celda, cuánto
+   rápido y cuánta orilla hay a partir de las alturas, la lámina y la corriente; la
+   malla lo lleva en un canal de vértice y el shader sólo lo lee. **Una pregunta, un
+   sitio**: la caída aguas abajo deja de calcularse en el shader.
+2. **El lecho se hunde sólo al dibujar**: en el vértice del terreno, bajo la lámina, en
+   proporción a lo hondo. **Los mapas de alturas no se tocan**: la banda anda, vadea y
+   mide con los de siempre, y la firma no cambia con el nivel. Sin hundirlo, la lámina
+   transparente de Alto no tendría nada debajo que enseñar: el relieve LiDAR es la
+   superficie del agua, no el fondo.
+3. **La caché de la malla cambia de versión** (`TerrainGenerationCache.CACHE_VERSION`):
+   lleva un canal más. Se rehace una vez por valle y la del regional una vez.
+4. **Cada nivel incluye al de abajo**, y en un solo shader por agua con interruptores,
+   como `use_orm`: cambiar de nivel es cambiar uniformes y encender o apagar nodos, en
+   caliente. Si algo no se puede en caliente, se mide y se dice en la tabla de §7.
+5. **Las salpicaduras no llenan el río**: un número fijo de emisores en los puntos de más
+   rápido cerca de la cámara, repartidos cada vez que la cámara cambia de bloque, como el
+   3D del bosque.
+6. **El mar se prueba subiendo el mar**: `AguaCaptura MAR=30` sobre el sitio 0, el valle
+   preparado de cota más baja, pone parte del valle bajo el agua sin tocar la partida.
+
+**Orden de dependencias.** Medir hoy y fijar encuadres primero, para comparar; el
+ajuste antes que ningún nivel; lo que decide la espuma antes que Medio, que lo usa; la
+lámina antes que Ultra, que la refleja; el mar aparte; las fotos de referencia en
+cualquier momento; y el visto bueno del usuario al final, sobre capturas de todo.
+
+**Riesgos técnicos.**
+
+- **Lo que va por el fondo del río se verá hundido**: la gente al vadear y las nasas
+  quedan a la cota de siempre, así que con el lecho hundido pueden flotar un palmo sobre
+  él. Se mira en captura; si canta, se limita la hondura en los vados.
+- **La lámina en celdas de 5 m**: la malla del terreno va a unos 5 m por vértice y los
+  arroyos estrechos son dientes. La lámina hereda esa rejilla; alisarla es otro trabajo.
+- ~~**SSR es del entorno entero**, no sólo del agua: en Ultra refleja también lo demás que
+  sea liso. Se mide su coste aparte.~~ **Se cayó al implementar**: el SSR de Godot sólo
+  refleja en materiales opacos y la lámina es transparente, así que no le llegaba. Los
+  reflejos van dentro del shader de la lámina, recorriendo la pantalla con el buffer de
+  profundidad, y sólo en Ultra; el entorno no se toca.
+- **Transparencia y orden de dibujo**: la lámina es transparente sobre el terreno opaco y
+  bajo las partículas del tiempo; lo que no se ordene bien se ve en captura.
+- **«Que parezca real» no se puede probar**: se da por bueno con las fotos y con el visto
+  bueno del usuario, y eso puede pedir varias vueltas.
+
+### Cómo quedó (2026-09-16)
+
+**Visto bueno del usuario el 2026-09-16**, tras tres vueltas al rápido y la orilla sobre
+las capturas de `AguaCaptura` junto a las fotos del Pas (CREDITOS).
+
+**Qué pone cada nivel.**
+
+- **Bajo**: el río pintado en el terreno, con la espuma de rápido.
+- **Medio**: además, la orilla —una banda fina de espuma por dentro de la línea del agua
+  y fondo de cantos en lo somero—, **las piedras** de los rápidos (`PiedrasDelRio`, peñas
+  de la biblioteca hundidas en el agua) y **la estela** detrás de cada una.
+- **Alto**: el agua deja de pintarse en el terreno y la dibuja **una lámina
+  transparente** propia (`agua_rio.gdshader`) sobre el lecho, que se hunde 0,8 m sólo al
+  dibujar; el color sale del grosor de agua medido con el buffer de profundidad.
+- **Ultra**: refracción, **reflejos recorriendo la pantalla** dentro del shader de la
+  lámina —el SSR de Godot no llega a lo transparente— y **salpicaduras** en las piedras
+  más cerca de la cámara (`SalpicadurasDelRio`, 12 emisores).
+- **El mar** (`agua_mar.gdshader`): oleaje, color por hondura y espuma de orilla desde
+  Medio, rompiente desde Alto y refracción en Ultra, probado con `MAR=30` en el sitio 0.
+
+**Qué decide la espuma, y dónde.** `AguaDelCauce` hornea por vértice la caída aguas abajo
+(el rápido), la orilla, las piedras y la corriente suavizada para dibujar; la partida no
+lo usa. **La línea del agua es 0,5 de la lámina** (`LINEA_DEL_AGUA`): por debajo es ribera
+mojada, no agua.
+
+**La espuma es viva** (`espuma_viva.gdshaderinc`): ruido hecho en el shader, arrastrado en
+dos fases que se cruzan y con un segundo campo que la forma y la deshace. **La estela**
+(`estela_de_piedras.gdshaderinc`) nace en la piedra, se mece, se rompe en manchas que
+bajan con el agua y, en la lámina, lleva grano de burbujas.
+
+**Lo que salió al hacerlo, que es lo que más costó.**
+
+- **Astillas triangulares en la espuma de cerca**: no eran la luz ni la corriente —se
+  vio pintando el ruido sin luz y parado—, sino **el hash del ruido sin precisión**. El
+  río está a miles de metros del origen y en la cuarta octava la celda pasa de diez mil:
+  `fract(p * 456.21)` en 32 bits devolvía pocos valores en rejilla. La celda va módulo 289.
+- **La orilla en dientes de sierra**, con una mancha de espuma en cada punta. Tres causas
+  y tres arreglos: el agua y los cantos subían talud arriba por la humedad interpolada
+  —en una cara empinada ya no—; la lámina trepaba al vértice de tierra —no sube más de
+  25 cm sobre el agua de al lado, `AguaDelCauce.LAMINA_SUBE_M`, y la corta el talud—; y
+  sobre todo **la malla del terreno se partía siempre por la misma diagonal**, que plegaba
+  en picos el pie de un talud que corre en diagonal a la rejilla. Ahora cada cuadro se
+  parte por la diagonal en que el relieve está más recto
+  (`MallaDelTerreno.diagonal_principal`; sólo el dibujo, caché v10). Eso mejora el relieve
+  de todo el mapa, no sólo el río. Montarlo sin caché cuesta unos 2 s más.
+- **Una lámina plana a la cota del agua** se probó y se quitó: en la orilla tendida tocaba
+  el lecho hundido por vértice en escalones de celda (visto en falso color).
+- **El coste de la espuma viva**: calculada en todo píxel de río, Medio llegó a 1,5-4,6 ms.
+  Ahora se calcula sólo donde hay rápido, piedra u orilla; el terreno no la calcula en Alto
+  y Ultra, donde no la pinta; y Bajo y Medio usan dos octavas y la estela reutiliza el
+  ruido del rápido.
+
+**Lo que cuesta**, `AguaCaptura GPU=1` (el agua encendida y apagada en el mismo proceso,
+sitio 56, 1920×1080):
+
+| | rápido | remanso | orilla | arriba | rápido de cerca |
+|---|---|---|---|---|---|
+| Bajo | | | | | 0,86-1,16 |
+| **Medio** | 0,58-0,60 | 0,17-0,38 | 0,48-0,64 | 0,63-0,69 | 1,30-1,38 |
+| Ultra | 1,18 | 2,33 | 1,88 | 1,16 | 5,04 |
+
+Medio, dos corridas; las cuatro primeras columnas, con el código de antes del último
+recorte, que sólo toca la estela. **Medio cuesta 0,2-0,5 ms más que Bajo con el río
+llenando la pantalla, dentro del tope de 1 ms sobre Bajo.** Ultra, una corrida y sin tope
+(decisión del usuario).
+
+**Deuda que queda, dicha.**
+
+- **Bajo ya no es exactamente el río de antes**: la espuma viva se pinta en todos los
+  niveles, y de cerca Bajo cuesta 0,86-1,16 ms de agua, que antes eran 0,37.
+- **Los dientes de roca de los taludes** que quedan en el remanso son del relieve, no del
+  agua.
+- **Si la gente al vadear flota un palmo sobre el lecho hundido** en Alto y Ultra no se ha
+  mirado en captura.
+- **`AguaCaptura` se cierra con un fallo de Godot al salir** (se destruye con el render
+  vivo); las capturas y las medidas salen antes y bien.
+- **`ver_termino`** se queda como depuración del shader del terreno (1-7), y lo que pinta
+  va sin luz, para no confundir un dibujo con un brillo.
+
+---
+
+## 7.4. El clima en pantalla (spec, 2026-09-15)
+
+> **Spec escrita con `/spec` el 2026-09-15**, con las decisiones del usuario. El
+> interruptor, en [INTERFAZ.md](INTERFAZ.md) §8.8. **Lo que el tiempo hace en la
+> partida no cambia**: ya decide lo que cunde la jornada, lo que se anda y hasta dónde
+> se ve (`Weather`); esto es cómo se ve.
+
+### Qué problema cierra
+
+El tiempo del juego existe —orbayu, lluvia, temporal, niebla, nieve— y decide cosas
+importantes, pero **se ve poco**: gotas y copos en una caja que va con la cámara, y
+una niebla de distancia que sube. **La niebla no se ve como niebla**, la nieve no
+cuaja, el suelo no se moja y un temporal tiene la misma luz que un día nublado. El
+jugador se entera del tiempo por el rótulo.
+
+### Lo que se pide
+
+**Sólo en el mapa de la banda** (decisión del usuario): el regional no tiene tiempo
+que dibujar.
+
+- **La lluvia, por intensidad.** Orbayu, lluvia y temporal **distintos**: cuántas
+  gotas, qué tamaño y **cuánto las inclina el viento**. **El suelo y las rocas se
+  mojan** —más oscuros y con brillo— mientras llueve, y **se secan poco a poco** al
+  parar.
+- **La nieve que cuaja.** Además de caer, **el terreno se blanquea** donde nieva,
+  con la **cota de hielo** que ya calcula el termómetro (SISTEMAS §19), y **se quita
+  poco a poco** al acabar.
+- **La niebla de valle.** Nubes bajas **con volumen** que se quedan **en el fondo del
+  valle y no en lo alto**; **bajan la visibilidad sin taparla**: se nota que hay
+  niebla y se sigue viendo el valle. **Cuando la cámara se mete dentro, condensación
+  en la cámara** —la imagen se empaña—, y se quita al salir (decisiones del usuario).
+- **El nublado y el temporal en la luz.** El cielo **y la luz del sol** cambian con el
+  tiempo: **luz plana** con nublado y orbayu, **más oscuro** con temporal. Hoy sólo
+  cambian las nubes del cielo.
+- **Un interruptor «Clima»** en la configuración gráfica (decisión del usuario):
+  **apagado no se dibuja nada del tiempo** —ni partículas, ni niebla de valle, ni
+  suelo mojado, ni nieve cuajada, ni la luz del temporal—; **encendido en todos los
+  niveles salvo Bajo**. Apagado o encendido, **el tiempo sigue haciendo lo que hace**
+  en la partida.
+
+### Criterios de aceptación
+
+- **Cada tiempo tiene su captura**, en el mismo encuadre de la banda: despejado,
+  nublado, orbayu, lluvia, temporal, niebla y nieve, y nieve al día siguiente de
+  parar.
+- **Las tres lluvias se distinguen por cifras**: más partículas y más inclinación de
+  orbayu a lluvia y de lluvia a temporal. Prueba sobre lo que se le pide a la vista.
+- **El suelo se moja y se seca**: lo mojado sube mientras llueve y baja al parar, sin
+  saltos. Prueba sobre el valor que lo lleva, con jornadas construidas.
+- **La nieve cuaja donde hiela**: por encima de la cota de hielo sí y por debajo no,
+  y se va poco a poco al acabar. Prueba con la cota construida.
+- **La niebla de valle es más densa abajo que arriba**: a la cota del fondo del valle
+  hay más que en la cumbre más alta del mapa. Prueba sobre lo que decide la densidad.
+- **La condensación sale sólo con la cámara dentro de la niebla**: dentro sí, encima
+  de la capa no, sin niebla no. Prueba.
+- **Apagado no dibuja nada**: sin partículas, sin niebla de valle, sin mojado ni
+  nieve. Prueba y captura.
+- **No toca la partida**: la firma de una partida es la misma con el clima encendido
+  y apagado. Prueba.
+- **Coste, sin tope** (decisión del usuario): con el tiempo más caro en pantalla —
+  temporal y niebla de valle—, a 1080p, clima sí y no en la misma corrida; se mide y
+  se escribe en la tabla de §7.
+
+### Fuera de alcance
+
+- **El clima en el mapa regional.**
+- **Cambiar qué hace el tiempo en la partida**, o cuándo sale cada uno.
+- **Nieve sobre árboles, obras y personas**, charcos, barro y ríos que crecen.
+- **Rayos, truenos y sonido.**
+- **Niveles del clima**: es un interruptor.
+
+### Plan técnico (2026-09-16)
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+- `Weather` (`sim/`) decide el tiempo **por jornadas**: despejado, nublado, orbayu,
+  lluvia, temporal, niebla y nieve, con `days_running`. La partida lo usa; nada de lo
+  que sigue lo toca.
+- `WeatherView` (`vista/`) pinta hoy: lluvia y nieve con `GPUParticles3D` en una caja de
+  200 m que va con la cámara, **la misma lluvia para orbayu, lluvia y temporal** salvo
+  la cantidad; una bruma de pantalla que cierra los bordes; y la niebla del entorno algo
+  más densa. `DemoMain._sync_weather` le pasa el tiempo y también las nubes del cielo
+  (`WorldEnvironmentSetup.nubes_por_el_tiempo`).
+- **La luz** la lleva `WorldEnvironmentSetup`: `_place_sun` pone la energía del sol por
+  la hora y `_update_ambient` la del ambiente. El tiempo no la toca.
+- **La cota de hielo** es `Termometro.cota_de_hielo(estación)`, y `Temporada` ya la pasa
+  al shader del terreno como `snow_min_height` —la nieve **de la estación**, en fracción
+  del relieve (`Temporada.fraccion_de`)—.
+- **El terreno** es `shaders/triplanar.gdshader` con sus capas; las peñas sueltas, los
+  MultiMesh de `ResourceProps` y `PiedrasDelRio`.
+- No hay interruptor «Clima» en `Configuracion`.
+
+**Módulos afectados.**
+
+1. **`Configuracion` y la ventana**: el ajuste `clima`, encendido en Medio, Alto y Ultra y
+   apagado en Bajo, y la casilla en la pestaña Gráficos (INTERFAZ §8.8).
+2. **`ClimaEnPantalla` (`vista/`, nuevo)**: **lo que se le pide a la vista**, sin nodos, para
+   probarlo sin ventana. Una tabla por tiempo —partículas, tamaño e inclinación de la
+   lluvia; si hay niebla de valle; energía del sol, opacidad de las sombras y ambiente— y
+   **el suelo**: `mojado` y `nieve` de 0 a 1, que avanzan **por horas de juego**
+   (`una_hora(tiempo)`) y se asientan al montar el mapa (`asentar(tiempo, días)`).
+3. **`WeatherView`**: la lluvia y la nieve por la tabla, inclinadas por un viento que la
+   vista elige; el suelo avanza con `SettlementSim.hour_passed` y se suaviza por cuadro;
+   y **apagado no dibuja nada** (`aplicar_configuracion`, grupo de la configuración).
+4. **El terreno y las peñas**: `triplanar.gdshader` gana `clima_mojado` —más oscuro y con
+   brillo— y `clima_nieve` con `clima_cota_de_nieve` —blanco encima de la cota, más en lo
+   llano—. La cota sale de **la misma cuenta de `Temporada`** pasada a altura del mundo, no
+   de otra. Las peñas llevan un `material_overlay` (`clima_encima.gdshader`) que lee lo
+   mismo.
+5. **`NieblaDeValle` (`vista/`, nuevo)**: una caja sobre el valle con un shader que avanza
+   por dentro (`niebla_de_valle.gdshader`), ruido 3D que se mueve con el reloj de la
+   partida, y cortado por la profundidad. **El fondo del valle** se hornea al montar: por
+   celda, la cota más baja en unos cientos de metros, suavizada; la densidad cae con la
+   altura sobre ese fondo. La densidad **sólo decide en GDScript lo que la prueba mira**
+   —fondo y perfil—, y el shader los recibe como textura y uniformes.
+6. **La condensación**: una capa de pantalla que empaña —desenfoque y gotas finas— cuando
+   la cámara está **dentro** de la niebla (`NieblaDeValle.dentro(punto)`), entrando y
+   saliendo en un segundo.
+7. **La luz del tiempo**: `WorldEnvironmentSetup.luz_por_el_tiempo(tiempo)` multiplica la
+   energía del sol, la opacidad de las sombras y el ambiente que ya pone la hora, con
+   transición. Apagado el clima, factores a uno.
+8. **`ClimaCaptura` (`tests/`, nueva)**: los ocho encuadres de la spec y el coste.
+
+**Decisiones que tomo, y se dicen.**
+
+- **El suelo mojado y la nieve viven en la vista**, no en la partida: al cargar o entrar en
+  un mapa se asientan por el tiempo que hace y los días que lleva (`asentar`). Guardarlos
+  sería meter vista en la instantánea.
+- **Ritmos del suelo** (se miran en captura): el orbayu moja hasta 0,6 en unas seis horas,
+  la lluvia del todo en tres y el temporal en una; seca en unas dieciocho horas. La nieve
+  cuaja en unas ocho horas y se va en unos dos días.
+- **La niebla de valle, sólo con NIEBLA**, unos 60 m de espesor sobre el fondo que se
+  apagan hacia los 120 m. **La bruma de los bordes se queda para la niebla**, más suave,
+  porque la de valle ya quita visibilidad.
+- **El viento de la lluvia** lo sortea la vista por jornada, con el día como semilla: no
+  sale del `_rng` de la partida, que no debe consumirse para dibujar (SPECS §3.3).
+- **Las peñas se mojan y se nievan; los árboles, obras y personas, no** (fuera de alcance).
+
+**Orden de dependencias.** El interruptor y la tabla primero, porque todo lo lee; las
+partículas y el suelo antes que el shader que los pinta; el fondo del valle antes que la
+niebla y la condensación; la luz aparte; las capturas y el coste al final, con todo.
+
+**Qué contrato cambia**: ninguno. Es vista (SPECS §4.7): lee `Weather` y la hora, no
+escribe en la partida, y avanza con `hour_passed` (SPECS §3.2, invariante 4).
+
+**Riesgos técnicos.**
+
+- **La nieve cuajada y la de la estación usan la misma cota**: en invierno, lo alto ya sale
+  blanco por `snow_min_height`, y la nevada tiene que notarse encima —cubre todas las capas
+  y baja por las laderas tendidas—. Se mira en captura.
+- **Una regla en dos sitios**: la cota y el perfil de la niebla se calculan en GDScript y se
+  pintan en el shader; se pasan como uniformes y textura para que el shader no repita la
+  cuenta.
+- **La niebla que avanza por dentro** cuesta por píxel de pantalla que la cruza: con el valle
+  lleno, varios ms. Sin tope, pero se mide y se escribe.
+- **La cámara de gestión va alta**: dentro de la niebla sólo se entra acercándose. La
+  captura de la condensación se hace metiendo la cámara.
+
+### Cómo quedó (2026-09-16)
+
+**Qué se ve con el clima encendido**, en el mapa de la banda:
+
+- **La lluvia por intensidad** (`WeatherView` con la tabla de `ClimaEnPantalla`): orbayu
+  3 000 gotas de 3 cm inclinadas 8°, lluvia 8 000 de 6 cm y 16°, temporal 16 000 de 8 cm y
+  38°, soplando desde un viento que la vista elige por jornada. La gota va alineada a su
+  caída en dos tiras cruzadas, en una caja de 140 m de lado a la altura de la cámara. El
+  orbayu apenas se ve, que es lo que es.
+- **El suelo mojado y la nieve que cuaja**: `ClimaEnPantalla` los lleva por horas de juego
+  —el orbayu moja a 0,6 en seis horas, la lluvia del todo en tres, el temporal en una; seca
+  en dieciocho; la nieve cuaja en ocho y se va en dos días— y `WeatherView` los pinta en el
+  terreno (`clima_mojado`, `clima_nieve`, con la cota de `Temporada`) y encima de las peñas
+  (`clima_encima.gdshader`). Nieva encima de la cota de hielo y en lo tendido, y no sobre el
+  agua. No se guardan: al entrar en el mapa se asientan por el tiempo que hace.
+- **La niebla de valle** (`NieblaDeValle`, `niebla_de_valle.gdshader`): una caja que se
+  recorre en 28 pasos con un ruido 3D, entera hasta 60 m sobre el fondo del valle horneado y
+  apagada a 120, con un tope del 65 %. Sólo con niebla; la bruma de los bordes baja con ella
+  de 0,8 a 0,35.
+- **El agua en la cámara**, al meterla en la niebla: gotas sueltas sobre la lente, cada una
+  una lente que ve la escena del revés, con el borde oscuro y un brillo, sobre un fondo casi
+  limpio (`gotas_en_la_camara.gdshader`).
+- **La luz del tiempo** (`WorldEnvironmentSetup.luz_por_el_tiempo`): factores sobre el sol,
+  las sombras y el ambiente —plana con nublado, orbayu y niebla; oscura con temporal—.
+- **Apagado no dibuja nada** de lo anterior, y el suelo sigue contando horas.
+
+**Lo que cuesta**, `ClimaCaptura`, 1080p, clima sí y no alternando en la misma corrida,
+mínimo de tres vueltas, tres corridas: **temporal +0,13 a +0,17 ms, niebla de valle +1,48 a
++1,72 ms**. Sin tope (decisión del usuario).
+
+**Lo que salió al hacerlo.**
+
+- **La lluvia no se había visto nunca.** La caja de partículas iba a cota cero, bajo el
+  relieve real; subida a la cámara, su caja de visibilidad quedaba por encima de lo que se
+  mira y Godot descartaba la lluvia entera. La pista fue **el coste: cero con temporal**.
+- **Con 400 m de lado se veían cuatro rayas**, y las gotas que pasaban pegadas a la cámara
+  eran barras: caja de 140 m y gotas que se apagan a menos de 12 m.
+- **La primera niebla tapaba el fondo del valle** en blanco: menos extinción y un tope.
+- **El primer efecto de agua en la cámara** era un desenfoque gris con motas, y el usuario
+  lo rechazó con una imagen de referencia («el que tenemos es horroroso»): se rehízo como
+  gotas que hacen de lente. Pendiente de su visto bueno.
+- **Las pruebas del clima heredaban el ajuste de otra suite** (Bajo, apagado): pasaban solas
+  y fallaban en la suite entera. Ahora lo ponen ellas.
+
+**Deuda que queda, dicha.**
+
+- **La nieve de la estación y la del tiempo usan la misma cota**: en invierno lo alto ya es
+  blanco, y la nevada se nota sobre todo bajando por lo tendido.
+- **La lluvia se lee cerca de la cámara**: desde la altura de gestión son rayas sueltas, y
+  el temporal se lee más por la luz que por el agua.
+- **Lo mojado se ve poco** en la captura de gestión: más oscuro, y el brillo depende del sol,
+  que con lluvia está bajo mínimos.
+
+---
+
+### Depurar del 2026-09-16: la lluvia con el zoom, y las gotas en el agua
+
+**La lluvia desaparecía al mover la cámara** —«desaparece un momento, y después a veces
+se reinicia, pero lejos, y saliendo sólo de un cuadrado»—. Dos causas:
+
+- **Las gotas nacían en coordenadas de mundo** y la caja seguía a la cámara: al moverse,
+  las que ya caían se quedaban atrás y las nuevas nacían en otro sitio. Ahora viajan
+  con la caja (`local_coords`).
+- **La caja medía 70 m siempre**, y desde lejos se veía entera: un cuadrado de lluvia en
+  medio del valle. Ahora crece con la órbita —88 m a 80 m de órbita, 264 m a 240, tope de
+  320—, con más gotas y algo más grandes para que en pantalla se lea igual, y su caja de
+  visibilidad va con ella (si se queda corta, Godot descarta la lluvia entera).
+
+Y las gotas pegadas al ojo se apagan ahora antes de 8 m y no de 3: salían como barras
+blancas cruzando la pantalla. Comprobado con `ClimaCaptura SOLO=zoom` a tres zooms.
+
+**Las gotas en el agua** (petición del usuario): anillos que nacen, crecen y se apagan,
+en la lámina del río y en el mar (`gotas_en_el_agua.gdshaderinc`, común a los dos). Una
+gota cada metro y medio, en dos capas de escala distinta para que no se lea la rejilla, y
+la cresta del anillo clara: **sin ella no se veían** —la primera captura enseñaba unas
+culebrillas que, comparando con la misma agua sin lluvia, resultaron ser la espuma de
+orilla de siempre—. Lo que pica sale de la lluvia que cae ahora (`WeatherView.lluvia_vista`),
+no de lo mojado del suelo: para de llover y los anillos se van en dos segundos.
 
 ---
 
@@ -1094,3 +1788,7 @@ Las tres reglas que salen de ahí:
 Edificios y cabañas, agua avanzada, clima visible y ciclo día/noche. Cada uno es
 su propio trabajo, **y meterlos aquí es exactamente cómo un revamp se convierte
 en un proyecto que no termina**.
+
+> **El agua y el clima salieron de esta lista el 2026-09-15**: el usuario los pidió
+> como trabajos propios, cada uno con su spec —§7.3 y §7.4—, que es justo lo que esta
+> lista pedía de ellos. Siguen fuera los edificios y el ciclo día/noche.

@@ -324,7 +324,7 @@ func _niveles(demo: Node, vp: RID) -> void:
 func _arboles(montar_desde: int) -> void:
 	var demo: Node = null
 	var bosque: Forest = null
-	# Con tope de reloj: con la distancia «sin límite» el bosque puede no acabar de
+	# Con tope de reloj: con la distancia muy larga el bosque puede no acabar de
 	# montarse en un tiempo razonable, y eso también es la medida.
 	for _i in range(100000):
 		await process_frame

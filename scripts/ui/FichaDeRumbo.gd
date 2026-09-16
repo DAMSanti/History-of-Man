@@ -1,32 +1,47 @@
 class_name FichaDeRumbo
 extends PanelContainer
-## La ficha para mandar una expedición hacia un rumbo: quién va, cuántas jornadas
-## y lo que cuesta, escrito antes de confirmar.
+## La ficha para mandar una expedición: hacia cuál de los ocho rumbos, quién va,
+## cuántas jornadas y lo que cuesta, escrito antes de confirmar.
 ##
-## INTERFAZ §4, «El rumbo de la expedición»; el mecanismo, SISTEMAS §4. La usan el
-## mapa regional y el valle, con la misma ficha. **Aquí no se cuenta nada**: el
-## coste es [Expedicion.hace_falta_para], quién puede ir es [Expedicion.puede_ir],
-## el pasillo es [Expedicion.pasillo_hacia] y quien manda es [Expedicion.mandar_a].
+## INTERFAZ §4; el mecanismo, SISTEMAS §4. Se abre en el mapa regional, con la R o
+## viniendo del botón «Rumbo» del valle. **Aquí no se cuenta nada**: los rumbos son
+## [Expedicion.rumbos_posibles], el coste [Expedicion.hace_falta_para], quién puede ir
+## [Expedicion.puede_ir], el motivo [Expedicion.motivo_para], el pasillo
+## [Expedicion.pasillo_hacia] y quien manda [Expedicion.mandar_a].
+##
+## **Desde el 2026-09-16 el rumbo no se pincha**: es uno de ocho botones, apagados los
+## que no tienen nada al alcance (decisión del usuario del 2026-09-15).
 
 ## Cambió lo que se va a recorrer: la flecha se rehace con este pasillo.
 signal cambiada(pasillo: Pasillo)
-## Se ha mandado, o se ha cancelado: quien la abrió la quita.
-signal cerrada(mandada: bool)
+## Se ha mandado, o se ha cancelado; y si se manda desde el valle, si se vuelve a él.
+## Quien la abrió la quita.
+signal cerrada(mandada: bool, volver_al_valle: bool)
 
 const ANCHO := 380
 const ALTO_DE_LA_LISTA := 240
+
+## Los ocho rumbos como se ven en la rosa, fila a fila: el centro, vacío.
+const ROSA: Array[float] = [315.0, 0.0, 45.0, 270.0, -1.0, 90.0, 225.0, 180.0, 135.0]
+const LETRAS := {0.0: "N", 45.0: "NE", 90.0: "E", 135.0: "SE", 180.0: "S",
+	225.0: "SO", 270.0: "O", 315.0: "NO"}
 
 var sim: SettlementSim = null
 var rumbo: float = 0.0
 var jornadas: int = Expedicion.JORNADAS_PROPUESTAS
 var marcados: Array[int] = []
+## Los rumbos que se ofrecen, calculados al abrir: ocho pasillos largos, unos 30 ms
+## desde la cueva de casa (SISTEMAS §4). Se rehacen al volver a abrirla.
+var posibles: Array[float] = []
+## Si se abrió viniendo del botón del valle: entonces se elige volver o quedarse.
+var desde_el_valle := false
 var _de_donde: String = ""
 var _columna: VBoxContainer = null
 
 
-## Abre la ficha para la simulación de un campamento hacia un rumbo. Marca de
-## entrada a los primeros que pueden ir, para que mandar sea un clic.
-func abrir(para: SettlementSim, hacia: float, nombre: String) -> void:
+## Abre la ficha para la simulación de un campamento. Marca de entrada a los primeros
+## que pueden ir, para que mandar sea un clic, y apunta al primer rumbo que se ofrece.
+func abrir(para: SettlementSim, nombre: String, viene_del_valle: bool = false) -> void:
 	if sim != para:
 		marcados.clear()
 		for persona: Inhabitant in para.people:
@@ -36,12 +51,20 @@ func abrir(para: SettlementSim, hacia: float, nombre: String) -> void:
 				marcados.append(persona.id)
 	sim = para
 	_de_donde = nombre
-	apuntar(hacia)
+	desde_el_valle = viene_del_valle
+	posibles = para.expedicion.rumbos_posibles()
+	if not posibles.is_empty() and not posibles.has(rumbo):
+		rumbo = posibles[0]
+	_pintar()
+	cambiada.emit(pasillo())
 
 
-## Cambia el rumbo sin tocar a quién va ni cuántas jornadas.
+## Cambia el rumbo sin tocar a quién va ni cuántas jornadas. Sólo a uno que se ofrece.
 func apuntar(hacia: float) -> void:
-	rumbo = fposmod(hacia, 360.0)
+	var grados := fposmod(hacia, 360.0)
+	if not posibles.has(grados):
+		return
+	rumbo = grados
 	_pintar()
 	cambiada.emit(pasillo())
 
@@ -62,35 +85,47 @@ func marcar(id: int, puesto: bool) -> void:
 	_pintar()
 
 
-## El pasillo que se recorrería con lo elegido. Es el de la flecha.
+## El pasillo que se recorrería con lo elegido, o null sin rumbo que se ofrezca. Es el
+## de la flecha.
 func pasillo() -> Pasillo:
-	return sim.expedicion.pasillo_hacia(rumbo, jornadas) if sim != null else null
+	if sim == null or not posibles.has(rumbo):
+		return null
+	return sim.expedicion.pasillo_hacia(rumbo, jornadas)
+
+
+## Los pasillos más largos de los demás rumbos que se ofrecen, para que la flecha
+## enseñe hacia dónde más se puede ir.
+func los_otros_rumbos() -> Array[Pasillo]:
+	var otros: Array[Pasillo] = []
+	if sim == null:
+		return otros
+	for hacia: float in posibles:
+		if hacia != rumbo:
+			var largo := sim.expedicion.pasillo_hacia(hacia, Pasillo.JORNADAS_MAXIMAS)
+			if largo != null:
+				otros.append(largo)
+	return otros
 
 
 ## Por qué no se puede mandar, o vacío. Lo mismo que comprueba [Expedicion.mandar_a].
 func bloqueo() -> String:
 	if sim == null:
 		return "no hay campamento"
-	if sim.expedicion.en_marcha():
-		return "ya hay una expedición fuera"
+	if posibles.is_empty():
+		return "no queda nada por descubrir al alcance de una expedición"
 	var pueden := 0
 	for persona: Inhabitant in sim.people:
 		if marcados.has(persona.id) and sim.expedicion.puede_ir(persona):
 			pueden += 1
-	if pueden < Expedicion.MINIMO_PARA_SALIR:
-		return "hacen falta %d adultos que puedan ir" % Expedicion.MINIMO_PARA_SALIR
-	var falta := sim.expedicion.lo_que_falta(pueden, jornadas)
-	if not falta.is_empty():
-		return "falta " + ", ".join(falta)
-	return ""
+	return sim.expedicion.motivo_para(pueden, jornadas)
 
 
-func mandar() -> bool:
+func mandar(volver_al_valle: bool = false) -> bool:
 	if sim == null or not bloqueo().is_empty():
 		return false
 	var salio := sim.expedicion.mandar_a(marcados, rumbo, jornadas)
 	if salio:
-		cerrada.emit(true)
+		cerrada.emit(true, volver_al_valle)
 	return salio
 
 
@@ -129,9 +164,11 @@ func _pintar() -> void:
 		return
 
 	_rotulo("EXPEDICIÓN DESDE %s" % _de_donde.to_upper(), 13, UISkin.OCHRE)
+	_pintar_la_rosa()
 	var recorrido := pasillo()
-	_rotulo("Hacia el %s · %.0f km de ida" % [Expedicion.nombre_del_rumbo(rumbo),
-		recorrido.largo_m / 1000.0 if recorrido != null else 0.0], 12, UISkin.INK)
+	if recorrido != null:
+		_rotulo("Hacia el %s · %.0f km de ida" % [Expedicion.nombre_del_rumbo(rumbo),
+			recorrido.largo_m / 1000.0], 12, UISkin.INK)
 
 	_rotulo("Quién va:", 11, UISkin.INK_SOFT)
 	var desplazable := ScrollContainer.new()
@@ -190,15 +227,48 @@ func _pintar() -> void:
 	var botones := HBoxContainer.new()
 	botones.add_theme_constant_override("separation", 8)
 	_columna.add_child(botones)
-	var mandar_boton := Button.new()
-	mandar_boton.text = "Mandar"
-	mandar_boton.disabled = not motivo.is_empty()
-	mandar_boton.pressed.connect(func() -> void: mandar())
-	botones.add_child(mandar_boton)
+	# DESDE EL VALLE SE ELIGE ADÓNDE SE VUELVE (SISTEMAS §4, punto 3, decisión del
+	# usuario); desde el regional con la R se queda en el regional.
+	var textos := ["Mandar y volver al valle", "Mandar y quedarse"] if desde_el_valle else ["Mandar"]
+	for i in range(textos.size()):
+		var mandar_boton := Button.new()
+		mandar_boton.text = textos[i]
+		mandar_boton.disabled = not motivo.is_empty()
+		var volver := desde_el_valle and i == 0
+		mandar_boton.pressed.connect(func() -> void: mandar(volver))
+		botones.add_child(mandar_boton)
 	var cancelar := Button.new()
 	cancelar.text = "Cancelar"
-	cancelar.pressed.connect(func() -> void: cerrada.emit(false))
+	cancelar.pressed.connect(func() -> void: cerrada.emit(false, false))
 	botones.add_child(cancelar)
+
+
+## La rosa de los ocho rumbos: apagados los que no tienen nada al alcance, y marcado el
+## elegido.
+func _pintar_la_rosa() -> void:
+	var rosa := GridContainer.new()
+	rosa.columns = 3
+	rosa.add_theme_constant_override("h_separation", 4)
+	rosa.add_theme_constant_override("v_separation", 4)
+	_columna.add_child(rosa)
+	for hacia: float in ROSA:
+		if hacia < 0.0:
+			var centro := Label.new()
+			centro.text = "·"
+			centro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			rosa.add_child(centro)
+			continue
+		var boton := Button.new()
+		boton.text = LETRAS[hacia]
+		boton.custom_minimum_size = Vector2(44, 26)
+		boton.toggle_mode = true
+		boton.button_pressed = posibles.has(hacia) and hacia == rumbo
+		boton.disabled = not posibles.has(hacia)
+		boton.tooltip_text = ("Hacia el %s" % Expedicion.nombre_del_rumbo(hacia)) if posibles.has(hacia) \
+			else "Hacia el %s no queda nada al alcance" % Expedicion.nombre_del_rumbo(hacia)
+		# Diferido, como las casillas: repintar borra el botón que emite.
+		boton.pressed.connect(func() -> void: apuntar.call_deferred(hacia))
+		rosa.add_child(boton)
 
 
 func _rotulo(texto: String, letra: int, color: Color) -> void:

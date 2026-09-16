@@ -50,11 +50,6 @@ var _de_visita_con_reloj := false
 ## Si la escena volcó una partida guardada: detrás van los demás campamentos.
 var _retomada := false
 
-## Mandar una expedición hacia un rumbo desde el valle: si el clic es un rumbo, la
-## ficha y la flecha. Ver [FichaDeRumbo] y SISTEMAS §4.
-var _apuntando := false
-var _ficha_de_rumbo: FichaDeRumbo = null
-var _flecha: FlechaDeRumbo = null
 
 ## Referencias a nodos. `terrain`, `sim`, `field`, `knowledge`, `herds`, `tech` y
 ## `_caves` son del campamento: aqui se guardan para no reescribir la vista.
@@ -545,6 +540,18 @@ func _levantar_marcadores() -> void:
 	weather_view.name = "Tiempo"
 	add_child(weather_view)
 	weather_view.setup(camera, _find_environment())
+	weather_view.pintar_el_suelo_en(terrain, sim.temporada)
+	# La niebla de valle, horneada sobre este relieve (GRAFICOS §7.4).
+	var niebla_de_valle := NieblaDeValle.new()
+	add_child(niebla_de_valle)
+	niebla_de_valle.montar(terrain)
+	weather_view.niebla = niebla_de_valle
+
+	# Las salpicaduras de los rápidos, en Ultra: unos pocos emisores cerca de la cámara.
+	# GRAFICOS §7.3.
+	var salpicaduras := SalpicadurasDelRio.new()
+	add_child(salpicaduras)
+	salpicaduras.setup(terrain, camera)
 
 	# La capa que ensena lo que el juego considera intransitable. Apagada por
 	# defecto: es una herramienta de mirar por dentro, no una capa de partida.
@@ -565,6 +572,11 @@ func _levantar_vegetacion() -> void:
 	for cave: CaveMouth in _caves:
 		props.bocas.append(cave.pick_position())
 	await props.setup(terrain, field)
+	# Las piedras que asoman en los rápidos, con las peñas de la misma biblioteca. Vista:
+	# no tocan la partida. GRAFICOS §7.3.
+	var piedras := PiedrasDelRio.new()
+	add_child(piedras)
+	piedras.setup(terrain, props._library)
 
 	# LA HIERBA VA APAGADA, y es una decisión, no un descuido.
 	#
@@ -955,10 +967,8 @@ func _dejar_la_escena() -> void:
 		else:
 			print("NO se ha podido guardar: %s" % fallo)
 	# EL CAMPAMENTO SALE DE LA ESCENA, NO DE LA PARTIDA: sigue simulando fuera del
-	# árbol. Ver [Campamentos.dejar_de_mirar].
-	if Campamentos.vivos.has(campamento):
-		remove_child(campamento)
-		Campamentos.dejar_de_mirar(campamento)
+	# árbol. Ver [Campamentos.soltar_de_la_escena].
+	Campamentos.soltar_de_la_escena(self, campamento)
 
 
 ## Vuelca la partida guardada sobre la escena recién montada.
@@ -1150,51 +1160,28 @@ func _on_tecnica_aprendida(gained: int) -> void:
 		ui.show_tech_milestone(gained as TechTree.Tech)
 
 
-## Empieza a apuntar el rumbo de una expedición. En una visita no hay quien salga.
-func empezar_a_apuntar() -> void:
-	if sim == null or Expedition.visita or sim.people.is_empty():
+## Mandar una expedición: el botón «Rumbo» lleva al mapa regional, con la pantalla de
+## carga, y allí se abre la ficha para este campamento (SISTEMAS §4, spec del
+## 2026-09-15). **Hasta el 2026-09-16 se pinchaba un rumbo en el valle**, y el botón
+## sólo escribía una línea en la crónica: visto por el usuario, «no hacía nada». El
+## botón está apagado mientras no pueda salir la más corta ([Minimapa.refrescar_el_rumbo]),
+## y aquí se vuelve a mirar por si cambió entre el refresco y el clic.
+func mandar_expedicion() -> void:
+	if sim == null or Expedition.visita or campamento == null or campamento.sitio == null:
 		return
-	_apuntando = true
-	sim._note(Chronicle.Kind.HALLAZGO,
-		"Pincha en el valle hacia dónde sale la expedición.", 0)
-
-
-## El rumbo hacia un punto del valle, desde la cueva: el este es +x y el norte, −z.
-func _apuntar_a(punto: Vector3) -> void:
-	var rumbo := rad_to_deg(atan2(punto.x - sim.home_position.x,
-		-(punto.z - sim.home_position.z)))
-	if _flecha == null:
-		_flecha = FlechaDeRumbo.new()
-		_flecha.name = "FlechaDeRumbo"
-		add_child(_flecha)
-	if _ficha_de_rumbo == null:
-		_ficha_de_rumbo = FichaDeRumbo.new()
-		_ficha_de_rumbo.name = "FichaDeRumbo"
-		# El pasillo no cabe en el valle: la flecha va de la cueva a la puerta
-		# por la que saldrían. Ver [Expedicion.puerta_del_valle].
-		_ficha_de_rumbo.cambiada.connect(func(_recorrido: Pasillo) -> void:
-			_flecha.trazar_rumbo(terrain, sim.home_position,
-				sim.expedicion.puerta_del_valle(_ficha_de_rumbo.rumbo)))
-		_ficha_de_rumbo.cerrada.connect(_cerrar_el_rumbo)
-		ui.add_child(_ficha_de_rumbo)
-		_ficha_de_rumbo.abrir(sim, rumbo, campamento.nombre())
-	else:
-		_ficha_de_rumbo.apuntar(rumbo)
-
-
-func _cerrar_el_rumbo(_mandada: bool) -> void:
-	_apuntando = false
-	if _ficha_de_rumbo != null:
-		_ficha_de_rumbo.queue_free()
-		_ficha_de_rumbo = null
-	if _flecha != null:
-		_flecha.queue_free()
-		_flecha = null
+	if not sim.expedicion.por_que_no_sale().is_empty():
+		return
+	Expedition.ficha_de_rumbo_desde = campamento.sitio.id
+	_return_to_region()
 
 
 ## La simulación de una visita se suelta del reloj al irse: la escena la libera, y
 ## el reloj le daría la vuelta a un objeto liberado.
+##
+## Y el campamento se suelta aunque la escena se vaya sin pasar por [_dejar_la_escena]:
+## si no, se libera con ella. Ver [Campamentos.soltar_de_la_escena].
 func _exit_tree() -> void:
+	Campamentos.soltar_de_la_escena(self, campamento)
 	if _de_visita_con_reloj and Campamentos.reloj != null \
 			and is_instance_valid(Campamentos.reloj):
 		Campamentos.reloj.soltar(sim)
@@ -1262,6 +1249,7 @@ func _process(_delta: float) -> void:
 		Cronometro.tramo("cada 15: panel de banda + minimapa")
 		_update_band_panel()
 		minimapa._update_minimap()
+		minimapa.refrescar_el_rumbo()
 		_refresh_debug_label()
 		# El tiempo cambia por horas de juego, no por fotogramas: mirarlo
 		# cuatro veces por segundo va sobrado, y la capa corta sola si no ha
@@ -1470,13 +1458,6 @@ func _unhandled_input(event: InputEvent) -> void:
 ## estan mas cerca de la camara; y el suelo desnudo va el ultimo, para que el
 ## clic sea un verbo en todas partes.
 func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
-	# APUNTANDO, el clic es el rumbo de la expedición y nada más.
-	if _apuntando:
-		var punto := _pick_ground(event.position)
-		if punto != Vector3.INF:
-			_apuntar_a(punto)
-		get_viewport().set_input_as_handled()
-		return
 	# Un clic en cualquier otro sitio borra el camino pintado: si no, se
 	# quedan lineas de gente que ya ha llegado
 	if paraje_markers:
@@ -1582,10 +1563,6 @@ func _tecla(event: InputEventKey) -> void:
 			# ventana y abrir el menú son dos pulsaciones distintas a
 			# propósito: con una sola, salir del juego estaría a un ESC de
 			# distancia de mirar el almacén.
-			if _ficha_de_rumbo != null:
-				_cerrar_el_rumbo(false)
-				get_viewport().set_input_as_handled()
-				return
 			if menu_del_juego != null and menu_del_juego.esta_abierto():
 				menu_del_juego.cerrar()
 			elif ui and ui.close_topmost():
@@ -1677,12 +1654,19 @@ func _pick_ground(screen: Vector2) -> Vector3:
 ## fichero no deberia depender de en que rama acabe colgado.
 func _sync_weather() -> void:
 	if weather_view and sim and sim.weather:
+		# Las horas antes que el tiempo: el viento de hoy lo pone al contar.
+		weather_view.contar_horas(sim.day, sim.hour, sim.weather.kind)
 		weather_view.show_weather(sim.weather.kind)
 		# Y el cielo: las nubes que se ven arriba son las del tiempo que hace,
 		# no una decoración aparte. Ver [WorldEnvironmentSetup.nubes_por_el_tiempo].
 		var entorno := _first_world_environment(get_tree().root)
 		if entorno != null and entorno.get_parent() != null 				and entorno.get_parent().has_method("nubes_por_el_tiempo"):
 			entorno.get_parent().call("nubes_por_el_tiempo", int(sim.weather.kind))
+			# Y la luz del tiempo (GRAFICOS §7.4), si el clima se dibuja.
+			if bool(Configuracion.graficos.get("clima", true)):
+				entorno.get_parent().call("luz_por_el_tiempo", int(sim.weather.kind))
+			else:
+				entorno.get_parent().call("luz_sin_clima")
 
 
 func _find_environment() -> Environment:

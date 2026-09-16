@@ -81,6 +81,11 @@ const FUERA := {
 	# Lo descubierto que espera a la barrera: se vacía al final de cada paso, así
 	# que en `paso_cerrado` va siempre vacío salvo a mitad de la vuelta del reloj.
 	"descubrimientos": true,
+	"avistamientos": true,
+	# Las tres cumbres más altas: caché del relieve, sale igual al cargar. Ver
+	# [Cumbres.tres_mas_altas].
+	"_mas_altas": true,
+	"_mas_altas_buscadas": true,
 	"niebla_por_levantar": true,
 	# Las decisiones que esperan a la barrera, y si se está dentro de un paso: lo
 	# mismo, se vacían al acabar la vuelta del reloj.

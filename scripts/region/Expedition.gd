@@ -52,6 +52,14 @@ static func is_active() -> bool:
 	return site != null and not heightmap_path.is_empty()
 
 
+## El campamento —por el id de su sitio— para el que el mapa regional tiene que abrir la
+## ficha de la expedición al montarse, o -1. Lo deja el botón «Rumbo» del valle
+## (SISTEMAS §4, spec del 2026-09-15: «el botón lleva al regional con la ficha
+## abierta»). **No lo borra [clear]**: el valle lo deja justo antes de limpiar el
+## traspaso para irse.
+static var ficha_de_rumbo_desde: int = -1
+
+
 static func clear() -> void:
 	visita = false
 	site = null

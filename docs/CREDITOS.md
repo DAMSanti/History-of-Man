@@ -144,6 +144,23 @@ silvestre, abedul, roble y avellano, y el usuario decidió generarlos (2026-09-1
   | Avellano, copa en otoño | [20171114Corylus avellana2](https://commons.wikimedia.org/wiki/File:20171114Corylus_avellana2.jpg) | AnRo0002 | CC0 |
   | Avellano, corteza | [Corylus avellana bark](https://commons.wikimedia.org/wiki/File:Corylus_avellana_bark.jpg) | MurielBendel | CC BY-SA 4.0 |
 
+## Agua del valle: las fotos de referencia (GRAFICOS §7.3)
+
+Con las que se compara el agua del juego para darla por buena —**lo decide el usuario
+mirándolas al lado de las capturas**—. **Las fotos no están en el repositorio**: se
+bajan a `user://referencias/agua/` con su ficha (`fuentes.json`: título, página, autor y
+licencia). Todas de Wikimedia Commons, bajadas el 2026-09-15:
+
+| Qué enseña | Foto | Autor | Licencia |
+|---|---|---|---|
+| remanso con salto | [Cascadas del Río Nansa en Camijanes](https://commons.wikimedia.org/wiki/File:Cascadas_del_R%C3%ADo_Nansa_en_Camijanes.jpg) | Jose Angel García | CC BY-SA 4.0 |
+| remanso y orilla de cantos | [Río Nansa](https://commons.wikimedia.org/wiki/File:R%C3%ADo_Nansa.jpg) | Jose Angel García | CC BY-SA 4.0 |
+| rápido somero | [Rio Saja en Saja](https://commons.wikimedia.org/wiki/File:Rio_Saja_en_Saja.jpg) | Obregón | CC BY-SA 4.0 |
+| rápido | [Rio Pas 1](https://commons.wikimedia.org/wiki/File:Rio_Pas_1.jpg) | Emilio Gómez Fernández | CC BY-SA 4.0 |
+| ría | [Ría de Tina Menor (Val de San Vicente, Cantabria) 04](https://commons.wikimedia.org/wiki/File:R%C3%ADa_de_Tina_Menor_(Val_de_San_Vicente,_Cantabria)_04.jpg) | Rondador | CC BY-SA 3.0 |
+| costa | [Ría de Tina Menor (Val de San Vicente, Cantabria) 07](https://commons.wikimedia.org/wiki/File:R%C3%ADa_de_Tina_Menor_(Val_de_San_Vicente,_Cantabria)_07.jpg) | Rondador | CC BY-SA 3.0 |
+| desde arriba | [Vista del río Pas](https://commons.wikimedia.org/wiki/File:Vista_del_r%C3%ADo_Pas.jpg) | Jesús Gómez Fernández | CC BY 4.0 |
+
 ## Arte parietal: los motivos de la pared
 
 Las figuras que se pintan en la pared de la cueva (SISTEMAS §13) son **calcos**:
@@ -174,6 +191,62 @@ derechos.
 2026-09-15, ni un calco ni una foto libre de un uro de las cuevas de la región;
 el de Lascaux es del mismo Magdaleniense. Si aparece uno cantábrico, se cambia la
 línea de `calcar_motivos.py` y se vuelve a calcar.
+
+## Iconos de material: los prompts para regenerarlos
+
+`textures/items/materia_*.png`, 512×512, **generados con IA**. Son lo que pinta la fila
+y la ficha de cada paraje (`MateriaIcon.for_materia`), y a veinte píxeles.
+
+**Lo que se vio al mirarlos el 2026-09-16**: no casan entre sí —la piedra lleva un
+marco fino de pizarra sobre negro; el avellanar, un marco de madera atado con cuerda
+sobre gris— y **el avellanar mezcla bellotas con avellanas**. Por eso los prompts van
+en dos partes: un **estilo común**, igual en todos, y el **sujeto** de cada uno. Y
+**sin marco**: siete de los de ahora traían uno de piedra clara pintado dentro, que
+sobre la piel oscura del almacén se leía como un recuadro, y hubo que quitarlos a mano
+(`scripts/tools/SinBordeBlanco.gd`).
+
+**En inglés**, que es como mejor responden los generadores de imagen.
+
+**Estilo común** (se pega detrás de cada sujeto):
+
+> game inventory icon, single subject centered and filling 70% of the frame, three-quarter
+> view from slightly above, resting on a flat dark slate slab, soft warm key light from
+> upper left, subtle cool rim light, deep charcoal background with gentle vignette fading
+> to the edges, no border, no frame, photorealistic with painterly finish, strong clean
+> silhouette readable at 20 pixels, natural materials only, square 1:1, 512x512
+
+**Negativo** (si el generador lo admite):
+
+> text, letters, watermark, logo, signature, modern objects, plastic, metal, glass,
+> polished or machine-cut surfaces, frame, border, rope, wooden frame, second object type,
+> busy background, people, hands, blur, tropical species
+
+**Sujeto de cada uno**, empezando por los diecisiete que nombran un paraje (`Paraje.APODOS`):
+
+| Fichero | Paraje | Sujeto |
+|---|---|---|
+| `materia_fruto_seco` | El avellanar | a small handful of wild hazelnuts (Corylus avellana), a few still in their frilly green-brown husks, one cracked open showing the pale kernel — no acorns |
+| `materia_bellota` | El robledal | three sessile oak acorns with scaly cups, one lying on its side, a dry brown oak leaf beneath |
+| `materia_baya` | El zarzal | a short thorny bramble stem with ripe black wild blackberries and two unripe red ones |
+| `materia_raiz` | El raizal | a small bundle of freshly dug wild roots and tubers, earthy, fine rootlets hanging, soil crumbs |
+| `materia_seta` | El setal | two wild porcini mushrooms with brown caps and thick pale stems, moss and forest soil at the base |
+| `materia_miel` | La colmena | an irregular broken chunk of wild honeycomb dripping amber honey, natural comb, no man-made frame |
+| `materia_carne` | El pasto | a raw cut of red deer venison on the bone with a band of white fat |
+| `materia_pescado` | El remanso | one fresh Atlantic salmon, silver with small dark spots, glistening wet |
+| `materia_marisco` | El marisqueo | a few Atlantic limpets and blue mussels with strands of green seaweed, wet — no tropical shells |
+| `materia_piedra` | El cantizal | a rounded water-worn grey-brown quartzite river cobble with one fresh flake scar showing the grainy interior |
+| `materia_silex` | La veta de sílex | a flint nodule with chalky white cortex, broken open to show glossy dark grey translucent flint with conchoidal ripples |
+| `materia_asta` | El desmogadero | a naturally shed red deer antler with four tines, weathered pale brown, rough burr at the base |
+| `materia_lena` | El leñero | a small bundle of dry firewood branches tied with a twisted plant-fibre cord |
+| `materia_fibra` | El fibral | a coil of hand-twisted plant-fibre cord beside a loose bundle of raw nettle fibres |
+| `materia_ocre` | La veta de ocre | lumps of raw red and yellow ochre earth, one lump rubbed leaving a red streak on the slate, a little red powder |
+| `materia_corteza` | El corteal | a curled strip of birch bark, white outside and tan inside, beside a piece of rough pine bark |
+| `materia_agua` | La fuente | clear spring water trickling from a mossy limestone crack into a tiny stone basin, small splashes |
+
+Los demás iconos de material se hacen con el mismo estilo común y cambiando sólo el
+sujeto. **Después de generarlos**: pasar `scripts/tools/SinBordeBlanco.gd`, que recorta el
+borde claro que dejan los generadores (`textures/items/recortados.txt` apunta los ya
+hechos; hay que quitar de ahí los que se regeneren).
 
 ## Lo que falta
 

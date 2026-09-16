@@ -58,7 +58,7 @@ func show_obras() -> void:
 		+ "encontrado antes, y encontrarla es justo lo que aquí se intenta.",
 		true)
 
-	_pasarelas(body)
+	_nota_sin_pasarelas(body)
 
 	var grupos := ui.census.obras.groups()
 	if grupos.is_empty():
@@ -79,30 +79,19 @@ func show_obras() -> void:
 		_fila_de_grupo(body, grupo)
 
 
-## Las pasarelas: las que hay, la que se está armando y, si no hay ninguna, por
-## qué. Van aparte de las demás obras porque no las pone el jugador ni se pinchan
-## en el mundo: las levanta la banda sola (SISTEMAS §20). El usuario preguntó por
-## ellas el 2026-09-14 —«dime si aparecen en obras, si no, deberían»— y no salían
-## en ninguna ventana.
-func _pasarelas(body: VBoxContainer) -> void:
+## Si no hay ninguna pasarela —ni armada ni en marcha—, por qué no la hay.
+##
+## Es lo único que queda del párrafo aparte que tenían: desde INTERFAZ §10 las
+## pasarelas son una fila más de la lista, con su ficha, como las trampas. Esto
+## se queda porque una fila que no existe no explica por qué no existe, y ésa es
+## una pregunta que el jugador se hace de verdad.
+func _nota_sin_pasarelas(body: VBoxContainer) -> void:
 	var pasarelas: Pasarelas = ui.sim.pasarelas
 	if pasarelas == null:
 		return
-	ui._heading(body, "PASARELAS DE TRONCOS")
-	if pasarelas.puentes.is_empty():
-		ui._text(body, "Ninguna armada todavía.", true)
-	for puente: Array in pasarelas.puentes:
-		var donde: Vector3 = puente[0]
-		ui._text(body, "· un paso de %d m en %s" % [
-			int(float(puente.size()) * Navgrid.CELL),
-			ui.sim.parajes.place_name(donde, ui.sim.home_position)])
-	if not pasarelas.obra.is_empty():
-		var donde: Vector3 = pasarelas.obra[0]
-		ui._text(body, "En marcha en %s: %d de %d jornadas puestas, y %.0f de leña al rematarla." % [
-			ui.sim.parajes.place_name(donde, ui.sim.home_position),
-			int(pasarelas.jornadas_puestas), int(Pasarelas.JORNADAS), Pasarelas.LENA], true)
-	else:
-		ui._text(body, _por_que_no_hay_pasarela(), true)
+	if not pasarelas.puentes.is_empty() or not pasarelas.obra.is_empty():
+		return
+	ui._text(body, "Pasarelas de troncos: " + _por_que_no_hay_pasarela(), true)
 
 
 ## Por qué no se está armando ninguna. Las mismas preguntas que [Pasarelas.nuevo_dia]

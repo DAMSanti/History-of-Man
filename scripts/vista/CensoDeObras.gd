@@ -66,6 +66,21 @@ func groups() -> Array[Dictionary]:
 			"family": "Obras", "count": levantadas, "note": "levantadas",
 		})
 
+	# LAS PASARELAS, una familia más. Iban aparte, como un párrafo encima de la
+	# lista, y por eso una pasarela armada no se podía ir a mirar (INTERFAZ §10).
+	# Las levanta la banda sola y no el jugador, pero eso no cambia lo que se
+	# quiere hacer con ellas: verlas.
+	if sim.pasarelas != null:
+		var cuantas := sim.pasarelas.puentes.size()
+		if not sim.pasarelas.obra.is_empty():
+			cuantas += 1
+		if cuantas > 0:
+			out.append({
+				"key": "obra:pasarela", "label": "Pasarela de troncos",
+				"family": "Obras", "count": cuantas,
+				"note": "armadas sobre el cauce",
+			})
+
 	var vivacs := _vivacs()
 	if not vivacs.is_empty():
 		out.append({
@@ -81,6 +96,8 @@ func entries(key: String, near: Vector3) -> Array[Dictionary]:
 		return _trampas(int(key.substr(12)), near)
 	if key == "obra:nasa":
 		return _nasas(near)
+	if key == "obra:pasarela":
+		return _pasarelas(near)
 	if key == "obra:campamento":
 		return _campamento()
 	if key == "obra:vivac":
@@ -154,6 +171,80 @@ func _nasas(near: Vector3) -> Array[Dictionary]:
 			"trail": Callable(),
 		})
 	return out
+
+
+## Las pasarelas armadas y, la última, la que se está armando.
+##
+## La de en marcha va en la misma lista y no en una nota aparte: es la misma
+## obra en otro momento, y el jugador quiere llevar la cámara a ella igual.
+func _pasarelas(near: Vector3) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if sim == null or sim.pasarelas == null:
+		return out
+	var orden: Array[int] = []
+	for i in range(sim.pasarelas.puentes.size()):
+		orden.append(i)
+	orden.sort_custom(func(a: int, b: int) -> bool:
+		return _centro(sim.pasarelas.puentes[a]).distance_squared_to(near) \
+			< _centro(sim.pasarelas.puentes[b]).distance_squared_to(near))
+
+	var n := 0
+	for i: int in orden:
+		n += 1
+		var puente: Array = sim.pasarelas.puentes[i]
+		var donde := _centro(puente)
+		var jornada := 0
+		if i < sim.pasarelas.rematadas.size():
+			jornada = int(sim.pasarelas.rematadas[i])
+		var lines: Array[String] = []
+		lines.append("Armada en %s." % sim.parajes.place_name(
+			donde, sim.home_position))
+		lines.append("Salva un paso de %d m."
+			% int(float(puente.size()) * Navgrid.CELL))
+		if jornada > 0:
+			lines.append("Rematada la jornada %d." % jornada)
+		else:
+			lines.append("Rematada antes de que se apuntara la jornada.")
+		lines.append("A %.0f m del abrigo."
+			% sim.home_position.distance_to(donde))
+		out.append({
+			"id": "pasarela:%.0f:%.0f" % [donde.x, donde.z],
+			"pos": donde,
+			"title": "Pasarela %d" % n,
+			"tint": Color(0.72, 0.58, 0.36),
+			"lines": lines,
+			"trail": Callable(),
+		})
+
+	if not sim.pasarelas.obra.is_empty():
+		var donde := _centro(sim.pasarelas.obra)
+		var lines: Array[String] = []
+		lines.append("En marcha en %s." % sim.parajes.place_name(
+			donde, sim.home_position))
+		lines.append("Salvará un paso de %d m."
+			% int(float(sim.pasarelas.obra.size()) * Navgrid.CELL))
+		lines.append("%d de %d jornadas puestas." % [
+			int(sim.pasarelas.jornadas_puestas), int(Pasarelas.JORNADAS)])
+		lines.append("Gastará %.0f de leña al rematarla." % Pasarelas.LENA)
+		out.append({
+			"id": "pasarela:obra",
+			"pos": donde,
+			"title": "Pasarela en marcha",
+			"tint": Color(0.55, 0.52, 0.45),
+			"lines": lines,
+			"trail": Callable(),
+		})
+	return out
+
+
+## El centro de las celdas que salva una pasarela: adónde se lleva la cámara.
+func _centro(celdas: Array) -> Vector3:
+	if celdas.is_empty():
+		return Vector3.ZERO
+	var suma := Vector3.ZERO
+	for celda: Vector3 in celdas:
+		suma += celda
+	return suma / float(celdas.size())
 
 
 ## Las obras del abrigo. Todas caen en el mismo sitio —el abrigo— y aun así van

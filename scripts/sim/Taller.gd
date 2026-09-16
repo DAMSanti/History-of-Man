@@ -268,7 +268,7 @@ func _por_que_no(kind: Tool.Kind) -> String:
 		return "falta %s" % Tool.kind_name(prerequisite as Tool.Kind).to_lower()
 	if not _can_pay_for(kind):
 		var faltan: Array[String] = []
-		var recipe := Tool.recipe(kind)
+		var recipe := Tool.recipe(kind, sim.techs)
 		for material: int in recipe:
 			var wanted: float = float(recipe[material])
 			if material == Materia.Kind.PIEDRA \
@@ -663,7 +663,7 @@ func material_forecast(kind: Materia.Kind) -> float:
 	# usara la del jugador, subir la meta de azagayas subiria el asta que
 	# «gasta» la banda, y querer tener mas guardado no hace que se gaste mas.
 	for tool_kind: int in tool_natural_demand():
-		var recipe := Tool.recipe(tool_kind as Tool.Kind)
+		var recipe := Tool.recipe(tool_kind as Tool.Kind, sim.techs)
 		var per_material := float(recipe.get(kind, 0.0))
 		if per_material <= 0.0:
 			continue
@@ -712,7 +712,7 @@ func _next_piece(speciality: Profession.Speciality) -> int:
 ## cuarcita por silex cuando lo hay: si aqui dijera que si y alli que no, el
 ## artesano se plantaria en el banco sin sacar nada.
 func _can_pay_for(kind: Tool.Kind) -> bool:
-	var recipe := Tool.recipe(kind)
+	var recipe := Tool.recipe(kind, sim.techs)
 	for material: int in recipe:
 		var wanted: float = float(recipe[material])
 		if material == Materia.Kind.PIEDRA \
@@ -805,7 +805,7 @@ func _craft(person: Inhabitant, hours: float) -> void:
 	# Ya hay pieza. Se paga la materia prima; si no la hay, no sale y el
 	# progreso se queda esperando a que alguien la traiga.
 	var stuff := Tool.default_stuff(kind_value)
-	var recipe := Tool.recipe(kind_value)
+	var recipe := Tool.recipe(kind_value, sim.techs)
 	for material: int in recipe:
 		var wanted: float = float(recipe[material])
 		# El silex se prefiere cuando lo hay: triplica la vida de la pieza
@@ -828,7 +828,12 @@ func _craft(person: Inhabitant, hours: float) -> void:
 		sim.toolkit.use(prerequisite as Tool.Kind,
 			Tool.wear_per_day(prerequisite as Tool.Kind) * 0.5)
 
-	var made := sim.toolkit.craft(kind_value, stuff, person.effectiveness())
+	# EL NÚCLEO PREPARADO pone suelo a la calidad de lo tallado en piedra. Es
+	# el efecto que la técnica prometía en su descripción y no tenía
+	# (INTERFAZ §10, EPOCA_01 §7).
+	var con_nucleo := sim.techs != null and sim.techs.has(TechTree.Tech.NUCLEO)
+	var made := sim.toolkit.craft(kind_value, stuff, person.effectiveness(),
+		con_nucleo)
 	note_tool_made(kind_value)
 	# Y si esta pieza era de un encargo, el encargo tiene una menos. Cumplido,
 	# desaparece de la cola: un encargo es una cantidad y se acaba.
@@ -870,8 +875,9 @@ func _workshop_short(person: Inhabitant) -> bool:
 	if kind < 0:
 		return false
 
-	for material: int in Tool.recipe(kind as Tool.Kind):
-		var wanted: float = float(Tool.recipe(kind as Tool.Kind)[material])
+	var receta := Tool.recipe(kind as Tool.Kind, sim.techs)
+	for material: int in receta:
+		var wanted: float = float(receta[material])
 		# El silex vale por la piedra: si hay de uno, no falta el otro
 		if material == Materia.Kind.PIEDRA \
 				and sim.store.amount(Materia.Kind.SILEX) >= wanted:

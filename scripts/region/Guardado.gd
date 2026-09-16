@@ -106,6 +106,8 @@ static func _escribir(sim: SettlementSim, fauna: WildlifeHerds, cuevas: Array,
 		# retomar sin decir por qué.
 		"sitio": sitio,
 		"descubierto": GameState.discovered.keys(),
+		# Lo avistado desde las cumbres, que es de la comarca como lo descubierto.
+		"avistado": GameState.avistados.keys(),
 		# Lo que se ha visto de la comarca, que como lo descubierto es de la
 		# partida y no del mapa: se suma al cargar. Ver [NieblaRegional].
 		"niebla": GameState.niebla.a_datos() if GameState.niebla != null else {},
@@ -336,6 +338,9 @@ static func preparar_la_escena(guardado: Dictionary, sitios: SiteSet) -> bool:
 	# la expedición del mapa B descubrió después de guardar A.
 	for id: Variant in (guardado.get("descubierto", []) as Array):
 		GameState.discovered[int(id)] = true
+	# Lo avistado, igual: se suma. Un guardado de antes del 2026-09-16 no lo trae.
+	for id: Variant in (guardado.get("avistado", []) as Array):
+		GameState.avistados[int(id)] = true
 	# LA NIEBLA, igual: se suma. Un guardado de antes del 2026-09-14 no la trae, y
 	# entonces se ve lo que la partida ya tuviera.
 	var niebla: Dictionary = guardado.get("niebla", {})

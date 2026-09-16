@@ -1516,6 +1516,21 @@ func descubrir(site: Site) -> void:
 		GameState.discover(site)
 
 
+## Lo que este campamento ha avistado desde una cumbre y todavía no está en la
+## partida, por lo mismo que [descubrimientos]. Ver [avistar].
+var avistamientos: Array[Site] = []
+
+
+## Avista un yacimiento. Suelta, en la partida al momento; dirigida, en la cola, y el
+## reloj lo pasa en la barrera.
+func avistar(site: Site) -> void:
+	if dirigido:
+		if not avistamientos.has(site):
+			avistamientos.append(site)
+	else:
+		GameState.avistar(site)
+
+
 ## Lo que este campamento ha visto de la comarca y todavía no está en la niebla de
 ## la partida, por lo mismo que [descubrimientos]: formas de
 ## [GameState.levantar_niebla], que el reloj levanta entre pasos.

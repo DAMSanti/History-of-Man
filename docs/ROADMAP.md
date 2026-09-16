@@ -144,6 +144,569 @@ El contexto largo de los bloques que se cerraron antes de este cambio sigue
 
 ---
 
+### ~~Depurar del 2026-09-16 (noche): la cueva, el relieve, la lluvia, el tooltip, las ondas y los iconos~~ — cerrado
+
+Seis quejas del usuario, de una vez. Dónde quedó cada una:
+
+- **La cámara de la cueva enseñaba el borde** (caso C, no había nada escrito): el tope
+  medía el punto al que se mira y no lo que cabe en pantalla. GRAFICOS §7.2, cinco
+  pruebas en `TestPared`.
+- **Las texturas sin relieve** (caso A): GRAFICOS §4 afirmaba un parallax que **no
+  existía** —el canal de altura se leía y no se usaba—. Hecho en Alto y Ultra, con la
+  altura sacada del dibujo y ajustado con el usuario en seis vueltas. GRAFICOS §4.
+  **Pendiente**: la segunda corrida de GPU de la versión final, y que el usuario lo vea
+  jugando.
+- **La lluvia desaparecía al mover la cámara**: las gotas se quedaban en el mundo
+  mientras la caja seguía a la cámara, y la caja medía 70 m a cualquier zoom. GRAFICOS
+  §7.4.
+- **El tooltip de técnica se cerraba solo**: ahora pinchar abre una ficha fija con
+  «EFECTO:». INTERFAZ §10.
+- **Ondas de lluvia en el río y el mar**: hechas; la primera versión no se veía y la
+  captura engañaba —eran la espuma de orilla—. GRAFICOS §7.4.
+- **Prompts para los iconos de los parajes**: CREDITOS, «Iconos de material».
+
+Suite: 1 584 pruebas y 8 523 comprobaciones, 0 fallan; `LlamadasHuerfanas` 0.
+
+---
+
+### ~~La expedición por ocho rumbos, y las cimas que avistan~~ — cerrado (2026-09-16)
+
+> **Cerrado.** Cómo quedó y lo que salió, en [SISTEMAS.md](SISTEMAS.md) §4 «Cómo quedó:
+> ocho rumbos y cimas que avistan»; la ficha y el botón, en INTERFAZ §4; lo avistado en
+> `GameState`, en SPECS §2.2; la cifra de pruebas, en ESTADO §3. **Queda por ver con el
+> usuario** si la marca apagada de un avistado se lee bien.
+
+Spec en [SISTEMAS.md](SISTEMAS.md) §4 (2026-09-15), con la ventana en
+[INTERFAZ.md](INTERFAZ.md) §4: el rumbo deja de ser libre y sale hacia uno de ocho, sólo
+los que tienen algo al alcance; el botón del valle lleva al regional y está apagado sin
+lo que cuesta la expedición más corta; y las tres cumbres más altas de cada valle avistan
+hasta dos yacimientos por línea de vista, que no se visitan hasta que pasa una
+expedición. Siguiente paso: `/plan-tarea`.
+
+**Plan técnico** en SISTEMAS §4 (2026-09-16). Tareas, en orden:
+
+- [x] **1. Los ocho rumbos y cuáles se ofrecen.** `Expedicion.RUMBOS`, `rumbos_posibles()`,
+  `comarca` cambiable, y `mandar_a` rechaza lo demás. Toca `sim/Expedicion.gd`,
+  `tests/TestExpedicion.gd` y las sondas que mandan (`ExpedicionProbe`, `PanelProbe`). Se
+  comprueba con pruebas: catálogo a mano que enciende y apaga cada rumbo, el yacimiento más
+  al este sin este, el ángulo siempre de los ocho y el pasillo con los ocho ángulos.
+  > **HECHO (2026-09-16).** `Expedicion.RUMBOS`, `se_ofrece`, `rumbos_posibles` y la
+  > `comarca` cambiable; `mandar_a` sólo sale hacia uno de los ocho que se ofrece.
+  > `TestExpedicion` pasa de 36 a 41 pruebas (102 comprobaciones). **Salió que mandar dos
+  > veces por el mismo pasillo ya no se puede** si lo de ahí quedó descubierto: la prueba
+  > del contacto vacío lo olvidaba a propósito. Las pruebas de coste salían «desde ninguna
+  > parte» y ahora llevan un yacimiento a cien metros. **Medido**: los ocho rumbos desde
+  > Cueva los Pendios, 28-29 ms; se ofrecen siete (el oeste, 68 km sin nada nuevo). Sin
+  > caché: el plan la ponía a partir de 100 ms.
+- [x] **2. Por qué no sale la más corta.** `Expedicion.por_que_no_sale()`, y
+  `FichaDeRumbo.bloqueo` la usa. Toca `sim/Expedicion.gd`, `ui/FichaDeRumbo.gd`,
+  `tests/TestExpedicion.gd`. Prueba por causa: gente, pieles curtidas, raciones, leña y una
+  fuera.
+  > **HECHO (2026-09-16).** `Expedicion.por_que_no_sale()` para la más corta y
+  > `motivo_para(pueden, dias)`, la única lista de motivos: la usa también
+  > `FichaDeRumbo.bloqueo`, que tenía su copia. Dos pruebas nuevas, una por causa y otra
+  > de que la ficha dice lo mismo (43 pruebas, 110 comprobaciones).
+- [x] **3. Lo avistado.** `GameState.avistados`, la cola de la barrera, el guardado y
+  `Instantanea`. Toca `region/GameState.gd`, `sim/SettlementSim.gd`,
+  `sim/RelojDeLaPartida.gd`, `region/Guardado.gd`, `tools/Instantanea.gd`,
+  `tests/TestNieblaRegional.gd`. Pruebas: guardar y cargar; la expedición que pasa lo deja
+  descubierto y la que no, no.
+  > **HECHO (2026-09-16).** `GameState.avistados`, `avistar` y `avistado` —avistado **y** sin
+  > descubrir—; `SettlementSim.avistar` con su cola `avistamientos`, que junta el reloj;
+  > `"avistado"` en el guardado, sumado al cargar; y la cola fuera de `Instantanea`. Una
+  > partida nueva lo vacía (`GameState.begin`, `MenuPrincipal`). Pruebas nuevas en
+  > `TestNieblaRegional` (la barrera; descubrirlo lo deja como cualquiera), `TestGuardado`
+  > (se guarda y se suma) y `TestExpedicion` (la que pasa lo descubre, la que no, no).
+  > **La suite entera sacó cuatro pruebas de otras suites** que mandaban expediciones con
+  > cualquier ángulo o desde ninguna parte, por la regla de la tarea 1: van con un
+  > ayudante único, `TestExpedicion.con_algo_al_lado`. `LlamadasHuerfanas`: 0.
+- [x] **4. La línea de vista.** `Avistamiento` nuevo. Toca `sim/Avistamiento.gd`,
+  `tests/TestAvistamiento.gd`, `RunTests`, la caché de clases. Pruebas sobre relieve a mano:
+  con sierra no, sin sierra sí; con cinco a la vista, los dos más lejanos.
+  > **HECHO (2026-09-16).** `Avistamiento.a_la_vista` y `los_mas_lejanos`, con curvatura
+  > y refracción (k = 0,13: 171 m a 50 km) y los primeros 300 m sin mirar. `TestAvistamiento`,
+  > 3 pruebas y 7 comprobaciones, sobre un llano de ~8 × 11 km con y sin sierra.
+- [x] **5. Las tres cumbres más altas avistan.** Toca `sim/Cumbres.gd`,
+  `tools/Instantanea.gd`, `tests/TestAvistamiento.gd`. Prueba con cumbres construidas: la
+  cuarta no avista. Y se mira una vez si la cota local y la regional casan.
+  > **HECHO (2026-09-16).** `Cumbres.tres_mas_altas` —caché del relieve, fuera de la
+  > instantánea— sale de un barrido que **no quita las coronadas** (`_barrer(false)`); la
+  > lista de adónde subir sigue quitándolas. Al coronar, `_avistar_desde` avista hasta dos
+  > de los yacimientos de la época sin descubrir a la vista. **Las cotas casan**: en la
+  > cima más alta del valle 56, 704 m en el mapa local y 694 en el regional. **Medido**:
+  > desde ahí avista 2, en 23 ms. `TestAvistamiento` sube a 7 pruebas y 19 comprobaciones;
+  > `Exploracion` sigue en 82 y 402.
+- [x] **6. La ficha con ocho rumbos, y el regional.** Toca `ui/FichaDeRumbo.gd`,
+  `vista/FlechaDeRumbo.gd`, `region/RegionMap.gd`. Pruebas de la ficha sin ventana
+  (rumbos apagados, nada al alcance, los dos botones) y que en el regional no quede el clic
+  de rumbo.
+  > **HECHO (2026-09-16), junto con la 8**: cambiar la ficha rompía el apuntar del valle,
+  > que quita la 8, y no compilaba por separado. `FichaDeRumbo` con la rosa de ocho,
+  > `abrir(sim, nombre, viene_del_valle)` y `cerrada(mandada, volver_al_valle)`;
+  > `FlechaDeRumbo` con los ejes tenues de los demás; `RegionMap.abrir_la_ficha` y sin
+  > `_apuntar_a`. Cuatro pruebas nuevas en `TestExpedicion` (49 pruebas, 126
+  > comprobaciones), una de ellas que no quede método de apuntar ni en el regional ni en
+  > el valle.
+- [x] **7. Los avistados en el mapa regional.** Toca `region/RegionMap.gd`. Prueba: un
+  avistado no es seleccionable ni sale en listas; captura de cómo se ve.
+  > **HECHO (2026-09-16).** `RegionMap.sitios_que_se_dibujan` reparte los que se pinchan y
+  > los avistados, que van al MultiMesh y no a `_visible_sites`. Prueba en
+  > `TestNieblaRegional` (31 pruebas, 92 comprobaciones) y captura en `RumboProbe`. **El
+  > gris claro del primer intento no se veía sobre la niebla**: van en pardo oscuro.
+- [x] **8. El botón del valle.** Toca `vista/Minimapa.gd`, `DemoMain.gd`,
+  `region/Expedition.gd`, `region/RegionMap.gd`, `tests/RumboProbe.gd` (nueva). Sonda por
+  el camino del juego con captura: botón apagado con motivo, encendido, y el regional con
+  la ficha abierta.
+  > **HECHO (2026-09-16).** `Minimapa.refrescar_el_rumbo` apaga el botón con el motivo;
+  > `DemoMain.mandar_expedicion` deja `Expedition.ficha_de_rumbo_desde` y sale a la
+  > comarca; el regional abre la ficha al montarse. Se fueron el apuntar del valle, su
+  > ficha y su flecha, y la captura de la ficha en el valle de `NieblaCaptura`.
+  > `RumboProbe`, 0 fallos: apagado sin pieles, encendido con ellas, la ficha abierta
+  > viniendo del valle con siete rumbos, los avistados dibujados sin pincharse, y «Mandar
+  > y volver al valle» de vuelta con tres fuera. **Cazó un fallo**: el botón pedía el
+  > coste de todos los que pueden ir —ocho pieles— y no el de tres; arreglado con prueba.
+- [x] **9. Documentar y cerrar.** SISTEMAS §4 «Cómo quedó», INTERFAZ §4, EPOCA_01 si toca,
+  ESTADO §3; suite entera y `LlamadasHuerfanas`.
+
+Medir: todo son pruebas de segundos salvo dos sondas con ventana (la 7 y la 8), unos 5 min
+cada una, y la suite entera dos o tres veces. **Total, unos 30 min de máquina.**
+  > **HECHO (2026-09-16).** SISTEMAS §4 «Cómo quedó», INTERFAZ §4, EPOCA_01, SPECS §2.2 y
+  > ESTADO §3. Suite: 1 522 pruebas y 8 262 comprobaciones; `LlamadasHuerfanas`: 0.
+
+### ~~La niebla del mapa regional, como nubes~~ — cerrado (2026-09-16)
+
+> **Cerrado con la elección del usuario** entre tres aspectos medidos, **y rehecho con
+> volumen esa misma tarde**: al verlo dijo «las nubes son un plano sobre el mapa regional,
+> quiero que tengan volumen, altura», y ahora son una losa de aire que se recorre
+> (`NubesDeLaNiebla`). Cuesta +4,4 a +5,6 ms, por encima del tope de 1 ms de la spec, y lo
+> aceptó: «no me importa el coste». Cómo quedó, lo que costó y lo que queda, en
+> [GRAFICOS.md](GRAFICOS.md) §3, «Cómo quedó: la niebla como nubes» y «Y con volumen de
+> verdad»; la cifra de pruebas, en ESTADO §3.
+
+Spec en [GRAFICOS.md](GRAFICOS.md) §3 (2026-09-15): nubes que se mueven con el reloj de
+la partida y siguen tapando lo no visto, con la costa intuida y 1 ms de tope. **Primero
+dos o tres aspectos con captura y coste, y elige el usuario.** Siguiente paso:
+`/plan-tarea`.
+
+**Plan técnico** en GRAFICOS §3 (2026-09-16). Tareas, en orden:
+
+- [x] **1. El viento de la partida, en un sitio.** Una función estática del recorrido del
+  viento por jornada y hora, usada por el cielo del valle y por `RegionMap`, que la lee de
+  `Campamentos.reloj`. Toca `region/NieblaRegional.gd`, `region/RegionMap.gd`,
+  `vista/WorldEnvironmentSetup.gd`, `tests/TestNieblaRegional.gd`. Prueba: la misma hora da
+  el mismo recorrido, otra hora otro, y sin reloj no se mueve.
+  > **HECHO (2026-09-16).** `Viento` (`vista/`) lleva la cuenta —la que hacía el cielo del
+  > valle— y la usan los dos: `WorldEnvironmentSetup` y `RegionMap`, que la lee de
+  > `Campamentos.reloj` cada cuadro. Dos pruebas (NieblaRegional: 33 y 97): la misma hora da
+  > el mismo recorrido —en pausa no se mueven—, cinco horas corren cinco veces lo que una, y
+  > sin reloj no se mueve nada.
+- [x] **2. Tres aspectos en un solo sitio.** `shaders/nubes_de_la_niebla.gdshaderinc` (nuevo)
+  con la calima de hoy y los estilos 1 a 3, usado por `triplanar.gdshader` y
+  `bajo_la_niebla.gdshader`. Se comprueba con la captura de la 3 (sin `SHADER ERROR`).
+  > **HECHO (2026-09-16).** `shaders/nubes_de_la_niebla.gdshaderinc`, incluido por los dos
+  > shaders. **Dos fallos por el camino**: `absf` no existe en GLSL (es de GDScript), y el
+  > tamaño de la nube iba en metros cuando el shader trabaja en unidades del mundo —111 m
+  > cada una en el regional—, así que salían nubes de dos mil kilómetros, o sea una mancha
+  > lisa.
+- [x] **3. Capturas y coste de cada aspecto.** `tests/NieblaCaptura.gd`: mismo encuadre, el
+  borde de cerca y GPU contra la calima. **Aquí se para y elige el usuario.**
+  > **HECHO (2026-09-16).** `NieblaCaptura ESTILOS=1`: los cuatro en el mismo encuadre, de
+  > lejos y el borde de cerca, con su coste. **Los tres pasaban el tope de 1 ms** con la
+  > pantalla llena de niebla: +1,56, +2,10 y +2,71 ms sobre la calima. **El usuario eligió
+  > el 2**, nubes con altura y sombra falsa.
+- [x] **4. Pulir el elegido y quitar los otros.** El borde deshilachado, el trazo de costa y
+  lo avistado por encima; fuera los estilos no elegidos.
+  > **HECHO (2026-09-16).** Se queda el elegido y se van los otros dos y la marcha. **Y baja
+  > a +0,30 ms**: el ruido va en textura sin costuras hecha una vez (`RegionMap`) en vez de
+  > tres octavas por píxel. Queda un interruptor `fog_nubes` —nubes o calima lisa—, que es
+  > lo que el criterio manda alternar para medir. La tesela pasó de 18 a 55 km: con 18 se
+  > repetía once veces sobre la comarca y se leía como papel pintado.
+- [x] **5. Los criterios, con captura.** `tests/NieblaCaptura.gd`: fuera del recuadro ni sitio
+  ni río ni frontera y sí costa; dos capturas corriendo distintas y en pausa iguales; GPU
+  ≤ 1 ms, dos corridas.
+  > **HECHO (2026-09-16).** `NieblaCaptura` compara las capturas ella misma: con la partida
+  > en pausa, 0,0005 de diferencia; con la hora corrida, 0,037. GPU de las nubes contra la
+  > calima: +0,22 y +0,27 ms en dos corridas. **El trazo de costa había desaparecido** bajo
+  > el bulto de la nube: ahora va con todo su peso por encima, y se ve en la captura de
+  > partida recién empezada, donde no se ve ni un río ni la frontera.
+- [x] **6. Documentar.** GRAFICOS §3 «Cómo quedó», ESTADO §3 y suite entera.
+  > **HECHO (2026-09-16).** Suite: 1 543 pruebas y 8 376 comprobaciones.
+
+Medir: la sonda de aspectos una vez (~5 min), la de criterios dos veces (~5 min cada una) y
+la suite entera una vez (~10 min). **Total, unos 25 min de máquina**, y una espera a la
+elección del usuario entre la 3 y la 4.
+
+### ~~El agua del valle~~ — cerrado (2026-09-16)
+
+> **Cerrado con el visto bueno del usuario.** Lo que quedó, lo que costó y lo que queda
+> está en [GRAFICOS.md](GRAFICOS.md) §7.3, «Cómo quedó»; el selector, en INTERFAZ §8.8; la
+> cifra de pruebas, en ESTADO §3. Medio cuesta 0,2-0,5 ms sobre Bajo con el río llenando
+> la pantalla.
+
+Spec y **plan técnico** en [GRAFICOS.md](GRAFICOS.md) §7.3 (2026-09-15), con el selector en
+[INTERFAZ.md](INTERFAZ.md) §8.8: Bajo el río de hoy; Medio la orilla; Alto una lámina
+propia transparente con el lecho debajo; Ultra salpicaduras y reflejos; y el mar con
+oleaje, probado en una costa de prueba. Medio en 1 ms, Ultra sin tope; fotos de ríos
+cantábricos y el visto bueno del usuario.
+
+- [x] **1. Medir hoy y fijar los encuadres.** `AguaCaptura`: el rápido, el remanso y la
+      orilla del sitio 56 **elegidos por los datos** —más caída aguas abajo, más lámina
+      quieta, más orilla—, a 1920×1080, y la costa de prueba con `MAR=30` sobre el sitio
+      0; `GpuProfile AGUA=1`: lo que cuesta hoy el río en pantalla, con y sin, dos
+      corridas. Fotos de referencia de ríos cantábricos (Wikimedia Commons, con licencia)
+      en CREDITOS. *Toca `scripts/tests/AguaCaptura.gd` (nueva),
+      `scripts/tests/GpuProfile.gd`, `docs/CREDITOS.md`.* Media.
+> **HECHO (2026-09-15).** `AguaCaptura` elige los encuadres con los mapas del terreno
+> —rápido por caída aguas abajo, remanso por lámina ancha y quieta, orilla por borde de
+> lámina junto a la cueva, y el rápido desde la altura de gestión— y la cámara **desde la
+> margen abierta**: la primera vuelta la dejaba pegada a la ladera del cañón. Oculta la
+> interfaz. **La GPU va en la misma sonda (`GPU=1`) y no en `GpuProfile`**, para medir en
+> los mismos encuadres que se capturan; con un interruptor nuevo del shader,
+> `use_rivers`, que alterna agua sí y no. **El río de hoy cuesta 0,09-0,28 ms** según el
+> encuadre (una corrida; las de cada nivel, dos, en la tarea 8). **Lo que se ve hoy**: una
+> cinta azul plana, y la espuma **no sale en los rápidos sino en la margen**, en vetas
+> dentadas donde la ladera del cauce es empinada —la caída que calcula el shader con la
+> normal la confunde con el borde—. Fotos de referencia, siete, en CREDITOS: el Pas y el
+> Saja (rápido), el Nansa (remanso, salto y orilla de cantos), el Pas desde arriba y la
+> ría de Tina Menor.
+- [x] **2. El ajuste «Agua».** Selector de cuatro, cada nivel el suyo, un fichero de
+      antes abre en su nivel. *Toca `scripts/vista/Configuracion.gd`,
+      `scripts/ui/VentanaDeConfiguracion.gd`, `scripts/tests/TestConfiguracion.gd`.
+      Prueba, y `ConfiguracionCaptura` a 1280×720.* Pequeña.
+> **HECHO (2026-09-15).** `agua` 0-3 en `Configuracion.AJUSTES` y en cada nivel —el de
+> su mismo nombre—, selector «Agua» debajo de la distancia del 3D, y el uniforme
+> `nivel_de_agua` del terreno puesto en caliente por `TerrainMaterialManager`. Un fichero
+> de antes abre en su nivel con el agua de ese nivel, sin tocar `cargar`: ya lo hacía con
+> cualquier ajuste que faltara. Pruebas en `TestConfiguracion` (dos nuevas, 21 y 173
+> comprobaciones en su suite); `ConfiguracionCaptura`: nada se sale a 1280×720.
+- [x] **3. Lo que decide la espuma, en la CPU.** `AguaDelCauce`: rápido por caída aguas
+      abajo y orilla por borde de la lámina, horneados en un canal de vértice; la caché
+      cambia de versión; el shader lee el canal en vez de calcular la caída. **Bajo tiene
+      que quedar igual que hoy**: captura antes y después. *Toca
+      `scripts/mundo/AguaDelCauce.gd` (nuevo), `scripts/mundo/MallaDelTerreno.gd`,
+      `scripts/datos/TerrainGenerationCache.gd`, `shaders/triplanar.gdshader`,
+      `scripts/tests/TestAgua.gd` (nueva). Prueba: espuma cero en un llano y sí en un
+      escalón; la corriente va aguas abajo en un cauce que gira; los mapas del terreno
+      son los mismos con el agua en Bajo y en Ultra.* Media.
+> **HECHO (2026-09-15).** `AguaDelCauce` (`mundo/`): la **caída del cauce aguas abajo
+> medida sólo entre celdas de cauce** y la orilla por borde de lámina junto a tierra
+> seca, horneadas en el **UV** del terreno —el shader no lo usaba: texturiza por posición
+> de mundo—, sin cambiar el formato de la malla. Los umbrales del rápido van al shader
+> como uniformes desde la misma constante, para afinar sin rehacer la caché. `TestAgua`:
+> espuma cero en el llano y sí en el escalón, **una margen empinada no es rápido**, orilla
+> en el borde y no en el centro, la corriente sigue un cauce con codo, y la malla y los
+> mapas iguales con el agua en Bajo y en Ultra. **Bajo no quedó igual que hoy, y se dice**:
+> la espuma dejó de salir en vetas dentadas por la margen —era el fallo— y pasó a salir en
+> el cauce que baja; con la cifra de antes (0,06 ×4) el torrente del sitio 56 salía blanco
+> entero, así que queda en 0,08 ×5 y en vetas en vez de manta (decisión mirando capturas).
+> **Y apareció un fallo viejo**: subir `CACHE_VERSION` no invalidaba nada, porque Godot no
+> guarda una propiedad igual a su valor por defecto y la versión lo era siempre —la
+> caché de v4 del sitio 56 se leía como v6—. Defecto a 0 en las dos cachés, la del
+> terreno y la del contorno; cada valle rehace las suyas una vez (25 + 31 s el 56).
+- [x] **4. Medio: la orilla.** Espuma de orilla, fondo de cantos en lo somero y color por
+      hondura, encendidos desde Medio. *Toca `shaders/triplanar.gdshader`,
+      `scripts/mundo/TerrainMaterialManager.gd`. Captura con la máscara de espuma: en la
+      orilla sí y en el centro no.* Media.
+> **HECHO (2026-09-15).** Desde Medio, en el shader del terreno: lo hondo más oscuro, lo
+> somero cubre menos y deja ver la capa de cantos, y **espuma de orilla** estrechada en
+> el shader —horneada por celda de 5 m, sin recortar salía una franja de diez metros en
+> escalones— con la textura grande y cruzada consigo misma girada, que a 4 m se leía como
+> galones. `AguaCaptura MASCARA=1` pinta la espuma en rojo: **en la orilla sí, en el
+> centro del remanso no**. El agua del regional no sigue el ajuste
+> (`TerrainGenerator.agua_con_niveles`). Sin `SHADER ERROR`. Coste, en la tarea 8.
+- [x] **5. Alto: la lámina y el lecho.** Malla de la lámina sobre el cauce, shader con
+      transparencia por hondura, lecho hundido al dibujar, espuma que se acumula en los
+      remansos. *Toca `shaders/agua_rio.gdshader` (nuevo), `scripts/mundo/MallaDelTerreno.gd`,
+      `scripts/mundo/TerrainGenerator.gd`, `shaders/triplanar.gdshader`. Capturas del
+      rápido, el remanso y la orilla; la gente y las nasas en un vado.* Grande.
+> **HECHO (2026-09-15).** `MallaDelTerreno.construir_la_lamina`: una malla con las celdas
+> de agua a la cota de la superficie —25 373 vértices en el sitio 56, **254 ms** al
+> montar, entera—, con el color y el UV del terreno y `shaders/agua_rio.gdshader`:
+> **transparencia por el grosor de agua** leído del buffer de profundidad (1,4 de
+> absorción por metro), espuma de rápido y de orilla, y **la de los remansos en hilos**
+> —en manchas, la primera captura sembraba la poza de témpanos—. El terreno hunde el
+> lecho 0,8 m bajo la lámina **sólo al dibujar** (uniforme `lecho_hondo`, cero sin lámina)
+> y lo pinta mojado. Se enciende en caliente (`aplicar_la_lamina`). Sin `SHADER ERROR`.
+> **Sin comprobar**: la gente y las nasas en un vado sobre el lecho hundido —al empezar no
+> hay nasas ni nadie cruzando en encuadre—; queda como riesgo para la vuelta de fotos.
+>
+> **Corregido tras una queja del usuario**, viendo el juego: «la orilla se está metiendo
+> varios metros en tierra». La máscara del río se difumina hacia la ribera y el relieve
+> sólo se allana al agua desde ~0,55; pintando desde 0,02, la orilla, el color del agua,
+> la lámina y el lecho hundido se metían en tierra —en Bajo también, con el río de
+> siempre—. Ahora **una sola línea del agua**, `AguaDelCauce.LINEA_DEL_AGUA` = 0,5, que
+> leen los dos shaders como uniforme; la espuma de orilla va **por dentro** de ella, en una
+> banda fina que marca la máscara interpolada —la celda de 5 m repartida por el triángulo
+> cubría casi todo el ancho de un río estrecho—. Prueba nueva en `TestAgua` («la orilla no
+> se mete en tierra»); caché a v7. En captura: la franja de cantos queda seca y la espuma
+> es una línea en el contacto.
+- [x] **6. Ultra: salpicaduras y reflejos.** Emisores en los rápidos cerca de la cámara,
+      SSR en Ultra. *Toca `scripts/vista/SalpicadurasDelRio.gd` (nuevo),
+      `scripts/vista/WorldEnvironmentSetup.gd`, `scripts/DemoMain.gd` (colgarlo).
+      Prueba: el reparto de emisores no pasa de su número y elige los de más rápido;
+      captura.* Media.
+> **HECHO (2026-09-15), con una premisa caída.** `SalpicadurasDelRio` (`vista/`): doce
+> emisores como mucho, en los rápidos de fuerza ≥ 0,6 a menos de 160 m de donde mira la
+> cámara, repartidos cada 25 m que se mueve; sólo en Ultra, en caliente. `TestAgua`: no pasa
+> de su número, no coge el de lejos y coge los más fuertes. **Los reflejos no van con el
+> SSR del entorno**, como decía el plan: el SSR de Godot sólo refleja en materiales opacos
+> y la lámina es transparente, así que no le llegaba, y encenderlo reflejaba todo lo liso.
+> Van en el shader de la lámina, recorriendo la pantalla por el rayo reflejado contra el
+> buffer de profundidad (24 pasos, 60 m), en Ultra; con la refracción del fondo. Sin
+> `SHADER ERROR`. Las salpicaduras, vistas de cerca en la tarea 8.
+- [x] **7. El mar.** Oleaje y espuma de orilla, de rompiente en Alto y Ultra. *Toca
+      `shaders/agua_mar.gdshader` (nuevo), `scripts/mundo/TerrainGenerator.gd`. Captura
+      de la costa de prueba en los cuatro niveles.* Media.
+> **HECHO (2026-09-15).** `shaders/agua_mar.gdshader` en el plano del mar del valle —el del
+> regional sigue con su material—, a 128 divisiones para que ondule: **Bajo el de
+> siempre**, con su color, transparencia y brillo; Medio con dos trenes de ola bajos, color
+> por hondura y espuma donde es somera; Alto con rompiente y transparencia; Ultra con el
+> fondo doblado. **La hondura se lee del buffer de profundidad y se proyecta en vertical**:
+> a lo largo de la mirada, con la cámara inclinada, salían bandas por todo el mar. **Y la
+> espuma, hasta 0,5 m y no 1,8**: con una costa tendida 1,8 m son decenas de metros, y la
+> ensenada salía blanca. Probado con la **costa de prueba** (`AguaCaptura SITIO=0 MAR=30`),
+> en los cuatro niveles, sin `SHADER ERROR`. **Límite de la prueba**: donde el río llega al
+> mar subido a mano queda un corte recto —el río no baja a esa cota—; en un valle con costa
+> real el río llega al nivel del mar.
+- [x] **8. En caliente, y lo que cuesta.** Cambiar de nivel con el mapa abierto;
+      `GpuProfile AGUA=1` por nivel, dos corridas, 1080p: **Medio no más de 1 ms sobre
+      Bajo**, Alto y Ultra medidos. *Toca los `aplicar_configuracion`,
+      `scripts/tests/GpuProfile.gd`.* Media.
+> **HECHO (2026-09-15).** **En caliente**: montado en Bajo y pasado a Ultra con el mapa
+> abierto (`AguaCaptura CALIENTE=3`), 565 ms, y la captura sale igual que montando en Ultra.
+> **Lo que cuesta**, `AguaCaptura GPU=1` —el agua entera encendida y apagada en el mismo
+> proceso, en cinco encuadres del sitio 56, 1920×1080, dos corridas por nivel—:
+>
+> | | rápido | remanso | orilla | arriba | rápido de cerca |
+> |---|---|---|---|---|---|
+> | Bajo | 0,06-0,10 | 0,42-0,44 | 0,48-0,53 | 0,07-0,11 | 0,36-0,38 |
+> | **Medio** | 0,17-0,21 | 0,25-0,51 | 0,47-0,58 | 0,12-0,15 | 0,41 |
+> | Alto | 0,71-0,76 | 1,69-1,81 | 1,61-1,79 | 0,52-0,67 | 3,09-3,22 |
+> | Ultra | 0,83-0,91 | 2,08-2,28 | 1,89-1,98 | 0,67-0,79 | 3,39-3,60 |
+>
+> **Medio cuesta de −0,2 a +0,1 ms sobre Bajo**: dentro del tope de 1 ms. Alto y Ultra,
+> sin tope (decisión del usuario), llegan a 3,2 y 3,6 ms con el río llenando la pantalla.
+> **Dos fallos del instrumento, arreglados antes de fiarse**: «sin agua» no apagaba la
+> lámina ni las salpicaduras, que van en nodos aparte —Alto habría salido gratis—; y la sonda
+> captura en pausa, que dejaba las salpicaduras sin repartir —en la captura de cerca no
+> salían—. Visto eso, **las gotas eran cuadrados**: llevan ya una textura redonda y blanda.
+- [x] **9. Las fotos al lado de las capturas, y el visto bueno.** Medio y Ultra en los
+      tres encuadres junto a sus fotos. **Sin el visto bueno del usuario, Ultra no está
+      hecho**; puede pedir vueltas. Pequeña por vuelta.
+      > **HECHO (2026-09-16), tras tres vueltas.** La primera, «otra vuelta al rápido»: las
+      > piedras y su estela. La segunda, cinco quejas —la estela no salía en la piedra, la
+      > espuma sólo se desplazaba, las salpicaduras flotaban, la espuma era muy regular y la
+      > orilla hacía manchas fijas—: estela en la rejilla de vértices, espuma viva hecha en
+      > el shader, salpicaduras que saltan de la piedra con gravedad y orilla en encaje. Las
+      > astillas triangulares que quedaban eran **el hash del ruido sin precisión**. La
+      > tercera, «la orilla es dentada y la estela no tiene movimiento»: **la malla se partía
+      > siempre por la misma diagonal** y plegaba el pie de los taludes; ahora cada cuadro
+      > elige la suya. Y la estela se mece, se rompe y lleva grano. **Al remedir, Medio se
+      > había ido a 1,5-4,6 ms** por la espuma viva: recortada a donde se usa, con dos
+      > octavas en Bajo y Medio, queda a 0,2-0,5 ms sobre Bajo. Todo en GRAFICOS §7.3.
+- [x] **10. Documentar.** GRAFICOS §7 (la fila «Agua» de la tabla de niveles, en caliente
+      o al montar) y §7.3 «Cómo quedó», INTERFAZ §8.8, CREDITOS, ESTADO §3.
+      > **HECHO (2026-09-16).** Fila «Agua», en caliente. CREDITOS ya llevaba las fotos del
+      > Pas. Suite: 1 498 pruebas y 8 197 comprobaciones.
+
+### ~~El clima en pantalla~~ — cerrado (2026-09-16)
+
+> **Cerrado.** Cómo quedó, lo que costó y lo que queda, en [GRAFICOS.md](GRAFICOS.md) §7.4
+> «Cómo quedó»; la casilla, en INTERFAZ §8.8; la cifra de pruebas, en ESTADO §3. **Queda el
+> visto bueno del usuario** al nuevo efecto de agua en la cámara, hecho con su imagen de
+> referencia.
+
+Spec en [GRAFICOS.md](GRAFICOS.md) §7.4 (2026-09-15), con el interruptor en
+[INTERFAZ.md](INTERFAZ.md) §8.8: lluvia por intensidad con suelo mojado, nieve que cuaja,
+niebla de valle con condensación en la cámara, y la luz del nublado y del temporal; sólo
+en el mapa de la banda, sin tope de coste. Siguiente paso: `/plan-tarea`.
+
+**Plan técnico** en GRAFICOS §7.4 (2026-09-16). Tareas, en orden:
+
+- [x] **1. El interruptor «Clima».** `vista/Configuracion.gd`, `ui/VentanaDeConfiguracion.gd`,
+  `tests/TestConfiguracion.gd`. Prueba: cada nivel pone el suyo, moverlo personaliza y un
+  fichero de antes abre en su nivel.
+  > **HECHO (2026-09-16).** `clima` en `Configuracion.AJUSTES` y en los cuatro niveles
+  > (apagado sólo en Bajo); casilla «Clima: lluvia, nieve y niebla» en Gráficos, con la
+  > ayuda de que apagado el tiempo sigue haciendo lo suyo. Dos pruebas nuevas
+  > (`Configuracion`, 23 pruebas y 190 comprobaciones).
+- [x] **2. Lo que se le pide a la vista.** `ClimaEnPantalla` nuevo y `tests/TestClima.gd`
+  (nueva). Pruebas: las tres lluvias en cifras crecientes; mojado y nieve suben y bajan sin
+  saltos con horas construidas; la partida da la misma firma con el clima encendido y
+  apagado.
+  > **HECHO (2026-09-16).** `ClimaEnPantalla` (`vista/`): tablas de lluvia, nieve y luz por
+  > tiempo, si hay niebla de valle, y el suelo —`mojado` y `nieve`— con `una_hora` y
+  > `asentar`. `TestClima` (suite `ClimaEnPantalla`, porque «Clima» ya era la de
+  > `TestWeather`): 7 pruebas y 53 comprobaciones; la de la firma anda seis horas de juego
+  > con la vista avanzando y da la misma partida.
+- [x] **3. Lluvia y nieve por intensidad.** `vista/WeatherView.gd`, `DemoMain.gd`. Prueba:
+  las partículas toman lo de la tabla, y el suelo avanza con `hour_passed`.
+  > **HECHO (2026-09-16).** `WeatherView` llueve con la tabla —gotas, tamaño y
+  > inclinación—, con la gota alineada a su velocidad en dos tiras cruzadas, soplando desde
+  > `viento_del_dia` (la jornada como semilla, sin el `_rng`). **Cambio de premisa**: el suelo
+  > no cuelga de `hour_passed` —el campamento sobrevive a la escena y habría que
+  > desconectarlo al irse—; `contar_horas(día, hora, tiempo)` cuenta las horas de juego
+  > pasadas cada vez que la escena mira el tiempo, y tras más de 48 se asienta. Dos
+  > pruebas nuevas (ClimaEnPantalla: 9 y 63).
+- [x] **4. El suelo mojado y la nieve que cuaja.** `shaders/triplanar.gdshader`,
+  `shaders/clima_encima.gdshader` (nuevo), `vista/WeatherView.gd`, `vista/ResourceProps.gd`,
+  quizá `mundo/Temporada.gd`. Prueba: la cota de nieve del mundo sale de la de `Temporada`,
+  y lo de encima nieva y lo de debajo no; captura.
+  > **HECHO (2026-09-16), la captura va en la 9.** `triplanar.gdshader` gana
+  > `clima_mojado`, `clima_nieve` y `clima_cota_de_nieve` —la misma fracción del relieve que
+  > `snow_min_height`—: mojado, más oscuro, liso y brillante; nevado, blanco encima de la cota
+  > y en lo tendido; nada donde hay agua. Las piedras de `ResourceProps` y `PiedrasDelRio`
+  > llevan `clima_encima.gdshader` de `material_overlay`, con la cota en metros
+  > (`Temporada.cota_de_nieve_en_metros`, nueva). La regla es `ClimaEnPantalla.cuaja`. Dos
+  > pruebas nuevas (ClimaEnPantalla: 11 y 70); el shader del terreno compila con ventana.
+- [x] **5. La niebla de valle.** `vista/NieblaDeValle.gd` y `shaders/niebla_de_valle.gdshader`
+  (nuevos), `DemoMain.gd`. Prueba: el fondo horneado y la densidad, más densa en el fondo
+  que en la cumbre más alta.
+  > **HECHO (2026-09-16), la captura va en la 9.** `NieblaDeValle`: hornea el fondo del
+  > valle —la cota más baja a 500 m, en celdas de 50 m, con un mínimo en dos pasadas y un
+  > suavizado— y monta una caja con `niebla_de_valle.gdshader`, que recorre el rayo en 28
+  > pasos hasta la profundidad de la escena con un ruido 3D de celda acotada, y no tapa más
+  > del 82 %. Entera hasta 60 m sobre el fondo y apagada a 120. La enciende `WeatherView`
+  > sólo con niebla, y la bruma de los bordes con niebla baja de 0,8 a 0,35. Dos pruebas
+  > sobre `PeakTerrain`: el fondo bajo la cima es el del valle, y la densidad entera en el
+  > fondo y nula en la cumbre.
+- [x] **6. La condensación en la cámara.** `vista/WeatherView.gd`, shader de pantalla. Prueba:
+  dentro sí, encima de la capa no, sin niebla no.
+  > **HECHO (2026-09-16), la captura va en la 9.** Una capa de pantalla en `WeatherView`
+  > desenfoca, aclara hacia el gris de la niebla y pone gotas finas, entrando y saliendo en
+  > un segundo cuando la cámara está dentro (`se_empana_en`, que pregunta a
+  > `NieblaDeValle.dentro`). Dos pruebas (ClimaEnPantalla: 15 y 80).
+- [x] **7. La luz del tiempo.** `vista/WorldEnvironmentSetup.gd`, `DemoMain.gd`. Prueba: el
+  temporal más oscuro que el nublado, y el nublado más plano que el despejado.
+  > **HECHO (2026-09-16), la captura va en la 9.** `WorldEnvironmentSetup.luz_por_el_tiempo`
+  > y `luz_sin_clima`: factores de `ClimaEnPantalla.LUZ` sobre la energía del sol, la
+  > opacidad de las sombras y el ambiente que pone la hora, con transición. La escena la
+  > llama con las nubes. La tabla lo cumple (prueba de la tarea 2), y una prueba del entorno
+  > comprueba que entra sin saltos (ClimaEnPantalla: 16 y 83).
+- [x] **8. Apagado no dibuja nada.** `vista/WeatherView.gd`, `vista/NieblaDeValle.gd`,
+  `vista/WorldEnvironmentSetup.gd`. Prueba sobre los nodos y los uniformes.
+  > **HECHO (2026-09-16).** `WeatherView` entra en el grupo de la configuración:
+  > `aplicar_configuracion` apaga lluvia, nieve, bruma, niebla de valle, suelo mojado, nieve
+  > cuajada y condensación; el suelo sigue contando horas para estar donde toca al encender.
+  > La escena pone la luz sin clima. Una prueba repasa las siete cosas apagadas y que al
+  > encender vuelve a llover (ClimaEnPantalla: 17 y 92).
+- [x] **9. Capturas y coste.** `tests/ClimaCaptura.gd` (nueva): los ocho encuadres de la spec
+  y la GPU a 1080p con temporal y niebla, clima sí y no, dos corridas.
+  > **HECHO (2026-09-16), en seis corridas.** Las capturas destaparon tres fallos, dos de
+  > ellos de antes: **la lluvia no se había visto nunca**. Su caja iba a cota cero —bajo el
+  > relieve real— y, al subirla a la cámara, su caja de visibilidad quedaba encima de lo que
+  > se mira y Godot la descartaba entera (cero coste con temporal). Y con 400 m de lado se
+  > veían cuatro rayas: va a 140. **Las gotas pegadas a la cámara** se pintaban como barras:
+  > se apagan por distancia. **La niebla tapaba el fondo del valle**: 0,004 de extinción y
+  > un 65 % de tope. **Y el usuario pidió otro efecto de agua en la cámara**, con una imagen
+  > de referencia: «el que tenemos es horroroso». Ahora son gotas sueltas que hacen de lente
+  > —la escena del revés, borde oscuro y brillo— sobre un fondo casi limpio
+  > (`gotas_en_la_camara.gdshader`). **GPU a 1080p, tres corridas buenas**: temporal +0,13 a
+  > +0,17 ms, niebla +1,48 a +1,72 ms. Hoja en `capturas/clima_fotos.jpg`.
+- [x] **10. Documentar.** GRAFICOS §7 (fila «Clima» y coste) y §7.4 «Cómo quedó», INTERFAZ
+  §8.8, ESTADO §3; suite entera.
+  > **HECHO (2026-09-16).** Suite: 1 541 pruebas y 8 371 comprobaciones. **La primera suite
+  > entera sacó dos pruebas del clima en rojo** que pasaban solas: heredaban el ajuste «Clima»
+  > apagado de `TestConfiguracion`; ahora lo ponen y lo devuelven.
+
+Medir: pruebas de segundos, la sonda de capturas y coste dos veces (~8 min cada una) y la
+suite entera dos veces (~10 min cada una). **Total, unos 40 min de máquina.**
+
+### ~~Buscar un paraje, ver una pasarela y saber qué da una técnica~~ — cerrado (2026-09-16)
+
+> **Cerrado el 2026-09-16.** Lo aprendido fue a [INTERFAZ.md](INTERFAZ.md) §10.6 (las tres
+> ventanas y lo que no se pudo capturar), a
+> [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §7 (el núcleo y la laminar, con lo
+> que hacen) y a [ESTADO.md](ESTADO.md) §2 (14,0 → 7,0 de piedra por tanda) y §3 (la suite).
+> Queda una deuda de instrumentación, no de juego: el aviso emergente de una técnica no se
+> puede capturar desde una sonda.
+
+**Plan técnico** en INTERFAZ §10.5 (2026-09-16). Tareas, en orden:
+
+- [x] **1. Los filtros de Parajes, sin ventana.** `ui/FiltroDeParajes.gd` (nuevo) y
+  `tests/TestParajes.gd`. Pruebas: el oficio mira todos los del paraje, los tramos cortan a
+  499 y 501 m, todo apagado es todo, y se vacían al empezar otra partida.
+  > **HECHO (2026-09-16).** `ui/FiltroDeParajes.gd`, estático: los oficios encendidos,
+  > el tramo, `pasa`, `filtrar` y los textos de la ventana. Se vacía solo cuando cambia
+  > la partida, y eso lo decide `para(sim)` mirando de quién era —la identidad del
+  > `SettlementSim`, que es lo que cambia al cargar otra—. Nueve pruebas nuevas en
+  > `TestParajes`, incluida la de que la distancia se mide en plano y no por la cota.
+- [x] **2. La ventana de Parajes con la fila de filtros.** `ui/PanelSitios.gd`,
+  `ui/GameUI.gd` si hace falta. Prueba de lo que pinta: cuántos enseña de cuántos conoce y
+  el aviso cuando el filtro no deja ninguno.
+  > **HECHO (2026-09-16).** Dos filas en `PanelSitios`: cinco oficios sueltos y cuatro
+  > tramos de los que manda uno. El encabezado dice «1 DE 13» en cuanto algo filtra, y
+  > la lista vacía lo dice con palabras. No hizo falta tocar `GameUI`.
+- [x] **3. Las pasarelas, una obra más.** `ui/PanelObras.gd` y `tests/TestPasarela.gd`:
+  fila con cuántas hay, ficha con ◀ ▶, sitio, medida y jornada; la que se arma, con sus
+  jornadas; sin ninguna, la nota de siempre y ninguna fila; y el párrafo aparte, fuera.
+  > **HECHO (2026-09-16).** La fila y las fichas las da `CensoDeObras`, como las trampas
+  > y las nasas; `PanelObras` sólo las pinta y se queda con la nota de por qué no hay
+  > ninguna. **Premisa que se cayó**: la jornada en que se remató una pasarela no la
+  > guardaba nadie. Se apunta en `Pasarelas.rematadas`, lista paralela a `puentes`,
+  > porque meter el número dentro de `puentes` rompería la rejilla, el andador y la
+  > vista, que leen ahí las celdas. Cuatro pruebas en `TestPasarela`, una de ellas la de
+  > que las dos listas no se descuadran cuando una riada se lleva una pasarela.
+- [x] **4. El efecto de cada técnica.** `economia/TechTree.gd`, `ui/TechGraph.gd`,
+  `tests/TestTecnicas.gd` (nueva). Pruebas: las dieciocho tienen efecto, y cambiar la cifra
+  en el sitio del que la lee la partida cambia el tooltip (una técnica por oficio).
+  > **HECHO (2026-09-16).** `TechTree.efecto(tech)` y `TechTree.abre(tech)`, leyendo de
+  > `Trap.INFO`, `Hunting.MEJORAS`, `Fishing.CATALOGUE`, `Tool.recipe`, `Hunt` y
+  > `Pasarelas`; lo pinta `TechGraph._tooltip`. Las dieciocho dicen qué dan.
+  > **Se cambió la comprobación planeada**: en vez de tocar la cifra en la tabla —las
+  > tablas son `const` y en Godot 4 no se dejan escribir— la prueba la lee de la tabla y
+  > comprueba que es la que sale en el texto, que es lo que distingue leerla de haberla
+  > escrito a mano. Y dos cosas que aparecieron al escribirlo: los decimales se comían
+  > («1,6» por 1,60) y las presas salían por su clave, sin tilde, como una errata.
+- [x] **5. «Lo de hoy» en las aprendidas.** `economia/TechTree.gd`, `ui/TechGraph.gd`,
+  `tests/TestTecnicas.gd`. Pruebas: con tres azagayas y dos cazadores dice 3 y 2, y las no
+  aprendidas no lo llevan.
+  > **HECHO (2026-09-16).** `TechTree.lo_de_hoy(tech, sim)`: trampas puestas, nasas
+  > caladas, pasarelas armadas, figuras pintadas, piezas en el utillaje, y para la
+  > laminar, para cuántas piezas da lo que hay en el abrigo. Sólo en las aprendidas, y
+  > callada cuando no hay nada que contar. `TechGraph` recibe la banda en `build`.
+- [x] **6. El núcleo y la laminar, con efecto.** `economia/Tool.gd`, `sim/Taller.gd`,
+  `tests/TestTaller.gd`. Pruebas: calidad ≥ 0,9 con núcleo y 0,82 sin; diez piezas gastan 5
+  de piedra o de sílex con laminar y 10 sin; asta, fibra y piel igual.
+  > **HECHO (2026-09-16), y antes que las tareas 4 y 5**, que leen sus cifras.
+  > `Tool.CALIDAD_CON_NUCLEO` (0,90) y `Tool.AHORRO_LAMINAR` (0,5). La receta de verdad
+  > la da `Tool.recipe(kind, techs)` y la piden los cinco sitios que la miraban por su
+  > cuenta —lo que se cobra, lo que se comprueba, los encargos y el almacén—, que si no
+  > el taller se para esperando una piedra que ya no hace falta. Siete pruebas en
+  > `TestTaller`.
+- [x] **7. Capturas y la cifra del gasto.** `tests/VentanasCaptura.gd` (nueva): Parajes con
+  filtros y un tooltip a 1280×720. Y el gasto de piedra y sílex de un tramo de taller
+  construido, antes y después, para ESTADO §2.
+  > **HECHO (2026-09-16).** `ParajesCaptura` saca la lista entera y la filtrada a
+  > 1280×720 —para lo cual hay que poner la ventana en modo ventana antes de pedir la
+  > medida: a pantalla completa, que es como arranca la partida, `window_set_size` se
+  > ignora sin decir nada—. **El aviso emergente no se pudo capturar**: Godot sólo lo
+  > abre con un ratón de verdad posado encima. Se intentó cuatro veces —`warp_mouse`, un
+  > `InputEventMouseMotion` por la cola, traer la ventana al frente, y pasar el punto a
+  > coordenadas de ventana, que era un fallo de verdad y quedó arreglado—. El texto sí
+  > está comprobado (`TestTecnicas`) y la sonda lo imprime entero. Queda como deuda de
+  > instrumentación, y está dicho en INTERFAZ §10.6.
+  > **La cifra**: `GastoLiticoProbe`, sin simular jornadas —el gasto de un tramo es lo
+  > que pide `Taller.tool_natural_demand` por lo que cuesta cada pieza—. Una banda de
+  > quince pasa de **14,0 a 7,0 de piedra o sílex por tanda**. En ESTADO §2.
+- [x] **8. Documentar.** INTERFAZ §10 «Cómo quedó», EPOCA_01 §7, ESTADO §2 y §3; suite
+  entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-16).** INTERFAZ §10.5 (el plan) y §10.6 (cómo quedó, con el texto
+  > de cuatro tooltips tal cual sale), EPOCA_01 §7 —el núcleo y la laminar ya no son una
+  > spec pendiente— y ESTADO §2 con la cifra medida. **Suite entera: 1 577 pruebas y
+  > 8 496 comprobaciones, 0 fallan** —suben de 1 544 y 8 379—, y `LlamadasHuerfanas`
+  > dice 0. Sigue saliendo el `SCRIPT ERROR` de `TestTaller` que ya estaba (ESTADO §3):
+  > no se tocó ese código.
+
+Medir: todo pruebas de segundos, salvo una sonda con ventana (~4 min) y la suite entera dos
+veces (~10 min cada una). **Total, unos 25 min de máquina.**
+
+Spec en [INTERFAZ.md](INTERFAZ.md) §10 (2026-09-15): filtros de oficio y de distancia en
+Parajes; las pasarelas en Obras con su fila, su ficha y «ver»; el efecto de cada técnica
+en su tooltip, con las cifras del juego y lo que supone hoy para la banda; y **efecto de
+verdad para el núcleo preparado y la talla laminar**, que no hacían nada (el mecanismo,
+en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §7). Siguiente paso: `/plan-tarea`.
+
 ### ~~La pantalla de carga, y las dos cargas que sobran~~ — cerrado (2026-09-15)
 
 Las diez tareas hechas y en verde: **1 483 pruebas y 8 142 comprobaciones** —del suelo
@@ -308,8 +871,31 @@ encuentre la malla hecha y que volver al mismo valle no vuelva a sembrar el bosq
 > sustituyendo a la de antes, y §3 con el total; SPECS §2.2 con la siembra guardada;
 > ARQUITECTURA §5.1 con a qué espera una sonda que cambia de escena y cómo se mide un
 > viaje en frío.
+>
+> **Corregido el mismo día** (`/depurar` de la tarde): las cifras de la vuelta de la
+> tarea 9 —15,0 s en frío, 5,4 la segunda, +3-5 %— eran de una `TransitoProbe` que no
+> viajaba como el juego. Por el camino del juego: **12,5-13,0 s y 2,8 s, y un 0-7 %**.
+> ESTADO §2 ya lleva las buenas.
 
-### ~~Depurar del 2026-09-15: el humo en cuesta, los tooltips de técnicas y el slider del 3D~~ — cerrado, con una medida pendiente
+### ~~Depurar del 2026-09-15 (tarde): el cambio de mapa, «sin límite», las cuevas y la ropa~~ — cerrado
+
+Cuatro cosas que quedaban de antes. **Los `SCRIPT ERROR` al cambiar de mapa**
+(apuntados el 2026-09-14) **no eran del juego**: salían sólo en `TransitoProbe`, que
+cambiaba de escena sin pasar por `DemoMain._dejar_la_escena`, y la escena se llevaba el
+campamento. La sonda viaja ya por las funciones del juego, y **la escena suelta su
+campamento al salir del árbol pase por donde pase** (`Campamentos.soltar_de_la_escena`,
+SPECS §6.4, `TestViaje`); tres corridas, 0 errores. Las cifras del viaje de ESTADO §2 se
+corrigieron: la vuelta medía otra carga. **«Sin límite» rompía el motor**: con el mapa
+entero en 3D Godot deja de crear los grupos de árboles. **Decisión del usuario**: el
+slider acaba en 1000 m, que monta y cuesta 34-67 ms de bosque, con la cifra en el aviso;
+el mapa entero va por `/spec` (abajo). **El fotograma de las cuevas**: nada desde la
+cámara de arranque, unos 2 ms a 30 m de la cueva (GRAFICOS); la sonda no arrancaba
+—llamaba a una función que ya no existe—, igual que otras dos. **La ropa**, con una
+cuenta y no con una partida (decisión del usuario): con el vestido a 30 h llega al
+invierno si hay un peletero dedicado, ~25 vestidos para 16, y no con media jornada, ~8
+(SISTEMAS §16). Suite: **1 485 pruebas, 8 148 comprobaciones**, `llamadas huerfanas: 0`.
+
+### ~~Depurar del 2026-09-15: el humo en cuesta, los tooltips de técnicas y el slider del 3D~~ — cerrado
 
 Tres quejas. **El humo** salía perpendicular a la hoguera en una ladera: el emisor
 heredaba la inclinación del corro; ahora mira al cielo (EPOCA_01 §10.1, 24). **Los
@@ -319,9 +905,11 @@ texto se escribe encima (INTERFAZ §8). **El slider** de la distancia de los ár
 de 10 m a sin límite, en caliente (INTERFAZ §8.7). Suite: **1 468 pruebas, 8 051
 comprobaciones**, `llamadas huerfanas: 0`.
 
-- [ ] **Medir «sin límite»** con `GpuProfile ARBOLES=1 ESCALON=1 RADIO=100000` y la
+- [x] **Medir «sin límite»** con `GpuProfile ARBOLES=1 ESCALON=1 RADIO=100000` y la
       máquina libre —la primera corrida coincidió con una partida abierta—, y poner la
       cifra en el aviso de la ventana (`VentanaDeConfiguracion.AVISO_SIN_LIMITE`).
+> **HECHO (2026-09-15), y no había cifra que poner: rompía el motor.** Ver el depurar de
+> la tarde; el slider acaba en 1000 m (`AVISO_AL_MAXIMO`, con su medida).
 
 ### ~~La pared que se ve, y lo que otros pintaron antes~~ — cerrado (2026-09-15)
 
@@ -632,19 +1220,31 @@ De catorce quejas, **nueve se arreglaron** (ver SISTEMAS §4, §16 y §20; INTER
 §4; ARQUITECTURA §3; ESTADO §2). **Decisión del usuario**: lo que no es un fallo
 sino funcionalidad nueva va por `/spec`. Queda esto:
 
-- **La niebla del mapa regional, como nubes.** Decisión: primero medir lo que
+- ~~**La niebla del mapa regional, como nubes.** Decisión: primero medir lo que
   cuesta hoy y enseñar dos o tres aspectos con captura —ruido en capas animado
-  frente a volumétrico de verdad— antes de elegir. GRAFICOS §3.
-- **Enviar expedición desde la banda.** El botón de rumbo no hace nada desde el
+  frente a volumétrico de verdad— antes de elegir. GRAFICOS §3.~~
+- ~~**Enviar expedición desde la banda.** El botón de rumbo no hace nada desde el
   mapa de la banda; debería abrir el regional con direcciones posibles y la
   lista de quién va, **desactivado sin 3 pieles curtidas y comida**. Y cuantas
   más cumbres coronadas, más direcciones «vistas desde las cimas». Encaja con la
-  decisión de hoy: la cumbre da pistas, la expedición descubre. SISTEMAS §4.
-- **Filtro en la ventana de Parajes**, por tipo y por distancia. INTERFAZ.
-- **Las pasarelas en Obras como las demás obras**: con botón «ver», su pestaña.
-  INTERFAZ.
-- **El tooltip de cada técnica aprendida, con su efecto EXACTO en el juego.**
-  INTERFAZ, con SISTEMAS §2.
+  decisión de hoy: la cumbre da pistas, la expedición descubre. SISTEMAS §4.~~ Las
+  dos, **spec escrita el 2026-09-15**; ver «En curso».
+- ~~**Filtro en la ventana de Parajes**, por tipo y por distancia. INTERFAZ.~~
+- ~~**Las pasarelas en Obras como las demás obras**: con botón «ver», su pestaña.
+  INTERFAZ.~~
+- ~~**El tooltip de cada técnica aprendida, con su efecto EXACTO en el juego.**
+  INTERFAZ, con SISTEMAS §2.~~ Las tres, **spec escrita el 2026-09-15** en
+  [INTERFAZ.md](INTERFAZ.md) §10; ver «En curso».
+- **Yacimientos con costa en el Paleolítico, sobre la plataforma emergida** (salió al
+  planear el agua, 2026-09-15). El usuario recuerda haber quedado en poner yacimientos
+  ficticios en la plataforma; **no está escrito en ningún documento ni en el código**.
+  Hoy ningún valle del Paleolítico tiene mar: el mar está a −120 m y el relieve local
+  —el LiDAR del IGN— no trae fondo marino. Un valle en la plataforma pediría su relieve
+  de 5 m inventado sobre la batimetría. Va por `/spec`. GRAFICOS §7.3.
+- **El mapa entero en árboles 3D** (salió del `/depurar` del 2026-09-15). «Sin límite»
+  rompía el motor y el slider acaba en 1000 m; para que quepa el mapa hay que agrupar
+  los bloques 3D lejanos en bloques mayores. **Decisión del usuario**: va por `/spec`.
+  GRAFICOS §7.1.
 
 Y **una optimización ya medida**, que no se tocó por no meterla a medias en una
 sesión de catorce quejas —ESTADO §2 tiene las cifras—:
@@ -654,10 +1254,13 @@ sesión de catorce quejas —ESTADO §2 tiene las cifras—:
   duplica el heightmap y la copia no tiene `resource_path`, que es de donde sale
   la clave (24,6 s). Vuelta: `_levantar_vegetacion` 13,8 s y
   `levantar_el_conocimiento` 2,3 s. Con `TransitoProbe` para comprobarlo.
+  **Hecho** con la pantalla de carga (INTERFAZ §9): 1,3 s y 2,8 desde el segundo viaje.
 - **Objetos de la escena anterior que siguen vivos** tras cambiar de mapa:
   `Campamentos` llama al `GameUI` liberado y `RelojDeLaPartida` escribe sobre
-  una simulación liberada. `SCRIPT ERROR` en cada viaje.
+  una simulación liberada. `SCRIPT ERROR` en cada viaje. **Resuelto el 2026-09-15:
+  eran de la sonda**, no del juego (depurar de la tarde).
 - **Mirar la ropa con los tiempos nuevos**: el vestido pasó de 22 a 30 horas.
+  **Mirado el 2026-09-15** con una cuenta (SISTEMAS §16).
 
 ---
 
@@ -1341,11 +1944,13 @@ Veinte quejas de una sola partida. Lo que se arregló, y dónde está contado:
 > vieja; **las obras se quedan** y hay que rehacerlas; **viajan todos juntos** y
 > dejan de trabajar.
 
-- [ ] **Medir el fotograma con las cuevas nuevas.** **Aparcado por el usuario**
+- [x] **Medir el fotograma con las cuevas nuevas.** **Aparcado por el usuario**
       mientras probaba el juego. `FotogramaCuevasProbe.gd` queda escrita:
       mide con y sin cuevas en la misma corrida, alternando y con mediana. La
       primera pasada, con media y p95, salió dominada por tirones sueltos —el
       horno de rejillas al mover la cámara— y no servía para comparar.
+      > **HECHO (2026-09-15).** Nada desde la cámara de arranque; unos 2 ms a 30 m de la
+      > cueva de la banda (GRAFICOS, «El techo de roca»).
 - [x] **Quitar la tarjeta vieja de trueque.**
 
   > **HECHO (2026-09-13).** Fuera `proponer_el_trato`, `tratar` y su viaje de

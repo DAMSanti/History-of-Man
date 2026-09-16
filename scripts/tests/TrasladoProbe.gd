@@ -45,7 +45,7 @@ func _init() -> void:
 	sim.store.add(Materia.Kind.PIEDRA, 300.0)
 
 	# La cueva de casa, y otra a la que se llegue: la más cercana que valga.
-	var casa: CaveMouth = demo._cave_at(sim.home_position)
+	var casa: CaveMouth = demo.campamento.cueva_en(sim.home_position)
 	var destino: CaveMouth = null
 	var mejor := INF
 	for cueva: CaveMouth in demo._caves:

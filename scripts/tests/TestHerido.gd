@@ -94,6 +94,7 @@ func test_no_se_manda_de_expedicion_a_un_tocado() -> void:
 	# [Expedicion.hace_falta_para].
 	sim.store.add(Materia.Kind.PIEL_CURTIDA, 10.0)
 	sim.store.add(Materia.Kind.LENA, 200.0)
+	TestExpedicion.con_algo_al_lado(sim)
 	for i in range(4):
 		sim.people[i].hurt_days = 5
 	assert_false(sim.expedicion.mandar(3, 90.0),

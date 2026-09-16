@@ -636,6 +636,238 @@ recorrido por expediciones, con las cuevas de dentro
 - El trazo de costa bajo la niebla sale del relieve regional a 111 m: se ve bien a
   la distancia de la captura, y de muy cerca puede dentarse.
 
+### Spec (2026-09-15): la expedición por ocho rumbos, y las cimas que avistan
+
+> **Cambia lo decidido el 2026-09-14, y se dice.** Aquel día el rumbo pasó a ser
+> **libre** —cualquier ángulo, pinchando en el mapa—. **Decisión del usuario del
+> 2026-09-15**: «no quiero que sea una dirección escogida directamente por el
+> jugador». La expedición sale hacia **uno de ocho rumbos**, y sólo hacia los que
+> tienen algo que descubrir. El pasillo, el coste, las jornadas y lo que se descubre
+> al volver no cambian. Salió del `/depurar` de la noche del 2026-09-14 (ROADMAP).
+
+**Por qué.** Tres cosas. **Desde el mapa de la banda no se podía mandar**: el botón
+«Rumbo» del minimapa no hacía nada visible —ni aviso, ni flecha, ni ficha—, visto
+por el usuario jugando. **El rumbo libre no es una decisión**: con cualquier ángulo
+posible y nada que lo distinga, se pincha al azar, y muchos pasillos no llevan a
+ningún sitio. **Y coronar una cumbre no dice nada de fuera del valle**: levanta la
+niebla 1,4 km alrededor, que casi siempre cae dentro del propio recuadro. Lo que
+se ve desde una cima alta es justo lo que haría falta para elegir hacia dónde salir.
+
+**Lo que se pide.**
+
+1. **Ocho rumbos**: norte, noreste, este, sureste, sur, suroeste, oeste y noroeste
+   (decisión del usuario). **Un rumbo se ofrece sólo si tiene algo al alcance**: al
+   menos un yacimiento **sin descubrir o avistado** dentro del pasillo de la
+   expedición más larga posible hacia ese rumbo, la de 24 jornadas (decisión del
+   usuario). Desde el yacimiento más al este del mapa, el este no sale. Si no queda
+   ninguno, la ficha lo dice y no deja mandar.
+2. **Se elige igual en los dos mapas** (decisión del usuario): desde el regional y
+   desde la banda, los mismos ocho, con la misma regla. **Se quita el rumbo libre.**
+3. **Desde el mapa de la banda, el botón lleva al regional** (decisión del usuario),
+   con la pantalla de carga, con los rumbos posibles dibujados desde ese campamento y
+   la ficha de quién va y cuántas jornadas. Al mandarla, **el jugador elige** volver
+   al valle o quedarse en el regional.
+4. **El botón está apagado mientras no se puede pagar la expedición más corta** —tres
+   personas y las menos jornadas—: sin tres adultos que puedan ir, **sin tres pieles
+   curtidas**, sin las raciones o sin la leña. Apagado, dice qué falta. El coste es el
+   de hoy (§4, «Lo que cuesta»); lo que cambia es que se sabe antes de pulsar.
+5. **Las tres cumbres más altas de cada valle avistan yacimientos** (decisión del
+   usuario). Al coronar una, se mira **qué se ve de verdad desde su cima** sobre el
+   relieve regional —lo que tapa una sierra no se ve—, y de los yacimientos sin
+   descubrir a la vista se **avistan hasta dos, los más lejanos**. Si sólo hay uno a
+   la vista, uno; si ninguno, ninguno. Las demás cumbres siguen dando lo que dan hoy
+   —parajes, y la niebla de 1,4 km— y no avistan.
+6. **Un yacimiento avistado se ve en el regional, más apagado**, aunque esté bajo la
+   niebla, y **no se puede visitar, fundar ni seleccionar para entrar**. Deja de ser
+   avistado —queda descubierto como cualquier otro— cuando **una expedición cuyo
+   pasillo lo cubre** vuelve (decisión del usuario). No se puede mandar una expedición
+   «a» un avistado: saberlo ahí sirve para elegir el rumbo.
+7. **Lo avistado se guarda** con la partida, como lo descubierto.
+
+**Criterios de aceptación.**
+
+- **Un rumbo se ofrece si y sólo si su pasillo de 24 jornadas tiene un yacimiento sin
+  descubrir o avistado**: prueba con un catálogo de sitios puesto a mano, que
+  enciende y apaga cada uno de los ocho. **El yacimiento más al este no ofrece el
+  este**: prueba con el catálogo real.
+- **Una expedición hacia un rumbo descubre lo mismo que hoy** con ese ángulo: la
+  prueba de pasillo de §4 sigue en verde con los ocho ángulos.
+- **No queda forma de dar un rumbo libre**, ni en el regional ni en el valle: prueba
+  de que el ángulo que llega a la expedición es siempre uno de los ocho.
+- **El botón de la banda lleva al regional con la ficha abierta** para ese
+  campamento: sonda por el camino del juego, con captura.
+- **Apagado sin tres pieles curtidas**, y con el motivo; **encendido con ellas** y lo
+  demás. Lo mismo por raciones, leña y gente. Prueba por causa.
+- **Sólo las tres cumbres más altas del valle avistan**: coronar la cuarta no avista
+  nada. Prueba con cumbres construidas.
+- **La línea de vista la tapa el relieve**: con una sierra construida entre la cima y
+  un yacimiento, no se avista; sin la sierra, sí. Prueba sobre un relieve hecho a mano.
+- **Hasta dos por cima, los más lejanos a la vista**: con cinco a la vista, avista los
+  dos más lejanos. Prueba.
+- **Un avistado no se selecciona para entrar ni para fundar**, y sale dibujado aunque
+  esté bajo la niebla: prueba y captura.
+- **Una expedición que pasa por un avistado lo deja descubierto**; una que no, no.
+  Prueba.
+- **Lo avistado sobrevive a guardar y cargar**. Prueba de ida y vuelta.
+
+**Fuera de alcance.**
+
+- **Mandar una expedición a un yacimiento avistado** como destino: decisión del
+  usuario.
+- **Cambiar el coste**, las jornadas (de 4 a 24), el ancho del pasillo o lo que se
+  descubre al volver.
+- **Cambiar qué da una cumbre** que no es de las tres más altas, o el alcance de
+  1,4 km para parajes y niebla.
+- **Ver avanzar a la expedición** por el mapa regional mientras está fuera.
+- **Rumbos intermedios**, rutas con varios tramos o puntos de paso.
+
+### Plan técnico: ocho rumbos y cimas que avistan (2026-09-16)
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+- `Expedicion.mandar_a(quienes, hacia, dias)` acepta **cualquier ángulo**; el coste es
+  `hace_falta_para` y lo que falta, `lo_que_falta` (raciones, **piel curtida** y leña:
+  las pieles curtidas ya están en el coste). Al volver, `_sitios_del_pasillo` carga la
+  comarca entera (`cantabria_sites.res`) y descubre lo de dentro; la forma con
+  `"descubre": true` es la única que descubre.
+- **El rumbo se pincha**: en el regional, tecla R y clic (`RegionMap._empezar_a_apuntar`,
+  `_apuntar_a`); en el valle, el botón «Rumbo» del minimapa llama a
+  `DemoMain.empezar_a_apuntar`, que sólo escribe una línea en la crónica y espera un clic
+  en el valle. **Por eso no se veía nada.**
+- `FichaDeRumbo` es la misma en los dos mapas y no cuenta nada por su cuenta: quién,
+  jornadas, coste y `bloqueo()`. `FlechaDeRumbo` traza un pasillo (regional) o de la
+  cueva a la puerta del valle.
+- `Cumbres._find_peaks` busca las cumbres del recuadro entero y **quita las ya coronadas**
+  (`_already_climbed`), así que la lista encoge al coronar. Al coronar, `_do_ascent`
+  levanta el círculo de 1 400 m por la barrera (`SettlementSim.levantar_niebla`).
+- El relieve regional es `cantabria_region.res`, de ~111 m por celda, y se lee con
+  `Viaje.cota`. Nada mira hoy una línea de vista.
+- Lo descubierto vive en `GameState.discovered`, pasa por la barrera
+  (`SettlementSim.descubrimientos`, que junta `RelojDeLaPartida`) y se guarda en cada
+  `sitio_<n>.sav` (`Guardado`, clave `"descubierto"`).
+
+**Módulos afectados.**
+
+1. **`Expedicion` (`sim/`)**: `RUMBOS`, los ocho ángulos; `rumbos_posibles()`, los que
+   tienen **un yacimiento sin descubrir** dentro del pasillo de `Pasillo.JORNADAS_MAXIMAS`
+   —un avistado está sin descubrir, así que la regla es una—, con el mismo
+   `_sitios_del_pasillo` que descubre al volver; `por_que_no_sale()`, el motivo para la
+   expedición más corta —`MINIMO_PARA_SALIR` personas y `JORNADAS_MINIMAS`—, que usan el
+   botón y la ficha. `mandar_a` **rechaza un ángulo que no sea de los ocho o no se
+   ofrezca**. La comarca se puede cambiar (`comarca`, por defecto la horneada) para que
+   las pruebas pongan su catálogo a mano.
+2. **`GameState` (`region/`)**: `avistados` (ids), `avistar(site)` y `avistado(site)`
+   —en la lista **y** sin descubrir—. Cruza escenas como `discovered`, sin autoload
+   (SPECS §2.2).
+3. **La barrera**: `SettlementSim.avistar(site)`, suelta al momento y dirigida en la cola
+   `avistamientos`, que `RelojDeLaPartida` junta detrás de lo descubierto. La cola va en
+   `Instantanea.FUERA`, como `descubrimientos`.
+4. **`Guardado`**: `"avistado"` junto a `"descubierto"`, sumado al cargar.
+5. **`Avistamiento` (`sim/`, nuevo, estático)**: `a_la_vista(lon, lat, ojo_m, sitios,
+   relieve)` recorre el relieve regional de la cima a cada yacimiento a pasos de una
+   celda y mira si algo tapa, **con la curvatura de la Tierra y la refracción**
+   (k = 0,13; a 50 km se esconden unos 170 m); y `los_mas_lejanos(sitios, n)`. El relieve
+   entra por parámetro, para la prueba de la sierra hecha a mano.
+6. **`Cumbres`**: `tres_mas_altas()`, las tres de más cota del valle **contando las
+   coronadas** —caché que no depende de lo coronado, así que al cargar sale igual y va en
+   `Instantanea.FUERA`—; y en `_do_ascent`, si la cima es una de ellas, avista hasta dos.
+7. **`FichaDeRumbo` (`ui/`)**: los ocho rumbos como botones, apagados los que no se
+   ofrecen, y «no queda nada al alcance» si no hay ninguno. Abierta desde el valle, dos
+   botones: **«Mandar y volver al valle»** y **«Mandar y quedarse»**. `FlechaDeRumbo`
+   dibuja el pasillo elegido y un eje tenue hacia cada rumbo posible.
+8. **`RegionMap`**: la R abre la ficha para el campamento y **se va el clic de rumbo**
+   (`_apuntar_a`, `_apuntando`). Al montar, si viene del valle a mandar, abre la ficha
+   de ese campamento. Los avistados, **dibujados más apagados aunque estén bajo la
+   niebla** y **fuera de `_visible_sites`**: no se pinchan, no se entra ni se funda, y no
+   salen en listas.
+9. **El valle**: el botón «Rumbo» de `Minimapa` se apaga con `por_que_no_sale()` en el
+   tooltip; al pulsarlo, `DemoMain` deja dicho a qué campamento abrir la ficha y sale a la
+   comarca por el camino de siempre (`_return_to_region`, con la pantalla de carga). Se
+   van `DemoMain.empezar_a_apuntar`, `_apuntar_a`, `_apuntando` y su ficha y flecha.
+10. **El aviso entre escenas** —qué campamento pide la ficha— va en `Expedition`, que ya es
+    el traspaso entre el regional y el valle (SPECS §2.2).
+
+**Decisiones que tomo, y se dicen.**
+
+- **Desde dónde se mira y qué se mira**: el ojo, a la cota de la cima en el mapa local
+  más 1,6 m; el yacimiento, a su cota regional más 2 m. Si la cota local y la regional no
+  salen en el mismo datum al implementarlo, se dice y se corrige.
+- **El botón también se apaga con una expedición fuera**, con ese motivo: `mandar_a` ya
+  no deja, y un botón encendido que no manda es lo que motivó la spec.
+- **Desde el regional con la R, tras mandar se queda en el regional**: la elección de
+  volver es la del camino que viene del valle, que es lo que pide el punto 3.
+
+**Orden de dependencias.** Los rumbos y el motivo de `Expedicion` antes que la ficha y el
+botón; lo avistado en `GameState`, la barrera y el guardado antes que la cumbre; la línea
+de vista antes que la cumbre; la ficha antes que el botón del valle y la sonda; las
+capturas al final.
+
+**Qué contrato cambia, dicho**: `GameState` gana `avistados` (SPECS §2.2), escrito sólo en
+la barrera o fuera del paso (SPECS §3.1, §7). Se quita el rumbo libre del 2026-09-14 en los
+dos mapas.
+
+**Riesgos técnicos.**
+
+- **Pruebas y sondas que mandan con cualquier ángulo** (`TestExpedicion`, `ExpedicionProbe`,
+  `PanelProbe`) mandan casi todas al este desde la cueva de casa, que tiene sitios; las que
+  no, se cambian diciéndolo. «Vuelve sin nada» pide un rumbo que se ofrece a 24 jornadas y
+  no tiene nada a 4.
+- **Ocho pasillos de 24 jornadas** son ocho trazados sobre el relieve regional cada vez que
+  se abre la ficha o cambia lo descubierto: se mide al abrirla; si pasa de 100 ms, caché
+  por campamento hasta que cambie lo descubierto.
+- **La línea de vista dentro de un paso**: un par de miles de lecturas de relieve por
+  yacimiento, una vez por cumbre coronada —tres por valle en toda la partida—. No hay
+  `exp` ni `pow` (SPECS §7.8).
+- **La cima local afina más que el relieve regional**: las primeras celdas junto a la cima
+  pueden tapar la vista por el redondeo de 111 m; se saltan los primeros 300 m.
+
+### Cómo quedó: ocho rumbos y cimas que avistan (2026-09-16)
+
+**Ocho rumbos, y sólo los que tienen algo.** `Expedicion.RUMBOS` son los ocho;
+`se_ofrece(rumbo)` mira si el pasillo de 24 jornadas tiene **un yacimiento sin
+descubrir** —un avistado lo está—, con los mismos sitios que descubre la vuelta.
+`mandar_a` sólo sale hacia uno de los ocho que se ofrece: **no queda rumbo libre**, ni en
+la ficha ni fuera de ella. **Medido**: los ocho desde Cueva los Pendios, 28-29 ms; se
+ofrecen siete, y el oeste no (68 km de pasillo sin nada nuevo). Sin caché.
+
+**Lo que falta, antes de pulsar.** `Expedicion.por_que_no_sale()` dice por qué no puede
+salir la más corta —tres personas, cuatro jornadas—: gente, pieles curtidas, raciones,
+leña o una expedición ya fuera. `motivo_para` es la única lista de motivos, y la usa
+también la ficha.
+
+**Lo avistado** (`GameState.avistados`) cruza escenas como lo descubierto, pasa por la
+barrera (`SettlementSim.avistar`, que junta el reloj) y se guarda sumado. Un sitio es
+**avistado** si está en la lista y sin descubrir: una expedición cuyo pasillo lo cubre lo
+descubre y deja de serlo.
+
+**Las cimas que avistan.** `Cumbres.tres_mas_altas` son las tres de más cota del valle
+**contando las coronadas**, así que coronar no cambia cuáles son. Al coronar una,
+`Avistamiento.a_la_vista` recorre el relieve regional de la cima a cada yacimiento de la
+época sin descubrir, con curvatura y refracción, y se avistan los dos más lejanos a la
+vista. **Medido** en la cima más alta del valle 56: la cota local, 704 m, y la regional,
+694 m, casan; avista 2 en 23 ms.
+
+**En el regional** los avistados se dibujan más apagados aunque estén bajo la niebla, y
+no se pinchan ni salen en listas. La ficha y el botón del valle, en
+[INTERFAZ.md](INTERFAZ.md) §4.
+
+**Lo que salió al hacerlo.**
+
+- **Mandar dos veces por el mismo pasillo ya no se puede** si lo de ahí quedó descubierto:
+  el rumbo deja de ofrecerse. Es la regla, no un fallo.
+- **El botón del valle pedía ocho pieles** en una banda de ocho: contaba el coste de todos
+  los que pueden ir y no el de tres. Lo cazó `RumboProbe`; las pruebas tenían diez pieles.
+- **Cinco pruebas de otras suites mandaban expediciones** con cualquier ángulo o desde
+  ninguna parte; una reventaba antes de su primer `assert` y contaba como pasada. Van con
+  un ayudante único, `TestExpedicion.con_algo_al_lado`.
+
+**Deuda que queda, dicha.**
+
+- **La ficha recalcula los ocho pasillos al abrirse** y los de los otros rumbos a cada
+  cambio de jornadas (~30 ms cada vez): no se nota, y no hay caché.
+- **Un avistado se dibuja con la misma marca** que un descubierto, en otro color: sin
+  captura del usuario, no se sabe si se lee como «sé que está ahí».
+
 ---
 
 > **Levantar niebla no descubre sitios** (2026-09-14). Dos quejas del usuario a
@@ -1672,6 +1904,32 @@ y con el vestido a 30 h —más los odres que hace antes— ya no llegaba. La pr
 comprueba la regla de la aguja, no el ritmo, así que se le dio holgura; **pero
 queda dicho que la ropa se encareció** y hay que mirar que la banda siga llegando
 vestida al invierno.
+
+> **Mirado el 2026-09-15, con una cuenta y no con una partida** (decisión del
+> usuario: la cuenta dice si llega, no si la banda lo elige). Con las cifras del
+> código: un vestido es **1,5 pieles curtidas** —curtir rinde 1,2 pieles por jornada
+> útil (`Taller.CURTIDO_PER_DAY`)— y **30 h de costura**, o sea **43,75 horas
+> efectivas**, 4,0 jornadas de un peletero a rendimiento 1. Un adulto empieza con
+> pericia 0,05-0,30 y rinde el 1,4 de ella (`Inhabitant.effectiveness`), así que a
+> 0,18 rinde 0,25; practicando once horas al día sube 0,0055 por jornada
+> (`APRENDE_POR_HORA`). El vestido se gasta 0,6 por jornada de calendario y aguanta
+> 80 × calidad, de 117 a 141 jornadas con la pericia de un peletero de una estación.
+>
+> | Peletero de pericia media, desde el primer día de primavera | Vestidos al entrar el invierno (jornada 136) |
+> |---|---|
+> | **Todo el día en la peletería**, vestido a 30 h | **~25**, para una banda de 16 |
+> | Igual, con el vestido a 22 h y el odre a 22 h de antes | ~30 |
+> | **Media jornada** en la peletería, a 30 h | **~8**: la mitad de la banda sin ropa |
+>
+> **Llega, pero sólo con un peletero dedicado.** El encarecimiento cuesta unos cinco
+> vestidos antes del invierno; lo que decide es cuántas horas le da la banda a la
+> peletería, y detrás, las pieles: ~40 crudas antes del invierno, con 12 de ocre y
+> 20 de grasa para curtirlas. Mantener a dieciséis vestidos, ya con la pericia alta,
+> pide un tercio de peletero para siempre. **Y en casa no cambia nada** (ESTADO §2,
+> `FrioInviernoProbe`): con fuego nadie coge frío. Donde falta ropa se nota en las
+> cumbres y durmiendo sin fuego. Si hace falta saber si la banda **elige** dedicar ese
+> peletero, es una partida hasta el invierno (~70 min) con los vestidos contados en
+> cada estación.
 
 ## 17. El agua: odres, y por qué llenar uno puede ser una salida
 

@@ -66,11 +66,11 @@ func _poner_boton_de_comarca(encima: Control) -> void:
 	icono.set_anchors_preset(Control.PRESET_FULL_RECT)
 	back.add_child(icono)
 
-	# Y DEBAJO, MANDAR UNA EXPEDICIÓN HACIA UN RUMBO (SISTEMAS §4): se pulsa y se
-	# pincha en el valle hacia dónde. Aquí y no en la barra de abajo, que ya no
-	# cabe a 1280×720, y junto al de la comarca porque los dos miran fuera del
-	# valle.
+	# Y DEBAJO, MANDAR UNA EXPEDICIÓN (SISTEMAS §4): lleva al mapa regional con la
+	# ficha abierta. Aquí y no en la barra de abajo, que ya no cabe a 1280×720, y
+	# junto al de la comarca porque los dos miran fuera del valle.
 	var rumbo := Button.new()
+	boton_de_rumbo = rumbo
 	rumbo.text = "Rumbo"
 	rumbo.anchor_left = 1.0
 	rumbo.anchor_right = 1.0
@@ -78,12 +78,34 @@ func _poner_boton_de_comarca(encima: Control) -> void:
 	rumbo.offset_right = -5.0
 	rumbo.offset_top = BOTON + 10.0
 	rumbo.offset_bottom = BOTON * 2.0 + 10.0
-	rumbo.tooltip_text = "Mandar una expedición: pulsa y pincha en el valle hacia dónde"
+	rumbo.tooltip_text = AYUDA_DEL_RUMBO
 	rumbo.add_theme_font_size_override("font_size", 11)
 	if demo.ui and demo.ui._skin:
 		rumbo.theme = demo.ui._skin
-	rumbo.pressed.connect(func() -> void: demo.empezar_a_apuntar())
+	rumbo.pressed.connect(func() -> void: demo.mandar_expedicion())
 	encima.add_child(rumbo)
+	refrescar_el_rumbo()
+
+
+const AYUDA_DEL_RUMBO := "Mandar una expedición: en el mapa regional, hacia qué rumbo, quién va y cuántas jornadas"
+
+## El botón «Rumbo», para apagarlo cuando no puede salir la expedición más corta.
+var boton_de_rumbo: Button = null
+
+
+## Apaga el botón «Rumbo» mientras no pueda salir la expedición más corta, y dice por
+## qué en la ayuda: sin tres adultos, sin tres pieles curtidas, sin raciones, sin leña
+## o con una fuera (SISTEMAS §4, spec del 2026-09-15: «se sabe antes de pulsar»). Lo
+## llama la escena cada pocos cuadros, con el minimapa.
+func refrescar_el_rumbo() -> void:
+	if boton_de_rumbo == null or demo.get("sim") == null:
+		return
+	var sim: SettlementSim = demo.sim
+	var motivo := "en una visita no hay quien salga" if Expedition.visita \
+		else sim.expedicion.por_que_no_sale()
+	boton_de_rumbo.disabled = not motivo.is_empty()
+	boton_de_rumbo.tooltip_text = AYUDA_DEL_RUMBO if motivo.is_empty() \
+		else "No puede salir una expedición: " + motivo
 
 
 ## La columna del bloque del minimapa, para poder colgarle cosas debajo.

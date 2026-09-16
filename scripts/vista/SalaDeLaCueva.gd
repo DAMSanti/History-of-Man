@@ -395,14 +395,55 @@ func _process(delta: float) -> void:
 	_colocar_camara()
 
 
+## LO QUE CABE EN PANTALLA a esta distancia de la pared, en metros: medio ancho y
+## medio alto.
+##
+## Es lo que faltaba para limitar la cámara. El tope era «un metro antes del
+## borde» **medido en el punto al que se mira**, y lo que se ve no es ese punto:
+## a 7,5 m con 55° de campo, el encuadre se come 3,9 m más a cada lado, así que
+## el borde de la pared entraba en pantalla —queja del usuario del 2026-09-16—.
+static func encuadre(distancia: float, fov_grados: float, aspecto: float) -> Vector2:
+	var medio_alto := tan(deg_to_rad(fov_grados) * 0.5) * maxf(distancia, 0.001)
+	return Vector2(medio_alto * maxf(aspecto, 0.001), medio_alto)
+
+
+## Lo más lejos que se puede poner la cámara sin que la pared deje de llenar la
+## pantalla: en cuanto el encuadre es más alto o más ancho que la pared, se ve el
+## borde. Se queda con el que antes se sale de los dos.
+static func distancia_maxima(ancho_m: float, alto_m: float, fov_grados: float,
+		aspecto: float) -> float:
+	var por_el_alto := (alto_m * 0.5) / tan(deg_to_rad(fov_grados) * 0.5)
+	var por_el_ancho := (ancho_m * 0.5) / (tan(deg_to_rad(fov_grados) * 0.5)
+		* maxf(aspecto, 0.001))
+	return minf(por_el_alto, por_el_ancho)
+
+
+## A dónde se puede mirar sin que asome el borde, con este encuadre.
+##
+## Si el encuadre es más grande que la pared —una ventana muy apaisada, por
+## ejemplo—, se centra: mejor enseñar el borde por los dos lados a la vez que
+## dar un tirón contra un tope imposible.
+static func mirada_dentro(mirada: Vector2, ancho_m: float, alto_m: float,
+		medio: Vector2) -> Vector2:
+	var dentro := mirada
+	dentro.x = ancho_m * 0.5 if medio.x * 2.0 >= ancho_m 		else clampf(mirada.x, medio.x, ancho_m - medio.x)
+	dentro.y = alto_m * 0.5 if medio.y * 2.0 >= alto_m 		else clampf(mirada.y, medio.y, alto_m - medio.y)
+	return dentro
+
+
 func _colocar_camara() -> void:
 	if _camara == null:
 		return
 	var ancho_m := ParedDeLaCueva.ANCHO * ParedDeLaCueva.CELDA_M
 	var alto_m := ParedDeLaCueva.ALTO * ParedDeLaCueva.CELDA_M
-	_mirada.x = clampf(_mirada.x, 1.0, ancho_m - 1.0)
-	_mirada.y = clampf(_mirada.y, 0.6, alto_m - 0.6)
-	_distancia = clampf(_distancia, 1.5, 7.5)
+	var tam := _vista.size if _vista != null else Vector2i(1920, 1080)
+	var aspecto := float(tam.x) / maxf(float(tam.y), 1.0)
+	# EL TOPE DE ALEJARSE SALE DE LA PARED, no de un número: en cuanto el
+	# encuadre pasa de los 4,8 m de alto de la pared, se ve por dónde acaba.
+	_distancia = clampf(_distancia, 1.5,
+		distancia_maxima(ancho_m, alto_m, _camara.fov, aspecto))
+	_mirada = mirada_dentro(_mirada, ancho_m, alto_m,
+		encuadre(_distancia, _camara.fov, aspecto))
 	_camara.position = Vector3(_mirada.x, _mirada.y, _distancia)
 	_camara.look_at(Vector3(_mirada.x, _mirada.y, 0.0), Vector3.UP)
 

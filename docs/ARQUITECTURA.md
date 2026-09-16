@@ -463,6 +463,17 @@ Tres cosas más que cuestan tiempo si se olvidan:
   primero: esperarlas mide la mitad. Y como la escena nueva se lee en un hilo
   (`Carga.cambiar_de_escena`), la de antes sigue unos cuadros diciendo
   `montado`: `TransitoProbe` midió así una ida de 20 ms. Ver `TransitoProbe._montar`.
+- **Una sonda que viaja, viaja por las funciones del juego** (2026-09-15).
+  `TransitoProbe` cambiaba de escena a pelo y se saltaba `DemoMain._dejar_la_escena`:
+  la escena se llevaba el campamento, salían 16-17 `SCRIPT ERROR` por corrida que
+  jugando no salen —y se apuntaron como fallo del juego desde el 2026-09-14—, y la
+  vuelta montaba un campamento nuevo en vez de adoptar el vivo, así que medía otra
+  carga: 15 s de vuelta en vez de 12,5, y 5,4 en el segundo viaje en vez de 2,8. Ahora
+  va por `_return_to_region` y `_entrar_en_el_campamento`, como `CargaProbe`.
+- **Una sonda que llama a algo que ya no existe no falla: se cuelga.** Un `SceneTree`
+  con un `SCRIPT ERROR` en `_init` no llega a `quit()` y espera al tope de reloj
+  (`FotogramaCuevasProbe`, 15 min, 2026-09-15). `LlamadasHuerfanas` no mira las sondas;
+  antes de dejar una corriendo, que se vea pasar el punto donde llama al juego.
   Y en `_init` de una sonda el árbol no es todavía el bucle principal:
   `Carga.cargar` necesita un `await process_frame` antes.
 - **Un viaje en frío se prepara, no se supone.** Las dos cachés del viaje —la

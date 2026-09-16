@@ -320,3 +320,65 @@ func test_salir_quita_la_sala() -> void:
 	sala.free()
 	sim.free()
 
+
+# --- La cámara de la sala no puede enseñar el borde de la pared --------------
+#
+# Queja del usuario del 2026-09-16: «debemos limitar el movimiento de cámara
+# para que no se vean los bordes de la cueva». El tope estaba puesto sobre el
+# PUNTO AL QUE SE MIRA —un metro antes del borde— y lo que se ve no es ese
+# punto: a 7,5 m con 55° de campo caben 3,9 m más a cada lado.
+
+
+func _pared_m() -> Vector2:
+	return Vector2(ParedDeLaCueva.ANCHO * ParedDeLaCueva.CELDA_M,
+		ParedDeLaCueva.ALTO * ParedDeLaCueva.CELDA_M)
+
+
+func test_el_encuadre_crece_con_la_distancia() -> void:
+	var cerca := SalaDeLaCueva.encuadre(1.5, 55.0, 16.0 / 9.0)
+	var lejos := SalaDeLaCueva.encuadre(4.0, 55.0, 16.0 / 9.0)
+	assert_true(lejos.y > cerca.y, "de más lejos se ve más pared")
+	assert_near(lejos.y / cerca.y, 4.0 / 1.5, 0.001, "y en proporción a la distancia")
+	assert_true(lejos.x > lejos.y, "una ventana apaisada ve más ancho que alto")
+
+
+func test_no_se_puede_alejar_mas_alla_de_la_pared() -> void:
+	# La pared mide 4,8 m de alto: con 55° de campo, a más de 4,6 m el encuadre
+	# la desborda por arriba y por abajo.
+	var pared := _pared_m()
+	var tope := SalaDeLaCueva.distancia_maxima(pared.x, pared.y, 55.0, 16.0 / 9.0)
+	assert_true(tope < 7.5, "el tope viejo, 7,5 m, enseñaba el borde")
+	var medio := SalaDeLaCueva.encuadre(tope, 55.0, 16.0 / 9.0)
+	assert_near(medio.y * 2.0, pared.y, 0.01, "justo en el tope, la pared llena el alto")
+
+
+func test_desde_el_tope_la_mirada_no_sale_de_la_pared() -> void:
+	var pared := _pared_m()
+	var tope := SalaDeLaCueva.distancia_maxima(pared.x, pared.y, 55.0, 16.0 / 9.0)
+	var medio := SalaDeLaCueva.encuadre(tope, 55.0, 16.0 / 9.0)
+	for donde: Vector2 in [Vector2(-50.0, -50.0), Vector2(999.0, 999.0),
+			Vector2(pared.x, 0.0)]:
+		var dentro := SalaDeLaCueva.mirada_dentro(donde, pared.x, pared.y, medio)
+		assert_true(dentro.x - medio.x >= -0.001, "no se sale por la izquierda")
+		assert_true(dentro.x + medio.x <= pared.x + 0.001, "ni por la derecha")
+		assert_true(dentro.y - medio.y >= -0.001, "ni por abajo")
+		assert_true(dentro.y + medio.y <= pared.y + 0.001, "ni por arriba")
+
+
+func test_el_tope_viejo_si_ensenaba_el_borde() -> void:
+	# La prueba de que era un fallo y no una impresión: con lo que había —mirada
+	# a un metro del borde y 7,5 m de distancia— el encuadre se salía 2,9 m.
+	var pared := _pared_m()
+	var medio := SalaDeLaCueva.encuadre(7.5, 55.0, 16.0 / 9.0)
+	var mirada_vieja := Vector2(pared.x - 1.0, pared.y - 0.6)
+	assert_true(mirada_vieja.x + medio.x > pared.x,
+		"el encuadre pasaba del borde de la pared")
+
+
+func test_si_el_encuadre_no_cabe_la_pared_se_centra() -> void:
+	# Mejor el borde por los dos lados que un tirón contra un tope imposible.
+	var pared := _pared_m()
+	var enorme := Vector2(pared.x, pared.y)
+	var dentro := SalaDeLaCueva.mirada_dentro(Vector2(0.0, 0.0), pared.x, pared.y, enorme)
+	assert_near(dentro.x, pared.x * 0.5, 0.001, "centrada en horizontal")
+	assert_near(dentro.y, pared.y * 0.5, 0.001, "y en vertical")

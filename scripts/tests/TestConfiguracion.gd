@@ -109,12 +109,14 @@ func test_cada_nivel_pone_su_escalon_de_arboles() -> void:
 		assert_near(float(Configuracion.graficos["radio_3d"]), float(distancias[cual]), 0.001,
 			"%s: la distancia de su escalón" % Configuracion.nombre_del_nivel(cual as Configuracion.Nivel))
 	Configuracion.poner_nivel(Configuracion.Nivel.MEDIO)
-	Configuracion.poner_ajuste("radio_3d", Configuracion.RADIO_3D_SIN_LIMITE)
+	Configuracion.poner_ajuste("radio_3d", Configuracion.RADIO_3D_MAXIMO)
 	assert_eq(Configuracion.nivel, Configuracion.Nivel.PERSONALIZADO,
 		"mover la distancia del 3D personaliza")
 	assert_false(Configuracion.AL_MONTAR_EL_MAPA.has("radio_3d"), "y se aplica en caliente")
-	assert_eq(VentanaDeConfiguracion.texto_de_distancia(Configuracion.RADIO_3D_SIN_LIMITE), "sin límite",
-		"el último punto del slider se lee «sin límite»")
+	assert_near(VentanaDeConfiguracion.DISTANCIAS_3D[-1], Configuracion.RADIO_3D_MAXIMO, 0.001,
+		"el último punto del slider es el máximo, 1000 m: «sin límite» rompía el motor")
+	assert_eq(VentanaDeConfiguracion.texto_de_distancia(Configuracion.RADIO_3D_MAXIMO), "1000 m",
+		"y se lee en metros")
 	assert_true(VentanaDeConfiguracion.DISTANCIAS_3D[0] <= 10.0, "y el primero, 10 m")
 	Configuracion.poner_nivel(Configuracion.Nivel.MEDIO)
 	Configuracion.poner_ajuste("arboles", 3)
@@ -136,6 +138,23 @@ func test_un_fichero_de_antes_de_los_arboles_sigue_en_su_nivel() -> void:
 	Configuracion.cargar()
 	assert_eq(Configuracion.nivel, Configuracion.Nivel.BAJO, "sigue en Bajo, no en Personalizado")
 	assert_eq(int(Configuracion.graficos["arboles"]), 0, "con el bosque de Bajo")
+
+
+## Un fichero guardado con la distancia «sin límite» de antes (100 km) no se aplica tal
+## cual: con todos los árboles del mapa en 3D Godot se queda sin identificadores y deja de
+## montar el bosque (GRAFICOS §7.1, 2026-09-15). Se lee como el máximo.
+func test_la_distancia_sin_limite_guardada_se_lee_como_el_maximo() -> void:
+	var fichero := ConfigFile.new()
+	fichero.set_value("graficos", "nivel", int(Configuracion.Nivel.ULTRA))
+	var ultra: Dictionary = Configuracion.NIVELES[Configuracion.Nivel.ULTRA]
+	for nombre: String in Configuracion.AJUSTES:
+		fichero.set_value("graficos", nombre, ultra[nombre])
+	fichero.set_value("graficos", "radio_3d", 100000.0)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(Configuracion.ruta.get_base_dir()))
+	assert_eq(fichero.save(Configuracion.ruta), OK, "se escribe un fichero con la distancia de antes")
+	Configuracion.cargar()
+	assert_near(float(Configuracion.graficos["radio_3d"]), Configuracion.RADIO_3D_MAXIMO, 0.001,
+		"se lee como el máximo del slider")
 
 
 func test_ultra_es_el_maximo_de_cada_ajuste() -> void:
@@ -285,3 +304,92 @@ func test_los_dos_menus_abren_la_misma_ventana() -> void:
 	assert_gt(float(controles_una.size()), 10.0, "la ventana tiene sus controles")
 	assert_eq(controles_una, controles_otra, "y son los mismos desde los dos menús")
 
+
+## GRAFICOS §7.3: el agua tiene su escalón en cada nivel —el de su mismo nombre—, y
+## moverla personaliza.
+func test_cada_nivel_pone_su_agua() -> void:
+	var esperado := {Configuracion.Nivel.BAJO: 0, Configuracion.Nivel.MEDIO: 1,
+		Configuracion.Nivel.ALTO: 2, Configuracion.Nivel.ULTRA: 3}
+	for cual: int in esperado:
+		Configuracion.poner_nivel(cual as Configuracion.Nivel)
+		assert_eq(int(Configuracion.graficos.get("agua", -1)), int(esperado[cual]),
+			"%s: agua" % Configuracion.nombre_del_nivel(cual as Configuracion.Nivel))
+	Configuracion.poner_nivel(Configuracion.Nivel.MEDIO)
+	Configuracion.poner_ajuste("agua", 3)
+	assert_eq(Configuracion.nivel, Configuracion.Nivel.PERSONALIZADO, "Medio con agua Ultra ya no es Medio")
+	assert_true(VentanaDeConfiguracion.NIVELES_DE_AGUA.size() == 4, "y la ventana ofrece los cuatro")
+
+
+## Un fichero de antes del agua abre en su nivel, con el agua de ese nivel.
+func test_un_fichero_de_antes_del_agua_sigue_en_su_nivel() -> void:
+	var fichero := ConfigFile.new()
+	fichero.set_value("graficos", "nivel", int(Configuracion.Nivel.ALTO))
+	var alto: Dictionary = Configuracion.NIVELES[Configuracion.Nivel.ALTO]
+	for nombre: String in Configuracion.AJUSTES:
+		if nombre != "agua":
+			fichero.set_value("graficos", nombre, alto[nombre])
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(Configuracion.ruta.get_base_dir()))
+	assert_eq(fichero.save(Configuracion.ruta), OK, "se escribe un fichero sin agua")
+	Configuracion.cargar()
+	assert_eq(Configuracion.nivel, Configuracion.Nivel.ALTO, "sigue en Alto, no en Personalizado")
+	assert_eq(int(Configuracion.graficos.get("agua", -1)), 2, "con el agua de Alto")
+
+
+## GRAFICOS §7.4: el clima encendido en Medio, Alto y Ultra y apagado en Bajo, y moverlo
+## personaliza.
+func test_cada_nivel_pone_su_clima() -> void:
+	var esperado := {Configuracion.Nivel.BAJO: false, Configuracion.Nivel.MEDIO: true,
+		Configuracion.Nivel.ALTO: true, Configuracion.Nivel.ULTRA: true}
+	for cual: int in esperado:
+		Configuracion.poner_nivel(cual as Configuracion.Nivel)
+		assert_eq(bool(Configuracion.graficos.get("clima", null)), bool(esperado[cual]),
+			"%s: clima" % Configuracion.nombre_del_nivel(cual as Configuracion.Nivel))
+	Configuracion.poner_nivel(Configuracion.Nivel.ALTO)
+	Configuracion.poner_ajuste("clima", false)
+	assert_eq(Configuracion.nivel, Configuracion.Nivel.PERSONALIZADO, "Alto sin clima ya no es Alto")
+
+
+## Un fichero de antes del clima abre en su nivel, con el clima de ese nivel.
+func test_un_fichero_de_antes_del_clima_sigue_en_su_nivel() -> void:
+	var fichero := ConfigFile.new()
+	fichero.set_value("graficos", "nivel", int(Configuracion.Nivel.BAJO))
+	var bajo: Dictionary = Configuracion.NIVELES[Configuracion.Nivel.BAJO]
+	for nombre: String in Configuracion.AJUSTES:
+		if nombre != "clima":
+			fichero.set_value("graficos", nombre, bajo[nombre])
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(Configuracion.ruta.get_base_dir()))
+	assert_eq(fichero.save(Configuracion.ruta), OK, "se escribe un fichero sin clima")
+	Configuracion.cargar()
+	assert_eq(Configuracion.nivel, Configuracion.Nivel.BAJO, "sigue en Bajo, no en Personalizado")
+	assert_eq(bool(Configuracion.graficos.get("clima", true)), false, "con el clima de Bajo, apagado")
+
+
+# --- El relieve de las texturas, por nivel (GRAFICOS §4, 2026-09-16) ---------
+#
+# Sale del nivel y no de un ajuste propio: decisión del usuario, «parallax de
+# verdad en Alto y Ultra». Lo que hay que asegurar es que Bajo y Medio no pagan
+# nada y que Personalizado lo decide por el agua, que es la medida del equipo.
+
+
+func test_el_relieve_solo_va_en_alto_y_ultra() -> void:
+	Configuracion.poner_nivel(Configuracion.Nivel.BAJO)
+	assert_eq(Configuracion.pasos_de_relieve(), 0, "Bajo, sin relieve")
+	Configuracion.poner_nivel(Configuracion.Nivel.MEDIO)
+	assert_eq(Configuracion.pasos_de_relieve(), 0, "Medio, sin relieve")
+	Configuracion.poner_nivel(Configuracion.Nivel.ALTO)
+	assert_true(Configuracion.pasos_de_relieve() > 0, "Alto, con relieve")
+	var alto := Configuracion.pasos_de_relieve()
+	Configuracion.poner_nivel(Configuracion.Nivel.ULTRA)
+	assert_true(Configuracion.pasos_de_relieve() > alto, "y Ultra, con más pasos")
+
+
+func test_en_personalizado_el_relieve_va_con_el_agua_de_alto() -> void:
+	# Quien quita la lámina del río de Alto está diciendo que el equipo no da
+	# para más: tampoco paga el relieve.
+	Configuracion.poner_nivel(Configuracion.Nivel.ALTO)
+	Configuracion.poner_ajuste("sombras", Configuracion.Sombras.BAJAS)
+	assert_eq(Configuracion.nivel, Configuracion.Nivel.PERSONALIZADO,
+		"tocar un ajuste deja el nivel en Personalizado")
+	assert_true(Configuracion.pasos_de_relieve() > 0, "con el agua de Alto, relieve")
+	Configuracion.poner_ajuste("agua", 1)
+	assert_eq(Configuracion.pasos_de_relieve(), 0, "con el agua de Medio, no")

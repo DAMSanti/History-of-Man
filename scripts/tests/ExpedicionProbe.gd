@@ -51,6 +51,8 @@ func _init() -> void:
 	sim.store.add(Materia.Kind.LENA, 120.0)
 	sim.store.add(Materia.Kind.CARNE_SECA, 120.0)
 	var comida_antes := sim.store.food_rations()
+	# Uno de los ocho rumbos, el más cercano al sitio (SISTEMAS §4, 2026-09-15).
+	hacia = fposmod(round(hacia / 45.0) * 45.0, 360.0)
 	var salio := sim.expedicion.mandar(3, hacia)
 	print("sale hacia %d: %s · raciones que se lleva: %.1f" % [
 		destino, "SI" if salio else "NO", comida_antes - sim.store.food_rations()])
