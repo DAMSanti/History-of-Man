@@ -34,6 +34,9 @@ encima y **Ultra sin límite**. Ver §7.)*
 | **El agua: ríos con rápidos y espuma, y el mar del valle** (spec) | §7.3 |
 | **El clima en pantalla: lluvia, nieve que cuaja, niebla de valle** (spec) | §7.4 |
 | La niebla del mapa regional como nubes (spec) | §3 |
+| El relieve de las texturas, que no existía (depurar del 2026-09-16) | §4 |
+| **El día y la noche**: está encendido desde el 2026-09-07, y la spec de apagarlo era falsa | §7.5 |
+| **Ver a la gente trabajar: viajes abreviados y cámara lenta** (spec) | §7.6 |
 | **Las tres veces que la medida estaba mal antes que el juego** | **§8** |
 | Qué queda fuera a propósito | §9 |
 
@@ -267,6 +270,19 @@ marrón. Ahora la playa es la franja de `RegionMap.shore_band_m` —**15 m**,
 decisión del usuario: «playa fina y hierba»— sobre el agua, y por encima es
 pradera y bosque como en tierra. En el valle `cota_base` es cero y nada cambia.
 Visto con `RegionCaptura`.
+
+> **Los ríos del mapa regional, hechos el 2026-09-16** (EPOCA_01 §10.2): el relieve
+> regional se horneó sin cauces y el mapa no dibujaba ninguno. Ahora se hornean de OSM
+> —1 599 tramos, 4 107 km— y se prolongan por la plataforma hasta la costa de la época
+> (54 desembocaduras, 1 464 km). Se pintan con `Hydrography.apply` como en un valle,
+> **exagerando el ancho ×4,5 con un mínimo de 0,8 celdas**: un vértice de la malla
+> regional son 195 m, y por debajo de ese mínimo el cauce sale a trozos. El ancho crece
+> aguas abajo (`AnchoDeLosRios`). **Y el relieve de la plataforma es ×1,6 el medido**
+> —elección del usuario sobre capturas—, con el valle de cada río abierto en las lomas.
+>
+> Pintarlos costaba **23 s en cada montaje del mapa**, así que el relieve ya preparado
+> —lomas, valles y ríos— se hornea en `data/dem/cantabria_region_mar…_hidro.res` (55 MB,
+> no se versiona): con él, la sonda que monta el mapa y captura pasa de 110 s a 38 s.
 
 **Y la plataforma tiene relieve** (`RelieveDeLaPlataforma`). La batimetría a 111 m
 sale lisa, y con el mar a −120 m se veía una llanura sin un bulto.
@@ -1351,8 +1367,8 @@ agua, nasas, pasarelas—, el río se tiene que leer como río.
 - **Cambiar por dónde van los ríos** o su anchura: son datos del relieve (§2).
 - **Sonido** del agua.
 - **Cascadas verticales** con geometría propia: los rápidos son lo que el cauce da.
-- **Yacimientos con costa en el Paleolítico** para ver el mar jugando: pendiente de
-  `/spec` (ROADMAP).
+- **Yacimientos con costa en el Paleolítico** para ver el mar jugando: spec escrita el
+  2026-09-16 en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §10.2.
 
 ### Plan técnico (2026-09-15)
 
@@ -1742,6 +1758,307 @@ la cresta del anillo clara: **sin ella no se veían** —la primera captura ense
 culebrillas que, comparando con la misma agua sin lluvia, resultaron ser la espuma de
 orilla de siempre—. Lo que pica sale de la lluvia que cae ahora (`WeatherView.lluvia_vista`),
 no de lo mojado del suelo: para de llover y los anillos se van en dos segundos.
+
+---
+
+## 7.5. El día y la noche: ya está encendido (2026-09-17)
+
+> **Esta sección era una spec, y la spec partía de un dato falso.** Se escribió el
+> 2026-09-16 diciendo «el sol está clavado a las 12:00, el ciclo se apagó a propósito»,
+> y al ir a planearla el 2026-09-17 resultó que **el ciclo lleva encendido desde el
+> 2026-09-07**. El usuario decidió entonces **dejar la luz exactamente como está** y
+> quedarse con lo medido. Abajo está lo que dice el código y lo que dio la medida; la
+> spec vieja no se conserva porque describía un juego que no existe.
+
+### De dónde salió el error, que es lo que importa
+
+`WorldEnvironmentSetup` tiene `@export var follow_time_of_day: bool = false` con un
+comentario que decía «de momento va desactivado: el ciclo está implementado y funciona,
+pero para trabajar en el terreno estorba tener medio mapa a oscuras». **Ese comentario
+llevaba diez días siendo mentira**: `scenes/WorldEnvironment.tscn` pone
+`follow_time_of_day = true`, y esa escena es la que instancian `demo_main` y
+`region_map`. El `@export` es el valor de fábrica; el de la escena es el que corre.
+
+La lección, que ya está en CLAUDE.md y aquí se cobró una spec entera: **un comentario
+sobre el estado de una opción caduca en cuanto alguien toca la escena**, y nadie vuelve
+a leerlo. El comentario quedó corregido el 2026-09-17.
+
+### Lo que hace hoy, medido
+
+`NocheLuzProbe` (ventana, 1080p, sitio 56, una noche con la luna alta y el hogar
+encendido; `DIAS=1 FIJO=1 HORAS=6,9,12,15,18,21,23`), brillo medio de la pantalla:
+
+| hora | pantalla | % del mediodía | altura del sol |
+|---|---|---|---|
+| 6:00 | 0,1558 | 72 % | 4,1° |
+| 9:00 | 0,2024 | 93 % | 35,7° |
+| 12:00 | 0,2171 | 100 % | 52,7° |
+| 15:00 | 0,2041 | 94 % | 35,7° |
+| 18:00 | 0,1662 | 77 % | 4,1° |
+| 21:00 | 0,0957 | 44 % | −26,1° |
+| 23:00 | 0,0839 | **39 %** | −38,9° |
+
+O sea: **el sol sigue la hora de la partida** —de 52,7° a mediodía a −38,9° a las once
+de la noche—, la luna se enciende de noche y se apaga de día, y **las hogueras alumbran**
+(28,4 de energía y 85 m de alcance, con sombras).
+
+**Y la noche se queda al 39 % del mediodía**, que es un día muy nublado y no una noche.
+Se deja así a propósito: decisión del usuario del 2026-09-17. La cifra vive también en
+[ESTADO.md](ESTADO.md) §2, que es donde se apuntan los huecos entre lo que se pretendía
+y lo que hace el juego.
+
+### Dos cosas que conviene saber si alguien vuelve aquí
+
+- **El mapa regional se queda con luz fija por su cuenta**, sin interruptor ninguno:
+  `_find_sim()` busca un `sim` en la escena actual y `RegionMap` no tiene, así que
+  `_process` se va sin mover el sol. No es una decisión escrita en ningún sitio: es una
+  consecuencia. Si algún día el regional necesita hora, hay que ponérsela a mano.
+- **La noche dura 1,6 segundos de reloj.** `SettlementSim.NOCHE_HORAS_POR_SEGUNDO = 5.0`:
+  en cuanto la banda se acuesta, ocho horas de juego pasan en un parpadeo. Lo único que
+  se ve del ciclo, por tanto, es el atardecer y el amanecer — y ésos salen al 72-77 % del
+  mediodía. Quien quiera «ver» la noche tiene ahí el número que tocar, no en la luz.
+
+## 7.6. Ver a la gente trabajar: los viajes abreviados y la cámara lenta (spec 2026-09-16, hecho 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-16**, a partir de una pregunta del usuario:
+> «incluso a la velocidad normal todo se mueve extremadamente rápido; ¿se te ocurre
+> alguna forma de que podamos ver a los personajillos trabajar a una velocidad normal,
+> pero el juego siga funcionando igual? El problema creo que son los viajes». Se le dieron
+> cuatro opciones y eligió la combinación de dos.
+
+### Qué problema cierra
+
+**Un día de juego son 120 s reales**, o sea una hora de juego son 5 s. La gente anda
+4,5 km por hora de juego, que en pantalla son **900 m por segundo**: 720 veces lo real.
+El usuario tenía razón con los viajes: para que una batida de dos kilómetros quepa en la
+jornada, el trayecto dura en pantalla un par de segundos, y lo que se ve son muñecos
+cruzando el valle como disparos.
+
+**Verlos andar a paso humano con este reloj es imposible**: habría que hacer el juego
+720 veces más lento. Lo que se pide es que **se lea**, separando lo que se ve de lo que se
+simula, y **sin que la partida cambie**.
+
+### Lo que se pide
+
+**Los viajes largos, abreviados en la vista.**
+
+- Un trayecto de **más de 150 m** no se dibuja andando entero. La persona se ve salir
+  andando **los primeros 20 m** y llegar andando **los últimos 20 m**, a un paso que se
+  pueda seguir con la vista; entre medias, **una marca pequeña con su color recorre la
+  vereda** a la velocidad del juego (decisión del usuario), para saber por dónde va.
+- **Es sólo vista**: la simulación hace el trayecto como hoy. Si el tramo de salida o de
+  llegada retrasa la figura respecto a la persona simulada, el retraso tiene tope.
+- Lo que la persona hace en el sitio —hoy la pose y los clips que haya— se reproduce **a
+  su velocidad**, no a la del reloj del juego. El trabajo se verá tan bien como sean sus
+  animaciones: los bucles de trabajo están pendientes (ROADMAP, «Los gráficos»).
+
+**La cámara lenta al acercarse.**
+
+- **Automática y gradual** (decisión del usuario): por debajo de **60 m** de distancia de
+  cámara el tiempo va frenando, hasta ir **20 veces más despacio** en la distancia mínima.
+  Al alejarse vuelve poco a poco.
+- **Un letrero** en la barra de arriba dice que va a cámara lenta y cuánto.
+- **Multiplica la velocidad que haya elegido el jugador** (×1, ×2, ×5) y no toca la
+  pausa. **La noche acelerada no se frena**: de noche no hay trabajo que mirar.
+- Frena **toda la partida a la vez**, todos los campamentos, porque el reloj es uno.
+- **La partida da lo mismo con cámara lenta que sin ella**: se simulan los mismos pasos
+  del mismo tamaño, sólo que menos por segundo real. Hoy la velocidad del juego cambia
+  el tamaño del paso; la cámara lenta **no puede hacerlo así**. El contrato está en
+  [SPECS.md](SPECS.md) §3.1.
+
+### Criterios de aceptación
+
+- **Nadie cruza la pantalla a toda velocidad.** A ×1 y sin cámara lenta, en una sonda de
+  una jornada que apunte dónde se dibuja cada figura cada cuadro, **ninguna figura
+  dibujada se mueve a más de 8 m por segundo real** salvo en trayectos de menos de 150 m.
+- **La marca no se pierde.** Durante un trayecto abreviado la marca está siempre sobre la
+  vereda que sigue la simulación y **a menos de 5 m de la posición simulada**.
+- **La figura no llega tarde de más.** Cada tramo andado de salida o de llegada dura
+  **como mucho 1,5 s reales**.
+- **Los viajes abreviados no cambian la partida**: la misma semilla da la misma firma en
+  diez jornadas con la función encendida y apagada. Prueba.
+- **La cámara lenta frena lo que dice**: con la cámara en la distancia mínima, la partida
+  avanza **1/20 de las horas de juego por segundo real** que sin ella, con un 5 % de margen;
+  a 60 m o más, lo mismo que sin ella. Prueba.
+- **La cámara lenta no cambia la partida**: los mismos pasos con y sin cámara lenta dan
+  la misma firma. **Se comprueba dando pasos, no esperando al reloj**: diez jornadas a
+  cámara lenta de verdad serían horas.
+- **El letrero sale y se va**: aparece por debajo de 60 m y desaparece por encima.
+  Prueba de lo que pinta la barra.
+
+### Fuera de alcance
+
+- **Cambiar la duración del día** o la velocidad de marcha de la simulación.
+- **Animaciones nuevas** de andar o de trabajar: van por su bloque (ROADMAP, «Los
+  gráficos»).
+- **La cámara lenta en el mapa regional.**
+- **Abreviar los viajes en el mapa regional** (las expediciones ya se dibujan como ruta).
+
+**Plan técnico (2026-09-17).**
+
+*Comprobado contra el código antes de planear.* Las cifras de la spec salen: un día son
+`seconds_per_day = 120` s y `_advance` convierte con `scaled / seconds_per_day * 24.0`,
+así que a ×1 una hora de juego son 5 s reales. La figura se dibuja en
+`SettlementSim._pintar_a`, que pasa `person.position` tal cual a `BandaCrowd.update`
+dentro del paso de simulación: **hoy no hay ninguna capa entre la posición simulada y la
+dibujada**, y ahí es donde entra todo esto. El camino que sigue la persona está en
+`Inhabitant.route` (`PackedVector3Array`) con `route_step`.
+
+### Cómo se frena sin cambiar la partida
+
+Es la pieza delicada, y la distinción ya está escrita en SPECS §3.1: `_advance(PASO_FIJO)`
+multiplica por `time_scale` **dentro**, así que el tamaño del paso en horas de juego
+depende de la velocidad. Bajar `time_scale` para ir a cámara lenta daría pasos más cortos
+y **sería otra partida**.
+
+Lo que se hace es lo contrario y es lo mismo que la noche al revés: **frenar el caudal de
+pasos, no su tamaño**. Un `freno_de_la_vista` (1,0 = nada, 0,05 = veinte veces más
+despacio) multiplica el `delta` que alimenta `_pendiente` en `SettlementSim._process` y en
+`RelojDeLaPartida._process`. Se dan menos pasos por segundo real; la sucesión de
+`_advance` es idéntica. **La noche no se frena**: su presupuesto sale del `delta` de
+verdad, porque de noche no hay nada que mirar.
+
+### Quién manda sobre quién
+
+El freno **lo pone la vista y lo guarda la simulación**, no al revés: `SettlementSim` y
+`RelojDeLaPartida` llevan un `freno_de_la_vista` que alguien de fuera escribe, igual que
+ya pasa con `time_scale`. `DemoMain` lo calcula cada cuadro con la distancia de cámara.
+Así no hay un `scripts/sim/` preguntándole nada a `scripts/vista/` (SPECS §4.7), y con
+varios campamentos el reloj lo adopta como ya adopta la velocidad.
+
+### Módulos
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| La curva del freno y su rótulo | `scripts/vista/CamaraLenta.gd` (nuevo) | Funciones puras, sin estado: la prueba las llama sin escena |
+| Dónde se dibuja cada figura, y la marca del viaje | `scripts/vista/Figuras.gd` (nuevo) | SPECS §4.7: la vista lee y dibuja, no decide |
+| Guardar el freno y repartir menos pasos | `SettlementSim`, `RelojDeLaPartida` | SPECS §3.1, con el añadido de abajo |
+| Ponerlo cada cuadro | `DemoMain` | — |
+| El letrero | `BarraSuperior` | INTERFAZ |
+
+### La figura y la marca, en concreto
+
+`Figuras` recuerda por persona **dónde se la está dibujando** y la lleva hacia
+`person.position` con dos reglas:
+
+- **Si lo que queda de camino es corto** (menos de 150 m de ruta total), la figura va
+  pegada a la persona, como hoy.
+- **Si es largo**, la figura anda **los primeros y los últimos 20 m a paso legible** —como
+  mucho 8 m por segundo real, y como mucho 1,5 s por tramo, que es el tope de retraso— y
+  entre medias se esconde bajo tierra (el gesto que ya usa `_sacar_del_mapa`) mientras
+  **una marca recorre la ruta** en la posición simulada.
+
+El tope de retraso es lo que impide que la figura se descuelgue: si 1,5 s no bastan para
+los 20 m, la figura salta a donde toque. **Es vista**: nadie lee la posición dibujada para
+decidir nada.
+
+### Riesgos que se nombran
+
+- **El freno multiplica al `time_scale` del jugador**, así que a ×5 y muy cerca la partida
+  va a ×0,25. Es lo que pide la spec, pero conviene saberlo: un día entero mirando de
+  cerca son cuarenta minutos de reloj.
+- **`Figuras` guarda estado por persona y por cuadro.** El invariante 3 de SPECS §7 dice
+  que nada de la SIMULACIÓN puede depender del cuadro; esto es vista y no entra en la
+  firma, y la prueba de firma con y sin lo comprueba.
+- **La marca sale sin color propio**: hoy no hay ningún color por persona ni por oficio en
+  el juego —el minimapa las pinta a todas del mismo amarillo—, así que «su color» no
+  tiene a qué referirse todavía. Se decide con el usuario antes de implementarlo.
+
+### Orden de dependencias
+
+Las dos mitades son independientes y se pueden hacer en cualquier orden: la cámara lenta
+toca el reloj, los viajes abreviados tocan el dibujo. La sonda de la jornada mide las dos
+a la vez, así que va al final y se corre **una sola vez**.
+
+### Cómo quedó (2026-09-17)
+
+**La cámara lenta frena dando MENOS pasos.** `SettlementSim.freno_de_la_vista` multiplica
+el reloj real que entra en `_pendiente`, en la simulación suelta y en
+`RelojDeLaPartida`. Los pasos son los mismos y del mismo tamaño: sólo se reparten en más
+fotogramas. La curva está en `CamaraLenta` —1 desde los 60 m, 1/20 en la distancia
+mínima, con el cuadrado de lo que queda por acercarse porque el recorrido útil del zoom
+está casi todo en los últimos metros— y `DemoMain` la pone cada cuadro. **La noche no se
+frena**: de noche no hay a nadie mirando trabajar. El letrero vive en la barra de arriba
+y lee el freno de la simulación, no la cámara.
+
+**Los viajes largos se abrevian** (`Figuras`). Por encima de 150 m de ruta, la figura
+anda los primeros doce metros del camino, se esconde, y reaparece a doce metros del final
+para andarlos. Por el medio va **una marca cuadrada del color de su oficio** sobre la
+posición simulada. Lo demás —viajes cortos, gente en el campamento— se dibuja donde está,
+como siempre.
+
+**Los doce metros son 8 m/s × 1,5 s, y salen de que la spec se contradecía.** Pedía
+tramos de 20 m, figuras a 8 m/s como mucho y un retraso de 1,5 s como mucho: 20 m a 8 m/s
+son 2,5 s. Los tres números no caben juntos, así que se conservan los dos medibles —el
+paso y la duración— y el tramo sale de ellos.
+
+**Y la primera paleta por oficio del juego** (decisión del usuario): no había ninguna, ni
+por persona ni por oficio. Vive en `Figuras.COLOR_DEL_OFICIO` porque hoy es su único
+consumidor.
+
+### Lo que costó que la figura no diera saltos
+
+La primera versión llevaba la figura **hacia la persona** y decidía si se la veía mirando
+dónde estaba *la persona*: cerca del principio del camino, o cerca del final. Parece lo
+mismo y no lo es, y la sonda lo dijo a la primera:
+
+| | primera versión | lo que se pedía |
+|---|---|---|
+| la figura más rápida | **883 m/s** | 8 m/s |
+| lo que se descolgaba | **64 m** | 12 m |
+
+**A ×1 la simulación mueve a alguien de quince a sesenta metros por cuadro**, así que
+«estar en los primeros doce metros del camino» es un estado por el que se pasa en un
+fotograma —o que se salta entero—. La figura tiene ahora **fases y un avance propio a lo
+largo de la ruta**, y mientras se la ve avanza `8 m/s × delta` y nada más: la garantía no
+depende de cuánto corra la simulación entre cuadros.
+
+Dos cosas más que aparecieron y ninguna era obvia:
+
+- **El viaje volvía a empezar en cuanto terminaba.** Al llegar, la figura pasa a
+  «pegada», y la pregunta «¿es otro viaje?» miraba justamente si estaba pegada: con la
+  ruta todavía guardada, la respuesta era que sí, para siempre. En la prueba salían 321
+  cuadros de salida donde tenía que haber 90. Ahora al llegar se tira la ruta.
+- **Replanificar a otro sitio a mitad de camino teletransportaba la figura**: la ruta
+  nueva empieza donde está la persona, que puede estar a un kilómetro. Medido: **3 374
+  m/s**. Si el camino nuevo no empieza donde está la figura, ya no se la ve salir: se
+  esconde y se va al medio del viaje.
+
+### Medido
+
+`VerTrabajarProbe` (ventana, 1280×720, valle del sitio 56, tres horas de juego a ×1, sin
+cámara lenta, 250 cuadros con alguien de viaje en 238 de ellos):
+
+| | medido | tope |
+|---|---|---|
+| la figura más rápida | **8,06 m/s** | 8,0 |
+| el tramo andado más largo | **1,57 s** | 1,50 |
+| el mayor salto de la marca | **652 m en un cuadro** | — |
+
+Los 652 m de la marca **no son un fallo**: la marca va en la posición simulada y a ×1 una
+persona recorre eso entre dos cuadros. Es lo que el usuario eligió al escribir la spec
+—«una marca recorre la vereda **a la velocidad del juego**»—, y por eso la marca cruza el
+valle como un trazo mientras la figura anda. La spec pedía además «la marca a menos de
+5 m de la posición simulada»: **eso sólo se puede medir dentro del mismo cuadro**, y ahí
+lo comprueba `TestVerTrabajar`; entre dos cuadros la persona ya se ha movido quince
+metros, así que el criterio no se puede observar como estaba escrito.
+
+Y dos cosas del instrumental, que costaron sus vueltas:
+
+- **Un `MultiMesh` no devuelve lo que se le escribe sin ventana.** `--headless` no tiene
+  dónde guardar las instancias y `get_instance_transform` contesta ceros, así que una
+  prueba de la suite no puede mirar ahí. `Figuras.marcas_puestas` guarda la decisión
+  aparte: la suite comprueba eso y la sonda comprueba que se dibujan.
+- **La velocidad se mide sobre medio segundo, no sobre un cuadro.** Comparar lo que anda
+  la figura en un cuadro con el `delta` que mide la sonda daba entre un 12 % y un 26 % de
+  más —el `delta` de `Figuras` se toma en otro punto del fotograma—, y la figura salía a
+  10,1 y a 9,0 m/s con el tope en 8. Lo que corría era la regla de medir.
+
+**Y una que no es de este trabajo pero conviene saberla**: cualquier sonda que monte
+`demo_main` con ventana y llame a `quit()` **revienta al cerrar** —«CrashHandlerException:
+signal 11», después de imprimirlo todo—. `NocheLuzProbe`, que no tiene nada que ver con
+esto, hace lo mismo. Es al apagar el servidor de render; la medida está entera.
+
 
 ---
 

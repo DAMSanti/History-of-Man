@@ -151,6 +151,7 @@ static func por_defecto() -> void:
 	vsync = true
 	tope = 0
 	poner_nivel(Nivel.MEDIO)
+	Teclas.por_defecto()
 	volumen_general = 1.0
 	volumen_musica = 1.0
 	volumen_efectos = 1.0
@@ -201,6 +202,11 @@ static func guardar() -> Error:
 	fichero.set_value("graficos", "nivel", int(nivel))
 	for nombre: String in AJUSTES:
 		fichero.set_value("graficos", nombre, graficos[nombre])
+	# Las teclas viven en [Teclas] —el catálogo y las reglas del choque— y se guardan
+	# aquí porque el fichero es uno solo: INTERFAZ §11.
+	var teclas := Teclas.para_guardar()
+	for id: String in teclas:
+		fichero.set_value("teclas", id, int(teclas[id]))
 	fichero.set_value("sonido", "general", volumen_general)
 	fichero.set_value("sonido", "musica", volumen_musica)
 	fichero.set_value("sonido", "efectos", volumen_efectos)
@@ -231,6 +237,11 @@ static func cargar() -> bool:
 	# El nivel se deduce de los ajustes y no se cree lo escrito: si alguien edita
 	# el fichero a mano, lo que manda es lo que se aplica.
 	nivel = _nivel_que_encaja()
+	var teclas: Dictionary = {}
+	for id: String in fichero.get_section_keys("teclas") if fichero.has_section("teclas") \
+			else PackedStringArray():
+		teclas[id] = fichero.get_value("teclas", id)
+	Teclas.cargar_de(teclas)
 	volumen_general = clampf(float(fichero.get_value("sonido", "general", 1.0)), 0.0, 1.0)
 	volumen_musica = clampf(float(fichero.get_value("sonido", "musica", 1.0)), 0.0, 1.0)
 	volumen_efectos = clampf(float(fichero.get_value("sonido", "efectos", 1.0)), 0.0, 1.0)

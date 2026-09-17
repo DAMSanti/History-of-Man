@@ -467,6 +467,6 @@ func _gui_input(event: InputEvent) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var tecla := event as InputEventKey
-	if tecla != null and tecla.pressed and tecla.keycode == KEY_ESCAPE:
+	if tecla != null and Teclas.es(tecla, "cerrar"):
 		get_viewport().set_input_as_handled()
 		cerrar()

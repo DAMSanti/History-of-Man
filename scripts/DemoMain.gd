@@ -473,7 +473,7 @@ func _start_settlement() -> void:
 	Campamentos.alta(get_tree(), campamento)
 	if _retomada:
 		var errores := Guardado.retomar_los_demas(get_tree(),
-			load(MenuPrincipal.SITIOS) as SiteSet, Expedition.site.id)
+			SiteSet.comarca(), Expedition.site.id)
 		if not errores.is_empty():
 			print("Los demás campamentos se retoman a medias: %s" % ", ".join(errores))
 
@@ -703,6 +703,11 @@ func _levantar_interfaz() -> void:
 	# decisiones que pedir. Ver [Moment].
 	if sim != null:
 		ui.barra.watch_moments(sim)
+		# Y la cámara sigue a la persona elegida JUSTO DESPUÉS de que se pongan las
+		# figuras del cuadro, no en el `_process` de aquí. Ver [seguir_a_quien_toque].
+		if sim.figuras != null and not sim.figuras.pintadas.is_connected(
+				seguir_a_quien_toque):
+			sim.figuras.pintadas.connect(seguir_a_quien_toque)
 		# AHORA, y no antes: sim.setup() ya corrió y nadie escuchaba todavía.
 		# Ver [SettlementSim.iniciar_partida].
 		#
@@ -1041,6 +1046,12 @@ func _setup_camera() -> void:
 		camera = camera_scene.instantiate() as OrbitalCamera
 		camera.name = "MainCamera"
 		add_child(camera)
+		# Mover la vista con las teclas suelta a quien se siguiera (INTERFAZ §13). Por
+		# señal y no preguntando cada cuadro: la regla de qué suelta y qué no —girar y
+		# hacer zoom no— vive en un solo sitio, la cámara.
+		camera.movida_a_mano.connect(func() -> void:
+			if ui != null:
+				ui.seguimiento.soltar())
 		
 		# La camara venia calibrada para 128 unidades; sobre 2 km hay que subir
 		# el alcance o el terreno no cabe ni en el zoom ni en el plano lejano
@@ -1237,6 +1248,39 @@ func _update_band_panel() -> void:
 	band_label.text = "\n".join(lines)
 
 
+## La cámara va con la persona elegida. INTERFAZ §13.
+##
+## **La llama `Figuras` al acabar de poner las figuras del cuadro** (su señal `pintadas`),
+## y no el `_process` de aquí: llamándola por su cuenta, la cámara leía las figuras del
+## cuadro ANTERIOR y se quedaba **a 54 m** de lo que se veía, que es lo que anda una
+## persona entre dos cuadros a ×1. Es vista, y sigue a lo que se dibuja.
+##
+## De paso, con la partida en pausa se sigue siguiendo —`Figuras` pinta igual—, que es lo
+## que la spec pide, y sale gratis.
+##
+## Y si la persona ya no está —de expedición, mudada o muerta— se suelta y la cámara se
+## queda donde estaba.
+func seguir_a_quien_toque() -> void:
+	if ui == null or camera == null or not ui.seguimiento.esta_siguiendo():
+		return
+	var punto := ui.seguimiento.punto(sim, sim.figuras if sim != null else null)
+	if punto == Vector3.INF:
+		ui.seguimiento.soltar()
+		return
+	camera.set_target(punto)
+
+
+## La cámara lenta: acercarse frena la partida, alejarse la devuelve. GRAFICOS §7.6.
+##
+## Se pone cada cuadro y sin memoria —la curva ya es gradual porque lo es el zoom—, y
+## aquí y no en la cámara porque **la vista no decide nada de la partida** (SPECS §4.7):
+## `CamaraLenta` da un número, la escena lo lleva, y la simulación sólo lo guarda.
+func _frenar_si_se_mira_de_cerca() -> void:
+	if camera == null:
+		return
+	sim.freno_de_la_vista = CamaraLenta.freno(camera.orbit_distance, camera.min_distance)
+
+
 func _process(_delta: float) -> void:
 	if sim == null:
 		return
@@ -1244,6 +1288,7 @@ func _process(_delta: float) -> void:
 		Campamentos.a_la_fecha(sim)
 	Cronometro.abre_el_fotograma()
 	Cronometro.tramo_raiz("escena principal (DemoMain)")
+	_frenar_si_se_mira_de_cerca()
 	var frame := Engine.get_process_frames()
 	if frame % 15 == 0:
 		Cronometro.tramo("cada 15: panel de banda + minimapa")
@@ -1550,65 +1595,82 @@ func _pinchar_en_el_mundo(event: InputEventMouseButton) -> void:
 			return
 
 
-## Los atajos de teclado.
+## Los atajos de teclado. **Por acción y no por tecla**: las teclas de cada acción viven
+## en [Teclas] y el jugador las cambia desde Configuración (INTERFAZ §11).
 func _tecla(event: InputEventKey) -> void:
-	match event.keycode:
-		KEY_ESCAPE:
-			# Primero cierra lo que tengas delante. Salirse del mapa entero
-			# al pulsar ESC daba un susto cada vez: eso ahora es el boton
-			# del minimapa, que es donde se busca.
-			#
-			# Y sin nada delante, el menú de la partida —guardar, cargar,
-			# salir—, que es lo que pidió la spec de INTERFAZ §7. Cerrar una
-			# ventana y abrir el menú son dos pulsaciones distintas a
-			# propósito: con una sola, salir del juego estaría a un ESC de
-			# distancia de mirar el almacén.
-			if menu_del_juego != null and menu_del_juego.esta_abierto():
-				menu_del_juego.cerrar()
-			elif ui and ui.close_topmost():
-				pass
-			elif menu_del_juego != null:
-				menu_del_juego.abrir()
-		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-			if sim:
-				var index: int = event.keycode - KEY_1
-				var acts: Array[int] = []
-				for a: int in sim.work_sites.keys():
-					acts.append(a)
-				acts.sort()
-				if index < acts.size():
-					sim.assign_all(acts[index] as Subsistence.Activity)
-					_update_band_panel()
-		KEY_R:
-			minimapa._cycle_overlay()
-		KEY_N:
-			# La capa de navegacion: rojo lo que no se pisa, naranja lo que
-			# se pisa pero no se alcanza desde el abrigo, y AZUL lo que solo
-			# se pasa por el vado. El azul hacia falta: la capa dejaba sin
-			# pintar una celda del rio abierta por su vado -o sea igual que un
-			# prado seco- y al pinchar esa casilla la ficha decia que no se
-			# podia pasar. Es la unica forma de comprobar si la rejilla esta
-			# acertando.
-			if nav_overlay and sim:
-				var on := nav_overlay.toggle(sim.navgrid(),
-					sim.home_position, terrain)
-				print("Navegacion: %s" % ["visible" if on else "oculta"])
-				if on:
-					print("   " + NavOverlay.tally_text(
-						sim.navgrid(), sim.home_position))
-		# El teclado mueve LA MISMA velocidad que los botones del reloj.
-		# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
-		# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
-		# segundo reloj: sólo manda `sim`.
-		KEY_P, KEY_SPACE:
-			if sim and (not Expedition.visita or _de_visita_con_reloj):
-				sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0
-		KEY_F1:
-			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 1.0
-		KEY_F2:
-			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 3.0
-		KEY_F3:
-			if sim and (not Expedition.visita or _de_visita_con_reloj): sim.time_scale = 5.0
+	if Teclas.es(event, "cerrar"):
+		# LO PRIMERO, SOLTAR LA CAMARA, y esta pulsación no abre el menú (INTERFAZ §13):
+		# quien está siguiendo a alguien y pulsa ESC quiere dejar de seguirlo, no salir
+		# de la partida.
+		if ui != null and ui.seguimiento.esta_siguiendo():
+			ui.seguimiento.soltar()
+			return
+		# Primero cierra lo que tengas delante. Salirse del mapa entero
+		# al pulsar ESC daba un susto cada vez: eso ahora es el boton
+		# del minimapa, que es donde se busca.
+		#
+		# Y sin nada delante, el menú de la partida —guardar, cargar,
+		# salir—, que es lo que pidió la spec de INTERFAZ §7. Cerrar una
+		# ventana y abrir el menú son dos pulsaciones distintas a
+		# propósito: con una sola, salir del juego estaría a un ESC de
+		# distancia de mirar el almacén.
+		if menu_del_juego != null and menu_del_juego.esta_abierto():
+			menu_del_juego.cerrar()
+		elif ui and ui.close_topmost():
+			pass
+		elif menu_del_juego != null:
+			menu_del_juego.abrir()
+		return
+	for numero in range(1, 6):
+		if not Teclas.es(event, "numero_%d" % numero):
+			continue
+		if sim:
+			var acts: Array[int] = []
+			for a: int in sim.work_sites.keys():
+				acts.append(a)
+			acts.sort()
+			if numero - 1 < acts.size():
+				sim.assign_all(acts[numero - 1] as Subsistence.Activity)
+				_update_band_panel()
+		return
+	if Teclas.es(event, "capa_del_minimapa"):
+		minimapa._cycle_overlay()
+		return
+	_tecla_de_mando(event)
+
+
+## Lo que manda sobre la partida: el reloj y la capa de desarrollo. Sale aparte porque
+## `_tecla` pasaba de las cincuenta líneas.
+func _tecla_de_mando(event: InputEventKey) -> void:
+	# El teclado mueve LA MISMA velocidad que los botones del reloj.
+	# Hubo un tiempo en que tocaba un segundo reloj, y acelerar por
+	# teclado movía el sol dejando a la banda a su ritmo. Ya no hay
+	# segundo reloj: sólo manda `sim`.
+	var manda := sim != null and (not Expedition.visita or _de_visita_con_reloj)
+	if Teclas.es(event, "pausa"):
+		if manda:
+			sim.time_scale = 0.0 if sim.time_scale > 0.0 else 1.0
+	elif Teclas.es(event, "velocidad_normal"):
+		if manda: sim.time_scale = 1.0
+	elif Teclas.es(event, "velocidad_x3"):
+		if manda: sim.time_scale = 3.0
+	elif Teclas.es(event, "velocidad_x5"):
+		if manda: sim.time_scale = 5.0
+	elif Teclas.es(event, "capa_de_navegacion"):
+		# La capa de navegacion: rojo lo que no se pisa, naranja lo que
+		# se pisa pero no se alcanza desde el abrigo, y AZUL lo que solo
+		# se pasa por el vado. El azul hacia falta: la capa dejaba sin
+		# pintar una celda del rio abierta por su vado -o sea igual que un
+		# prado seco- y al pinchar esa casilla la ficha decia que no se
+		# podia pasar. Es la unica forma de comprobar si la rejilla esta
+		# acertando.
+		if nav_overlay and sim:
+			var on := nav_overlay.toggle(sim.navgrid(),
+				sim.home_position, terrain)
+			print("Navegacion: %s" % ["visible" if on else "oculta"])
+			if on:
+				print("   " + NavOverlay.tally_text(
+					sim.navgrid(), sim.home_position))
 
 
 ## Donde toca el terreno el rayo del cursor, o INF si no lo toca.

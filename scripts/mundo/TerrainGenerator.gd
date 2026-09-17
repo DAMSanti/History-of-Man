@@ -1136,6 +1136,79 @@ func extend_height_ceiling(new_top: float) -> void:
 var caudal: float = 1.0
 
 
+## Hasta qué hondura se pisa el mar, en metros. Es la orilla: donde se marisquea y se
+## pesca a pie. Más adentro no se cruza de ninguna manera.
+##
+## **2,5 m, que es la franja de marea.** La lapa y el mejillón se cogen en la roca que
+## el mar descubre al bajar, y en la costa cantábrica la marea mueve unos cuatro metros;
+## el juego no simula mareas (EPOCA_01 §10.2, fuera de alcance), así que la orilla
+## entera se trata como pisable. Con 1,2 m la franja era más estrecha que una celda del
+## campo de recursos y **no nacía ni un paraje de marisqueo**: la mejor celda caía en
+## agua honda y no se llegaba andando (`CostaProbe`, 2026-09-16).
+const MAR_QUE_SE_PISA_M := 2.5
+
+
+## La franja que la marea descubre, en metros sobre la lámina. Es tierra mojada: se anda
+## y se marisquea en ella.
+##
+## Está aquí y no en el mar porque **es donde se marisquea de verdad**: en la roca que el
+## mar destapa al bajar. Metiendo el marisqueo dentro del agua no nacía ningún paraje —la
+## rejilla de caminos da por intransitable toda celda con agua honda a veinte metros, así
+## que a la orilla no se llegaba— (`CostaProbe`, 2026-09-16).
+const FRANJA_DE_MAREA_M := 2.5
+
+
+## El vado del MAR en un punto de esa cota: la franja de marea se anda mojándose, el mar
+## somero se vadea y el mar hondo no se cruza de ninguna manera.
+##
+## Hace falta porque **la simulación no sabía que hay mar** (EPOCA_01 §10.2): el vado
+## salía sólo de los ríos, así que por encima del agua salada se andaba como por un
+## prado, y ningún paraje de marisqueo o de pesca podía nacer allí —para nacer hace
+## falta vado, ver [Parajes.activity_fits]—. Ningún valle jugable tenía mar hasta los
+## abrigos de la costa, así que nunca se había visto.
+##
+## **No se multiplica por el caudal de la estación**, que es cosa de los ríos: con él,
+## en verano se vadearía el Cantábrico.
+static func vado_del_mar(altura_m: float, mar_m: float) -> float:
+	var sobre := altura_m - mar_m
+	if sobre > FRANJA_DE_MAREA_M:
+		return 0.0
+	if sobre >= 0.0:
+		# La franja de marea: mojado, se anda, y cuenta como agua para los parajes.
+		return lerpf(0.06, 0.18, 1.0 - sobre / FRANJA_DE_MAREA_M)
+	if -sobre >= MAR_QUE_SE_PISA_M:
+		return 1.0
+	# Y el mar somero, que se vadea justo hasta donde se hace pie.
+	return lerpf(0.20, Hydrography.FORD_WADEABLE, -sobre / MAR_QUE_SE_PISA_M)
+
+
+## El vado del mar en una casilla del relieve, sacado de SU PROPIA ALTURA.
+##
+## Se calcula al preguntarlo y no se guarda en un mapa aparte: con la malla leída de la
+## caché ese mapa se quedaba vacío y la primera pregunta se salía de rango (`CostaProbe`,
+## 2026-09-16). La altura, en cambio, está siempre.
+func _vado_del_mar_en(indice: int) -> float:
+	if indice < 0 or indice >= _height_map.size():
+		return 0.0
+	return vado_del_mar(_height_map[indice] / maxf(_to_units(1.0), 0.0001), sea_level)
+
+
+## Si este punto es ORILLA DE MAR: la franja que descubre la marea o el agua donde se
+## hace pie. Es donde se marisquea y donde se pesca a pie (EPOCA_01 §10.2).
+##
+## **Una regla, un sitio**: lo preguntan el campo de recursos y la banda al asentarse. La
+## banda buscaba su marisqueo con `is_underwater` —dentro del mar—, y ahí ni se llega ni
+## hay lapas: están en la roca que el agua destapa (`CostaProbe`, 2026-09-16).
+func en_la_orilla_del_mar(world_pos: Vector3) -> bool:
+	var vado := vado_del_mar(cota_en_metros(world_pos), sea_level)
+	return vado > 0.05 and vado < 1.0
+
+
+## La cota del terreno en ese punto, EN METROS y no en unidades de mundo.
+func cota_en_metros(world_pos: Vector3) -> float:
+	return get_height_at(world_pos) / maxf(_to_units(1.0), 0.0001)
+
+
 func crossing_difficulty_at(world_pos: Vector3) -> float:
 	if _ford_map.is_empty() or resolution <= 1:
 		return 0.0
@@ -1144,7 +1217,7 @@ func crossing_difficulty_at(world_pos: Vector3) -> float:
 		0, resolution - 1)
 	var z := clampi(int(round(world_pos.z / float(terrain_size.y) * float(resolution - 1))),
 		0, resolution - 1)
-	return _ford_map[z * resolution + x] * caudal
+	return maxf(_ford_map[z * resolution + x] * caudal, _vado_del_mar_en(z * resolution + x))
 
 
 ## Lo mismo, pero al caudal que se le diga en vez de al de hoy.
@@ -1166,7 +1239,8 @@ func crossing_difficulty_with(world_pos: Vector3, con_caudal: float) -> float:
 		0, resolution - 1)
 	var z := clampi(int(round(world_pos.z / float(terrain_size.y) * float(resolution - 1))),
 		0, resolution - 1)
-	return _ford_map[z * resolution + x] * con_caudal
+	return maxf(_ford_map[z * resolution + x] * con_caudal,
+		_vado_del_mar_en(z * resolution + x))
 
 
 ## Si una recta se anda entera sin toparse con agua que no se vadea.
@@ -1197,7 +1271,8 @@ func linea_sin_agua(desde: Vector3, hasta: Vector3, cada: float,
 		var pz := desde.z + (hasta.z - desde.z) * t
 		var x := clampi(int(round(px / ancho * float(ultimo))), 0, ultimo)
 		var z := clampi(int(round(pz / alto * float(ultimo))), 0, ultimo)
-		var dificultad := _ford_map[z * resolution + x] * con_caudal
+		var dificultad := maxf(_ford_map[z * resolution + x] * con_caudal,
+			_vado_del_mar_en(z * resolution + x))
 		if dificultad > tope or (estricto and dificultad == tope):
 			return false
 	return true

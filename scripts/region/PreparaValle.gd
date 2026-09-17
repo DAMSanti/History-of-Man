@@ -67,7 +67,44 @@ func _publicar() -> void:
 ## que afecte al relieve guardado -la fuente de cotas, el borrado de obra
 ## humana, el umbral de cauce- para que los ficheros ya bakeados se rehagan
 ## solos en vez de quedarse viejos sin avisar.
-const VERSION := 9
+const VERSION := 10
+
+## DONDE VIVEN LOS VALLES PREPARADOS, con sus contornos.
+##
+## La del juego, y otra en las pruebas, por lo mismo que `Guardado.carpeta` y
+## `Configuracion.ruta`: **una prueba no toca nunca los datos del jugador**, y aqui lo
+## que hay son ficheros de veinte megas que cuesta minutos de red volver a hacer.
+const CARPETA := "res://data/dem/local"
+var carpeta_de_los_valles: String = CARPETA
+
+
+## El fichero del recuadro jugable de un sitio, y el de su contorno.
+func ruta_del_valle(id: int) -> String:
+	return "%s/site_%d.res" % [carpeta_de_los_valles, id]
+
+
+func ruta_del_contorno(id: int) -> String:
+	return "%s/site_%d_surround.res" % [carpeta_de_los_valles, id]
+
+
+## DE DONDE SALE EL RELIEVE DEL CONTORNO, y de donde el agua.
+##
+## Son los dos unicos sitios donde rehacer el contorno toca la red, y estan aqui con
+## nombre para poder comprobarlo SIN ELLA: la spec pide que el contorno rehecho salga
+## igual byte a byte con datos guardados (INTERFAZ §12), y eso no se puede comprobar si
+## la receta llama al IGN y a Overpass por su cuenta. La prueba les pone datos de bote;
+## el juego no se entera.
+##
+## `trae_el_relieve(norte, sur, oeste, este, metros) -> HeightmapData` (o null si falla)
+## `trae_el_agua(norte, sur, oeste, este) -> Dictionary` con `channels` y `bodies`.
+var trae_el_relieve: Callable = func(norte: float, sur: float, oeste: float, este: float,
+		metros: float) -> HeightmapData:
+	return IGNImporter.new().import_area(norte, sur, oeste, este, metros)
+
+var trae_el_agua: Callable = func(norte: float, sur: float, oeste: float,
+		este: float) -> Dictionary:
+	return OSMWays.new().fetch_water(norte, sur, oeste, este)
+
 
 ## Usar el MDT del IGN (5 m, LiDAR) para el mapa local en vez del relieve
 ## global. Tarda mas en descargar pero es el mayor salto de calidad disponible,
@@ -113,6 +150,9 @@ var erosion_thermal_passes: int = 8
 ## serian 2.400x2.400 -casi seis millones de cotas- solo para interpolar.
 var surround_meters: float = 8.0
 
+## De donde sale la cota de la plataforma para los valles inventados (EPOCA_01 §10.2).
+const RELIEVE_REGIONAL := "res://data/dem/cantabria_region.res"
+
 
 ## El relieve fino del sitio, preparado, o null si no se ha podido descargar.
 ## Si ya estaba guardado y es de esta versión, se lee.
@@ -125,7 +165,7 @@ var surround_meters: float = 8.0
 ## `al_cuadro`, si se da, se llama en cada cuadro de espera: quien enseña la barra la
 ## mueve con él.
 func preparar(arbol: SceneTree, sitio: Site, al_cuadro: Callable = Callable()) -> HeightmapData:
-	var cache_path := "res://data/dem/local/site_%d.res" % sitio.id
+	var cache_path := ruta_del_valle(sitio.id)
 	if ResourceLoader.exists(cache_path):
 		var cached: HeightmapData = load(cache_path)
 		if cached != null and cached.pipeline_version == VERSION:
@@ -134,7 +174,7 @@ func preparar(arbol: SceneTree, sitio: Site, al_cuadro: Callable = Callable()) -
 			# ha quedado mas basto de lo que ahora se pide, se rehace SOLO el.
 			# Subir el sello del recuadro para esto obligaria a volver a
 			# descargar el mapa jugable entero, que no ha cambiado en nada.
-			await _refresh_surround_if_coarse(arbol, sitio, cached)
+			await _poner_al_dia_el_contorno(arbol, sitio, cached, al_cuadro)
 			return cached
 		print("PreparaValle: %s es de una version anterior, se rehace" % cache_path)
 
@@ -158,6 +198,12 @@ func preparar(arbol: SceneTree, sitio: Site, al_cuadro: Callable = Callable()) -
 ## La receta entera, en el hilo de [preparar]. Lo que va diciendo lo apunta con [_avisar]
 ## y lo publica el hilo principal: una señal no se emite desde otro hilo.
 func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
+	# UN SITIO DE LA COSTA DE LA EPOCA NO SE DESCARGA: no hay MDT bajo el mar de hoy, asi
+	# que su valle se inventa con el mismo relieve que se ve en el mapa regional
+	# (EPOCA_01 §10.2). Sin red, y siempre igual.
+	if sitio.fidelity == Site.Fidelity.HIPOTETICO:
+		return _valle_inventado(sitio, cache_path)
+
 	_avisar("Descargando relieve de %s...\n(unos segundos)" % sitio.display_name(), 0)
 
 	# Margen justo sobre el recuadro jugable: cada decima de grado de mas son
@@ -276,7 +322,7 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 	# la malla del contorno muestrea cada 32 m.
 	_avisar("Descargando el relieve de alrededor...\nMDT del IGN, unos segundos.", 4)
 
-	var surround_path := "res://data/dem/local/site_%d_surround.res" % sitio.id
+	var surround_path := ruta_del_contorno(sitio.id)
 	var span_lat := local.lat_north - local.lat_south
 	var span_lon := local.lon_east - local.lon_west
 	var t_sur := Time.get_ticks_msec()
@@ -308,48 +354,113 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 	_avisar("Guardando el valle...", 5)
 	local.pipeline_version = VERSION
 	DirAccess.make_dir_recursive_absolute(
-		ProjectSettings.globalize_path("res://data/dem/local"))
+		ProjectSettings.globalize_path(carpeta_de_los_valles))
 	ResourceSaver.save(local, cache_path)
 	print("PreparaValle: recuadro local bakeado en %s" % cache_path)
 	return local
 
 
-## Pone al dia el contorno: la resolucion del relieve y los cauces.
+## El valle de un abrigo de la costa, inventado. Ver [ValleDeLaPlataforma].
 ##
-## Son DOS cosas independientes y con precios muy distintos. Rehacer el MDT es
-## una descarga larga; traer la hidrografia de OSM es corta. Si se comprueban
-## juntas, un contorno que solo le falta el agua paga la descarga entera del
-## relieve para nada, y peor: si el IGN falla, se queda tambien sin rios.
-func _refresh_surround_if_coarse(arbol: SceneTree, sitio: Site,
-		local: HeightmapData) -> void:
+## Va en el mismo hilo que el resto: son cuentas, sin nodos y sin red. Guarda tambien su
+## contorno, mas basto, porque un valle sin contorno se dibuja con el relieve regional a
+## 111 m y se veria el corte.
+func _valle_inventado(sitio: Site, cache_path: String) -> HeightmapData:
+	_avisar("Levantando el valle de %s...\n(costa de la epoca, sin descarga)"
+		% sitio.display_name(), 0)
+	var regional: HeightmapData = load(RELIEVE_REGIONAL)
+	if regional == null:
+		_avisar("No esta el relieve regional.", -1)
+		return null
+	var rios := RiosDeLaRegion.cargar()
+	var mar := Expedition.sea_level_m
+	var t0 := Time.get_ticks_msec()
+	var local := ValleDeLaPlataforma.generar(sitio, rios, regional, mar,
+		float(Expedition.local_size_m) * 1.1, 5.0)
+	if local == null:
+		_avisar("No se pudo levantar el valle.", -1)
+		return null
+	print("ValleDeLaPlataforma: %d x %d a %.0f m en %d ms" % [local.width, local.height,
+		local.meters_per_sample, Time.get_ticks_msec() - t0])
+
+	_avisar("Levantando lo de alrededor...", 4)
+	var surround := ValleDeLaPlataforma.generar(sitio, rios, regional, mar,
+		float(Expedition.local_size_m) * 3.3, surround_meters * 2.0)
+	if surround != null:
+		surround.pipeline_version = VERSION
+		ResourceSaver.save(surround, ruta_del_contorno(sitio.id))
+
+	_avisar("Guardando el valle...", 5)
+	local.pipeline_version = VERSION
+	DirAccess.make_dir_recursive_absolute(
+		ProjectSettings.globalize_path(carpeta_de_los_valles))
+	ResourceSaver.save(local, cache_path)
+	return local
+
+
+## Pone al dia el contorno sin congelar la ventana. INTERFAZ §12.
+##
+## **La espera va aqui y el trabajo en un hilo**, igual que preparar un valle nuevo: lo
+## que se hace son decenas de segundos de red -43 s el MDT del IGN, medidos- y hasta hoy
+## se hacian en el hilo principal con dos cuadros de cortesia delante. La ventana se
+## quedaba parada con un cartel de «esto tarda» encima.
+##
+## Todo va dentro del hilo, incluida la comprobacion de si hace falta: mirar el contorno
+## es leer un recurso de disco, y leerlo en el principal seria justo el tiron que se viene
+## a quitar. Si no hay nada que hacer, el hilo termina en el primer cuadro.
+func _poner_al_dia_el_contorno(arbol: SceneTree, sitio: Site, local: HeightmapData,
+		al_cuadro: Callable = Callable()) -> void:
 	if local == null:
 		return
+	var hilo := Thread.new()
+	hilo.start(_rehacer_el_contorno.bind(sitio, local))
+	while hilo.is_alive():
+		_publicar()
+		if al_cuadro.is_valid():
+			al_cuadro.call()
+		await arbol.process_frame
+	hilo.wait_to_finish()
+	_publicar()
 
-	var path := "res://data/dem/local/site_%d_surround.res" % sitio.id
+
+## La receta del contorno: mirar si hace falta, bajarlo, pintarle el agua y guardarlo.
+##
+## **Ni un nodo ni una señal**: corre en el hilo de [_poner_al_dia_el_contorno] y lo que
+## va diciendo lo deja en el buzon de [_avisar] (invariante 9 de SPECS §7). Devuelve si
+## ha tocado algo, que es lo que mira la prueba.
+##
+## Son DOS cosas independientes y con precios muy distintos. Rehacer el MDT es una
+## descarga larga; traer la hidrografia de OSM es corta. Si se comprueban juntas, un
+## contorno que solo le falta el agua paga la descarga entera del relieve para nada, y
+## peor: si el IGN falla, se queda tambien sin rios.
+func _rehacer_el_contorno(sitio: Site, local: HeightmapData) -> bool:
+	if local == null:
+		return false
+	var path := ruta_del_contorno(sitio.id)
 	if not ResourceLoader.exists(path):
-		return
+		return false
 
 	var surround: HeightmapData = load(path)
 	if surround == null:
-		return
+		return false
 
 	# Con un 10% de margen: no merece la pena una descarga de minutos por una
 	# diferencia de decimales
 	var coarse := surround.meters_per_sample > surround_meters * 1.1
 	var dry := surround.river_mask.is_empty()
 	if not coarse and not dry:
-		return
+		return false
 
+	var no_respondio := false
 	if coarse and use_ign_elevation:
-		aviso.emit("Mejorando el relieve de alrededor...\n"
-			+ "MDT del IGN a %.0f m para 12 km de lado: esto tarda." % surround_meters)
-		await arbol.process_frame
-		await arbol.process_frame
-
+		# La etapa 4 de [ETAPAS] es «Descargando el relieve de alrededor», que es esto;
+		# el agua de abajo va en la misma para que la barra no vaya hacia atras.
+		_avisar("Mejorando el relieve de alrededor...\n"
+			+ "MDT del IGN a %.0f m para 12 km de lado: esto tarda." % surround_meters, 4)
 		var span_lat := local.lat_north - local.lat_south
 		var span_lon := local.lon_east - local.lon_west
 		var started := Time.get_ticks_msec()
-		var finer: HeightmapData = IGNImporter.new().import_area(
+		var finer: HeightmapData = trae_el_relieve.call(
 			local.lat_north + span_lat, local.lat_south - span_lat,
 			local.lon_west - span_lon, local.lon_east + span_lon, surround_meters)
 
@@ -360,15 +471,31 @@ func _refresh_surround_if_coarse(arbol: SceneTree, sitio: Site,
 				Time.get_ticks_msec() - started, surround.width, surround.height,
 				surround.meters_per_sample])
 		else:
+			# Y LA PARTIDA SIGUE. Se dice y se sigue con el contorno que hubiera: es feo
+			# pero no rompe nada. **Se reintenta la proxima vez que se entre al valle**
+			# -sigue basto, asi que la condicion de arriba vuelve a dar verdad-, decision
+			# del usuario del 2026-09-17: si la red va mal hoy y bien mañana, el contorno
+			# mejora solo.
+			#
+			# NO SE AVISA AQUI Y YA: el buzon guarda UN texto y lo publica el hilo
+			# principal cuando puede, asi que un aviso seguido de otro se pisa. El paso
+			# siguiente tarda milisegundos, o sea que este cartel se veria durante un
+			# cuadro y el jugador no leeria nada. Se guarda y se dice AL FINAL, que es
+			# donde la barra se queda parada un momento.
+			no_respondio = true
 			print("PreparaValle: el IGN no ha respondido, se queda el relieve que habia")
 
 	if dry:
-		aviso.emit("Trazando los rios de alrededor...")
-		await arbol.process_frame
+		_avisar("Trazando los rios de alrededor...", 4)
 		_apply_surround_water(surround)
 
+	var final := "Guardando el relieve de alrededor..."
+	if no_respondio:
+		final += "\n(El IGN no ha respondido: se queda el que había.)"
+	_avisar(final, 5)
 	surround.pipeline_version = VERSION
 	ResourceSaver.save(surround, path)
+	return true
 
 
 ## Mete los cauces de OSM en el MDT del contorno.
@@ -382,7 +509,7 @@ func _refresh_surround_if_coarse(arbol: SceneTree, sitio: Site,
 ## de 3x3. Si Overpass no responde, el contorno se queda seco y ya esta: es un
 ## fallo feo pero no rompe nada.
 func _apply_surround_water(surround: HeightmapData) -> void:
-	var hidro := OSMWays.new().fetch_water(
+	var hidro: Dictionary = trae_el_agua.call(
 		surround.lat_north, surround.lat_south,
 		surround.lon_west, surround.lon_east)
 	var canales: Array = hidro.get("channels", [])

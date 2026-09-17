@@ -336,10 +336,11 @@ func _looking_at() -> Vector3:
 func _look_at_world(point: Vector3) -> void:
 	if ui.camera == null:
 		return
-	ui.camera.set_target(point)
-	var close_enough := ui.camera.distancia_para_mirar()
-	if ui.camera.orbit_distance > close_enough:
-		ui.camera.set_distance(close_enough)
+	# Y SUELTA A QUIEN SE ESTUVIERA SIGUIENDO: llevar la camara a otra cosa es elegir otra
+	# cosa (INTERFAZ §13). Si no, la camara volveria con la persona al cuadro siguiente.
+	if ui.seguimiento != null:
+		ui.seguimiento.soltar()
+	ui.camera.mirar_a(point)
 
 
 ## Vuelve a pintar la ficha que este abierta, si hay alguna.

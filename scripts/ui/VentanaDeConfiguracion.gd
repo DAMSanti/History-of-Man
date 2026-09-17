@@ -36,7 +36,16 @@ const DISTANCIAS_3D: Array[float] = [10.0, 20.0, 30.0, 40.0, 50.0, 70.0, 100.0, 
 var _pestanas: TabContainer
 var _pantalla: VBoxContainer
 var _graficos: VBoxContainer
+var _controles: VBoxContainer
 var _sonido: VBoxContainer
+
+## La acción que está esperando una tecla, vacía si no hay ninguna. Ver
+## [esperar_la_tecla]: mientras espera, la ventana se come la siguiente pulsación.
+var esperando := ""
+
+## El choque a resolver: la acción que se cambiaba, la tecla nueva y con quién choca.
+## Vacío si no hay ninguno. Ver [resolver_el_choque].
+var choque: Dictionary = {}
 var _confirmar: HBoxContainer
 var _aviso: Label
 
@@ -67,6 +76,7 @@ func _init() -> void:
 	columna.add_child(_pestanas)
 	_pantalla = _pestana("Pantalla")
 	_graficos = _pestana("Gráficos")
+	_controles = _pestana("Controles")
 	_sonido = _pestana("Sonido")
 
 	_confirmar = HBoxContainer.new()
@@ -119,6 +129,61 @@ func elegir_nivel(nivel: Configuracion.Nivel) -> void:
 func elegir_ajuste(nombre: String, valor: Variant) -> void:
 	Configuracion.poner_ajuste(nombre, valor)
 	_aplicar_graficos_y_guardar()
+
+
+## Empieza a esperar la tecla de una acción. La siguiente que se pulse será la suya.
+##
+## ESC no espera nada: no se cambia (INTERFAZ §11, decisión del usuario del 2026-09-17).
+func esperar_la_tecla(id: String) -> void:
+	if Teclas.tecla_de(id) == Teclas.NINGUNA or _es_fija(id):
+		return
+	esperando = id
+	choque = {}
+	_pintar_controles_de_nuevo()
+
+
+## La tecla que se ha pulsado mientras esperaba. Devuelve qué pasó: `"puesta"`,
+## `"choque"` o `"nada"`. La ventana la llama desde `_input`; la prueba, a mano.
+func tecla_pulsada(tecla: Key) -> String:
+	if esperando.is_empty():
+		return "nada"
+	var id := esperando
+	esperando = ""
+	# La misma que tenía: ni se cambia ni se avisa de que choca consigo misma.
+	if Teclas.tecla_de(id) == tecla:
+		_pintar_controles_de_nuevo()
+		return "nada"
+	var chocan := Teclas.choca_con(id, tecla)
+	if not chocan.is_empty():
+		choque = {"id": id, "tecla": tecla, "con": chocan[0]}
+		_pintar_controles_de_nuevo()
+		return "choque"
+	Teclas.poner(id, tecla)
+	Configuracion.guardar()
+	_pintar_controles_de_nuevo()
+	return "puesta"
+
+
+## Resuelve el choque que hay pendiente: `true` las intercambia, `false` lo deja todo
+## como estaba. **Nunca quedan dos acciones con la misma tecla** sin que el jugador lo
+## haya visto, que es lo que pedía la spec.
+func resolver_el_choque(intercambiar: bool) -> void:
+	if choque.is_empty():
+		return
+	if intercambiar:
+		Teclas.intercambiar(String(choque["id"]), String(choque["con"]))
+		Configuracion.guardar()
+	choque = {}
+	_pintar_controles_de_nuevo()
+
+
+## Todas a las de siempre.
+func teclas_de_siempre() -> void:
+	esperando = ""
+	choque = {}
+	Teclas.por_defecto()
+	Configuracion.guardar()
+	_pintar_controles_de_nuevo()
 
 
 func elegir_volumen(cual: String, valor: float) -> void:
@@ -201,12 +266,13 @@ func _pestana(nombre: String) -> VBoxContainer:
 
 
 func _pintar() -> void:
-	for pestana: VBoxContainer in [_pantalla, _graficos, _sonido]:
+	for pestana: VBoxContainer in [_pantalla, _graficos, _controles, _sonido]:
 		for hijo: Node in pestana.get_children():
 			pestana.remove_child(hijo)
 			hijo.queue_free()
 	_pintar_pantalla()
 	_pintar_graficos()
+	_pintar_controles()
 	_pintar_sonido()
 
 
@@ -328,6 +394,108 @@ const AVISO_AL_MAXIMO := "1000 m: sólo el bosque pasa de 3 ms a 34-67 ms por fo
 
 static func texto_de_distancia(metros: float) -> String:
 	return "%d m" % int(metros)
+
+
+## La pestaña de los controles: una fila por acción, agrupadas por dónde valen.
+##
+## Se agrupan por ámbito porque la misma tecla vale en dos pantallas sin chocar —la R es
+## la capa del minimapa en el valle y la ficha del sitio en el regional—, y verlas en dos
+## bloques distintos es lo que hace que eso no parezca un fallo. Ver [Teclas.Ambito].
+func _pintar_controles() -> void:
+	if not choque.is_empty():
+		_pintar_el_choque()
+		return
+	if not esperando.is_empty():
+		_nota(_controles, "Pulsa la tecla nueva para «%s». ESC no vale: es la salida."
+			% Teclas.rotulo_de(esperando))
+	for ambito: int in [Teclas.Ambito.SIEMPRE, Teclas.Ambito.VALLE, Teclas.Ambito.REGIONAL]:
+		var filas := Teclas.del_ambito(ambito as Teclas.Ambito)
+		if filas.is_empty():
+			continue
+		var titulo := Label.new()
+		titulo.text = Teclas.nombre_del_ambito(ambito as Teclas.Ambito)
+		titulo.add_theme_color_override("font_color", UISkin.OCHRE)
+		_controles.add_child(titulo)
+		if ambito == Teclas.Ambito.SIEMPRE:
+			_nota(_controles, "Los números mandan a toda la banda a un oficio en el "
+				+ "valle, y reparten la partida en el mapa regional; el 0 la deja sin "
+				+ "nadie.")
+		for fila: Dictionary in filas:
+			_fila_de_tecla(fila)
+	_controles.add_child(HSeparator.new())
+	_controles.add_child(_boton("Volver a las de siempre", teclas_de_siempre))
+	_nota(_controles, "El ratón no se cambia: clic para mirar, botón derecho para girar "
+		+ "y la rueda para acercar.")
+
+
+func _fila_de_tecla(fila: Dictionary) -> void:
+	var id: String = fila["id"]
+	var caja := _fila(_controles, String(fila["rotulo"]))
+	var boton := Button.new()
+	boton.text = Teclas.nombre_de_la_tecla(Teclas.tecla_de(id))
+	boton.custom_minimum_size = Vector2(110, 0)
+	if _es_fija(id):
+		boton.disabled = true
+		boton.tooltip_text = "No se cambia: es la salida de todas las ventanas."
+	elif esperando == id:
+		boton.text = "pulsa una tecla"
+	else:
+		boton.pressed.connect(func() -> void: esperar_la_tecla(id))
+	caja.add_child(boton)
+
+
+func _pintar_el_choque() -> void:
+	var aviso := Label.new()
+	# Se nombran LAS DOS: sin decir cuál se estaba cambiando, el aviso llega cuando la
+	# lista ya no se ve y hay que acordarse de qué fila se tocó.
+	aviso.text = "Querías poner «%s» en la tecla %s, y esa tecla ya es «%s»." % [
+		Teclas.rotulo_de(String(choque["id"])),
+		Teclas.nombre_de_la_tecla(int(choque["tecla"]) as Key),
+		Teclas.rotulo_de(String(choque["con"]))]
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.custom_minimum_size = Vector2(ANCHO - 60, 0)
+	aviso.add_theme_color_override("font_color", UISkin.OCHRE)
+	_controles.add_child(aviso)
+	_nota(_controles, "Si las cambias entre sí, «%s» se queda con la %s."
+		% [Teclas.rotulo_de(String(choque["con"])),
+			Teclas.nombre_de_la_tecla(Teclas.tecla_de(String(choque["id"])))])
+	_controles.add_child(_boton("Cambiarlas entre sí",
+		func() -> void: resolver_el_choque(true)))
+	_controles.add_child(_boton("Dejarlo como estaba",
+		func() -> void: resolver_el_choque(false)))
+
+
+func _es_fija(id: String) -> bool:
+	for fila: Dictionary in Teclas.CATALOGO:
+		if fila["id"] == id:
+			return bool(fila.get("fija", false))
+	return false
+
+
+## Repinta sólo los controles: repintar la ventana entera cerraría los desplegables de
+## las otras pestañas cada vez que se toca una tecla.
+func _pintar_controles_de_nuevo() -> void:
+	for hijo: Node in _controles.get_children():
+		_controles.remove_child(hijo)
+		hijo.queue_free()
+	_pintar_controles()
+
+
+## Mientras espera una tecla, la ventana se come la pulsación: si no, la W de «avanzar»
+## movería además la cámara de detrás.
+func _input(event: InputEvent) -> void:
+	if esperando.is_empty():
+		return
+	var tecla := event as InputEventKey
+	if tecla == null or not tecla.pressed or tecla.echo:
+		return
+	get_viewport().set_input_as_handled()
+	# ESC cancela la espera: es la salida de todo, y por eso no se puede asignar.
+	if Teclas.es(tecla, "cerrar"):
+		esperando = ""
+		_pintar_controles_de_nuevo()
+		return
+	tecla_pulsada(tecla.physical_keycode)
 
 
 func _pintar_sonido() -> void:

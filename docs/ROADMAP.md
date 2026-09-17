@@ -115,12 +115,12 @@ FASE 6 queda cancelada, no aplazada.
 
 | | Estado |
 |---|---|
-| Entrada duplicada en `OrbitalCamera` (teclas físicas + acciones del `InputMap`) | sin unificar: el remapeo de teclas no funciona |
-| Descarga de teselas bloqueante | congela la ventana unos segundos; no hay hilo |
-| Ciclo día/noche (`WorldEnvironmentSetup.follow_time_of_day`) | apagado a propósito para trabajar con luz |
+| ~~Entrada duplicada en `OrbitalCamera`~~ | **SALDADA el 2026-09-17**: ninguna tecla se nombra fuera de `Teclas`, y hay pestaña para cambiarlas. INTERFAZ §11, SPECS §4.10 |
+| ~~Descarga de teselas bloqueante~~ | **SALDADA el 2026-09-17**: el último caso —rehacer el contorno— va en un hilo. Medido: 73 ms el peor cuadro, cero por encima de 500. INTERFAZ §12 |
+| ~~Ciclo día/noche~~ | **NO ERA DEUDA**: llevaba encendido desde el 2026-09-07 y el `@export` mentía. Lo que pasa es que la noche está al 39 % del mediodía, y el usuario la dejó así (2026-09-17). GRAFICOS §7.5 |
 | Capas de física 2–4 (`props`, `resources`, `banda`) | declaradas en `project.godot` y sin asignar a nada |
 | Ríos y lagos | deducidos del relieve, no de datos reales (FASE E1) |
-| `SettlementSim` de vuelta en 4 119 líneas | el troceado funciona, pero toca otra pasada |
+| ~~`SettlementSim` de vuelta en 5 046 líneas~~ | **Segunda pasada hecha el 2026-09-17**: 3 401 líneas, la mitad comentarios. Por debajo de 3 000 no se llegó, a propósito. ARQUITECTURA §3.2 |
 
 Lo que **se fue** de esta tabla, para no volver a buscarlo: `Inventory.gd` y
 `GameUtils.gd` (borrados con el resto de la capa vieja), las señales duplicadas
@@ -141,6 +141,588 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 
 El contexto largo de los bloques que se cerraron antes de este cambio sigue
 íntegro en [archivo/](archivo/); no se edita.
+
+---
+
+### La segunda pasada a `SettlementSim`
+
+> **CERRADA el 2026-09-17, en 3 401 líneas y no en 3 000**, por decisión del usuario con el
+> recuento delante. Salieron `Rutina`, `Destino`, `CierreDelDia` y `Berrea`, y la partida
+> es la misma 30 jornadas. **Lo que enseña**: mover estado cambia la firma aunque la
+> partida no cambie, y colgar un objeto nuevo del simulador también. Está en ARQUITECTURA
+> §3.2 y en SPECS §6.2.
+
+Spec y **plan técnico** en [ARQUITECTURA.md](ARQUITECTURA.md) §3.2 (spec 2026-09-16, plan
+2026-09-17). Está hoy en **5 094 líneas** y la meta son **menos de 3 000**. Tareas, en
+orden:
+
+- [x] **1. La firma de antes.** `TironAnualProbe VEL=20 DIAS=30 CEPO=0 FIRMAS=…`, guardada
+  fuera del repositorio. **Va la primera y sin tocar una línea**: es la partida contra la
+  que se coteja todo lo demás. Unos 4 minutos.
+  > **HECHO (2026-09-17).** 30 jornadas, en la carpeta de las sondas.
+- [x] **2. `Rutina`: la jornada de una persona.** `sim/Rutina.gd` (nueva),
+  `sim/SettlementSim.gd`. ~863 líneas seguidas: `_tick_person`, `_tick_routine`,
+  `_tick_daylight`, `_decide_the_day` y sus ayudantes. **Es el corazón del paso**, así que
+  va primero, con la firma recién tomada. Comprobación: suite en verde y
+  `LlamadasHuerfanas` a cero.
+  > **HECHO (2026-09-17).** 876 líneas movidas y 898 en la clase. **Se hizo después de
+  > `Berrea` y no antes**: primero el corte pequeño, para probar la herramienta que mueve
+  > y reescribe con `sim.` delante. Tres firmas de pasamanos salieron mal a la primera
+  > —`_tick_daylight`, `_tick_routine` y `_decide_the_day` no tenían los parámetros que se
+  > supusieron— y las cazó el compilador.
+- [x] **3. `Destino`: dónde se pone y a dónde se le manda.** `sim/Destino.gd` (nueva).
+  ~487 líneas: el sitio en casa, la salida, y a qué tajo se manda a cada uno.
+  > **HECHO (2026-09-17).** 503 líneas. **El corte se llevó dos líneas del comentario de la
+  > función siguiente**, `_note`: el tramo acababa una línea tarde. Se devolvieron.
+- [x] **4. `CierreDelDia`: lo que pasa al acabar la jornada.** `sim/CierreDelDia.gd`
+  (nueva). ~424 líneas: el historial, el cierre, la práctica del día, la transmisión de
+  saber, el parte y el giro de la estación local.
+  > **HECHO (2026-09-17).** 418 líneas. Cuatro variables de estado dentro del tramo —lo
+  > perdido hoy y los avisos de hambre— se quedaron en la fachada.
+- [x] **5. `Berrea`: el celo del ciervo.** `sim/Berrea.gd` (nueva). ~116 líneas.
+  > **HECHO (2026-09-17), y aquí se cayó la primera premisa.** Mover el estado de la berrea
+  > cambiaría la firma aunque la partida fuera la misma —la instantánea firma las
+  > propiedades por su sitio—, así que **en esta pasada se mueve el comportamiento y el
+  > estado se queda en la fachada**. La nota está en `SettlementSim.berrea_hasta_el_dia`.
+- [x] **6. Los parajes, a `Parajes`.** `sim/Parajes.gd`, que ya existe. ~245 líneas:
+  `_paraje_to_survey`, `_paraje_at`, `fishing_method`. **No es una clase nueva**: es
+  devolver a su dueño lo que se había quedado en la fachada.
+  > **NO SE HIZO, y el plan estaba mal.** El bloque se había contado desde `_paraje_at`
+  > hasta la función siguiente, y en medio había constantes de rendimiento: la función
+  > eran nueve líneas. Y `Parajes` se crea sin simulador, así que meterle algo que lo pide
+  > le cambiaba la forma —y con ella la firma—.
+- [x] **7. Contar, y sacar otro tema si hace falta.** `wc -l scripts/sim/SettlementSim.gd`
+  por debajo de 3 000. Si no llega, sale **lo que se cuenta al volver** (`_butcher`,
+  `tell_tale`, `_tell_the_hunt`, `tell_technique`, ~190 líneas seguidas, que ya tienen su
+  rótulo de sección).
+  > **HECHO (2026-09-17): 3 401 líneas, y el usuario eligió cerrar aquí.** Lo que queda es
+  > un 49 % de comentarios (1 654) y 567 en blanco: 1 181 de código, que son 133
+  > variables, 125 constantes, pasamanos y el bucle. Los bloques grandes ya están fuera, y
+  > llegar a 3 000 pedía 400 líneas de funciones sueltas, que es lo que la regla 2 del
+  > troceado dice que no se haga.
+- [x] **8. La firma de después, y el cotejo.** La misma corrida y
+  `Cotejo.gd -- firmas antes.txt despues.txt`: **las 30 jornadas idénticas**. Otros 4
+  minutos.
+  > **HECHO (2026-09-17): iguales las 30 jornadas, a la segunda.** La primera salió
+  > distinta desde la jornada 2 **con el resumen idéntico las 30**, azar incluido: los
+  > cuatro objetos nuevos renumeraban las referencias de lo que se codificaba detrás. Se
+  > sacaron de la instantánea —no tienen estado— y se repitió: iguales.
+- [x] **9. Documentar.** ARQUITECTURA §3 (la lista de «Ya salieron así…» y las cifras),
+  §3.1 «Cómo quedó», ESTADO §3, y **arreglar la numeración**: hoy hay dos §3.1. Suite
+  entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** ARQUITECTURA §3 y §3.2 «Cómo quedó» —la spec pasó de §3.1 a
+  > §3.2, que estaba repetida—, SPECS §6.2 (lo que la firma no distingue) y ESTADO §2.
+  > Suite **1 673 pruebas y 9 051 comprobaciones** y `llamadas huerfanas: 0`.
+
+Medir: **la 1 y la 8 son las únicas corridas**, unos 4 minutos cada una —medido: dos
+jornadas headless con el cepo apagado tardan 34 s, de los que 20 son montar la escena—.
+La spec presupuestaba 15 minutos por corrida; son cuatro. Con la suite entre tarea y
+tarea, **menos de media hora de máquina** en total. Nada se puede paralelizar: cada corte
+se comprueba antes del siguiente, y las dos medidas son la misma partida.
+
+---
+
+### La cámara sigue a la persona elegida
+
+> **CERRADA el 2026-09-17.** Las nueve tareas hechas. Lo aprendido vive en INTERFAZ §13
+> «Cómo quedó». **Lo que costó**: seguir desde el `_process` de la escena raíz deja la
+> cámara un cuadro por detrás —54 m a ×1—, y lo destapó la corrida con ventana, no la
+> suite. **Y lo que la spec pedía y no existe**: «arrastrar la cámara», que en el valle no
+> es ningún gesto.
+
+Spec y **plan técnico** en [INTERFAZ.md](INTERFAZ.md) §13 (spec 2026-09-16, plan
+2026-09-17). Tareas, en orden:
+
+- [x] **1. Lo que se ve de alguien.** `vista/Figuras.gd`, `tests/TestSeguimiento.gd`
+  (nueva), `tests/RunTests.gd`. `donde_se_ve(index, person)`: la figura dibujada, o la
+  marca cuando el viaje va abreviado y la figura está escondida. Prueba: las tres fases.
+  > **HECHO (2026-09-17).** Y **la marca se guarda cuando se pone**: la primera versión la
+  > recalculaba de `person.position` en vivo, y la simulación da su paso después, así que
+  > se leía un sitio distinto del que se había dibujado.
+- [x] **2. Llevar la cámara, en un solo sitio.** `vista/OrbitalCamera.gd`,
+  `ui/PanelCenso.gd`. La receta «centra y acércate sólo si estabas lejos» sale de
+  `PanelCenso` a `OrbitalCamera.mirar_a`. Prueba: a 150 m deja 80; a 30 m deja 30.
+  > **HECHO (2026-09-17).** La receta ya existía y ya daba los 80 m que pedía la spec; lo
+  > único que hacía falta era que no viviera dentro de un panel.
+- [x] **3. El seguimiento.** `vista/Seguimiento.gd` (nuevo). A quién se sigue, `seguir`,
+  `soltar` y `punto()`. Prueba: a quién sigue y qué punto da.
+  > **HECHO (2026-09-17).** `Seguimiento`, colgado de `GameUI` y no estático: es estado de
+  > una escena y así se muere con ella. **El método se llama `seguir_a` y no `seguir`**
+  > porque `BarraSuperior` tiene su propio `seguir` —el de continuar con la tarjeta de un
+  > momento— y `LlamadasHuerfanas` sólo ve nombres: daba siete llamadas mal puestas.
+- [x] **4. Elegir a alguien centra y sigue.** `ui/GameUI.gd`. Se engancha en
+  `show_person`, que es la puerta única del clic y de las listas. Prueba: por los dos
+  caminos, el punto de órbita queda a menos de 1 m de la persona; y con alguien que no
+  está en el valle, la cámara no se mueve.
+  > **HECHO (2026-09-17).** En `show_person`, que es la puerta única.
+- [x] **5. La cámara va con ella cada cuadro.** `DemoMain.gd`. Prueba dando pasos de
+  simulación y de vista: en cada cuadro, a menos de 1 m; y lo mismo contra la marca
+  durante un viaje abreviado.
+  > **HECHO (2026-09-17), y aquí estuvo el trabajo.** Seguir desde `DemoMain._process`
+  > dejaba la cámara **a 54 m de lo que se veía**, medido con ventana: `DemoMain` es la
+  > raíz de la escena, así que su `_process` corre ANTES que el de sus hijos y leía las
+  > figuras del cuadro anterior. Ahora la mueve la señal `pintadas` de `Figuras`, que es
+  > quien sabe cuándo están puestas. Desvío **cero desde el primer cuadro dibujado**;
+  > queda un solo cuadro con 6,4 m, el de elegirla, porque la persona anda entre que se
+  > pincha y que se dibuja.
+- [x] **6. Lo que suelta.** `vista/OrbitalCamera.gd` (señal `movida_a_mano`),
+  `DemoMain.gd`, `ui/GameUI.gd`, `ui/PanelCenso.gd`, `ui/PanelObras.gd`,
+  `vista/Minimapa.gd`. Los seis sitios: teclas de desplazamiento, minimapa, cerrar la
+  ficha, ESC, elegir otra cosa, y el «llevar la cámara» de otra ficha. **Girar y hacer
+  zoom no sueltan.** Prueba: una por gesto, y que tras soltar el punto no se mueve en diez
+  pasos.
+  > **HECHO (2026-09-17).** Los seis. La regla de qué suelta y qué no vive en la cámara,
+  > que emite `movida_a_mano` al desplazar la vista y **no** al girar ni al hacer zoom.
+  > **Dos de los seis no se pueden ejercitar en la suite** —ESC y el minimapa viven en
+  > escenas que no se montan sin el valle—, así que de ésos se comprueba que el suelto
+  > sigue escrito, y se dice.
+- [x] **7. Quien se va, se suelta.** `vista/Seguimiento.gd`, `DemoMain.gd`. Fuera del
+  valle, mudada o muerta. Prueba construyendo el estado, no jugándolo.
+  > **HECHO (2026-09-17), sin código nuevo**: las tres salen de `people`, así que
+  > `punto()` devuelve «nada» y quien lo pide suelta.
+- [x] **8. Que funcione de verdad.** Una corrida con ventana del valle eligiendo a
+  alguien y dejándola andar: que la cámara va con ella y que no revienta nada.
+  «Compila» no es «funciona».
+  > **HECHO (2026-09-17), y menos mal**: es lo que destapó los 54 m de desvío, que la
+  > suite daba por buenos porque allí las cosas se llaman en el orden que uno escribe.
+- [x] **9. Documentar.** INTERFAZ §13 «Cómo quedó», ESTADO §3; suite entera y
+  `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** INTERFAZ §13 «Cómo quedó» y ESTADO §3. Suite **1 673 pruebas y
+  > 9 051 comprobaciones en verde** y `llamadas huerfanas: 0`.
+
+Medir: de la 1 a la 7 son **pruebas de segundos** —el seguimiento es una regla, no una
+cifra de balanceo—. La 8 es una corrida con ventana de un par de minutos. Con la suite dos
+veces, **menos de quince minutos de máquina**. Nada se solapa con nada.
+
+---
+
+### El contorno del valle, sin congelar la ventana
+
+> **CERRADA el 2026-09-17.** Las siete tareas hechas, y **con ellas se cierra la deuda
+> «la descarga del relieve congela la ventana»**: era el último caso que quedaba. Lo
+> aprendido vive en INTERFAZ §12 «Cómo quedó» y las cifras en ESTADO §2 y §3. **Lo que la
+> prueba destapó**: el aviso de «el IGN no responde» duraba un cuadro y no lo leía nadie.
+
+Spec y **plan técnico** en [INTERFAZ.md](INTERFAZ.md) §12 (spec 2026-09-16, plan
+2026-09-17). Tareas, en orden:
+
+- [x] **1. Los dos costurones.** `region/PreparaValle.gd`. `trae_el_relieve` y
+  `trae_el_agua` como `Callable`, con el IGN y Overpass por defecto. Sin esto no hay
+  forma de comprobar nada sin red. Prueba: por defecto son los de verdad.
+  > **HECHO (2026-09-17).** Y de paso **`carpeta_de_los_valles`**, que no estaba en el
+  > plan: la prueba tiene que escribir contornos de mentira en algún sitio, y ese sitio no
+  > puede ser `data/dem/local`, donde hay ficheros de veinte megas que cuestan minutos de
+  > red. Misma receta que `Guardado.carpeta`.
+- [x] **2. La receta, sin árbol y sin señales.** `region/PreparaValle.gd`,
+  `tests/TestContorno.gd` (nueva), `tests/RunTests.gd`. Sacar de
+  `_refresh_surround_if_coarse` el trabajo de datos a `_rehacer_el_contorno`, que avisa
+  por el buzón (`_avisar`) y no toca ni un nodo. Prueba: con los costurones puestos, deja
+  el contorno que toca y el recuadro jugable intacto.
+  > **HECHO (2026-09-17).** `_rehacer_el_contorno`, que devuelve si ha tocado algo. Una
+  > prueba lee su propio texto y falla si alguien le mete un `aviso.emit` o un `await`:
+  > eso no reventaría en la suite —donde corre en el hilo principal— sino en el juego.
+- [x] **3. Va en un hilo, con la barra.** `region/PreparaValle.gd`. `preparar` lanza el
+  hilo y bombea cuadros con `al_cuadro`, como ya hace con el valle nuevo; etapas 4 y 5.
+  Prueba: mientras corre, el hilo principal da cuadros.
+  > **HECHO (2026-09-17).** `_poner_al_dia_el_contorno`. **Todo va dentro del hilo,
+  > incluida la comprobación de si hace falta**: mirar el contorno es leer un recurso de
+  > varios megas, y leerlo en el principal sería justo el tirón que se viene a quitar.
+  > Que no congela lo dice la sonda, no una prueba: es una cifra de reloj.
+- [x] **4. Si la red falla, se dice y se sigue.** `region/PreparaValle.gd`. Prueba: con
+  el relieve devolviendo null, el contorno viejo se queda tal cual y hay un aviso que lo
+  dice.
+  > **HECHO (2026-09-17), y la prueba destapó lo que no se buscaba.** El aviso duraba un
+  > cuadro y no lo leía nadie: el buzón guarda UN texto y lo publica el principal cuando
+  > puede, así que un aviso seguido de otro se pisa, y el paso siguiente tarda
+  > milisegundos. La spec decía «lo dice» y el juego no decía nada. Ahora el fallo sale en
+  > el último cartel, que es donde la barra se queda parada un momento.
+- [x] **5. Byte a byte.** `tests/TestContorno.gd`. El contorno que guarda el hilo es
+  idéntico al que guarda la misma receta llamada a pelo, con los mismos datos de bote.
+  > **HECHO (2026-09-17).** Dos pasadas de la misma receta sobre el mismo punto de
+  > partida dan el mismo fichero, comparado byte a byte.
+- [x] **6. La sonda.** `tests/CargaProbe.gd`: un camino `CONTORNO` que
+  coge un valle ya preparado, le estropea el contorno —primero le quita el agua, después
+  lo pone basto— y mide los cuadros. **El cuadro más largo por debajo de 500 ms**, que es
+  el criterio de la spec, y la barra avanzando.
+  > **HECHO (2026-09-17).** `CargaProbe CONTORNO=1`, los dos casos: **seco 43,5 s con
+  > 73 ms el peor cuadro** y **basto 49,1 s con 40 ms**, y **cero cuadros de más de
+  > 500 ms** en los dos. La barra no retrocede y se queda quieta como mucho 2,1 s y 7,7 s.
+  > **Costó una corrida de más**: la copia del valle que hace la sonda salía «de una
+  > versión anterior», así que `preparar` rehacía el valle entero —dos minutos de
+  > descarga— en vez de sólo el contorno. Ahora pone el sello a mano.
+- [x] **7. Documentar.** INTERFAZ §12 «Cómo quedó», ESTADO §2 y §3, y la deuda de
+  ROADMAP que esto cierra; suite entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** INTERFAZ §12 «Cómo quedó» y ESTADO §2 y §3. Suite **1 657
+  > pruebas y 9 015 comprobaciones en verde** y `llamadas huerfanas: 0`.
+
+Medir: de la 1 a la 5 son pruebas de segundos. **La 6 es la única con red**: el caso seco
+es una consulta a Overpass (segundos) y el basto una descarga del IGN de **43 s medidos**,
+así que con el montaje de la escena son **unos 5 minutos**. Con la suite dos veces,
+**menos de veinte minutos de máquina**. Nada se solapa: la sonda mide.
+
+---
+
+### Ver a la gente trabajar: viajes abreviados y cámara lenta
+
+> **CERRADA el 2026-09-17.** Las nueve tareas hechas. Lo aprendido vive en GRAFICOS §7.6
+> «Cómo quedó» y en SPECS §3.1 (el freno, junto a la noche); las cifras, en ESTADO §2 y
+> §3. **La premisa que se cayó**: la primera versión de la figura la llevaba detrás de la
+> persona, y a ×1 la simulación mueve a alguien de quince a sesenta metros por cuadro, así
+> que no había manera. **Y la spec se contradecía**: 20 m a 8 m/s no caben en 1,5 s, así
+> que el tramo es de 12.
+
+Spec y **plan técnico** en [GRAFICOS.md](GRAFICOS.md) §7.6 (spec 2026-09-16, plan
+2026-09-17); el contrato del paso, en [SPECS.md](SPECS.md) §3.1. Tareas, en orden:
+
+- [x] **1. El freno, guardado y repartido.** `sim/SettlementSim.gd`,
+  `sim/RelojDeLaPartida.gd`, `tests/TestVerTrabajar.gd` (nueva), `tests/RunTests.gd`.
+  Un `freno_de_la_vista` que multiplica el `delta` que alimenta `_pendiente` —**menos
+  pasos, del mismo tamaño**— y que **no toca la noche**. Prueba: con freno 1/20 se dan
+  1/20 de los pasos en el mismo tiempo real, y la firma de N pasos es la misma con y sin.
+  > **HECHO (2026-09-17).** `freno_de_la_vista` multiplica el reloj real que entra en
+  > `_pendiente`, aquí y en el reloj de la partida, que lo adopta del campamento que se
+  > mira. **Y hubo que meterlo en `Instantanea.FUERA`**: la firma serializa las
+  > propiedades de la simulación, así que acercar la cámara cambiaba la firma sin cambiar
+  > un solo paso. Lo mismo con el nodo `figuras`.
+- [x] **2. La curva de la cámara lenta.** `vista/CamaraLenta.gd` (nuevo). Función pura:
+  de 60 m para arriba, 1; en la distancia mínima, 1/20; gradual entre medias. Prueba: los
+  dos extremos, que es monótona y que no se sale del rango.
+  > **HECHO (2026-09-17).** `CamaraLenta`, funciones puras. La cuesta va con el CUADRADO
+  > de lo que queda por acercarse: con una recta, la mitad del frenazo se gastaba entre
+  > los 60 y los 40 m, donde todavía no se distingue a nadie.
+- [x] **3. Ponerlo cada cuadro.** `DemoMain.gd`. La distancia de cámara decide el freno
+  de la simulación, y al alejarse vuelve. Prueba: con la cámara puesta a mano a tres
+  distancias, el freno de la simulación es el que dice la curva.
+  > **HECHO (2026-09-17).** `DemoMain._frenar_si_se_mira_de_cerca`, sin memoria: la curva
+  > ya es gradual porque lo es el zoom.
+- [x] **4. El letrero.** `ui/BarraSuperior.gd`. Dice que va a cámara lenta y cuánto.
+  Prueba de lo que pinta: sale por debajo de 60 m y se va por encima.
+  > **HECHO (2026-09-17).** En la barra, pegado al reloj, y **lee el freno de la
+  > simulación y no la cámara**: es lo que de verdad le está pasando a la partida.
+- [x] **5. Dónde se dibuja cada figura.** `vista/Figuras.gd` (nuevo),
+  `sim/SettlementSim.gd` (`_pintar_a` delega). Los primeros y últimos 20 m a paso
+  legible, con tope de retraso de 1,5 s; en medio, escondida. Prueba: la figura nunca se
+  mueve a más de 8 m/s reales, y el retraso nunca pasa de 1,5 s.
+  > **HECHO (2026-09-17), y la primera versión no servía.** Llevaba la figura hacia la
+  > persona y decidía si se la veía mirando dónde estaba *la persona*: la sonda dio
+  > **883 m/s** y **64 m** de retraso, con los topes en 8 y 12. A ×1 la simulación mueve
+  > a alguien de quince a sesenta metros por cuadro, así que «estar en los primeros doce
+  > metros» es un estado que dura un fotograma o que no se pisa. Ahora la figura tiene
+  > **fases y avance propio por la ruta** y, mientras se la ve, anda `8 m/s × delta` y
+  > nada más. **El tramo es de 12 m y no de 20**: la spec pedía 20 m, 8 m/s y 1,5 s, y
+  > esos tres números no caben juntos.
+- [x] **6. La marca que recorre la vereda.** `vista/Figuras.gd`. Una marca por viaje
+  largo, sobre la ruta, en la posición simulada. **Aquí se decide de qué color**
+  (pregunta abierta: hoy no hay color por persona ni por oficio). Prueba: la marca está a
+  menos de 5 m de la posición simulada mientras dura el viaje.
+  > **HECHO (2026-09-17).** Un cuadrito sin luz por viaje, con la **primera paleta por
+  > oficio del juego** (decisión del usuario: no había ninguna). **Un `MultiMesh` no
+  > devuelve lo que se le escribe sin ventana**, así que la decisión se guarda aparte en
+  > `marcas_puestas`: la suite comprueba eso y la sonda que se dibujan.
+- [x] **7. Ni una cosa ni la otra cambian la partida.** `tests/TestVerTrabajar.gd`. La
+  misma semilla, los mismos pasos, con las dos funciones encendidas y apagadas: **misma
+  firma**. Se comprueba **dando pasos, no esperando al reloj**.
+  > **HECHO (2026-09-17).** En verde las dos. **Las dos corridas van una detrás de otra y
+  > no intercaladas**: escriben en el mismo `GameState` —lo descubierto—, y alternando los
+  > pasos la segunda encontraba descubierto lo que acababa de descubrir la primera. Y las
+  > dos con multitud, que la instantánea firma `_crowd` por su clase.
+- [x] **8. La jornada medida.** `tests/VerTrabajarProbe.gd` (nueva), con ventana: apunta
+  dónde se dibuja cada figura en cada cuadro durante una jornada a ×1 y saca la velocidad
+  máxima en pantalla, el retraso máximo y la distancia de la marca a lo simulado. **Es la
+  única corrida cara del bloque y mide las tres cifras de una vez.**
+  > **HECHO (2026-09-17).** 8,06 m/s, tramos de 1,57 s y saltos de marca de 652 m (que es
+  > lo que anda una persona entre dos cuadros a ×1: la marca va a la velocidad del juego,
+  > como pidió el usuario). **Costó cuatro corridas, y tres fueron del instrumento**: la
+  > primera llamaba a `sim._repartir()`, que es un ayudante de otra sonda y no un método,
+  > así que nadie salió del campamento; y luego la velocidad medida salía un 26 % y un
+  > 12 % alta por comparar metros de un cuadro con el `delta` de otro. Ahora se mide sobre
+  > medio segundo. **De paso**: cualquier sonda que monte `demo_main` con ventana y llame
+  > a `quit()` revienta al cerrar (signal 11, después de imprimirlo todo); `NocheLuzProbe`
+  > también, así que no es de aquí.
+- [x] **9. Documentar.** GRAFICOS §7.6 «Cómo quedó», SPECS §3.1 (el freno, junto a la
+  noche), ESTADO §2 y §3; suite entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** GRAFICOS §7.6 «Cómo quedó», SPECS §3.1 y ESTADO §2 y §3.
+  > Suite **1 650 pruebas y 9 000 comprobaciones en verde** y `llamadas huerfanas: 0`.
+
+Medir: de la 1 a la 7 son pruebas de segundos. La **8 es la única cara**: una jornada a
+×1 son 120 s más el montaje, unos **4 minutos con ventana**, y saca las tres cifras de
+aceptación en la misma pasada. Con la suite dos veces, **menos de veinte minutos de
+máquina** en total. Las tareas 1-4 (el reloj) y 5-6 (el dibujo) tocan ficheros distintos
+y podrían ir en paralelo; la 8 no se solapa con nada porque mide.
+
+---
+
+### Las teclas, que se pueden cambiar
+
+> **CERRADA el 2026-09-17.** Las once tareas hechas. Lo aprendido vive en INTERFAZ §11
+> «Cómo quedó» —el catálogo, el ámbito, la pestaña y lo que se pierde— y en SPECS §4.10,
+> que es el contrato: ninguna tecla se nombra fuera de `Teclas`. **Tres hallazgos que no
+> estaban en la spec**: F3 hacía dos cosas, la ventana de controles anunciaba una «B» que
+> no existe, y el mapa de entrada del proyecto estaba muerto entero.
+
+Spec y **plan técnico** en [INTERFAZ.md](INTERFAZ.md) §11 (spec 2026-09-16, plan
+2026-09-17). Tareas, en orden:
+
+- [x] **1. El catálogo y el mapa de teclas.** `vista/Teclas.gd` (nuevo),
+  `tests/TestTeclas.gd` (nueva), `tests/RunTests.gd`. La tabla de acciones con rótulo,
+  ámbito (valle / regional / siempre) y tecla de siempre; `aplicar()` reescribe el
+  `InputMap`, `poner`, `choca_con`, `intercambiar`, `por_defecto`. Prueba: el catálogo
+  trae todas las teclas que el juego usa hoy, `aplicar` las deja en el `InputMap`, y dos
+  acciones de ámbitos distintos con la misma tecla **no** chocan.
+  > **HECHO (2026-09-17).** `vista/Teclas.gd`: 24 acciones con rótulo, ámbito y tecla.
+  > **Y una función más de las planeadas**: todo se pregunta por `Teclas.pulsada` /
+  > `Teclas.es` y no por `Input` a pelo, porque una sonda que arranca `demo_main` sin
+  > pasar por el menú no ha leído la configuración y la primera pregunta daba «request
+  > for nonexistent InputMap action».
+- [x] **2. Se guardan y se leen.** `vista/Configuracion.gd`, `tests/TestTeclas.gd`.
+  Sección `[teclas]` en el mismo fichero, con la ruta de pruebas. Prueba: cambiar dos,
+  guardar, leer, siguen cambiadas; y un fichero sin la sección da las de siempre.
+  > **HECHO (2026-09-17).** Sección `[teclas]` del mismo fichero. Lo que el fichero no
+  > trae se queda con la de siempre, que es lo que deja añadir acciones nuevas sin
+  > borrarle nada a nadie; y **ESC no se cambia ni editando el fichero a mano**.
+- [x] **3. La cámara deja de mirar teclas.** `vista/OrbitalCamera.gd`. W/A/S/D, Q/E y
+  Mayús pasan a acciones, y **se va la doble lectura** que hacía inútil cambiarlas.
+  Prueba: con «avanzar» puesta en la I, la cámara se mueve al pulsar la acción.
+  > **HECHO (2026-09-17).** Se va la doble lectura. La prueba quedó **donde de verdad se
+  > decide**: que el evento de la I sea «avanzar» y el de la W ya no lo sea. Y de paso,
+  > el `Cronometro.cierra` de `_process` estaba escrito DEBAJO del comentario de la
+  > función siguiente —compilaba y funcionaba, pero se leía al revés—.
+- [x] **4. El valle deja de mirar teclas.** `DemoMain.gd`. ESC, 1-5, R, N, P/espacio y
+  F1-F3 por acción. Prueba: con «pausa» en otra tecla, el evento de esa tecla pausa.
+  > **HECHO (2026-09-17).** `_tecla` pasó de un `match` de cincuenta líneas a preguntar
+  > por acción, con el reloj en `_tecla_de_mando` aparte. **La P deja de pausar**: una
+  > tecla por acción, y se queda el espacio.
+- [x] **5. El regional deja de mirar teclas.** `region/RegionMap.gd`. ESC, 0-5, espacio,
+  F, R y E por acción. Prueba: la misma forma, con «fundar».
+  > **HECHO (2026-09-17).** Y aquí se vio para qué sirve el ámbito: la R y el espacio
+  > valen en las dos pantallas con significados distintos, y no son un choque.
+- [x] **6. Lo que queda, y el choque de F3.** `ui/PerformanceOverlay.gd`,
+  `vista/SalaDeLaCueva.gd`, `ui/PanelAlmacen.gd`. **F3 es hoy «velocidad ×5» y el panel
+  de rendimiento a la vez**: aquí se separa. Prueba: ninguna acción comparte tecla dentro
+  de su ámbito.
+  > **HECHO (2026-09-17).** El panel de fotogramas se muda a **F4** (decisión del
+  > usuario). `PerformanceOverlay` pierde su `@export toggle_key`, la sala de la cueva
+  > cierra por «cerrar» y el almacén va de diez en diez con la acción «deprisa».
+- [x] **7. Ninguna tecla fija.** `tests/TestTeclas.gd`. Recorre `scripts/` —fuera de
+  `tests/` y `tools/`— y falla si alguien pregunta por `KEY_…` o `is_key_pressed` fuera
+  de `Teclas.gd`. Es la prueba que impide que esto se deshaga solo.
+  > **HECHO (2026-09-17).** En verde a la primera después de las tareas 3 a 6. Busca el
+  > `KEY_` como palabra y no como trozo —`MONKEY_` daría positivo— y se salta los
+  > comentarios. El contrato quedó escrito en SPECS §4.10.
+- [x] **8. La pestaña «Controles».** `ui/VentanaDeConfiguracion.gd`,
+  `tests/TestConfiguracion.gd`. Cuarta pestaña: la lista por ámbito, se pincha una fila y
+  se pulsa la tecla nueva; si choca, avisa y ofrece intercambiar o cancelar; y «volver a
+  las de siempre». Pruebas: cambiar desde la ventana, el choque que intercambia, cancelar
+  que no toca nada, y volver a las de siempre.
+  > **HECHO (2026-09-17).** Cuarta pestaña. **Dos cosas salieron de mirar la captura**:
+  > el rótulo largo del «1» empujaba su botón y rompía la alineación de la lista entera
+  > —los números llevan rótulo corto y una nota explica qué hacen—, y el aviso de choque
+  > tapaba la lista sin decir qué fila se estaba cambiando, así que ahora nombra las
+  > dos acciones.
+- [x] **9. La ventana «Controles» del juego dice la verdad.** `ui/GameUI.gd`. Se pinta
+  del catálogo. Prueba: tras cambiar una tecla enseña la nueva, y ninguna fila nombra una
+  tecla que no esté en el catálogo —**hoy enseña «B — modo construcción» y no hay
+  ninguna B en el juego**—.
+  > **HECHO (2026-09-17).** Se pinta del catálogo. Y sí: la B no existía. La prueba que
+  > caza teclas escritas a mano pilló de paso **la cruz de cerrar del marco**, que no es
+  > una tecla; va apartada con su nombre.
+- [x] **10. Que se lea.** `tests/TeclasCaptura.gd` (nueva): la pestaña a 1280×720, con
+  ventana. Que nada se salga y que el aviso de choque se entienda.
+  > **HECHO (2026-09-17), sin sonda nueva.** `ConfiguracionCaptura` ya recorría las
+  > pestañas, sólo que **con la cuenta escrita a mano en tres**: con «Controles» se
+  > habría quedado sin mirar la que más filas tiene. Ahora las recorre todas y saca
+  > además el aviso de choque. **Nada se sale a 1920×1080 ni a 1280×720.**
+- [x] **11. Documentar.** INTERFAZ §11 «Cómo quedó», SPECS §4 (el contrato nuevo: toda
+  tecla pasa por una acción), ESTADO §3; suite entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** INTERFAZ §11 «Cómo quedó», SPECS §4.10 y ESTADO §3. Suite
+  > **1 637 pruebas y 8 849 comprobaciones en verde** y `llamadas huerfanas: 0`. Y el
+  > valle arrancado de verdad (`NocheLuzProbe`, una hora) para que «compila» no pasara
+  > por «funciona».
+
+Medir: todo son pruebas de segundos salvo la captura de la tarea 10 (una corrida con
+ventana, ~3 min) y la suite dos veces (~8 min). **Total, menos de quince minutos de
+máquina.** Las tareas 3, 4, 5 y 6 tocan ficheros distintos y podrían ir en paralelo, pero
+las tres últimas dependen de todas las anteriores.
+
+---
+
+### La costa de la época
+
+> **CERRADA el 2026-09-16.** Las trece tareas hechas. Lo aprendido vive en EPOCA_01 §10.2
+> «Cómo quedó» —los cuatro abrigos, la puerta única, los ríos, el valle inventado y lo que
+> costó que la orilla funcionara—, en GRAFICOS §3 (los ríos del mapa regional), SISTEMAS
+> §12.1 (marisqueo y pesca de orilla), SPECS §4.9 y las cifras en ESTADO §2 y §3. **Queda
+> dicho lo que no se hizo**: la firma de un valle de interior antes y después del mar no se
+> cotejó (tarea 12).
+
+Spec y **plan técnico** en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §10.2
+(2026-09-16). **Rehecho al planear**: el usuario pidió además los ríos y la orografía en el
+mapa regional, que no tenía ni un río. Tareas, en orden:
+
+- [x] **1. La cota de la plataforma en un punto.** `datos/RelieveDeLaPlataforma.gd`,
+  `tests/TestCosta.gd` (nueva). Prueba: en las muestras de la rejilla, `cota_en` da lo
+  mismo que `aplicar`, con 1 m de margen; y sin terrazas entre muestras.
+  > **HECHO (2026-09-16).** `RelieveDeLaPlataforma.para(...).cota_en(lon, lat)`. Y de
+  > paso, **la distancia a la costa se lee interpolada** y no por casillas de cuatro
+  > muestras: a 111 m no se notaba, pero en un valle de 5 m salían terrazas de 444 m.
+- [x] **2. Los ríos de hoy, de OSM, horneados.** `tools/HornearRios.gd` (nueva). Baja los
+  ríos de la región por trozos y los guarda. Comprobación: cuántos ríos y kilómetros, y
+  que el Nansa, el Saja-Besaya, el Pas y el Asón están enteros. **Con red.**
+  > **HECHO (2026-09-16).** `HornearRios` + `RiosDeLaRegion` (`data/sites/rios_de_la_region.res`,
+  > 1,3 MB, versionado). **1 599 tramos y 4 107 km.** Overpass devolvió 504 en dos de los
+  > ocho trozos a la primera, así que la herramienta apunta **qué trozos bajó** y sólo
+  > reintenta los que falten. Ocho trozos, unos 5 minutos de red.
+- [x] **3. Los ríos de la época por la plataforma.** `datos/RioDeLaPlataforma.gd` (nueva),
+  `HornearRios`, `TestCosta`. Pruebas con relieve construido: el río baja hasta el mar de
+  la época, no sube más de 2 m, y se abre paso en un llano. Y cuántos tramos lo necesitaron
+  en la región de verdad.
+  > **HECHO (2026-09-16).** `RioDeLaPlataforma`. **Dos formas no valieron antes de la
+  > buena**: bajar a la vecina más baja se atascaba contra un umbral, e inundar desde
+  > cada boca vagaba en paralelo a la costa. La que vale es **inundar desde el mar hacia
+  > tierra** —prioridad por cota— y seguir de vuelta por donde se llegó. **54 bocas,
+  > 1 464 km de río por la plataforma**, con 3 937 pasos que suben (los hoyos de la
+  > batimetría a 111 m, que el valle tallado aplana). Y las bocas se buscan en **las dos
+  > puntas** de cada tramo: en OSM hay ríos dibujados al revés y el Pas se quedaba sin
+  > desembocadura.
+- [x] **4. Los valles y el relieve de la plataforma.** `RelieveDeLaPlataforma`, `TestCosta`,
+  `tests/PlataformaCaptura.gd`. Prueba: junto al río la cota es más baja que a 1 km en el
+  90 % de sus puntos. Y **dos o tres amplitudes con captura: aquí se para y elige el
+  usuario.**
+  > **HECHO (2026-09-16).** El río abre valle en las lomas y su fondo baja siempre
+  > —cota más baja recorrida menos tres metros, nunca bajo el mar—, y el valle es plano
+  > en su cuarto central: sin eso el propio río quedaba a doscientos metros de su fondo.
+  > **El usuario eligió ×1,6** entre ×1, ×1,6 y ×2,4, con capturas frente a Santander
+  > (`PlataformaCaptura AMPLITUDES=...`). Dos tropiezos de la sonda, no del juego: las
+  > nubes con volumen tapaban la plataforma, y apagarlas volvía a poner la niebla.
+- [x] **5. Los ríos en el mapa regional.** `region/RegionMap.gd`. Captura con la niebla
+  levantada: los cuatro ríos seguidos hasta la costa de la época; bajo la niebla, nada; y
+  la GPU con y sin.
+  > **HECHO (2026-09-16), y creció por el camino.** Se pintan con `Hydrography.apply`
+  > como en un valle. Tres cosas que salieron al verlo:
+  > **(1)** pintarlos costaba **23 s en cada montaje del mapa** —el viaje entero son
+  > 1,3 s—, así que el relieve ya preparado se hornea aparte
+  > (`cantabria_region_mar…_hidro.res`, 55 MB, en `data/dem/`, que no se versiona): con
+  > él, la misma sonda pasa de 110 s a 38 s.
+  > **(2)** el usuario: «el río aparece con el mismo grosor a lo largo de toda su
+  > extensión y eso no representa la realidad» → `AnchoDeLosRios` da un semiancho por
+  > punto con los kilómetros de río que le caen encima (1,5 m en la fuente, 80 m de
+  > tope), y `Hydrography.apply` pinta con él. En el mapa regional se exagera ×4,5 con
+  > un mínimo de 0,8 celdas: **un vértice de esa malla son 195 m**, y por debajo de ese
+  > mínimo el cauce sale a trozos.
+  > **(3)** los tramos de la plataforma iban en escalera de celda en celda: se suavizan
+  > (Chaikin, dos pasadas).
+- [x] **6. Los candidatos, y el usuario los confirma.** `tests/CostaCaptura.gd` (nueva):
+  junto a la desembocadura de la época de cada uno de los cuatro, el primer resalte;
+  captura del mapa regional con los cuatro. **Aquí se para** hasta que el usuario los dé
+  por buenos.
+  > **HECHO (2026-09-16).** `CostaCaptura`. Los cuatro salieron a 158-249 m del mar de la
+  > época, sobre resaltes de 31-44 m. **El Pas y el Saja-Besaya desembocan juntos** con el
+  > mar bajo —sus cauces confluyen en la plataforma—, así que se pide medio kilómetro
+  > largo entre abrigos y el del Pas queda 3 km al oeste. El usuario los dio por buenos
+  > con sus capturas (`costa_*.png`).
+- [x] **7. Los cuatro sitios, y una sola puerta.** `datos/SitiosDeLaCosta.gd` (nuevo),
+  `datos/Site.gd`, `datos/SiteSet.gd` y los siete sitios que cargan la lista. Pruebas:
+  salen con el mar del Paleolítico y no con el de hoy; llevan la marca y ningún sitio real
+  la lleva; su cota casa con la de la plataforma; ningún guion carga la lista sin la puerta.
+  > **HECHO (2026-09-16).** `SitiosDeLaCosta` (tabla a mano, ids 90001-90004),
+  > `Site.Fidelity.HIPOTETICO` —al final del enum, que los conjuntos horneados guardan el
+  > entero— y `SiteSet.comarca()`. **Eran ocho los sitios que cargaban la lista con
+  > `load`**, no siete: uno más en `DemoMain` y dos en `PanelCampamentos`, por una
+  > constante del menú. Una prueba recorre los guiones del juego y falla si alguno se
+  > salta la puerta.
+- [x] **8. El mar, agua que no se cruza.** `mundo/TerrainGenerator.gd`, `TestCosta`. Pruebas
+  con relieve construido: el mar no se cruza en ninguna estación; la rejilla de caminos no
+  pasa por él; un río sigue igual.
+  > **HECHO (2026-09-16).** `TerrainGenerator.vado_del_mar`, que no se multiplica por el
+  > caudal de la estación —con él, en verano se vadearía el Cantábrico—. **Se calcula al
+  > preguntarlo y no se guarda en un mapa aparte**: con la malla leída de la caché ese
+  > mapa se quedaba vacío y la primera pregunta se salía de rango.
+- [x] **9. Lo que da la orilla.** `sim/ResourceMapper.gd`, `TestCosta`. Pruebas: marisqueo en
+  la franja pegada a tierra y no mar adentro; pesca en el mar somero y en la ría **como un
+  río medio** (decisión del usuario); nacen parajes de los dos.
+  > **HECHO (2026-09-16), y la primera versión no servía.** El marisqueo se puso dentro
+  > del mar somero, y **no nacía ni un paraje**: la rejilla de caminos da por
+  > intransitable toda celda con agua honda a veinte metros, así que a esas celdas no se
+  > llega. Lo que vale es **la franja que descubre la marea** —2,5 m sobre la lámina, que
+  > es lo que mueve la marea cantábrica—: tierra mojada, se anda, y cuenta como agua para
+  > bautizar un paraje. La regla vive en `TerrainGenerator.en_la_orilla_del_mar` y la
+  > preguntan el campo de recursos y la banda al asentarse.
+- [x] **10. El valle inventado.** `region/ValleDeLaPlataforma.gd` (nuevo),
+  `region/PreparaValle.gd`, `TestCosta`. Pruebas: dos veces da los mismos bytes; el abrigo
+  a menos de 1 km del mar; 200 m de orilla de roca y de playa; el río llega al mar y pasa a
+  menos de 50 m del río horneado; la cota del abrigo casa con la del sitio. Y cuánto tarda.
+  > **HECHO (2026-09-16).** `ValleDeLaPlataforma` + la rama de `PreparaValle` (sello 10).
+  > **901 × 901 muestras a 5 m en 8-16 s**, sin red, y el contorno aparte. Lleva la cota
+  > de la plataforma, detalle fino con la semilla del sitio, el cantil del abrigo, el río
+  > del mapa y **dos cosas que hicieron falta al jugar**: la rasa —el mar plancha su
+  > orilla— y **una rampa del abrigo al agua**, porque la costa de la plataforma cae a
+  > plomo (40 m en 40 m, medido) y a la orilla no se bajaba.
+- [x] **11. Fundar y migrar allí.** `Expedicion`, `Campamentos`. Pruebas: la expedición los
+  ofrece y la mudanza puede ir.
+  > **HECHO (2026-09-16), sin tocar nada.** Todo lo que ofrece sitios pasa por
+  > `SiteSet.available_in(mar, época)` —el mapa, la expedición, quién vive dónde—, así que
+  > con la puerta única los abrigos hipotéticos entran solos. Comprobado fundando en uno
+  > (`CostaProbe`).
+- [x] **12. Diez jornadas en la costa, y la captura.** `tests/CostaProbe.gd` (nueva),
+  `CostaCaptura`: parajes de marisqueo y de pesca de mar o ría, marisco y pescado en el
+  almacén, y la captura del valle desde el abrigo. **Y la firma de un valle de interior
+  igual antes y después** de la tarea 8.
+  > **HECHO (2026-09-16), menos la firma, que se dice.** `CostaProbe`, abrigo del Nansa,
+  > diez jornadas, **dos corridas idénticas**: 4 parajes de marisqueo y 4 de pesca, y
+  > **45,7 de marisco y 169,5 de pescado** en el almacén; nadie andando dentro del mar. El
+  > valle sale con el 48 % de sus muestras bajo el agua. **Dos tropiezos de la sonda**: sin
+  > repartir los oficios a mano el almacén salía vacío —el juego deja ese reparto al
+  > jugador—, y la captura salía de noche hasta fijar `sim.hour = 12.0`.
+  > **La firma de un valle de interior antes y después de la tarea 8 NO se ha cotejado.**
+  > En su lugar hay prueba de que el vado del mar vale cero por encima de la franja de
+  > marea (`TestCosta`), así que un valle sin costa no puede notarlo, y la suite entera
+  > está en verde. Queda dicho para quien quiera la certeza del cotejo.
+- [x] **13. Documentar.** EPOCA_01 §10.2 «Cómo quedó», GRAFICOS §3 y §7.3, SISTEMAS (la
+  orilla y el mar), ESTADO §2 y §3, SPECS §4; suite entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-16).** EPOCA_01 §10.2 «Cómo quedó», GRAFICOS §3, SISTEMAS §12.1,
+  > SPECS §4.9, ARQUITECTURA §3.2 e INTERFAZ §10.5-§10.6; las cifras medidas, en ESTADO §2
+  > y §3. Suite **1 613 pruebas y 8 599 comprobaciones en verde** y `llamadas huerfanas: 0`.
+  > **Dos cosas salieron al comprobar, y ninguna era de la costa:**
+  > **(1)** `TestExpedicion` se puso roja —«nordeste: faltan 0, sobran 1»— porque calculaba
+  > lo esperado leyendo `cantabria_sites.res` a pelo mientras la partida ya miraba por
+  > `SiteSet.comarca()`, que trae además los abrigos de la costa: la expedición los
+  > descubre, y con razón. Los cinco sitios de ese fichero pasan ahora por la puerta.
+  > **(2)** `LlamadasHuerfanas` daba 1 por un choque de NOMBRES: `MallaDelTerreno` tiene su
+  > `_cota` y el nuevo `RelieveDeLaPlataforma` tenía otro; el de la plataforma se llama
+  > ahora `_cota_de_la_plataforma`.
+
+Medir: pruebas de segundos, salvo la descarga de los ríos (unos minutos de red, una vez),
+cinco corridas con ventana (relieve, ríos, candidatos, valle y captura: unos 15 min), la
+sonda de diez jornadas (unos 7 min), la firma de un valle de interior antes y después (unos
+12 min) y la suite dos veces (~20 min). **Total, algo más de una hora de máquina.**
+
+---
+
+### Siete specs del 2026-09-16 (noche) — queda una sin plan
+
+Escritas con `/spec` a partir de la lista de pendientes, con las decisiones del usuario
+sacadas a preguntas. **Una sigue sin plan ni tareas**; las tachadas ya pasaron por
+`/plan-tarea` (la costa se hizo entera, las teclas están planeadas arriba, y la del día
+y la noche se retiró porque partía de un dato falso):
+
+| Qué | Dónde está la spec |
+|---|---|
+| ~~**Ver a la gente trabajar**~~: **hecha el 2026-09-17**, ver el bloque «Ver a la gente trabajar» de arriba | [GRAFICOS.md](GRAFICOS.md) §7.6; el contrato del paso, [SPECS.md](SPECS.md) §3.1 |
+| ~~**El día y la noche**~~: **retirada el 2026-09-17**, partía de un dato falso —el ciclo llevaba encendido desde el 2026-09-07— y el usuario dejó la luz como está | [GRAFICOS.md](GRAFICOS.md) §7.5 |
+| ~~**Las teclas, que se pueden cambiar**~~: **planeada el 2026-09-17**, ver el bloque «Las teclas, que se pueden cambiar» de arriba | [INTERFAZ.md](INTERFAZ.md) §11 |
+| ~~**El contorno del valle sin congelar la ventana**~~: **hecha el 2026-09-17**, ver el bloque «El contorno del valle, sin congelar la ventana» de arriba | [INTERFAZ.md](INTERFAZ.md) §12 |
+| ~~**La segunda pasada a `SettlementSim`**~~: **hecha el 2026-09-17**, en 3 401 líneas, ver el bloque «La segunda pasada a `SettlementSim`» de arriba | [ARQUITECTURA.md](ARQUITECTURA.md) §3.2 |
+| ~~**La cámara sigue a la persona elegida**~~: **hecha el 2026-09-17**, ver el bloque «La cámara sigue a la persona elegida» de arriba | [INTERFAZ.md](INTERFAZ.md) §13 |
+
+**La séptima que se pidió, restaurar una instantánea, no necesitaba spec: ya estaba
+hecha** —ver «Lo mismo, más deprisa», abajo—. Se dio por pendiente leyendo una línea de
+este documento que nadie había cerrado.
+
+**Para quien las planee:** el troceado de `SettlementSim` mueve código que tocan casi
+todas las demás; conviene hacerlo **primero, o cuando no haya otro bloque abierto** sobre
+ese fichero. Las sondas de vista de las de GRAFICOS se pueden juntar en una corrida con
+ventana. *(Decía además que «la cámara lenta y el día y la noche no se pisan»: la del día
+y la noche se retiró el 2026-09-17 y ya no hay con qué pisarse.)*
 
 ---
 
@@ -712,7 +1294,7 @@ en [EPOCA_01_PALEOLITICO.md](EPOCA_01_PALEOLITICO.md) §7). Siguiente paso: `/pl
 Las diez tareas hechas y en verde: **1 483 pruebas y 8 142 comprobaciones** —del suelo
 de 1 468 y 8 051—, `llamadas huerfanas: 0`. Lo aprendido fue a
 [INTERFAZ.md](INTERFAZ.md) §9.6, [ESTADO.md](ESTADO.md) §2 (la tabla nueva del viaje) y
-§3, [SPECS.md](SPECS.md) §2.2 y §3.1 y [ARQUITECTURA.md](ARQUITECTURA.md) §3.1 y §5.1.
+§3, [SPECS.md](SPECS.md) §2.2 y §3.2 y [ARQUITECTURA.md](ARQUITECTURA.md) §3.2 y §5.1.
 Todas las cifras de la spec se cumplen. **Un criterio lo cambió el usuario**: esperando
 a la red al preparar un valle, la barra se detiene y un brillo la recorre, en vez de «no
 quieta más de 2 s». Quedan fuera, como decía la spec, los `SCRIPT ERROR` de los objetos
@@ -779,7 +1361,7 @@ encuentre la malla hecha y que volver al mismo valle no vuelva a sembrar el bosq
 > minimapa; la **rejilla de paso de la estación**, que se construía entera la primera
 > vez que se preguntaba un camino (`HornoDeRejillas.hornear`); el Dijkstra desde casa;
 > y el relieve desde caché. Lo de la simulación y el mundo recibe un `ceder` opcional,
-> sin saber de pantallas (ARQUITECTURA §3.1). Tocados además: `Carga`, `RepartoDeCarga`
+> sin saber de pantallas (ARQUITECTURA §3.2). Tocados además: `Carga`, `RepartoDeCarga`
 > (avance por tiempo), `ResourceProps`, `Minimapa`, `Campamento`, `Querencia`,
 > `Marcha`, `Wayfinder`, `HornoDeRejillas`, `TerrainGenerator`, `MallaDelTerreno`,
 > `TestBosque`, `TestParajes`, `GpuProfile`. Y `LlamadasHuerfanas` leía mal los ficheros
@@ -1235,7 +1817,8 @@ sino funcionalidad nueva va por `/spec`. Queda esto:
 - ~~**El tooltip de cada técnica aprendida, con su efecto EXACTO en el juego.**
   INTERFAZ, con SISTEMAS §2.~~ Las tres, **spec escrita el 2026-09-15** en
   [INTERFAZ.md](INTERFAZ.md) §10; ver «En curso».
-- **Yacimientos con costa en el Paleolítico, sobre la plataforma emergida** (salió al
+- **Yacimientos con costa en el Paleolítico, sobre la plataforma emergida** —**spec
+  escrita el 2026-09-16** en EPOCA_01 §10.2— (salió al
   planear el agua, 2026-09-15). El usuario recuerda haber quedado en poner yacimientos
   ficticios en la plataforma; **no está escrito en ningún documento ni en el código**.
   Hoy ningún valle del Paleolítico tiene mar: el mar está a −120 m y el relieve local
@@ -4289,13 +4872,19 @@ en [archivo/LO_MISMO_MAS_DEPRISA.md](archivo/LO_MISMO_MAS_DEPRISA.md).
 
 Lo que queda vivo:
 
-- [ ] **`Instantanea.volcar`: de bytes a la partida** (tarea 15 del bloque). El
+- [x] **`Instantanea.volcar`: de bytes a la partida** (tarea 15 del bloque). El
       sentido de vuelta está sin construir; sin él una instantánea se toma pero
       no se restaura.
       **Verificable:** en `TestInstantanea.gd`, tomar → volcar sobre una
       simulación nueva → volver a tomar da los mismos bytes; tras volcar, diez
       pasos en las dos simulaciones dan la misma firma; y un campo guardado que
       no existe en la clase da error.
+      > **HECHO, sin apuntar (visto el 2026-09-16).** `Instantanea.volcar` existe y las
+      > tres comprobaciones de arriba están en `TestInstantanea`
+      > (`test_tomar_volcar_y_tomar_da_lo_mismo`, `test_tras_volcar_la_partida_sigue_igual`,
+      > `test_un_campo_que_ya_no_existe_es_un_error`), en verde en la suite del mismo día.
+      > La casilla se había quedado sin marcar, y por eso se dio al usuario como
+      > pendiente.
 
 - [ ] **El año de cierre**, cuando el usuario dé el bloque por cerrado. Está
       medido y a la espera de esa decisión, no de más trabajo.

@@ -15,9 +15,9 @@ extends SceneTree
 
 ## Las fachadas y las clases que salieron de ellas.
 const FACHADAS := {
-	"res://scripts/sim/SettlementSim.gd": ["Caceria", "Cumbres", "Despensa",
+	"res://scripts/sim/SettlementSim.gd": ["Berrea", "Caceria", "CierreDelDia", "Cumbres", "Despensa", "Destino",
 		"Hogar", "Marcha", "Nasas", "Percances", "Pinturas", "Reconocimiento",
-		"Reparto", "Tajo", "Taller", "Trampas"],
+		"Reparto", "Rutina", "Tajo", "Taller", "Trampas"],
 	"res://scripts/ui/GameUI.gd": ["BarraSuperior", "PanelAlmacen", "PanelRastros",
 		"PanelCenso", "PanelOficios", "PanelSitios", "PanelTrabajos"],
 	"res://scripts/mundo/TerrainGenerator.gd": ["MallaDelTerreno"],
@@ -252,7 +252,8 @@ func _leer(ruta: String) -> String:
 	# Sin retornos de carro: con ficheros en CRLF y en LF mezclados, un `split` por salto
 	# de línea dejaba un fichero entero en una sola línea y sus variables sin ver —cinco
 	# falsas huérfanas en `Marcha` el 2026-09-15, al pasarla a LF—.
-	var s := f.get_as_text().replace("", "")
+	var s := f.get_as_text().replace("
+", "")
 	f.close()
 	return s
 

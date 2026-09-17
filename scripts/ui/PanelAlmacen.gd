@@ -857,14 +857,16 @@ func _tech_behind(kind: Tool.Kind) -> int:
 ##
 ## Estaba ya, sin prueba y sin escribir en ninguna parte —la queja del usuario
 ## del 2026-09-13 lo pedía como si no existiera—. Se saca a una función sin
-## teclado para poder comprobarlo: `Input.is_key_pressed` no se puede preguntar
-## en una prueba sin pantalla.
+## teclado para poder comprobarlo: el estado del teclado no se puede preguntar en una
+## prueba sin pantalla.
 static func paso_del_objetivo(con_shift: bool) -> float:
 	return 10.0 if con_shift else 1.0
 
 
 func _goal_step() -> float:
-	return paso_del_objetivo(Input.is_key_pressed(KEY_SHIFT))
+	# La misma accion que hace correr la vista: una tecla, dos sitios donde significa
+	# «mas de golpe». Ver [Teclas].
+	return paso_del_objetivo(Teclas.pulsada("deprisa"))
 
 
 ## Los tres botones del objetivo, iguales en las dos tablas.

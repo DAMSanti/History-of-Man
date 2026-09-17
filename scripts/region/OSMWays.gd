@@ -245,6 +245,24 @@ func fetch_water(lat_north: float, lat_south: float,
 	return parse_water((parsed as Dictionary).get("elements", []))
 
 
+## Sólo los RÍOS de un recuadro, sin arroyos ni láminas.
+##
+## Para el mapa regional (EPOCA_01 §10.2): a 111 m por muestra un arroyo no se
+## dibuja, y pedir toda la hidrografía de Cantabria son cientos de megas que
+## Overpass corta. Los ríos de la región caben por trozos.
+func fetch_rivers(lat_north: float, lat_south: float,
+		lon_west: float, lon_east: float) -> Array:
+	var bbox := "%.6f,%.6f,%.6f,%.6f" % [lat_south, lon_west, lat_north, lon_east]
+	var query := '[out:json][timeout:120];way["waterway"="river"](%s);out geom;' % bbox
+	var body := _http_get(HOST, PATH + "?data=" + query.uri_encode())
+	if body.is_empty():
+		return []
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return []
+	return parse_water((parsed as Dictionary).get("elements", []))["channels"]
+
+
 ## Separa los elementos de Overpass en cauces y laminas. Aparte del descargador
 ## para poder alimentarlo con una respuesta guardada, igual que parse_elements.
 static func parse_water(elements: Array) -> Dictionary:
@@ -296,6 +314,9 @@ static func parse_water(elements: Array) -> Dictionary:
 			"kind": kind,
 			"name": name,
 			"closed": false,
+			# Para no contar dos veces el mismo tramo cuando se pide por trozos:
+			# una vía que cruza la frontera de dos trozos llega en los dos.
+			"id": int(way.get("id", 0)),
 		})
 
 	return {"channels": channels, "bodies": bodies}

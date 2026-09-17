@@ -241,6 +241,9 @@ func _mirando() -> Vector3:
 func _llevar_camara(point: Vector3) -> void:
 	if ui.camera == null:
 		return
+	# Suelta a quien se siguiera: se está llevando la cámara a otra cosa (INTERFAZ §13).
+	if ui.seguimiento != null:
+		ui.seguimiento.soltar()
 	ui.camera.set_target(point)
 	var cerca := ui.camera.distancia_para_mirar()
 	if ui.camera.orbit_distance > cerca:

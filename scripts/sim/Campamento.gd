@@ -322,7 +322,7 @@ func levantar_la_simulacion(home: Vector3, poblacion: int, comida: float) -> voi
 	# cablean subsistemas. Sin esto nadie vivia en ninguna parte: compilaba, y no
 	# funcionaba. (La expedicion ya no la necesita aqui: busca en la comarca los
 	# sitios de su pasillo al volver. Ver [Expedicion].)
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	if comarca != null:
 		var ids := PackedInt32Array()
 		for otro: Site in comarca.available_in(GameState.sea_level_m, GameState.era):
@@ -691,7 +691,8 @@ func _find_work_sites(home: Vector3) -> Array[Dictionary]:
 					best_river_score = score
 					best_river = point
 
-			if terrain.is_underwater(point) and distance < best_coast_dist \
+			# LA ORILLA, no el mar adentro: ver [TerrainGenerator.en_la_orilla_del_mar].
+			if terrain.en_la_orilla_del_mar(point) and distance < best_coast_dist \
 					and sim.marcha.can_reach(point, RIVER_APPROACH_M):
 				best_coast_dist = distance
 				best_coast = point

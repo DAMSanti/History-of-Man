@@ -19,7 +19,7 @@ func _init(panel: GameUI) -> void:
 ## El nombre del sitio donde vive una banda.
 static func nombre_de(id: int) -> String:
 	if _sitios == null:
-		_sitios = load("res://data/sites/cantabria_sites.res") as SiteSet
+		_sitios = SiteSet.comarca()
 	if _sitios != null:
 		for site: Site in _sitios.sites:
 			if site.id == id:

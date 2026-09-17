@@ -1414,9 +1414,12 @@ func test_lo_que_esta_dentro_lo_dice_la_huella() -> void:
 ## los cojones». Salian doce porque la siembra revelaba cuatro manchas enteras y
 ## dejaba que el barrido de [Parajes.refresh] bautizara todo lo que pasara el
 ## liston dentro de ellas.
-func test_el_primer_dia_salen_cuatro_uno_de_cada() -> void:
-	assert_eq(Querencia.OFICIOS.size(), 4,
-		"son cuatro oficios: recoleccion, caza, pesca y materia prima")
+func test_el_primer_dia_sale_uno_de_cada_oficio() -> void:
+	# Cinco desde el 2026-09-16: el marisqueo entró con la costa de la época
+	# (EPOCA_01 §10.2). En un valle sin mar sigue sin salir, porque no hay celda
+	# que pase el listón.
+	assert_eq(Querencia.OFICIOS.size(), 5,
+		"son cinco oficios: recoleccion, caza, pesca, materia prima y marisqueo")
 	# Y el borde de lo que se conoce al asentarse se queda POR DEBAJO del
 	# liston de bautizar: si lo pasara, el primer repaso abriria la mancha
 	# entera en vez de los cuatro sitios sembrados a mano.

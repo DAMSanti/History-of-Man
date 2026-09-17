@@ -187,7 +187,7 @@ func _abrir_lista() -> void:
 	_limpiar()
 	_titulo("Cargar una partida")
 	_lista = ListaDePartidas.new()
-	_lista.sitios = load(MenuPrincipal.SITIOS) as SiteSet
+	_lista.sitios = SiteSet.comarca()
 	_lista.elegida.connect(_cargar)
 	_columna.add_child(_lista)
 	_lista.refrescar()
@@ -198,7 +198,7 @@ func _cargar(id: String) -> void:
 	# La pantalla antes que leer. Ver [MenuPrincipal._cargar].
 	Carga.abrir(get_tree(), "Retomando la partida")
 	await get_tree().process_frame
-	var fallo := Partidas.cargar(id, load(MenuPrincipal.SITIOS) as SiteSet)
+	var fallo := Partidas.cargar(id, SiteSet.comarca())
 	if not fallo.is_empty():
 		Carga.cerrar()
 		_decir("No se ha podido cargar: %s" % fallo, true)

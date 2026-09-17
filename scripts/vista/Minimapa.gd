@@ -515,6 +515,10 @@ func _pinchado_en_el_minimapa(event: InputEvent) -> void:
 		or (arrastre != null and (arrastre.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0)
 	if not pulsado or demo.camera == null or demo._minimap.size.x <= 0.0:
 		return
+	# Y suelta a quien se estuviera siguiendo: llevar la vista a otro sitio del valle es
+	# dejar de mirar a esa persona (INTERFAZ §13).
+	if demo.ui != null and demo.ui.seguimiento != null:
+		demo.ui.seguimiento.soltar()
 	demo.camera.set_target(punto_del_valle(
 		(event as InputEventMouse).position, demo._minimap.size,
 		Vector2(demo.terrain_size)))

@@ -40,6 +40,16 @@ func _init() -> void:
 		await process_frame
 
 	var resultados: Array[String] = []
+	# CONTORNO=1: rehacer el contorno de un valle YA preparado, con red. INTERFAZ §12.
+	if OS.get_environment("CONTORNO") == "1":
+		resultados.append(await _rehacer_el_contorno(false))
+		resultados.append(await _rehacer_el_contorno(true))
+		print("")
+		print("=== EL CONTORNO REHECHO, CUADRO A CUADRO (ventana 1920x1080) ===")
+		for linea: String in resultados:
+			print(linea)
+		quit()
+		return
 	# VALLE=1: sólo preparar un valle nuevo, con red. Ver [_preparar_un_valle].
 	if OS.get_environment("VALLE") == "1":
 		resultados.append(await _preparar_un_valle())
@@ -80,6 +90,60 @@ func _init() -> void:
 	for linea: String in resultados:
 		print(linea)
 	quit()
+
+
+## REHACER EL CONTORNO de un valle que ya está preparado. INTERFAZ §12.
+##
+## El caso que congelaba la ventana: el recuadro jugable está en caché y lo que se rehace
+## es sólo el relieve de alrededor. Para provocarlo se estropea a propósito el contorno
+## que hay —**sobre una copia, en la carpeta de las sondas: no se toca lo del jugador**—:
+##
+##   - `basto = false`: se le quita el agua. Rehacerlo es una consulta a Overpass, corta.
+##   - `basto = true`: se le sube el paso de muestreo. Rehacerlo es la descarga del MDT
+##     del IGN para doce kilómetros de lado, que son **43 s medidos**.
+##
+## Las dos pasan por el mismo camino, así que la corta ya prueba el hilo; la larga es la
+## que de verdad congelaba.
+func _rehacer_el_contorno(basto: bool) -> String:
+	var nombre := "CONTORNO basto" if basto else "CONTORNO seco"
+	var origen := "res://data/dem/local/site_%d.res" % SITE_ID
+	var origen_contorno := "res://data/dem/local/site_%d_surround.res" % SITE_ID
+	if not ResourceLoader.exists(origen) or not ResourceLoader.exists(origen_contorno):
+		return "  %s  no está preparado el sitio %d" % [nombre, SITE_ID]
+
+	# La copia, en la carpeta de las sondas.
+	var carpeta := "user://sondas/dem"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(carpeta))
+	var valle: HeightmapData = load(origen)
+	# CON EL SELLO PUESTO A MANO. La copia salía «de una versión anterior» y `preparar`
+	# rehacía el valle entero —dos minutos de descarga— en vez de sólo el contorno, que es
+	# lo que se viene a medir. La sonda está fabricando el escenario «este valle ya está
+	# preparado», así que lo dice.
+	valle.pipeline_version = PreparaValle.VERSION
+	ResourceSaver.save(valle, "%s/site_%d.res" % [carpeta, SITE_ID])
+	var contorno: HeightmapData = load(origen_contorno)
+	if basto:
+		contorno.meters_per_sample = contorno.meters_per_sample * 4.0
+	else:
+		contorno.river_mask = PackedFloat32Array()
+	contorno.pipeline_version = PreparaValle.VERSION
+	ResourceSaver.save(contorno, "%s/site_%d_surround.res" % [carpeta, SITE_ID])
+
+	var sitio: Site = null
+	for s: Site in _sitios.sites:
+		if s.id == SITE_ID:
+			sitio = s
+	if sitio == null:
+		return "  %s  no está el sitio %d" % [nombre, SITE_ID]
+
+	var estado := {"hecho": false}
+	return await _camino(nombre, func() -> void:
+		var preparador := PreparaValle.new()
+		preparador.carpeta_de_los_valles = carpeta
+		Carga.abrir(self, "Entrando en %s" % sitio.display_name())
+		Carga.etapas(PreparaValle.ETAPAS)
+		preparador.etapa_cambiada.connect(Carga.etapa)
+		_esperar_al_valle(preparador, sitio, estado), "", estado)
 
 
 ## PREPARAR UN VALLE NUEVO, como lo hace `RegionMap` al fundar: con la pantalla, sus

@@ -32,6 +32,7 @@ con el código delante. Lo que hace hoy el juego, medido, está en
 | **Los dos primeros años: la spec, en dos tandas, con criterios** | **§10.1** |
 | Tanda 3: quién va a la expedición, pasarela, herido, guardado, cielo y ventanas | §10.1 → Tanda 3 |
 | Tanda 4 (cerrada el 2026-09-13): explorar cuevas, pintar sólo lo explorado, sepultura, trueque y relaciones, humo, mapa regional | §10.1 → Tanda 4 |
+| **La costa de la época: abrigos hipotéticos en la plataforma** (spec) | §10.2 |
 | La trampa: alargarla porque es la que está hecha | §11 |
 
 Es la única época construida: lo que hace hoy, medido, está en
@@ -2218,6 +2219,291 @@ se miren pasar. En concreto, siete frentes:
 
 ---
 
+
+## 10.2. Spec: la costa de la época (2026-09-16)
+
+> **Spec escrita con `/spec` el 2026-09-16.** Las decisiones las tomó el usuario con
+> preguntas y están marcadas donde salen. El agua que se ve está en
+> [GRAFICOS.md](GRAFICOS.md) §7.3; aquí va qué se puede hacer allí.
+
+### Qué problema cierra
+
+**En el Paleolítico no hay ningún valle con mar.** Con el mar a −120 m la costa de la
+época queda a kilómetros de la de hoy, sobre la plataforma emergida, y el relieve de
+los valles —el LiDAR del IGN a 5 m— se acaba en la orilla de hoy. Así que el marisqueo,
+la pesca en la ría y todo el mar que ya se dibuja en el mapa regional no se pueden
+jugar en la época en que más costa había. El usuario recordaba haber quedado en poner
+yacimientos inventados en la plataforma, y **no estaba escrito en ningún sitio** (salió
+al planear el agua, 2026-09-15).
+
+Hoy el mapa regional ya enseña la plataforma con relieve y la costa de la época
+(GRAFICOS §3); lo que falta son sitios donde vivir en ella y un valle que jugar.
+
+### Lo que se pide
+
+**Cuatro abrigos hipotéticos, puestos a mano** (decisión del usuario: «unos pocos,
+puestos a mano»), uno en la desembocadura de la época de cada uno de estos ríos: el
+**Nansa**, el **Saja-Besaya**, el **Pas** y el **Asón**. El sitio exacto de cada uno
+se propone en el plan sobre una captura del mapa regional y lo confirma el usuario
+antes de construirlo.
+
+- **Son hipotéticos y se dice.** En la ficha del sitio y en el mapa llevan esa marca,
+  con una línea que explica por qué: lo que había en esa costa está hoy bajo el mar y
+  no se ha excavado. Ninguno lleva entrada enciclopédica ni finge serlo.
+- **Sólo existen cuando la plataforma está fuera del agua**: en las épocas en que su
+  cota queda por encima del mar de la época. Con el mar de hoy no salen.
+- **Cada uno tiene su valle de 5 m**, inventado sobre la batimetría y la orografía de la
+  plataforma que ya existen, con lo que un abrigo en la costa necesita: **un resalte o
+  cantil** donde esté el abrigo, **el río de la época llegando al mar**, **una franja de
+  roca en la orilla** y **playa**. Es siempre el mismo valle: se genera igual cada vez.
+- **Se puede fundar allí y migrar allí** (decisión del usuario), por la expedición y por
+  la mudanza, como a cualquier abrigo.
+- **Se marisquea en la orilla**: lapa y mejillón en la roca, con los parajes de
+  marisqueo que ya existen (decisión del usuario).
+- **Se pesca en la ría y en el mar** con las maneras de pescar que ya hay (decisión del
+  usuario). Qué rinde cada una en agua salada **no se inventa aquí**: si hace falta una
+  cifra nueva, el plan la dice y la decide el usuario.
+- **El mar se ve desde el valle**, con olas y rompiente y los niveles de agua que ya
+  existen (decisión del usuario; GRAFICOS §7.3).
+
+**Y el mapa regional, con sus ríos y los valles de la plataforma** (añadido al planear,
+2026-09-16). Al escribir el plan salió que el río de la época tendría que cruzar las
+lomas de la plataforma —su relieve es ruido, sin drenaje— y que el mapa regional **no
+dibuja ningún río**, ni en la tierra de hoy: el relieve regional se horneó sin cauces.
+El usuario: «que salgan dibujados los ríos y la orografía en el mapa regional».
+
+- **Los ríos de hoy salen de OpenStreetMap** (decisión del usuario), los que OSM llama
+  río, y **se prolongan por la plataforma**, bajando por el relieve, **hasta el mar de la
+  época**. Se dibujan en el mapa regional, y bajo la niebla no se ven, como ya dice
+  GRAFICOS §3.
+- **Por la plataforma cada río va por su valle**: las lomas se abren a su paso en vez
+  de cruzarlo.
+- **Y la plataforma tiene más relieve** que hoy (decisión del usuario: se ve poco). Cuánto
+  más se elige mirando capturas con dos o tres propuestas, como se eligió el aspecto de
+  las nubes.
+- **El río del valle de un abrigo de la costa es el mismo que el del mapa**: sale de la
+  misma línea.
+
+### Criterios de aceptación
+
+- **Salen donde deben.** Con el mar del Paleolítico los cuatro están en la lista de
+  sitios y se dibujan en el mapa; con el mar de hoy, ninguno. Prueba.
+- **Llevan la marca.** La ficha de cada uno dice que es hipotético; ningún sitio real la
+  lleva. Prueba.
+- **Su valle es siempre el mismo.** Generarlo dos veces da el mismo relieve, byte a
+  byte. Prueba.
+- **Su valle tiene costa jugable**: el abrigo a menos de 1 km del mar de la época; al
+  menos un tramo de orilla de roca de 200 m y uno de playa dentro del valle; y el río
+  llega al mar sin cortarse. Prueba sobre el relieve generado.
+- **Se marisquea y se pesca de verdad**: en las primeras diez jornadas de una partida
+  fundada en uno de ellos, la banda bautiza al menos un paraje de marisqueo y uno de
+  pesca en agua salada o en la ría, y trae marisco y pescado al almacén. Sonda de diez
+  jornadas, presupuestada en el plan.
+- **Se funda y se migra**: la expedición puede elegirlos como destino y la mudanza
+  puede ir a ellos. Prueba.
+- **El mar se ve**: captura del valle a 1920×1080 desde el abrigo, con el mar, la
+  rompiente y la orilla. La juzga el usuario.
+- **Los ríos, en el mapa regional**: en una captura con la niebla levantada se ven el
+  Nansa, el Saja-Besaya, el Pas y el Asón seguidos desde tierra adentro hasta la costa de
+  la época.
+- **Cada río baja**: por la plataforma, ningún tramo de río sube más de 2 m respecto al
+  punto más bajo que lleva recorrido. Prueba sobre las líneas horneadas.
+- **Van por su valle**: en la plataforma, la cota junto al río es más baja que a 1 km a
+  cada lado, en al menos el 90 % de los puntos del río. Prueba.
+- **Más relieve**: la plataforma elegida tiene la mediana de su subida por encima de la
+  de hoy (48 m). Captura de antes y después, y la elige el usuario.
+- **El río del valle es el del mapa**: el cauce de un valle de la costa pasa a menos de
+  50 m de la línea horneada en todo su recorrido. Prueba.
+- **Lo que cuesta**: GPU del mapa regional con ríos y sin ellos, alternando, a 1080p. Se
+  mide y se dice.
+
+### Fuera de alcance
+
+- **Mareas**, **barcas** —la piragua es del Mesolítico— y **mamíferos marinos**.
+- **Que el mar suba durante una partida.** El mar es el de la época, fijo.
+- **Más sitios o repartirlos solos por la costa**: se decidió que no.
+- **Afirmar nada arqueológico** de esa costa: los sitios son hipótesis de juego.
+- **Cambiar el mar del mapa regional.** Ya está (GRAFICOS §3).
+- **Arroyos, lagos y embalses** en el mapa regional: sólo ríos.
+- **Los ríos del mapa regional en otras épocas**: los de hoy valen para todas, y la
+  prolongación por la plataforma es la del mar del Paleolítico.
+
+### Plan técnico (2026-09-16)
+
+**Lo que hay hoy en el código, que es lo que manda el plan.**
+
+- **Los sitios** son `Site` dentro de un `SiteSet` horneado
+  (`data/sites/cantabria_sites.res`). Uno está disponible con un mar si su cota queda
+  por encima (`Site.is_available`) y se ocupa en el Paleolítico si tiene abrigo
+  (`is_usable_in`). La evidencia va en `Site.Fidelity`: `ATESTIGUADO` o `INFERIDO`.
+  **El conjunto se carga en siete sitios distintos** con `load` (`Campamentos`,
+  `GameState`, `RegionMap`, `Campamento`, `Expedicion`, `MenuPrincipal`,
+  `PanelRelaciones`).
+- **El valle de un sitio** lo prepara `PreparaValle` en un hilo: descarga el MDT del
+  IGN, quita la obra humana, traza los ríos con OSM (`Hydrography.apply`, que recibe
+  cauces como polilíneas en lon/lat), descarga el contorno y guarda
+  `data/dem/local/site_<id>.res`. **Para un sitio de la plataforma no hay nada que
+  descargar**: el IGN se acaba en la costa de hoy.
+- **El relieve de la plataforma** ya existe a escala regional (`RelieveDeLaPlataforma`,
+  GRAFICOS §3), pero **sólo sabe aplicarse a una rejilla entera**, no dar la cota de un
+  punto.
+- **El mar del valle ya se dibuja** a la cota de la época (`DemoMain` pone
+  `sea_level = Expedition.sea_level_m`).
+- **Pero la simulación no sabe que hay mar.** Nunca se ha jugado un valle con costa: los
+  del Paleolítico están a más de 10 km de ella. Al mirar el código:
+  - la rejilla de caminos no conoce el mar —la dificultad de cruce sale sólo del vado de
+    los ríos—, así que **se andaría por encima del agua**;
+  - un paraje de pesca o de marisqueo sólo nace donde hay vado (`Parajes.activity_fits`),
+    y el mar no tiene vado: **no nacería ninguno**;
+  - `ResourceMapper` **excluye de la pesca lo que está bajo el mar**, y pone marisqueo
+    en **todas** las celdas de mar, también mar adentro.
+
+**Módulos afectados.**
+
+1. **`SitiosDeLaCosta` (`datos/`, nuevo)**: la tabla escrita a mano de los cuatro abrigos
+   —coordenadas, cota, nombre, la cavidad— y quién los convierte en `Site`. Datos
+   puros, sin nodos (SPECS §4).
+2. **`Site`**: un valor más en `Fidelity`, **`HIPOTETICO`, al final** —los enteros de
+   los ficheros horneados no se mueven—, y la frase que lo dice en su descripción.
+3. **`SiteSet.comarca()`**: **una sola puerta** que carga el conjunto y le suma los
+   hipotéticos una vez. Los siete `load` pasan por ella: si uno se quedara con el
+   `load`, un abrigo de la costa existiría en el mapa y no al guardar la partida.
+4. **`RelieveDeLaPlataforma.cota_en(lon, lat, ...)`**: la cota de la plataforma en un
+   punto, **la misma que da `aplicar`** sobre la rejilla regional. Es lo que hace que el
+   valle case con lo que se ve en el mapa.
+5. **`ValleDeLaPlataforma` (`region/`, nuevo)**: el valle inventado de un sitio
+   hipotético —y su contorno— sin red: la cota de la plataforma, detalle fino con una
+   semilla que sale del id del sitio, **el cantil del abrigo**, **el río de la época**
+   bajando hasta el mar y metido por `Hydrography.apply` como un cauce más, y **la
+   orilla**, con roca y playa. `PreparaValle` lo llama en vez de descargar cuando el
+   sitio es hipotético, en el mismo hilo y con la misma barra.
+6. **`TerrainGenerator`**: **el mar entra en la dificultad de cruce**, y **no se
+   multiplica por el caudal de la estación**, que es del río: con él, en verano se
+   vadearía el mar. De ahí beben la rejilla de caminos, las bocas y los parajes, sin
+   tocarlos.
+7. **`ResourceMapper`**: el marisqueo, **sólo en la franja de mar pegada a tierra**; y la
+   pesca también **en el mar somero junto a la orilla y en la ría**, con la cifra que
+   decida el usuario.
+8. **Sondas**: `CostaCaptura` (los candidatos sobre el mapa regional; el valle desde el
+   abrigo) y `CostaProbe` (las diez jornadas). **Suite**: `TestCosta`.
+
+**Y lo que entró al planear —los ríos del mapa regional y los valles de la plataforma—:**
+
+9. **`HornearRios` (`tools/`, nueva)**: baja de OSM los ríos de la región, por trozos
+   —Overpass no da la región de una vez—, y **los prolonga por la plataforma**: desde la
+   boca de cada uno en la costa de hoy, bajando por el relieve sin lomas hasta el mar de
+   la época. Guarda las líneas en lon/lat en `data/sites/rios_de_la_region.res`. **Se hace
+   una vez**, como las máscaras de las eras. La regla de la bajada va en su propia clase
+   de datos, **`RioDeLaPlataforma` (`datos/`, nueva)**, para poder probarla sin red.
+10. **`RelieveDeLaPlataforma`, con valles**: la subida de las lomas se abre cerca de un río
+    de la plataforma —la distancia al río sale de las líneas horneadas— y el río se hunde
+    un poco; y con la amplitud que elija el usuario. Las dos cosas, **en el mismo cálculo
+    que da la cota de un punto**, para que el valle de la costa y el mapa sigan casando.
+11. **`RegionMap`**: pinta los ríos con `Hydrography.apply` sobre el relieve regional al
+    montarlo, igual que un valle. La caché de la malla regional lleva la huella de los
+    ríos.
+
+**Decisiones que tomo, y se dicen.**
+
+- **Los hipotéticos van en una tabla de código y no en el `SiteSet` horneado**: son
+  cuatro, puestos a mano, y así se leen en una revisión sin hornear nada.
+- **Sus ids, de 90001 a 90004**, lejos de los del catálogo.
+- **Dónde va cada uno lo calcula la sonda y lo confirma el usuario**, como dice la spec:
+  desde la boca de hoy de cada río se baja por el relieve de la época hasta el mar, y
+  el candidato es el primer resalte junto a esa desembocadura. **Hasta que el usuario
+  confirme, no se construye el valle.**
+- **El mar se trata como agua que no se cruza en ningún lado**, no sólo en estos valles:
+  es una regla del terreno, y hoy ningún valle jugable la estrenaba.
+
+**Orden de dependencias.** La cota de la plataforma en un punto va antes que todo lo
+demás, porque de ella salen los candidatos y el valle. **Los ríos horneados van antes que
+los valles de la plataforma, y los valles antes que los candidatos**: el abrigo se pone
+junto a la desembocadura de la época, y esa desembocadura es la del río horneado. Los candidatos y la confirmación
+del usuario, antes que la tabla. El mar en el terreno y los recursos de la orilla se
+comprueban con relieve construido en las pruebas, sin esperar al valle. La sonda de diez
+jornadas, al final.
+
+**Qué contrato cambia.** SPECS §4: **una sola puerta a la lista de sitios**. Y la
+dificultad de cruce gana un sentido: además del vado del río, el mar.
+
+**Riesgos técnicos.**
+
+- **La plataforma no tiene ríos**, y el relieve regional **tampoco tiene cauces en
+  tierra**. Se resuelve con los ríos horneados y los valles en las lomas, que entraron en
+  el plan a petición del usuario. El riesgo que queda: la batimetría a 111 m puede no
+  tener pendiente hasta la costa de la época en algún tramo llano, y el río de la
+  plataforma se atascaría. Se abre paso hacia la cota más baja cercana y se dice cuántos
+  tramos lo necesitaron.
+- **Overpass puede cortar** una petición del tamaño de la región. Se pide por trozos y se
+  guarda lo bajado; volver a hornear no vuelve a bajar lo que ya está.
+- **Tratar el mar como no cruzable toca todos los valles**, aunque ninguno jugable de
+  hoy tenga mar. Se mide que la firma de un valle de interior no cambia.
+- **Inventar un valle de 4 km a 5 m en GDScript** son unos 670 000 puntos, y el contorno
+  más del triple: decenas de segundos en el hilo, la primera vez. Se mide.
+- **Andar por la orilla** puede destapar más cosas que no se hicieron pensando en el mar
+  —la huella de un paraje, los vivacs, la entrada de las bocas—. Lo que salga en la sonda
+  de diez jornadas se apunta y va por `/depurar`.
+
+### Cómo quedó (2026-09-16)
+
+**Los cuatro abrigos.** `SitiosDeLaCosta` (`datos/`), una tabla a mano con ids
+90001-90004, `Site.Fidelity.HIPOTETICO` y su frase en la ficha: «lo que hubo en esta
+costa está hoy bajo el mar y no se ha excavado». Están donde los propuso `CostaCaptura`
+y los confirmó el usuario: en el resalte junto a la desembocadura de la época del
+**Nansa**, el **Saja-Besaya**, el **Pas** y el **Asón**, a 158-249 m del mar de la época
+y 31-44 m por encima de él. **El Pas y el Saja-Besaya desembocan juntos** con el mar a
+−120 m —sus cauces confluyen en la plataforma—, así que el del Pas está tres kilómetros
+al oeste para que no sean el mismo sitio.
+
+**Una sola puerta a la comarca.** `SiteSet.comarca()` carga el conjunto horneado y le
+suma los hipotéticos. Se cargaba con `load` en **ocho** sitios distintos; con abrigos
+añadidos por código, uno que se quedara con el `load` sería un sitio que sale en el mapa
+y no al guardar la partida. Una prueba recorre los guiones del juego y falla si alguno se
+salta la puerta.
+
+**Los ríos del mapa regional** (entraron al planear, a petición del usuario). El relieve
+regional se horneó sin cauces: el mapa no dibujaba ni un río. Ahora
+`HornearRios` baja de OSM los de la región —**1 599 tramos, 4 107 km**, guardados en
+`data/sites/rios_de_la_region.res`— y los prolonga por la plataforma emergida:
+**54 desembocaduras y 1 464 km** de río sobre lo que hoy es fondo marino, deducidos
+inundando desde el mar hacia tierra (`RioDeLaPlataforma`). Cada río **abre su valle** en
+las lomas de la plataforma y **se ensancha aguas abajo** según los kilómetros de río que
+le caen encima (`AnchoDeLosRios`: 1,5 m de semiancho en la fuente, 80 m de tope).
+
+**El valle de un abrigo de la costa se inventa** (`ValleDeLaPlataforma`), sin red y
+siempre igual: la cota de la plataforma —la misma que se ve en el mapa—, detalle fino con
+la semilla del sitio, el cantil del abrigo, el río del mapa recortado, **la rasa** —el
+mar plancha su orilla— y **una rampa del abrigo al agua**. 901 × 901 muestras a 5 m en
+8-16 s.
+
+**El mar, por fin, es agua**: `TerrainGenerator.vado_del_mar` lo hace infranqueable —sin
+multiplicar por el caudal de la estación, que es cosa de los ríos— y
+`en_la_orilla_del_mar` define dónde se marisquea y se pesca a pie: **la franja que
+descubre la marea**, 2,5 m sobre la lámina. `ResourceMapper` pone allí lapa y mejillón y
+la pesca de orilla, con el rendimiento de un río medio (decisión del usuario).
+
+**Lo que costó que funcionara, que es la mitad del trabajo.** Ningún valle jugable había
+tenido mar nunca, así que nada de esto estaba probado:
+
+- la rejilla de caminos da por intransitable toda celda con agua honda a veinte metros,
+  así que **un paraje dentro del mar no se alcanza jamás**: por eso el marisqueo vive en
+  la franja de marea y no en el agua;
+- la costa de la plataforma **cae a plomo** —40 m en 40 m, medido en el valle del
+  Nansa—, así que sin la rampa no había cómo bajar a la orilla;
+- y la banda, al asentarse, **no buscaba marisqueo**: `Querencia.OFICIOS` tenía cuatro
+  oficios y le faltaba ése. En un valle sin costa no cambia nada; en uno con costa era la
+  diferencia entre tener marisqueo y no tenerlo.
+
+**Medido** (`CostaProbe`, abrigo del Nansa, diez jornadas, la banda repartida con cuatro
+a la ribera): 4 parajes de marisqueo y 4 de pesca, y **45,7 de marisco y 169,5 de pescado
+en el almacén**; nadie andando dentro del mar. El valle sale con el 48 % de sus muestras
+bajo el agua.
+
+**Lo que no se hizo, y se dice.** La firma de un valle de interior antes y después del
+cambio del mar **no se ha cotejado**: lo que se comprueba es que el vado del mar vale
+cero por encima de la franja de marea —prueba de `TestCosta`—, así que un valle sin costa
+no puede notarlo, y la suite entera está en verde. Queda pendiente para quien quiera la
+certeza del cotejo.
 
 ## 11. La trampa
 

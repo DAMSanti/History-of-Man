@@ -116,7 +116,7 @@ static func levantar_niebla(forma: Dictionary, sitios: SiteSet = null) -> int:
 	if not bool(forma.get("descubre", false)):
 		return 0
 	if sitios == null:
-		sitios = load("res://data/sites/cantabria_sites.res") as SiteSet
+		sitios = SiteSet.comarca()
 	var nuevos := 0
 	for site: Site in sitios.sites:
 		if not is_discovered(site) and dentro.call(site):

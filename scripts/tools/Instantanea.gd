@@ -54,6 +54,25 @@ const FUERA := {
 	"_pendiente": true,
 	# La velocidad la pone quien juega, o la sonda.
 	"time_scale": true,
+	# Y el freno de la camara lenta, por lo mismo y con mas motivo: es RITMO DE RELOJ
+	# -cuantos pasos se dan por segundo real-, no partida. Lo pone la vista segun lo
+	# cerca que este la camara. Con el dentro, acercarse cambiaba la firma sin cambiar
+	# un solo paso, que es justo lo contrario de lo que la spec promete. Ver
+	# [SettlementSim.freno_de_la_vista] y GRAFICOS §7.6.
+	"freno_de_la_vista": true,
+	# Y donde se dibuja cada uno, que es un nodo de vista colgado de la simulacion. Ver
+	# [Figuras]: la partida es la misma con figuras y sin ellas.
+	"figuras": true,
+	# Lo que salio de la fachada en la segunda pasada (ARQUITECTURA §3.2) y NO TIENE
+	# ESTADO: solo comportamiento y su `sim`. Su estado se quedo en el simulador, que es
+	# donde se firma. Con ellos dentro, la firma de treinta jornadas salia distinta desde
+	# la jornada 2 con el resumen identico las treinta: no era la partida, era que cuatro
+	# objetos nuevos renumeraban las referencias de todo lo que se codificaba despues
+	# -`sim.caceria`, `sim.marcha`, `fauna._rng`-.
+	"SettlementSim.rutina": true,
+	"SettlementSim.destino": true,
+	"SettlementSim.cierre": true,
+	"SettlementSim.berrea": true,
 	# Quién da los pasos a esta simulación —ella misma o el reloj de la
 	# partida— y si es la que gira la fecha. Es cómo se lleva el reloj, no lo que
 	# pasa: con ellas dentro, un campamento mirado y el mismo sin mirar darían

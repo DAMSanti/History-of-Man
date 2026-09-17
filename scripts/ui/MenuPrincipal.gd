@@ -12,7 +12,6 @@ extends Control
 
 ## El catálogo de emplazamientos, para que la lista diga el nombre del valle y
 ## no su número.
-const SITIOS := "res://data/sites/cantabria_sites.res"
 
 var _lista: ListaDePartidas
 var _panel_de_carga: PanelContainer
@@ -82,7 +81,7 @@ func _ready() -> void:
 	_panel_de_carga.add_child(dentro)
 
 	_lista = ListaDePartidas.new()
-	_lista.sitios = load(SITIOS) as SiteSet
+	_lista.sitios = SiteSet.comarca()
 	_lista.elegida.connect(_cargar)
 	dentro.add_child(_lista)
 
@@ -120,7 +119,7 @@ func _cargar(id: String) -> void:
 	# clic, y leída antes de abrir la pantalla ese cuadro pasaba de 500 ms. INTERFAZ §9.
 	Carga.abrir(get_tree(), "Retomando la partida")
 	await get_tree().process_frame
-	var sitios := load(SITIOS) as SiteSet
+	var sitios := SiteSet.comarca()
 	var fallo := Partidas.cargar(id, sitios)
 	if not fallo.is_empty():
 		Carga.cerrar()

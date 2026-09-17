@@ -477,7 +477,7 @@ func _sitios_del_pasillo(recorrido: Pasillo) -> Array[Site]:
 
 func _la_comarca() -> SiteSet:
 	if comarca == null:
-		comarca = load("res://data/sites/cantabria_sites.res") as SiteSet
+		comarca = SiteSet.comarca()
 	return comarca
 
 

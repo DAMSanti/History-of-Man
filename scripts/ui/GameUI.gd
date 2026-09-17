@@ -93,6 +93,10 @@ var shown_paraje: Paraje = null
 ## a alguien «de camino» que llevaba media jornada trabajando.
 var shown_person: Inhabitant = null
 
+## A quién sigue la cámara. Ver [Seguimiento] e INTERFAZ §13: vive aquí porque aquí
+## llegan los paneles que lo sueltan, y muere con la escena.
+var seguimiento := Seguimiento.new()
+
 ## La cumbre cuya ficha está abierta, y lo que ha contestado el último
 ## «intentar cima»: sin guardarlo, el aviso se perdía al repintar la ficha
 ## y el botón parecía no hacer nada.
@@ -659,7 +663,10 @@ func _window(id: String, title: String,
 		# rastro lo pinta la ficha y sin ficha no tiene quién lo mantenga al
 		# día, así que se quedaría congelado en el mapa para siempre.
 		elif id == "entidad":
-			censo._forget_entity())
+			censo._forget_entity()
+		# Y cerrar la de una persona suelta la cámara, igual que ESC (INTERFAZ §13).
+		elif id == "persona":
+			seguimiento.soltar())
 	header.add_child(close)
 
 	column.add_child(HSeparator.new())
@@ -747,6 +754,11 @@ func close_topmost() -> bool:
 	if best == null:
 		return false
 	best.visible = false
+
+	# Cerrar la ficha de una persona suelta la cámara: se deja de seguir a quien ya no se
+	# está mirando (INTERFAZ §13).
+	if _windows.get("persona", null) == best:
+		seguimiento.soltar()
 
 	# Cerrar la ficha de un paraje apaga su mancha en el terreno: la marca es
 	# de la ficha, no del mundo. Y ESC cierra igual que la cruz, asi que tiene
@@ -898,44 +910,38 @@ func _bar(body: VBoxContainer, caption: String, value: float) -> ProgressBar:
 ##
 ## Estaba en el panel de la esquina, tapando el terreno y visible siempre
 ## aunque no hiciera falta. Aquí se consulta cuando se necesita y se cierra.
+##
+## **Se pinta del catálogo de [Teclas], no de una lista a mano** (INTERFAZ §11). La
+## lista a mano decía lo que le parecía: anunciaba «B — modo construcción» cuando en el
+## juego no hay ninguna B, y ponía F3 dos veces —los fotogramas y la velocidad ×5—
+## porque de verdad hacía las dos cosas. Una ventana que enseña teclas tiene que leerlas
+## de donde están puestas, o miente en cuanto alguien cambia una.
 func show_controls() -> void:
 	var body := _window("controles", "Controles")
 	_clear(body)
 
-	_heading(body, "MOVERSE")
-	for entry: Array in [
-		["W A S D", "desplazar la vista"],
-		["SHIFT + WASD", "desplazarse más deprisa"],
-		["Rueda", "acercar y alejar"],
-		["Botón derecho", "girar la cámara"],
-	]:
-		_key_row(body, entry[0], entry[1])
+	_heading(body, "CON EL RATÓN")
+	for fila: Dictionary in Teclas.EL_RATON:
+		_key_row(body, String(fila["como"]), String(fila["rotulo"]))
+
+	body.add_child(HSeparator.new())
+	_heading(body, "EN EL VALLE")
+	for fila: Dictionary in Teclas.del_ambito(Teclas.Ambito.VALLE):
+		_key_row(body, Teclas.nombre_de_la_tecla(Teclas.tecla_de(String(fila["id"]))),
+			String(fila["rotulo"]))
 	_text(body, "La vista se para en el borde del recuadro. Lo gris de "
-		+ "alrededor es terreno real, pero no se juega ahí.", true)
+		+ "alrededor es terreno real, pero no se juega ahí. Y las capas pintan lo que "
+		+ "la banda CONOCE, no lo que hay: al empezar están casi en blanco, y eso es "
+		+ "información, no un fallo.", true)
 
 	body.add_child(HSeparator.new())
-	_heading(body, "MIRAR")
-	for entry: Array in [
-		["Clic", "ver la ficha de una persona, un recurso o una cueva"],
-		["R", "cambiar la capa del mapa: territorio y recursos"],
-		["F3", "mostrar u ocultar los fotogramas por segundo"],
-	]:
-		_key_row(body, entry[0], entry[1])
-	_text(body, "Las capas pintan lo que la banda CONOCE, no lo que hay. Al "
-		+ "empezar están casi en blanco: eso es información, no un fallo.", true)
-
-	body.add_child(HSeparator.new())
-	_heading(body, "MANDAR")
-	for entry: Array in [
-		["B", "modo construcción: el clic levanta en vez de seleccionar"],
-		["1 a 5", "mandar a toda la banda a una actividad"],
-		["P o espacio", "pausar y reanudar"],
-		["F1 F2 F3", "velocidad normal, x3 y x5"],
-		["ESC", "cerrar la ventana de delante"],
-	]:
-		_key_row(body, entry[0], entry[1])
+	_heading(body, "EN TODAS PARTES")
+	for fila: Dictionary in Teclas.del_ambito(Teclas.Ambito.SIEMPRE):
+		_key_row(body, Teclas.nombre_de_la_tecla(Teclas.tecla_de(String(fila["id"]))),
+			String(fila["rotulo"]))
 	_text(body, "El reparto fino se hace en la pestaña de Trabajos, no con las "
-		+ "teclas: ahí se ve quién puede hacer cada oficio y por qué.", true)
+		+ "teclas: ahí se ve quién puede hacer cada oficio y por qué. Y todas éstas se "
+		+ "cambian en Configuración, pestaña Controles.", true)
 
 
 ## Una fila de tecla y para qué sirve.
@@ -1305,6 +1311,15 @@ func show_lore() -> void:
 ## haciendo ahora mismo, qué lleva encima y por qué puede o no puede hacer
 ## ciertos trabajos.
 func show_person(person: Inhabitant) -> void:
+	# ELEGIR A ALGUIEN LA CENTRA Y LA SIGUE (INTERFAZ §13). Va aquí y no en cada sitio que
+	# abre la ficha porque **ésta es la puerta única**: el clic en el valle, la lista de
+	# trabajos y el censo pasan todos por aquí. A quien no está en el valle —de
+	# expedición, mudada— se le abre la ficha y la cámara no se mueve.
+	if person != shown_person or not seguimiento.esta_siguiendo():
+		if Seguimiento.esta_en_el_valle(person, sim):
+			seguimiento.seguir_a(person)
+			if camera != null:
+				camera.mirar_a(person.position)
 	shown_person = person
 	var body := _window("persona", "Persona")
 	_clear(body)

@@ -153,9 +153,14 @@ extends Node3D
 ## Seguir la hora de la partida. Con false el sol se queda fijo a la hora
 ## de `fixed_hour` y no hay ciclo dia/noche.
 ##
-## De momento va desactivado: el ciclo esta implementado y funciona, pero para
-## trabajar en el terreno y los emplazamientos estorba tener medio mapa a
-## oscuras. El codigo se conserva entero, solo se puentea la conexion.
+## **ESTE VALOR DE FABRICA NO ES EL QUE CORRE.** `scenes/WorldEnvironment.tscn` lo
+## pone en `true` desde el 2026-09-07, y esa escena es la que instancian
+## `demo_main` y `region_map`: en el juego el sol SIGUE LA HORA.
+##
+## Aqui decia «de momento va desactivado, el codigo se conserva entero»,
+## y llevaba diez dias siendo mentira: el 2026-09-16 se escribio una spec entera
+## para «encender el ciclo» creyendose este comentario. Ver GRAFICOS §7.5, que
+## trae ademas lo que da la luz medida a cada hora.
 @export var follow_time_of_day: bool = false
 
 ## Hora fija cuando follow_time_of_day es false
@@ -539,11 +544,6 @@ func _place_sun(hour: float, season: int, season_day: int) -> void:
 	_update_fill()
 
 
-## Coloca la luna, con su fase, y decide cuánto alumbra.
-##
-## La fase sale de los días transcurridos de partida convertidos a días reales,
-## porque una lunación es un periodo físico y el calendario del juego es una
-## convención. Ver [SolarPosition].
 ## Cuánto tapan las nubes hoy. Lo llama la escena cuando cambia el tiempo.
 ##
 ## El cielo no pregunta el tiempo por su cuenta: se lo dan, como el sol y la
@@ -616,6 +616,11 @@ func _pintar_el_cielo(latitude: float, day: float, hour: float,
 		SolarPosition.moon_lit(fase) * clampf(0.25 + 0.75 * noche, 0.0, 1.0))
 
 
+## Coloca la luna, con su fase, y decide cuánto alumbra.
+##
+## La fase sale de los días transcurridos de partida convertidos a días reales,
+## porque una lunación es un periodo físico y el calendario del juego es una
+## convención. Ver [SolarPosition].
 func _place_moon(latitude: float, day: float, hour: float,
 		sun_above: float) -> void:
 	if not _moon_light:
@@ -775,12 +780,10 @@ func _process(_delta: float) -> void:
 	# `season_day` cuenta desde cero los días cumplidos de la estación; el
 	# cálculo del día del año los quiere desde uno.
 	_place_sun(sim.hour, GameState.season, sim.season_day + 1)
-
-
-## Deja el sol clavado a la hora de `fixed_hour`, con el cielo que le toque.
 	Cronometro.cierra("vista: entorno")
 
 
+## Deja el sol clavado a la hora de `fixed_hour`, con el cielo que le toque.
 func _apply_fixed_sun() -> void:
 	if not _directional_light:
 		return

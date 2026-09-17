@@ -6,6 +6,11 @@ extends SceneTree
 ## ventana abierta **a cada resolución**, que se coloca con el tamaño que había al
 ## abrirse. Las tres pestañas.
 ##
+## Desde el 2026-09-17 recorre **todas** las pestañas y no tres: la cuenta estaba
+## escrita a mano y al añadir «Controles» (INTERFAZ §11) se habría quedado sin mirar la
+## que más filas tiene. Y de la de controles saca además el aviso de choque, que es lo
+## que hay que poder leer sin dudar.
+##
 ##   godot --path . --script res://scripts/tests/ConfiguracionCaptura.gd
 
 var _fallos: Array[String] = []
@@ -38,7 +43,7 @@ func _init() -> void:
 			menu.configuracion.cerrada.emit()
 			await process_frame
 		var ventana := menu.abrir_configuracion()
-		for pestana in range(3):
+		for pestana in range(ventana._pestanas.get_tab_count()):
 			ventana._pestanas.current_tab = pestana
 			for i in range(8):
 				await process_frame
@@ -55,6 +60,27 @@ func _init() -> void:
 				var ruta := "user://configuracion_%d_%dx%d.png" % [pestana, resolucion.x, resolucion.y]
 				shot.save_png(ruta)
 				print("      captura en %s" % ProjectSettings.globalize_path(ruta))
+			if nombre != "Controles":
+				continue
+			# El aviso de choque: se pide la tecla de «avanzar» y se pulsa la del acercar,
+			# que ya está cogida. Es el estado que hay que poder leer sin dudar.
+			ventana.esperar_la_tecla("avanzar")
+			ventana.tecla_pulsada(Teclas.tecla_de("acercar"))
+			for i in range(8):
+				await process_frame
+			var choque := _fuera_de(ventana, Rect2(Vector2.ZERO, Vector2(get_root().size)))
+			if choque.is_empty():
+				print("   ok · %dx%d · el aviso de choque cabe" % [resolucion.x, resolucion.y])
+			else:
+				_fallos.append("%dx%d · choque: %s" % [resolucion.x, resolucion.y,
+					str(choque.slice(0, 4))])
+				print("   MAL · %s" % _fallos.back())
+			var tiro := get_root().get_texture().get_image()
+			if tiro != null:
+				var donde := "user://configuracion_choque_%dx%d.png" % [resolucion.x, resolucion.y]
+				tiro.save_png(donde)
+				print("      captura en %s" % ProjectSettings.globalize_path(donde))
+			ventana.resolver_el_choque(false)
 	print("=== %s ===" % ("TODO BIEN" if _fallos.is_empty() else "%d COSAS MAL" % _fallos.size()))
 	quit(0 if _fallos.is_empty() else 1)
 

@@ -834,6 +834,80 @@ Y con el **núcleo preparado**, lo tallado en piedra sale con calidad 0,90 en ve
 0,82 para un novato: un 10 % más de vida útil por pieza (`Tool.durability` es la vida
 del material por la calidad), lo que baja la reposición sin tocar ninguna otra cifra.
 
+### Diez jornadas en la costa de la época: 45,7 de marisco y 169,5 de pescado
+
+Medido el 2026-09-16 con `CostaProbe` en el abrigo hipotético de la ría del Nansa
+(EPOCA_01 §10.2), con la banda repartida —cuatro a la ribera, cuatro a recolección, dos a
+la caza y dos a explorar— y diez jornadas a velocidad 20. **Dos corridas, cifras
+idénticas**: la partida es determinista.
+
+| | Tras diez jornadas |
+|---|---|
+| Parajes de marisqueo | 4 |
+| Parajes de pesca | 4 |
+| Parajes de caza / recolección / materia prima | 15 / 15 / 17 |
+| Marisco en el almacén | 45,7 |
+| Pescado en el almacén | 169,5 |
+| Gente andando dentro del mar | 0 |
+
+El valle inventado del sitio sale con el **48 % de sus muestras bajo el agua** y cotas de
+−163 a +195 m, y se levanta en **8-16 s** (901 × 901 muestras a 5 m), sin red.
+
+**Lo que esto no dice**: no es una partida larga ni un año, así que no dice si una banda
+puede VIVIR de la costa —cuánto rinde el marisqueo frente a la caza, si el invierno se
+sostiene—. Eso pide una corrida de año y no se ha hecho.
+
+**Y el mapa regional, con sus ríos**: 1 599 tramos de OSM (4 107 km) más 54
+desembocaduras prolongadas por la plataforma (1 464 km). Pintarlos costaba 23 s en cada
+montaje del mapa; con el relieve ya preparado en disco, la sonda que lo monta y captura
+pasa de 110 s a 38 s.
+
+### La noche está al 39 % del mediodía, y se queda así
+
+Medido el 2026-09-17 con `NocheLuzProbe` (ventana, 1080p, sitio 56, una noche con la luna
+alta y el hogar encendido): brillo medio de la pantalla **0,2171 a mediodía** con el sol a
+52,7°, **0,0957 a las 21:00** (44 %) y **0,0839 a las 23:00** (39 %) con el sol a −38,9°.
+El amanecer y el atardecer, que es lo único que se llega a ver porque la noche se salta a
+5 h por segundo, van al **72-77 %**.
+
+El **ciclo de día y noche funciona** —el sol sigue la hora, la luna se enciende de noche y
+se apaga de día, las hogueras alumbran con sombras—: lo que pasa es que la noche se lee
+como un día muy nublado. Se pretendió llevarla al 15-30 %, y **el usuario decidió el
+2026-09-17 dejarla como está**; el hueco queda apuntado aquí. El detalle, en
+[GRAFICOS.md](GRAFICOS.md) §7.5.
+
+### `SettlementSim` en 3 401 líneas, y la partida idéntica 30 jornadas
+
+La segunda pasada (2026-09-17, ARQUITECTURA §3.2) sacó `Rutina`, `Destino`, `CierreDelDia`
+y `Berrea`: de **5 094 a 3 401 líneas**, con la firma diaria de **30 jornadas idéntica**
+antes y después (`TironAnualProbe VEL=20 DIAS=30 CEPO=0` y `Cotejo`). **La meta eran
+3 000** y no se alcanzó por decisión del usuario: lo que queda es un 49 % de comentarios
+y el resto, estado, constantes, pasamanos y el bucle. Cada corrida de 30 jornadas costó
+**unos 4 minutos** headless y con el cepo apagado.
+
+### El contorno rehecho ya no congela la ventana: 73 ms el peor cuadro
+
+Medido el 2026-09-17 con `CargaProbe CONTORNO=1` (ventana 1920×1080, sitio 56, con red),
+estropeando a propósito el contorno de un valle ya preparado: con sólo el agua que
+rehacer, **43,5 s y 73 ms el cuadro más largo**; con el MDT del IGN entero, **49,1 s y
+40 ms**. **Ni un cuadro de más de 500 ms** en ninguno de los dos, que era el criterio.
+Antes, esa misma descarga se hacía en el hilo principal: la ventana se quedaba parada
+hasta un minuto con un cartel de «esto tarda» encima. Detalle en
+[INTERFAZ.md](INTERFAZ.md) §12.
+
+### Lo que se ve andar: 8,06 m/s de figura y tramos de 1,57 s
+
+Medido el 2026-09-17 con `VerTrabajarProbe` (ventana, 1280×720, valle del sitio 56, tres
+horas de juego a ×1, sin cámara lenta): **250 cuadros, con alguien de viaje en 238**. La
+figura más rápida va a **8,06 m/s** de reloj —el tope es 8—, el tramo andado más largo
+dura **1,57 s** —el tope es 1,5— y la marca del viaje da saltos de hasta **652 m en un
+cuadro**, que es lo que de verdad anda una persona simulada entre dos fotogramas a ×1.
+
+Esos 652 m son la cifra que explica el trabajo entero: **un día de juego son 120 s
+reales**, así que la gente anda 900 m por segundo de pantalla. Lo que se arregla es lo que
+se ve —la figura sale y llega andando, y por el medio va la marca—, no lo que se simula.
+Detalle en [GRAFICOS.md](GRAFICOS.md) §7.6.
+
 ## 3. Lo que está construido y funciona
 
 Para no perderlo de vista mientras se habla de lo que falta.
@@ -853,7 +927,38 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**1 584 pruebas y 8 523 comprobaciones en verde (2026-09-16, depurar de la noche).**
+**1 673 pruebas y 9 051 comprobaciones en verde (2026-09-17, con la cámara que sigue a la
+persona elegida).** Suben de 1 657 y 9 015 con `TestSeguimiento` (nueva: lo que se ve de
+alguien, centrar sin tocar el zoom si ya estaba cerca, seguir cuadro a cuadro, y los seis
+gestos que sueltan).
+
+Antes: **1 657 pruebas y 9 015 comprobaciones en verde (2026-09-17, con el contorno en un
+hilo).** Suben de 1 650 y 9 000 con `TestContorno` (nueva: la receta del contorno sin red,
+que no toca un contorno que está bien, que sin red se queda el que había y lo dice, y que
+dos pasadas dan el mismo fichero byte a byte).
+
+Antes: **1 650 pruebas y 9 000 comprobaciones en verde (2026-09-17, con los viajes
+abreviados y la cámara lenta).** Suben de 1 637 y 8 849 con `TestVerTrabajar` (nueva: que el freno da
+menos pasos y no pasos más cortos, que ni el freno ni las figuras cambian la firma, la
+curva de la cámara lenta, y las fases de la figura).
+
+Antes: **1 637 pruebas y 8 849 comprobaciones en verde (2026-09-17, con las teclas que se
+cambian).** Suben de 1 613 y 8 599 con `TestTeclas` (nueva: el catálogo, el ámbito del
+choque, el guardado, la pestaña que las cambia, la ventana que las enseña y **la que
+recorre `scripts/` para que nadie vuelva a escribir una tecla a mano**).
+
+Antes: **1 613 pruebas y 8 599 comprobaciones en verde (2026-09-16, con la costa de la época).**
+Suben de 1 584 y 8 523 con `TestCosta` (nueva: los cuatro abrigos hipotéticos, la puerta
+única a la comarca, los ríos horneados y los de la plataforma, el vado del mar y la franja
+de marea) y las pruebas del ancho de los ríos.
+
+Y una prueba que se puso roja y **no era suya**:
+`TestExpedicion.test_por_los_ocho_rumbos_...` medía lo esperado leyendo el conjunto
+horneado a pelo mientras la partida ya miraba por `SiteSet.comarca()` —que además de los
+horneados trae los abrigos de la costa—, así que al nordeste «sobraba 1». Los cinco sitios
+de ese fichero que cargaban el recurso a secas pasan ahora por la puerta.
+
+Antes: **1 584 pruebas y 8 523 comprobaciones en verde (2026-09-16, depurar de la noche).**
 Suben de 1 577 y 8 496 con la cámara de la cueva en `TestPared` y el relieve por nivel en
 `TestConfiguracion`.
 

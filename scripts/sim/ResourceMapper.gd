@@ -18,6 +18,19 @@ extends RefCounted
 ## metros, no un punto, y a esta resolución el campo entero cabe de sobra.
 const CELL_METERS := 64.0
 
+## Lo que rinde una jornada de pesca en el mar somero y en la ría, en la misma escala
+## que el río.
+##
+## **Como un río medio** (decisión del usuario del 2026-09-16): un tramo de río con agua
+## media y poca pendiente da 0,65 con la cuenta de abajo, y eso es lo que se pone en la
+## orilla del mar. Ver EPOCA_01 §10.2.
+const PESCA_EN_LA_ORILLA := 0.65
+
+## La orilla es LO QUE SE PUEDE PISAR: el mar cuya hondura deja estar de pie, que es lo
+## que dice el vado del terreno (`TerrainGenerator.vado_del_mar`). Una celda de mar
+## hondo no vale aunque tenga tierra a cien metros: no se llega andando y allí no puede
+## nacer un paraje (`CostaProbe`, 2026-09-16).
+
 
 ## Construye el campo a partir del terreno ya generado.
 static func build(terrain: TerrainGenerator, home: Vector3) -> ResourceField:
@@ -37,6 +50,11 @@ static func build(terrain: TerrainGenerator, home: Vector3) -> ResourceField:
 			var underwater := terrain.is_underwater(point)
 			var distance := Vector2(point.x - home.x, point.z - home.z).length()
 
+			# LA ORILLA DEL MAR: la franja que la marea descubre y el agua donde se hace
+			# pie. Es donde se marisquea y donde se pesca sin barca (EPOCA_01 §10.2). Se
+			# pregunta al mar y no al vado a secas, que ése lleva también los ríos.
+			var en_la_orilla := terrain.en_la_orilla_del_mar(point)
+
 			# --- Pesca ---------------------------------------------------
 			# Sigue al agua corriente. El mejor sitio no es el rápido sino el
 			# tramo ancho y remansado, donde el salmón para: por eso puntúa la
@@ -44,11 +62,15 @@ static func build(terrain: TerrainGenerator, home: Vector3) -> ResourceField:
 			if water > 0.05 and not underwater:
 				field.set_abundance(Subsistence.Activity.PESCA, x, z,
 					clampf(water * 1.3 - slope * 1.5, 0.0, 1.0))
+			elif en_la_orilla:
+				# El mar somero y la ría: la desembocadura es de las dos cosas.
+				field.set_abundance(Subsistence.Activity.PESCA, x, z, PESCA_EN_LA_ORILLA)
 
 			# --- Marisqueo -----------------------------------------------
-			# Solo hay donde hay mar. Si el emplazamiento no tiene costa, este
-			# campo se queda vacío entero, y eso es correcto.
-			if underwater:
+			# Solo hay donde hay mar, Y PEGADO A TIERRA. Estuvo en todas las celdas de
+			# mar —también a kilómetros de la costa, donde no se llega a pie— porque
+			# ningún valle jugable tenía mar y no se veía (2026-09-16).
+			if en_la_orilla:
 				field.set_abundance(Subsistence.Activity.MARISQUEO, x, z, 0.9)
 
 			# --- Caza ----------------------------------------------------

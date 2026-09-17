@@ -217,7 +217,7 @@ static func _llegar(viaje: Viaje) -> void:
 static func _fundar(id: int) -> Campamento:
 	if _arbol == null:
 		return null
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	var sitio: Site = null
 	for s: Site in comarca.sites:
 		if s.id == id:

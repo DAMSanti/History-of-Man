@@ -42,6 +42,8 @@ está aquí y también allí, allí manda:
 | **Quién contesta «¿se puede pasar?» y «¿cuánto cuesta andar?»** | **§4.3** |
 | `SettlementSim` como fachada y las reglas del troceado | §4.4 |
 | La ración, y qué limita la despensa | §4.5 |
+| La comarca, que se pide por una sola puerta | §4.9 |
+| **Dónde se nombra una tecla, que es en un solo sitio** | **§4.10** |
 | Las capas de física, y cuáles no se usan | §5 |
 | Rendimiento medido, y el aviso del contador roto | §6.1 |
 | Cómo se comprueba que dos corridas son la misma partida | §6.2 |
@@ -190,6 +192,17 @@ que la partida no cambia necesita la pareja con y sin. Y el interruptor está en
 lanzado con `--script` arranca con `SettlementSim.SEMILLA_DE_SONDA`, no con el
 reloj: ninguna sonda la fijaba por su cuenta y comparar dos corridas era
 comparar dos partidas distintas. Ver ARQUITECTURA.md §5.1.
+
+**Y la cámara lenta frena dando MENOS pasos, no pasos más cortos** (2026-09-17,
+[GRAFICOS.md](GRAFICOS.md) §7.6). Es la misma distinción que la noche, al revés: frenar
+bajando `time_scale` cambiaría el tamaño del paso —`_advance` multiplica por él— y sería
+otra partida. `SettlementSim.freno_de_la_vista` multiplica en cambio el reloj real que
+entra en `_pendiente`, aquí y en `RelojDeLaPartida`, así que la sucesión de `_advance` es
+idéntica y sólo se reparte en más fotogramas. **La noche no se frena.** Lo pone la vista
+según lo cerca que esté la cámara (`CamaraLenta`) y la simulación sólo lo guarda; **va en
+`Instantanea.FUERA`**, como `time_scale`, porque es ritmo de reloj y no partida. Lo
+comprueba `TestVerTrabajar`, dando pasos y no esperando al reloj: diez jornadas a cámara
+lenta de verdad serían horas.
 
 ### 3.2. Las tres señales, y cuál usar
 
@@ -448,6 +461,38 @@ del motor que no existe.
 
 ---
 
+### 4.9. La comarca se pide por una sola puerta (2026-09-16)
+
+`SiteSet.comarca()` es **el único sitio** desde el que se carga la lista de
+emplazamientos. Antes se hacía `load("res://data/sites/cantabria_sites.res")` en ocho
+guiones distintos, y desde que hay sitios que **no** están en el fichero horneado —los
+abrigos hipotéticos de la costa de la época, `SitiosDeLaCosta`, EPOCA_01 §10.2— eso son
+ocho listas que pueden no decir lo mismo: un sitio saldría en el mapa y no al guardar la
+partida.
+
+Lo comprueba una prueba que recorre los guiones del juego —sin `tests/` ni `tools/`, que
+son instrumentos— y falla si alguno carga el fichero por su cuenta.
+
+---
+
+### 4.10. Ninguna tecla se nombra fuera de `Teclas` (2026-09-17)
+
+Toda tecla a la que el juego responde **pasa por una acción**, y la acción se pregunta a
+`Teclas.pulsada(id)` o `Teclas.es(evento, id)`. El catálogo, el `InputMap` y la regla del
+choque viven en `scripts/vista/Teclas.gd` y en ningún otro sitio.
+
+Es el invariante 3 de §7 —una pregunta, un sitio que la contesta— aplicado a la entrada,
+y se escribe aparte porque **romperlo no da ningún error**: `OrbitalCamera` miraba la W
+física *y* la acción `move_forward`, las dos, y por eso cambiar la acción no movía la
+cámara. Lo mismo hacían `DemoMain`, `RegionMap`, `SalaDeLaCueva`, `PerformanceOverlay` y
+`PanelAlmacen` con `event.keycode`.
+
+Lo comprueba `TestTeclas.test_ningun_guion_del_juego_pregunta_por_una_tecla`, que recorre
+`scripts/` fuera de `tests/` y `tools/`. Las sondas y las herramientas sí pueden: son
+instrumentos, no juego. Ver INTERFAZ §11.
+
+---
+
 ## 5. Capas de física
 
 `project.godot` nombra cuatro: `terrain` (1), `props` (2), `resources` (3),
@@ -516,6 +561,20 @@ No es una promesa, es un procedimiento:
 ```
 godot --headless --path . --script res://scripts/tests/Cotejo.gd -- firmas A.txt B.txt
 ```
+
+**Y lo que la firma NO distingue** (2026-09-17, ARQUITECTURA §3.2). La instantánea firma
+las propiedades **por su sitio y las referencias por su orden**, así que dos partidas
+idénticas dan hashes distintos si cambia **la forma** del simulador:
+
+- **mover un `var` a otra clase** cambia el hash aunque la partida sea la misma;
+- **colgar un objeto nuevo del simulador**, aunque no tenga estado, renumera las
+  referencias de todo lo que se codifica detrás. En la segunda pasada salió distinto
+  `fauna._rng` con el azar idéntico las treinta jornadas.
+
+Por eso **un objeto sin estado que sale de la fachada va en `Instantanea.FUERA` en el
+mismo cambio que lo crea**, y por eso, cuando la firma se separa, **se mira el resumen
+antes de creerse la separación**: `Cotejo` dice «en el resumen: nada» cuando lo que ha
+cambiado es la forma y no la partida.
 
 ### 6.3. Pruebas
 

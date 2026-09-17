@@ -16,6 +16,8 @@ repositorio está pendiente de arreglar.
 |---|---|
 | Qué carpeta es para qué, y cuánto pesa cada una | §2 |
 | **Cómo se saca un sistema de `SettlementSim`, y las siete trampas** | **§3** |
+| Repartir un trabajo largo entre cuadros sin congelar la pantalla | §3.1 |
+| **La segunda pasada a `SettlementSim`: por qué mover estado cambia la firma** | **§3.2** |
 | Estilo: tipado, nombres, qué comentario sirve, cifras de balanceo | §4 |
 | Pruebas y sondas, y en qué se diferencian | §5 |
 | **Cuánto cuesta medir y cómo no pagarlo** | **§5.1** |
@@ -104,17 +106,20 @@ y en `SettlementSim`:
 var caceria: Caceria = Caceria.new(self)
 ```
 
-Ya salieron así veintidós: `Ascent`, `Barbecho`, `Caceria`, `CampProjects`,
-`Cronista`, `Cumbres`, `Desechos`, `Despensa`, `ElLobo`, `Hogar`, `Marcha`,
-`Nasas`, `Partida`, `Percances`, `Pinturas`, `Reconocimiento`, `Relevo`,
-`Reparto`, `Tajo`, `Taller`, `Tanteo` y `Trampas`. De `GameUI` salieron
+Ya salieron así veintiséis: `Ascent`, `Barbecho`, `Berrea`, `Caceria`, `CampProjects`,
+`CierreDelDia`, `Cronista`, `Cumbres`, `Desechos`, `Despensa`, `Destino`, `ElLobo`,
+`Hogar`, `Marcha`, `Nasas`, `Partida`, `Percances`, `Pinturas`, `Reconocimiento`,
+`Relevo`, `Reparto`, `Rutina`, `Tajo`, `Taller`, `Tanteo` y `Trampas` —las cuatro nuevas,
+de la segunda pasada del 2026-09-17, §3.2—. De `GameUI` salieron
 `BarraSuperior`, `PanelAlmacen`, `PanelCenso`, `PanelCronica`, `PanelObras`,
 `PanelOficios`, `PanelRastros`, `PanelSitios`, `PanelTecnicas` y
 `PanelTrabajos`; de `TerrainGenerator`, `MallaDelTerreno`; y de `DemoMain`,
 `Minimapa`.
 
-`SettlementSim` bajó de **9 276 líneas a 3 100** por ese camino. Hoy está en
-**4 119**, `GameUI` en 1 377, `TerrainGenerator` en 1 263 y `DemoMain` en 1 642.
+`SettlementSim` bajó de **9 276 líneas a 3 100** por ese camino, volvió a subir a
+**5 094** y la segunda pasada lo dejó en **3 401** (2026-09-17, §3.2). *(Aquí decía
+«hoy está en 4 119»: era la cifra de antes de que entraran la expedición por rumbos, las
+pasarelas, el clima y los campamentos.)*
 
 **Que `SettlementSim` haya vuelto a subir mil líneas no es un fallo del método,
 es el método funcionando**: se corta cuando estorba, no cuando se cruza un
@@ -230,6 +235,150 @@ aprendidas midiendo:
    de la carga era **leer la partida antes de abrir la pantalla**; y los recursos
    visibles eran **un `load` de 431 MB**, que se resuelve con
    `ResourceLoader.load_threaded_request` (`Carga.cargar`), no troceando.
+
+
+### 3.2. La segunda pasada a `SettlementSim` (spec 2026-09-16, hecho 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-16**, de la deuda del ROADMAP. La meta la
+> decidió el usuario.
+
+**Qué problema cierra.** `SettlementSim` bajó de 9 276 líneas a poco más de 4 000 con
+la primera pasada, y **ha vuelto a subir a 5 046**: cada bloque nuevo —la expedición por
+rumbos, las pasarelas, el clima, los campamentos— ha dejado dentro un trozo. Un fichero
+de cinco mil líneas es el que nadie lee entero, y es donde una regla acaba escrita dos
+veces.
+
+**Lo que se pide.**
+
+- **Por debajo de 3 000 líneas** (decisión del usuario), sacando **temas cerrados** a su
+  clase con el patrón de arriba. Primero lo más grande que siga dentro.
+- **Sin cambiar nada de la partida**: se mueve código, no se corrige de paso. Lo que se
+  vea mal al moverlo se apunta y va por `/depurar`.
+- Lo que llamaban otros sigue llamándose: donde haga falta, la fachada reenvía.
+
+**Criterios de aceptación.**
+
+- `SettlementSim.gd` **por debajo de 3 000 líneas**, contadas con `wc -l`.
+- **La partida es la misma**: la firma diaria de **30 jornadas** con la semilla de sonda
+  es idéntica antes y después (`Cotejo`). Unos 15 minutos por corrida: dos corridas,
+  presupuestadas en el plan.
+- **La suite en verde y el total de comprobaciones sin bajar.**
+- **`LlamadasHuerfanas` dice 0.**
+- **Cada módulo nuevo está en la lista de arriba** («Ya salieron así…») y en
+  `.godot/global_script_class_cache.cfg`.
+
+**Fuera de alcance.** Cambiar comportamiento o cifras; renombrar lo que no se mueve;
+trocear `GameUI` o `DemoMain`.
+
+**Plan técnico (2026-09-17).**
+
+*Medido antes de planear.* `SettlementSim.gd` está hoy en **5 094 líneas** —no 5 046: han
+entrado el freno de la cámara lenta y el nodo de las figuras—. Para bajar de 3 000 hay que
+sacar **más de dos mil**, así que no vale un corte: son cuatro o cinco.
+
+### Qué sale, y en qué orden
+
+Por la regla 2 del troceado —**bloque contiguo antes que funciones sueltas**—, los
+candidatos se han buscado por tramos seguidos de líneas, no por temas repartidos:
+
+| Qué | Líneas | Qué se lleva |
+|---|---|---|
+| **`Rutina`** — la jornada de una persona | 1793-2655, **~863** | `_tick_person`, `_tick_routine`, `_tick_daylight`, `_decide_the_day`, `_radio_de_llegada`, `cuenta_como_trabajo`, `_ultima_salida` |
+| **`Destino`** — dónde se pone y a dónde se le manda | 2812-3298, **~487** | `_home_spot`, `_at_shelter`, `_saliendo_de_casa`, `_shelter_reach`, `_home_reached`, `_settle_at_home`, `_send_to_work`, `_work_candidates` |
+| **`CierreDelDia`** — lo que pasa al acabar la jornada | 3556-3979, **~424** | el historial, `_end_of_day`, la práctica, la transmisión, el parte del día y el giro de la estación local |
+| **`Berrea`** — el celo del ciervo | 3980-4095, **~116** | `_offer_rut_choice`, `_pueden_cazar`, `focus_on_rut`, `_acabar_la_berrea`, `_season_line` |
+| **`Parajes`**, que ya existe | 4593-4837, **~245** | `_paraje_to_survey`, `_paraje_at`, `fishing_method` |
+
+Son **~2 135 líneas**. Restando lo que vuelve como pasamanos, deja el simulador cerca de
+**3 000**, y por eso la lista lleva una tarea de contar y, si hace falta, sacar un tema
+más: el siguiente candidato es **lo que se cuenta al volver** (`_butcher`, `tell_tale`,
+`_tell_the_hunt`, `tell_technique`, ~190 líneas seguidas), que además ya tiene su propio
+rótulo de sección dentro del fichero.
+
+### Lo que NO se toca
+
+- **No se corrige nada de paso.** Lo que se vea mal al moverlo se apunta y va por
+  `/depurar`, que es lo que dice la spec.
+- **Las llamadas de fuera se quedan como están**: pasamanos en la fachada. `Reparto` tenía
+  156 llamadas externas y se resolvió con 28 pasamanos; aquí pasará lo mismo.
+- **`GameUI` y `DemoMain` están fuera de alcance** aunque también hayan crecido.
+
+### Lo que hay que comprobar, y con qué
+
+**La firma diaria de 30 jornadas, antes y después.** Se toma con
+`TironAnualProbe VEL=20 DIAS=30 CEPO=0 FIRMAS=<fichero>` y se comparan con
+`Cotejo.gd -- firmas`. La spec presupuestaba 15 minutos por corrida; **medido, son cuatro**:
+dos jornadas headless con el cepo apagado tardan 34 s de los que unos 20 son montar la
+escena, así que treinta salen por unos 3-4 minutos. Las dos corridas, **menos de diez
+minutos**.
+
+Y lo de siempre: la suite en verde con el total sin bajar, y `LlamadasHuerfanas` a cero.
+Ese último **no es un detalle aquí**: es lo que sustituye a la comprobación de compilación
+que se pierde al pedir las cosas por `sim.`, y con cinco clases nuevas es donde más fácil
+se cuela un nombre mal escrito.
+
+### Riesgos conocidos
+
+- **`_tick_person` es el corazón del paso**, y lo que se mueve con él es lo que decide qué
+  hace cada persona cada tick. Si algo se rompe, se rompe la partida entera y lo dirá la
+  firma, no la suite.
+- **Las constantes se piden por la CLASE** (`SettlementSim.MIN_HEARTH`), regla 5: al mover
+  código a otra clase, las que se pedían sin prefijo dejan de resolverse y hay que
+  ponérselo.
+- **El azar tiene que seguir saliendo del `_rng` del simulador** (invariante 2 de SPECS
+  §7): las clases nuevas lo piden por `sim._rng`, no se hacen uno.
+- **Deuda que se hereda y se dice**: este documento tiene **dos secciones numeradas §3.1**
+  —la de repartir un trabajo entre cuadros y esta spec—. Se arregla al documentar.
+  *(Arreglado: esta sección pasó a ser la §3.2 el 2026-09-17.)*
+
+**Cómo quedó (2026-09-17).**
+
+Salieron cuatro temas cerrados, **por tramos contiguos**, y la fachada quedó en **3 401
+líneas** —**no en 3 000**, y es decisión del usuario, con lo de abajo delante—:
+
+| Clase | Líneas | Qué es |
+|---|---|---|
+| `Rutina` | 898 | La jornada de una persona: el tick, el horario, el estado y la decisión de la mañana |
+| `Destino` | 503 | Dónde se pone cada uno en el abrigo y a qué tajo se le manda |
+| `CierreDelDia` | 418 | Lo que pasa a medianoche: historial, cuentas, práctica, transmisión, parte y estación |
+| `Berrea` | 131 | El celo del ciervo: la decisión del otoño y el mes que dura |
+
+**Comprobado**: la firma diaria de **30 jornadas idéntica** antes y después
+(`TironAnualProbe VEL=20 DIAS=30 CEPO=0`, `Cotejo -- firmas`), la suite en verde con el
+total sin moverse (1 673 pruebas y 9 051 comprobaciones) y `LlamadasHuerfanas` a cero.
+Cada corrida de 30 jornadas tardó **unos 4 minutos, no los 15** que presupuestaba la spec:
+dos jornadas headless con el cepo apagado son 34 s, y 20 de ellos son montar la escena.
+
+**Dos cosas que este corte enseña, y valen para el siguiente:**
+
+1. **Mover ESTADO cambia la firma aunque la partida sea la misma.** La instantánea firma
+   las propiedades del simulador por su sitio, así que un `var` que se muda a una clase
+   nueva cambia la forma del hash. Así que en esta pasada se movió **lo que se hace** y
+   se quedó **lo que se es**: las cuatro clases piden su estado por `sim.`, y la nota que
+   lo explica está en `SettlementSim.berrea_hasta_el_dia`. Quien quiera mudar también el
+   estado tendrá que cotejar por el resumen y no por el hash, y decirlo.
+2. **Incluso sin estado, los objetos nuevos cambiaban la firma.** La primera comparación
+   salió **distinta desde la jornada 2** con el **resumen idéntico las 30** —azar
+   incluido—. No era la partida: cuatro objetos nuevos colgados del simulador
+   renumeraban las referencias de todo lo que se codificaba detrás (`sim.caceria`,
+   `sim.marcha`, `fauna._rng`). No se dio por bueno leyéndolo: se sacaron de la
+   instantánea —van en `Instantanea.FUERA`, porque no tienen estado propio— y se repitió
+   la corrida. **Iguales las 30.** Regla para la próxima: **un objeto sin estado que sale
+   de la fachada va en `FUERA` en el mismo cambio que lo crea.**
+
+**Por qué no bajó de 3 000, que era la meta.** Con los cuatro cortes fuera, lo que queda
+en las 3 401 líneas es **un 49 % de comentarios** (1 654) y 567 en blanco: **1 181 de
+código**, que son 133 variables de estado, 125 constantes con su porqué, los pasamanos y
+el bucle —`setup`, `_process`, `_advance`—. **Los bloques grandes y cohesionados ya no
+están.** Bajar de 3 000 habría pedido mover unas 400 líneas de funciones sueltas y
+repartidas, que es justo lo que la regla 2 dice que no se haga, o recortar los
+comentarios que dicen el porqué de cada cifra. El usuario eligió cerrar aquí.
+
+Y un tropiezo que conviene saber: **el bloque de «parajes» del plan era un espejismo**.
+Se había contado desde `_paraje_at` hasta la siguiente función, y en medio había
+constantes de rendimiento: la función eran nueve líneas.
+
+
 
 ---
 

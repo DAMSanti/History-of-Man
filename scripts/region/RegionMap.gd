@@ -520,7 +520,9 @@ func _build_sites() -> void:
 	if not show_sites:
 		return
 
-	_site_set = load(sites_path) as SiteSet
+	# Por la puerta de siempre cuando es el conjunto de siempre: así entran los abrigos
+	# hipotéticos de la costa (EPOCA_01 §10.2).
+	_site_set = SiteSet.comarca() if sites_path == SiteSet.RUTA else load(sites_path) as SiteSet
 	if _site_set == null:
 		push_warning("RegionMap: no hay emplazamientos en " + sites_path)
 		return
@@ -1057,41 +1059,60 @@ func _unhandled_input(event: InputEvent) -> void:
 		_select_site(_pick_site(event.position))
 		get_viewport().set_input_as_handled()
 
+	# POR ACCION, no por tecla: las teclas viven en [Teclas] y se cambian desde
+	# Configuración (INTERFAZ §11).
 	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_ESCAPE:
-				# El mismo menú que en el valle: guardar, cargar y salir
-				# también desde aquí, que es la otra pantalla de una partida.
-				# Ver [MenuDelJuego] y `docs/INTERFAZ.md` §7.
-				if _menu_del_juego == null:
-					return
-				if _menu_del_juego.esta_abierto():
-					_menu_del_juego.cerrar()
-				else:
-					_menu_del_juego.abrir()
-				get_viewport().set_input_as_handled()
-			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-				_assign_party(event.keycode - KEY_1)
-			KEY_0:
-				_assignment.clear()
-				_update_band()
-			KEY_SPACE:
-				_resolve_season()
-			KEY_F:
-				_found_settlement()
-			KEY_R:
-				abrir_la_ficha()
-			KEY_E:
-				_era = ((_era + 1) % (Site.Era.HISTORICA + 1)) as Site.Era
-				_refresh_sites()
-				if _selected and not _visible_sites.has(_selected):
-					_select_site(null)
-				_update_info()
+		if Teclas.es(event, "cerrar"):
+			# El mismo menú que en el valle: guardar, cargar y salir
+			# también desde aquí, que es la otra pantalla de una partida.
+			# Ver [MenuDelJuego] y `docs/INTERFAZ.md` §7.
+			if _menu_del_juego == null:
+				return
+			if _menu_del_juego.esta_abierto():
+				_menu_del_juego.cerrar()
+			else:
+				_menu_del_juego.abrir()
+			get_viewport().set_input_as_handled()
+			return
+		for numero in range(1, 6):
+			if Teclas.es(event, "numero_%d" % numero):
+				_assign_party(numero - 1)
+				return
+		if Teclas.es(event, "numero_0"):
+			_assignment.clear()
+			_update_band()
+		elif Teclas.es(event, "resolver"):
+			_resolve_season()
+		elif Teclas.es(event, "fundar"):
+			_found_settlement()
+		elif Teclas.es(event, "ficha_del_sitio"):
+			abrir_la_ficha()
+		elif Teclas.es(event, "cambiar_era"):
+			_era = ((_era + 1) % (Site.Era.HISTORICA + 1)) as Site.Era
+			_refresh_sites()
+			if _selected and not _visible_sites.has(_selected):
+				_select_site(null)
+			_update_info()
+
+
+## Cuánto se exageran los ríos al pintarlos en el mapa regional, y su mínimo en celdas.
+## Un vértice de la malla regional son unos 195 m: con el ancho de verdad sólo se veían
+## los cauces grandes, y por debajo de 0,8 celdas el río sale a trozos. Con 4,5, el Saja
+## en su boca pinta unas 2,5 celdas y un arroyo de cabecera, el mínimo. Decisión mirando
+## capturas (EPOCA_01 §10.2).
+const RIOS_ESCALA_DEL_ANCHO := 4.5
+const RIOS_CELDAS_MINIMAS := 0.8
 
 
 ## Lo que distingue la malla regional de una época de la de otra, para su caché.
+##
+## Con los RÍOS desde el 2026-09-16 (EPOCA_01 §10.2): se tallan en la malla —el cauce se
+## asienta en su lámina— y abren valle en la plataforma, así que otros ríos son otra
+## malla.
 static func sufijo_de_la_cache(mar: float) -> String:
-	return "_mar%d_lomas%x" % [roundi(mar), RelieveDeLaPlataforma.huella() & 0xffffff]
+	var rios := RiosDeLaRegion.cargar().huella()
+	return "_mar%d_lomas%x_rios%x" % [roundi(mar), RelieveDeLaPlataforma.huella() & 0xffffff,
+		hash([rios, RIOS_ESCALA_DEL_ANCHO, RIOS_CELDAS_MINIMAS]) & 0xffffff]
 
 
 ## Lo que se pasa como `ceder` al generar: mueve la barra por tiempo, y cambia de las
@@ -1103,13 +1124,39 @@ func _ceder_al_generar() -> void:
 
 
 func _setup_terrain() -> void:
-	var data := await Carga.cargar(heightmap_path) as HeightmapData
-	if data == null:
-		push_error("RegionMap: no se pudo cargar " + heightmap_path)
-		return
+	var mar := GameState.sea_level_m if GameState.home != null else 0.0
+	# EL RELIEVE YA PREPARADO, SI ESTÁ: con lomas, valles y ríos pintados. Pintar los ríos
+	# costaba 23 s en cada montaje del mapa (`PlataformaCaptura`, 2026-09-16), y es
+	# siempre lo mismo para un mar y unos ríos.
+	var preparado := heightmap_path.get_basename() + sufijo_de_la_cache(mar) + "_hidro.res"
+	var data: HeightmapData = null
+	if ResourceLoader.exists(preparado):
+		data = await Carga.cargar(preparado) as HeightmapData
+	if data != null:
+		print("Relieve: preparado de %s" % preparado)
+	else:
+		data = await Carga.cargar(heightmap_path) as HeightmapData
+		if data == null:
+			push_error("RegionMap: no se pudo cargar " + heightmap_path)
+			return
+		data = _preparar_el_relieve(data, mar)
+		var error := ResourceSaver.save(data, preparado)
+		if error != OK:
+			push_warning("RegionMap: no se guardó el relieve preparado (%d)" % error)
+	await _montar_el_terreno(data)
+
+
+## Las lomas y los valles de la plataforma, y los ríos pintados, sobre UNA COPIA del
+## relieve regional. Ver [_setup_terrain], que lo guarda para no rehacerlo.
+func _preparar_el_relieve(original: HeightmapData, mar: float) -> HeightmapData:
 	# Una copia con lomas y cerros sobre la plataforma: el fondo del relieve sale
 	# liso. La misma que hornea las máscaras. Ver [RelieveDeLaPlataforma].
-	data = data.duplicate() as HeightmapData
+	#
+	# COPIA DE VERDAD de las cotas: `duplicate` comparte los arrays empaquetados con el
+	# recurso cacheado, y escribir en la copia escribía en el original (memoria del
+	# proyecto, 2026-09-15).
+	var data := original.duplicate() as HeightmapData
+	data.elevations = PackedFloat32Array(original.elevations)
 	# CON EL MAR QUE ESTE MAPA VA A DIBUJAR, que es el de la partida si la hay y el
 	# de hoy si no: el relieve entra sólo donde ya hay tierra con ese mar, así que
 	# la costa no se mueve. Sin partida —una sonda, el mapa abierto a secas— el mar
@@ -1117,9 +1164,23 @@ func _setup_terrain() -> void:
 	# del Paleolítico la sacaba entera del agua (visto en `RegionCaptura`,
 	# 2026-09-14). Cambiar de época con la tecla E no rehace el relieve: el de la
 	# plataforma es el de la época con la que se montó el mapa.
-	RelieveDeLaPlataforma.aplicar(data,
-		GameState.sea_level_m if GameState.home != null else 0.0)
+	# LOS RÍOS, horneados de OSM y prolongados por la plataforma (EPOCA_01 §10.2): el
+	# relieve regional se horneó sin cauces y el mapa no dibujaba ni uno. Los de la
+	# plataforma abren su valle en las lomas y, después, todos se pintan igual que en un
+	# valle, con [Hydrography.apply].
+	var rios := RiosDeLaRegion.cargar()
+	var de_la_plataforma: Array = rios.de_la_plataforma \
+		if mar <= rios.mar_de_la_plataforma + 0.5 else []
+	RelieveDeLaPlataforma.aplicar(data, mar, de_la_plataforma)
+	var t_rios := Time.get_ticks_msec()
+	Hydrography.apply(data, rios.para_el_mar(mar), [], RIOS_ESCALA_DEL_ANCHO,
+		RIOS_CELDAS_MINIMAS)
+	print("Ríos del mapa regional: %d cauces en %d ms" % [rios.para_el_mar(mar).size(),
+		Time.get_ticks_msec() - t_rios])
+	return data
 
+
+func _montar_el_terreno(data: HeightmapData) -> void:
 	print("Relieve: ", data.describe())
 
 	terrain = TerrainGenerator.new()

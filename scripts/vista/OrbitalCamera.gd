@@ -3,6 +3,13 @@ extends Camera3D
 ## Controlador de cámara orbital para el demo.
 ## Permite movimiento WASD, rotación con click derecho y zoom con scroll.
 
+## El jugador ha movido el punto que se mira con las teclas.
+##
+## **Girar y hacer zoom NO la emiten**, a propósito: la spec de INTERFAZ §13 dice que
+## rodear a alguien y acercarse a él no sueltan el seguimiento; mover la vista a otro
+## sitio, sí. Quien la escucha es [DemoMain].
+signal movida_a_mano
+
 @export var target_position: Vector3 = Vector3(64, 0, 64)
 @export var orbit_distance: float = 50.0
 @export var orbit_angle_h: float = 0.0
@@ -116,30 +123,23 @@ func _process(delta: float) -> void:
 	Cronometro.tramo_raiz("camara")
 	var input_dir := Vector3.ZERO
 	
-	# Movimiento con teclas directas (más confiable)
-	if Input.is_key_pressed(KEY_W):
+	# POR ACCION, Y UNA SOLA VEZ. Aqui se miraban la W fisica Y la accion
+	# `move_forward`, las dos, sumando cada una su unidad: por eso cambiar la accion no
+	# servia de nada -la tecla de siempre seguia moviendo- y por eso hubo que hacer
+	# INTERFAZ §11. Las teclas de cada accion, en [Teclas].
+	if Teclas.pulsada("avanzar"):
 		input_dir.z -= 1
-	if Input.is_key_pressed(KEY_S):
+	if Teclas.pulsada("retroceder"):
 		input_dir.z += 1
-	if Input.is_key_pressed(KEY_A):
+	if Teclas.pulsada("izquierda"):
 		input_dir.x -= 1
-	if Input.is_key_pressed(KEY_D):
+	if Teclas.pulsada("derecha"):
 		input_dir.x += 1
-	
-	# También intentar con acciones de input
-	if Input.is_action_pressed("move_forward"):
-		input_dir.z -= 1
-	if Input.is_action_pressed("move_backward"):
-		input_dir.z += 1
-	if Input.is_action_pressed("move_left"):
-		input_dir.x -= 1
-	if Input.is_action_pressed("move_right"):
-		input_dir.x += 1
-	
-	# Zoom con Q/E, tambien proporcional a la distancia actual
-	if Input.is_key_pressed(KEY_Q):
+
+	# El zoom del teclado, proporcional a la distancia actual como el de la rueda.
+	if Teclas.pulsada("acercar"):
 		_apply_zoom(pow(_zoom_step(), delta * 6.0))
-	if Input.is_key_pressed(KEY_E):
+	if Teclas.pulsada("alejar"):
 		_apply_zoom(pow(1.0 / _zoom_step(), delta * 6.0))
 	
 	if input_dir != Vector3.ZERO:
@@ -149,8 +149,8 @@ func _process(delta: float) -> void:
 		# El desplazamiento escala con el zoom: de cerca se avanza despacio,
 		# de lejos se cruza el mapa sin desesperar
 		var speed := move_speed * clampf(orbit_distance / 500.0, 0.15, 4.0)
-		# Con SHIFT se cruza el mapa; sin el, se recorre
-		if Input.is_key_pressed(KEY_SHIFT):
+		# Con «deprisa» se cruza el mapa; sin ella, se recorre
+		if Teclas.pulsada("deprisa"):
 			speed *= sprint_multiplier
 		target_position += rotated * speed * delta
 
@@ -162,6 +162,9 @@ func _process(delta: float) -> void:
 			target_position.z = clampf(target_position.z, bounds_min.y, bounds_max.y)
 		_apoyar_el_centro()
 		_update_camera()
+		# Mover la vista a mano suelta a quien se estuviera siguiendo. Ver [movida_a_mano].
+		movida_a_mano.emit()
+	Cronometro.cierra("camara")
 
 
 ## Fija el recorrido de zoom a partir del rango COMPLETO que pediria la escena,
@@ -169,9 +172,6 @@ func _process(delta: float) -> void:
 ##
 ## Las escenas siguen razonando en terminos del mundo entero -"de un centesimo
 ## del mapa a dos veces el mapa"- y el recorte se decide en un solo sitio.
-	Cronometro.cierra("camara")
-
-
 func set_distance_limits(full_near: float, full_far: float) -> void:
 	var near := maxf(full_near, 0.01)
 	var far := maxf(full_far, near * 1.01)
@@ -279,6 +279,21 @@ const CERCA_PARA_MIRAR := 80.0
 
 func distancia_para_mirar() -> float:
 	return maxf(min_distance * 1.6, CERCA_PARA_MIRAR)
+
+
+## Lleva la camara a un punto, y **se acerca solo si estaba lejos**.
+##
+## Solo si estaba lejos porque el zoom es del jugador: si ya esta mirando de cerca,
+## reencuadrarle en cada flecha le quita el encuadre que habia elegido.
+##
+## Vivia en `PanelCenso._look_at_world` y desde el 2026-09-17 esta aqui, porque la usan
+## tambien el censo, las obras y el seguimiento de una persona (INTERFAZ §13): la misma
+## pregunta, un solo sitio que la contesta (invariante 3 de SPECS §7).
+func mirar_a(punto: Vector3) -> void:
+	set_target(punto)
+	var cerca := distancia_para_mirar()
+	if orbit_distance > cerca:
+		set_distance(cerca)
 
 
 ## Establece la distancia de órbita

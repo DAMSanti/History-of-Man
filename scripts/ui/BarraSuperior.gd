@@ -77,6 +77,16 @@ func _build_clock() -> void:
 	ui._clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	strip.add_child(ui._clock)
 
+	# EL LETRERO DE LA CAMARA LENTA, pegado al reloj: lo que dice es a que ritmo corre
+	# la partida, igual que la hora. Ver [CamaraLenta] y GRAFICOS §7.6.
+	_letrero_lento = Label.new()
+	_letrero_lento.add_theme_font_size_override("font_size", 12)
+	_letrero_lento.add_theme_color_override("font_color", UISkin.OCHRE)
+	_letrero_lento.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_letrero_lento.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_letrero_lento.visible = false
+	strip.add_child(_letrero_lento)
+
 	_build_temp_gauge(strip)
 	_build_band_gauge(strip)
 	_build_winter_gauge(strip)
@@ -119,6 +129,9 @@ func _on_moment(moment: Moment) -> void:
 
 ## El momento que se está enseñando, si hay alguno.
 var _en_pantalla: Moment = null
+
+## El letrero de la cámara lenta. Ver [_poner_el_letrero_lento].
+var _letrero_lento: Label = null
 
 
 func momento_en_pantalla() -> Moment:
@@ -686,6 +699,21 @@ func _paint_speed_buttons() -> void:
 			UISkin.button_box("pressed" if active else "normal"))
 
 
+## El letrero de la cámara lenta: sale al acercarse y se va al alejarse.
+##
+## Lee el freno de la simulación y no la cámara: es lo que de verdad está pasando con la
+## partida, y así dice la verdad aunque el freno venga de otro sitio. Ver
+## [SettlementSim.freno_de_la_vista].
+func _poner_el_letrero_lento() -> void:
+	if _letrero_lento == null or ui.sim == null:
+		return
+	var freno: float = ui.sim.freno_de_la_vista
+	var se_ve := CamaraLenta.se_avisa(freno)
+	_letrero_lento.visible = se_ve
+	if se_ve:
+		_letrero_lento.text = CamaraLenta.rotulo(freno)
+
+
 func _update_clock() -> void:
 	if ui._clock == null:
 		return
@@ -716,6 +744,8 @@ func _update_clock() -> void:
 		ui._clock_night = night
 		ui._clock.add_theme_color_override("font_color",
 			UISkin.INK_SOFT if night else UISkin.INK)
+
+	_poner_el_letrero_lento()
 
 	if not is_equal_approx(ui._clock_speed, ui.sim.time_scale):
 		ui._clock_speed = ui.sim.time_scale

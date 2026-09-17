@@ -34,7 +34,7 @@ var _sitios: SiteSet
 func _initialize() -> void:
 	Guardado.carpeta = CARPETA
 	Guardado.borrar()
-	_sitios = load(MenuPrincipal.SITIOS) as SiteSet
+	_sitios = SiteSet.comarca()
 
 	print("")
 	print("=== MIGRAR, CON ESCENAS ===")

@@ -25,7 +25,7 @@ var _fallos: Array[String] = []
 
 func _initialize() -> void:
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	var sitios := load(MenuPrincipal.SITIOS) as SiteSet
+	var sitios := SiteSet.comarca()
 	var origen := Campamento.montar(self, _sitio(sitios, ORIGEN),
 		GameState.population, GameState.food)
 	Campamentos.alta(self, origen)

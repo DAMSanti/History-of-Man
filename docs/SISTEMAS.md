@@ -1316,6 +1316,30 @@ por la mañana y luego pesca con lo mejor que tenga.
 > —«la orilla al norte del abrigo, a 900 m»—. **Decisión del usuario**: «donde
 > pesca, pero bien nombrada». `TestParajes`.
 
+## 12.1. La orilla del mar: marisqueo y pesca a pie (2026-09-16)
+
+Hasta la costa de la época (EPOCA_01 §10.2) **ningún valle jugable había tenido mar**, y
+las reglas del agua salada no estaban probadas. Lo que quedó:
+
+- **El mar no se cruza.** La dificultad de vado la da `TerrainGenerator.vado_del_mar` y
+  **no la mueve el caudal de la estación**: un río baja en verano, el Cantábrico no.
+- **Se marisquea y se pesca en la franja que descubre la marea**, 2,5 m sobre la lámina
+  (`en_la_orilla_del_mar`). No dentro del agua: la rejilla de caminos da por
+  intransitable toda celda con agua honda a veinte metros, así que un paraje mar adentro
+  no se alcanza nunca. Es además donde están la lapa y el mejillón: en la roca que el mar
+  destapa al bajar.
+- **La pesca de orilla y de ría rinde como un río medio** (decisión del usuario del
+  2026-09-16). La pesquera, la nasa, el sedal y el arpón son los mismos: lo que cambia es
+  dónde se pescan.
+- **Al asentarse, la banda busca también su marisqueo**: `Querencia.OFICIOS` tenía cuatro
+  oficios y le faltaba ése. Donde no hay costa no cambia nada.
+
+**Medido** (`CostaProbe`, diez jornadas en el abrigo de la ría del Nansa, cuatro personas
+a la ribera): 4 parajes de marisqueo, 4 de pesca, y 45,7 de marisco y 169,5 de pescado en
+el almacén.
+
+---
+
 ## 13. Lo que se cuenta, y lo que se pinta
 
 > **Mudarse de cueva (2026-09-13)**: `Traslado`. Sólo a una cueva a la que se

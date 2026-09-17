@@ -116,7 +116,9 @@ func _process(delta: float) -> void:
 		Cronometro.cierra("reloj de la partida")
 		return
 
-	_pendiente += delta
+	# El freno de la vista, adoptado de las simulaciones como la velocidad: si frenara
+	# solo la que se mira, los campamentos dejarian de estar en la misma hora.
+	_pendiente += delta * _adoptar_el_freno()
 	var dados := 0
 	while _pendiente >= SettlementSim.PASO_FIJO and dados < SettlementSim.PASOS_POR_CUADRO:
 		_pendiente -= SettlementSim.PASO_FIJO
@@ -137,6 +139,7 @@ func _process(delta: float) -> void:
 		var hasta := Time.get_ticks_usec() \
 			+ int(SettlementSim.MS_DE_NOCHE_TOPE * 1000.0)
 		var dia_al_entrar := primero.day
+		# Sin el freno: la noche no se frena (GRAFICOS §7.6).
 		var faltan := delta * SettlementSim.NOCHE_HORAS_POR_SEGUNDO
 		var por_paso := SettlementSim.PASO_FIJO * time_scale \
 			/ primero.seconds_per_day * 24.0
@@ -305,6 +308,18 @@ func _adoptar_la_velocidad() -> float:
 	for sim: SettlementSim in campamentos:
 		sim.time_scale = time_scale
 	return time_scale
+
+
+## El freno de la vista que vale para todos: el del campamento que se mira.
+##
+## No se adopta como la velocidad —«el primero que difiera»— porque no es una decisión
+## del jugador que se contagia, sino la distancia a la que está mirando AHORA MISMO: el
+## que no se mira no tiene cámara. Ver [SettlementSim.freno_de_la_vista].
+func _adoptar_el_freno() -> float:
+	for sim: SettlementSim in campamentos:
+		if sim.se_mira:
+			return clampf(sim.freno_de_la_vista, 0.0, 1.0)
+	return 1.0
 
 
 func _nadie_trabaja_en_ninguno() -> bool:

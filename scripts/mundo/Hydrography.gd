@@ -83,7 +83,13 @@ const BANK_REGRADE_CELLS := 5
 ## `bodies` láminas cerradas {points (lon,lat), kind}. Los cuerpos se pintan
 ## primero y los cauces encima, porque un río que entra en una laguna debe
 ## seguir teniendo corriente dentro de su propio canal.
-static func apply(data: HeightmapData, channels: Array, bodies: Array) -> void:
+##
+## `escala_de_ancho` y `celdas_minimas` son para el mapa regional (EPOCA_01 §10.2): a
+## 111 m por muestra y con un vértice de malla cada 195 m, un río de 30 m no se ve, y por
+## debajo de 0,8 celdas de radio el cauce sale a trozos. Allí se exagera el ancho y se
+## le pone un mínimo; en un valle, a 5 m, se pinta el de verdad.
+static func apply(data: HeightmapData, channels: Array, bodies: Array,
+		escala_de_ancho: float = 1.0, celdas_minimas: float = 0.8) -> void:
 	var w := data.width
 	var h := data.height
 	var n := w * h
@@ -127,9 +133,16 @@ static func apply(data: HeightmapData, channels: Array, bodies: Array) -> void:
 			continue
 
 		var half_width_m: float = float(channel.get("half_width_m", 4.0))
-		var radius: float = maxf(half_width_m / mps, 0.8)
-		var difficulty := crossing_difficulty_for_width(half_width_m * 2.0)
+		# UN ANCHO POR PUNTO si el cauce lo trae ([AnchoDeLosRios]): el río crece aguas
+		# abajo. Sin él, el de la tabla de OSM en todo el tramo, como antes.
+		var anchos: PackedFloat32Array = channel.get("half_widths_m", PackedFloat32Array())
+		var por_punto := anchos.size() == cells.size()
 		for i in range(cells.size() - 1):
+			var semiancho := half_width_m
+			if por_punto:
+				semiancho = (anchos[i] + anchos[i + 1]) * 0.5
+			var radius: float = maxf(semiancho * escala_de_ancho / mps, celdas_minimas)
+			var difficulty := crossing_difficulty_for_width(semiancho * 2.0)
 			_stroke_channel(mask, flow_x, flow_z, ford, w, h,
 				cells[i], cells[i + 1], radius, difficulty)
 

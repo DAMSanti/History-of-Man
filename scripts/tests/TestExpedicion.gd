@@ -66,7 +66,7 @@ static func con_algo_al_lado(sim: SettlementSim) -> void:
 ## y no se escribe, que los ids cambian en cada horneado. Desde el 2026-09-16 el rumbo
 ## es de los ocho (SISTEMAS §4): antes era el ángulo exacto hacia el otro sitio.
 func _salida_con_algo() -> Dictionary:
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	for desde: Site in comarca.available_in(-120.0, Site.Era.PALEOLITICO):
 		for hacia: float in Expedicion.RUMBOS:
 			var pasillo := Pasillo.trazar(desde.lon, desde.lat, hacia, 12)
@@ -78,9 +78,13 @@ func _salida_con_algo() -> Dictionary:
 
 
 ## Los sitios que caen en el pasillo de una salida, sin el de salida.
+##
+## Por la puerta unica, no por el conjunto horneado: desde el 2026-09-16 la comarca lleva
+## ademas los abrigos hipoteticos de la costa (EPOCA_01 §10.2), y la expedicion descubre
+## esos igual que los demas. Leer aqui el horneado a secas era medir con otra lista.
 func _del_pasillo(sim: SettlementSim, rumbo: float, dias: int) -> Array[Site]:
 	var pasillo := sim.expedicion.pasillo_hacia(rumbo, dias)
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	var dentro: Array[Site] = []
 	for s: Site in comarca.sites:
 		if s.id != sim.sitio.id and pasillo.contiene(s.lon, s.lat):
@@ -607,7 +611,7 @@ func test_la_tienda_es_de_piel_curtida() -> void:
 
 ## Un sitio de la comarca lejos de la costa y del borde, para que los pasillos anden.
 func _origen_de_dentro() -> Site:
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	var mejor: Site = null
 	var mas_cerca := INF
 	for s: Site in comarca.sites:
@@ -661,7 +665,7 @@ func test_un_avistado_enciende_su_rumbo() -> void:
 
 
 func test_el_yacimiento_mas_al_este_no_ofrece_el_este() -> void:
-	var comarca := load("res://data/sites/cantabria_sites.res") as SiteSet
+	var comarca := SiteSet.comarca()
 	var este: Site = null
 	for s: Site in comarca.sites:
 		if este == null or s.lon > este.lon:
@@ -795,7 +799,7 @@ func test_la_expedicion_que_pasa_por_un_avistado_lo_descubre_y_la_que_no_no() ->
 	# Uno de fuera del pasillo: el primero de la comarca que no cae en él.
 	var fuera: Site = null
 	var pasillo := sim.expedicion.pasillo_hacia(float(salida["rumbo"]), 12)
-	for s: Site in (load("res://data/sites/cantabria_sites.res") as SiteSet).sites:
+	for s: Site in SiteSet.comarca().sites:
 		if s.id != sim.sitio.id and not pasillo.contiene(s.lon, s.lat):
 			fuera = s
 			break

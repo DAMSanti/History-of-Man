@@ -21,9 +21,6 @@ extends CanvasLayer
 ## Ventana de historial para el mínimo y la mediana de FPS, en segundos
 @export var history_seconds: float = 5.0
 
-## Tecla que muestra u oculta el overlay
-@export var toggle_key: Key = KEY_F3
-
 ## Umbrales de color para los FPS
 @export var fps_good: float = 55.0
 @export var fps_warn: float = 30.0
@@ -104,7 +101,10 @@ func _build_ui() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == toggle_key:
+		# La accion «panel_de_rendimiento», no una tecla propia: era F4 desde el
+		# 2026-09-17 porque F3 hacia DOS cosas -esto y «velocidad x5» de `DemoMain`- y
+		# la ventana de controles las listaba las dos como si nada. Ver [Teclas].
+		if Teclas.es(event, "panel_de_rendimiento"):
 			visible = not visible
 			# El cronometro cuesta un `if` por marca cuando esta apagado, pero
 			# marcas hay muchas: se enciende SOLO mientras se mira el panel.

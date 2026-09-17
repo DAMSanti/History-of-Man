@@ -59,6 +59,10 @@ enum Feature {
 enum Fidelity {
 	ATESTIGUADO,  ## Yacimiento real documentado
 	INFERIDO,     ## Deducido del relieve; plausible pero sin excavar
+	## Inventado por el juego donde no se puede excavar: los abrigos de la costa de la
+	## epoca, bajo el mar de hoy. Ver [SitiosDeLaCosta]. **Al final de la lista** para no
+	## mover los enteros de los conjuntos ya horneados.
+	HIPOTETICO,
 }
 
 @export var id: int = -1
@@ -232,6 +236,10 @@ static func era_name(era: Era) -> String:
 ## No es literatura: cada frase sale de un atributo medido.
 func describe_for_player(era_index: int = 0) -> String:
 	var parts: Array[String] = []
+
+	# Lo primero, si es una hipotesis del juego y no un sitio del catalogo.
+	if fidelity == Fidelity.HIPOTETICO:
+		parts.append(SitiosDeLaCosta.POR_QUE)
 
 	# Que es
 	if has_shelter:

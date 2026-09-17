@@ -74,6 +74,12 @@ const OFICIOS := [
 	Subsistence.Activity.CAZA,
 	Subsistence.Activity.PESCA,
 	Subsistence.Activity.MATERIA_PRIMA,
+	# EL MARISQUEO TAMBIÉN, desde el 2026-09-16. Faltaba, y no se notaba porque ningún
+	# valle jugable tenía mar: en los abrigos de la costa de la época la banda se
+	# asentaba sin saber dónde mariscar, teniendo la orilla a doscientos metros
+	# (EPOCA_01 §10.2, `CostaProbe`). Donde no hay costa no cambia nada: no hay celda
+	# que pase el listón.
+	Subsistence.Activity.MARISQUEO,
 ]
 
 var sim: SettlementSim

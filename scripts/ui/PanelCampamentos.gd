@@ -242,7 +242,7 @@ func grupo() -> Array[Inhabitant]:
 ## campamentos vivos, menos el propio. Ordenado por nombre, que es como se busca.
 func destinos() -> Array[Site]:
 	var salida: Array[Site] = []
-	var comarca := load(MenuPrincipal.SITIOS) as SiteSet
+	var comarca := SiteSet.comarca()
 	if comarca == null or ficha == null:
 		return salida
 	for sitio: Site in comarca.sites:
@@ -269,7 +269,7 @@ func mandar() -> Viaje:
 func _sitio(id: int) -> Site:
 	if id < 0:
 		return null
-	var comarca := load(MenuPrincipal.SITIOS) as SiteSet
+	var comarca := SiteSet.comarca()
 	for sitio: Site in comarca.sites:
 		if sitio.id == id:
 			return sitio

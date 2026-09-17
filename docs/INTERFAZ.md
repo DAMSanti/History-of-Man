@@ -1758,3 +1758,566 @@ ya se sabe, el botón del vídeo del hito, que es lo que hacía antes el clic. E
 emergente sigue saliendo al pasar por encima, con el mismo «EFECTO:». Comprobado en
 pantalla con `ParajesCaptura` (`tecnica_ficha.png`).
 
+
+---
+
+## 11. Las teclas, que se pueden cambiar (spec 2026-09-16, hecho 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-16**, con las decisiones del usuario marcadas.
+
+### Qué problema cierra
+
+**Cambiar una tecla no sirve de nada.** La cámara mira a la vez las teclas W, A, S y D
+fijas en el código y las acciones del mapa de entrada del proyecto: si se cambia la
+acción, la W sigue moviendo. Y no es sólo la cámara: el zoom (Q/E), correr (Mayús), la
+pausa (P y espacio), las capas de recursos (R) y el panel de rendimiento (F3) también
+están fijos en el código. **Y no hay dónde cambiarlas**: la ventana «Controles» sólo
+las enseña, con un texto escrito a mano.
+
+### Lo que se pide
+
+- **Toda tecla a la que responde el juego pasa por una acción**, también las que hoy
+  están fijas. Una tecla no se mira en ningún otro sitio.
+- **Una pestaña «Controles» en Configuración** (decisión del usuario): la lista de
+  acciones con su tecla; se pincha una, se pulsa la nueva y queda puesta.
+- **Si la tecla ya la usa otra acción, se dice** y se ofrece cambiarlas entre sí o
+  cancelar. Nunca quedan dos acciones con la misma tecla sin que el jugador lo haya
+  visto.
+- **«Volver a las de siempre»**, que deja las del proyecto.
+- **Se guardan en disco** con el resto de la configuración, y se leen al arrancar.
+- **La ventana «Controles» del juego enseña las teclas que hay puestas**, no un texto
+  fijo.
+
+### Criterios de aceptación
+
+- **Ninguna tecla fija.** Una comprobación que recorre los guiones del juego —fuera de
+  las pruebas y de las herramientas— no encuentra ni una consulta de tecla concreta. Se
+  corre con la suite.
+- **Cambiar funciona**: con «avanzar» puesta en la I, la I mueve la cámara y la W no.
+  Prueba.
+- **Se guarda y se lee**: cambiar dos teclas, guardar, volver a leer: siguen cambiadas.
+  Prueba, con la configuración de pruebas y no la del jugador.
+- **Choque**: poner en «avanzar» la tecla de «pausa» avisa, y aceptar el cambio las
+  intercambia. Prueba.
+- **Volver a las de siempre** deja todas las del proyecto. Prueba.
+- **La ventana «Controles» dice la verdad**: tras cambiar una tecla, enseña la nueva.
+  Prueba de lo que pinta.
+- **Se lee**: captura de la pestaña a 1280×720.
+
+### Fuera de alcance
+
+- **Los botones y la rueda del ratón.**
+- **Mandos** de consola.
+- **Varias teclas por acción**: una por acción.
+- **Las teclas de las sondas y herramientas de desarrollo.**
+
+**Plan técnico (2026-09-17).**
+
+*La premisa se comprobó contra el código antes de planear, y aguanta*: el mapa de entrada
+del proyecto tiene **cinco acciones** —`move_forward`, `move_backward`, `move_left`,
+`move_right` y `rotate_camera`— y `OrbitalCamera._process` mira W, A, S y D **fijas** y
+además esas cuatro acciones, sumando las dos. Todo lo demás son `match event.keycode` en
+`DemoMain._tecla` y `RegionMap._unhandled_input`, más `Input.is_key_pressed` en la cámara y
+en `PanelAlmacen`, y un `@export var toggle_key: Key = KEY_F3` en `PerformanceOverlay`.
+
+**Y dos cosas que la spec no sabía, encontradas al mirar:**
+
+- **F3 ya está pisada.** Es «velocidad ×5» en `DemoMain._tecla` y a la vez la tecla del
+  panel de rendimiento. La ventana «Controles» las lista las dos como si nada.
+- **La ventana «Controles» miente.** Enseña «B — modo construcción» y **no hay ninguna
+  B** en el juego: `KEY_B` no aparece en `scripts/`. Es exactamente lo que la spec quiere
+  cerrar pintando la ventana del catálogo en vez de a mano.
+
+### Módulos
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| El catálogo de acciones y el mapa de teclas | `scripts/vista/Teclas.gd` (nuevo) | Estado estático sin autoload, como [Configuracion] (SPECS §2.2) |
+| Guardar y leer con el resto | `scripts/vista/Configuracion.gd` | Sección `[teclas]` del mismo `configuracion.cfg`, y la ruta de pruebas que ya tiene |
+| Quien pregunta por una tecla | `OrbitalCamera`, `DemoMain`, `RegionMap`, `SalaDeLaCueva`, `PerformanceOverlay`, `PanelAlmacen` | SPECS §4.7: la vista lee y dibuja |
+| La pestaña donde se cambian | `scripts/ui/VentanaDeConfiguracion.gd` | INTERFAZ §8 |
+| La ventana que las enseña | `scripts/ui/GameUI.gd` | Se pinta del catálogo |
+
+### Las tres decisiones que la spec obliga a tomar
+
+**1. Las acciones llevan ÁMBITO, o el detector de choques miente.** Hoy la R es «cambiar
+la capa del minimapa» en el valle y «abrir la ficha del sitio» en el regional, y el espacio
+es «pausar» en uno y «resolver la estación» en el otro. Son pantallas distintas y nunca
+coinciden, así que **no son un choque**. El catálogo lleva por acción un ámbito —`valle`,
+`regional` o `siempre`— y dos acciones sólo chocan si comparten ámbito o si una es de
+`siempre`. Sin esto, la ventana avisaría de conflictos falsos el primer día.
+
+**2. Los números son una familia, no once filas.** El 1 al 5 manda a la banda a un oficio
+en el valle y reparte la partida en el regional; el 0 limpia el reparto. Son **seis
+acciones** (`numero_0`…`numero_5`) de ámbito `siempre`, y cada pantalla hace con ellas lo
+suyo. Ponerlas por pantalla daría once filas que el jugador no sabría distinguir.
+
+**3. El invariante que esto viene a cerrar es el tercero de SPECS §7**: «una pregunta, un
+sitio que la contesta». Hoy «¿está pulsado avanzar?» se contesta desde dos sitios —la
+tecla física y la acción— y por eso cambiar la acción no hace nada. Después se contesta
+sólo desde `Teclas`/`InputMap`, y **una prueba de la suite recorre `scripts/` y falla si
+alguien vuelve a preguntar por una tecla concreta** fuera de `Teclas.gd`.
+
+### Lo que se hereda y no se arregla aquí
+
+- **El ratón se queda fuera**, como dice la spec: `rotate_camera` seguirá siendo el botón
+  derecho en el mapa del proyecto, y la rueda del zoom sigue leída en `_input`. Entran en
+  el catálogo **sólo para enseñarse** en la ventana, sin poder cambiarse.
+- **Una tecla por acción.** La pausa tiene hoy P **y** espacio; al catálogo va con una
+  sola y la otra se pierde. Es lo que pide la spec («varias teclas por acción» está fuera
+  de alcance), pero es una pérdida y se dice.
+- **La N de la capa de navegación** es una herramienta de desarrollo —imprime por
+  consola—: pasa a ser acción, para que la prueba de «ninguna tecla fija» no necesite
+  excepciones, pero **no sale en la ventana del jugador**.
+
+### Orden de dependencias
+
+El catálogo (`Teclas`) antes que nada: todo lo demás le pregunta. Guardar y leer va justo
+después, porque es lo que hace que un cambio sobreviva a cerrar el juego. Luego los
+consumidores, uno por pantalla. La prueba de «ninguna tecla fija» va **al final de los
+consumidores**, cuando puede pasar. Y la ventana de cambiar, y la que enseña, al final:
+las dos se pintan del catálogo, así que no pueden existir antes que él.
+
+### Cómo quedó (2026-09-17)
+
+**Una sola puerta: `Teclas`** (`scripts/vista/Teclas.gd`). El catálogo —id, rótulo,
+ámbito y tecla de siempre—, el `InputMap` que monta con lo que el jugador tenga puesto,
+la regla del choque y el guardado. Estado estático como `Configuracion`, y en su mismo
+fichero, sección `[teclas]`.
+
+**Todo el juego pregunta por `Teclas.pulsada(...)` o `Teclas.es(evento, ...)`**, nunca
+por `Input.is_action_pressed` a pelo. Parece un rodeo y no lo es: una sonda que arranca
+`demo_main` sin pasar por el menú principal no ha leído la configuración, y sin nadie que
+monte el `InputMap` la primera pregunta daba «request for nonexistent InputMap action».
+Preguntando por aquí, la primera pregunta lo monta.
+
+**Las acciones llevan ámbito** —`SIEMPRE`, `VALLE`, `REGIONAL`— y dos sólo chocan si
+comparten pantalla. Sin eso, la ventana habría avisado el primer día de dos choques que
+no lo son: la R es «la capa del minimapa» en el valle y «la ficha del sitio» en el
+regional, y el espacio es «pausar» y «resolver la estación».
+
+**La pestaña «Controles»**, cuarta de Configuración: la lista por ámbito, se pincha una
+fila, se pulsa la tecla y queda puesta y guardada. Si choca, la pestaña entera pasa a un
+aviso que **nombra las dos acciones** —«querías poner "X" en la tecla K, y esa tecla ya
+es "Y"»— con «cambiarlas entre sí» y «dejarlo como estaba». Y «volver a las de siempre».
+**ESC no se cambia** (decisión del usuario): su fila sale apagada, porque es la salida de
+todas las ventanas, incluida ésta y su propio aviso.
+
+**La ventana «Controles» del juego se pinta del catálogo.** Antes era una lista escrita a
+mano, y por eso decía lo que le parecía.
+
+### Tres cosas que aparecieron al implementarlo, y ninguna estaba en la spec
+
+- **F3 hacía dos cosas**: «velocidad ×5» en `DemoMain` y abrir el panel de fotogramas.
+  El panel se muda a **F4** (decisión del usuario, 2026-09-17), que las tres velocidades
+  son un trío de teclas seguidas.
+- **La ventana «Controles» anunciaba una «B — modo construcción» que no existe.** No hay
+  ninguna B en el juego. Llevaba escrita a mano desde que la ventana se sacó del panel de
+  la esquina.
+- **El mapa de entrada del proyecto estaba muerto entero.** `move_forward`,
+  `move_backward`, `move_left`, `move_right` y `rotate_camera`: las cuatro primeras
+  porque la cámara sumaba la tecla física *y* la acción —de ahí que cambiarla no
+  hiciera nada—, y `rotate_camera` porque el botón derecho se lee a mano en
+  `OrbitalCamera._unhandled_input`. La sección `[input]` de `project.godot` queda vacía,
+  con una nota que dice dónde viven ahora.
+
+### Lo que se pierde, y se dice
+
+**La P deja de pausar.** Pausaban la P y el espacio, y el catálogo lleva una tecla por
+acción —«varias teclas por acción» está fuera de alcance en la spec—. Se queda el
+espacio. Quien quiera la P la pone en dos clics, que es de lo que iba todo esto.
+
+### Comprobado
+
+`TestTeclas`, **24 pruebas y 250 comprobaciones**. Las que valen la pena nombrar:
+
+- **«Ninguna tecla fija»**: recorre `scripts/` —fuera de `tests/` y `tools/`— y falla si
+  alguien vuelve a escribir un `KEY_…` o un `is_key_pressed`. Es la que impide que esto
+  se deshaga solo, porque deshacerlo no da ningún error de compilación.
+- **La tecla física dispara su acción y sólo la suya**: con «avanzar» puesta en la I, el
+  evento de la I es «avanzar» y el de la W ya no lo es.
+- **El choque**: dos pantallas distintas comparten tecla sin avisar; lo de «en todas
+  partes» choca con cualquiera; aceptar intercambia y cancelar no toca nada.
+- **Preguntar sin haber leído la configuración no revienta.**
+
+Y la vista: `ConfiguracionCaptura` recorre ahora **todas** las pestañas —la cuenta estaba
+escrita a mano en tres y la nueva se habría quedado sin mirar— y saca además el aviso de
+choque. **Nada se sale a 1920×1080 ni a 1280×720.**
+
+
+---
+
+## 12. El contorno del valle, sin congelar la ventana (spec 2026-09-16, hecho 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-16**, de la deuda «la descarga del relieve
+> congela la ventana unos segundos» (ROADMAP).
+
+### Qué problema cierra
+
+La deuda estaba escrita en grande y **ya es sólo un caso**. Preparar un valle nuevo va
+en un hilo con su barra desde la pantalla de carga (§9). Lo que sigue congelando la
+ventana es **rehacer el contorno de un valle que ya estaba preparado**: si el relieve de
+alrededor quedó basto o sin ríos, se vuelve a descargar del IGN **en el hilo principal**,
+con un aviso de «esto tarda» encima de una pantalla parada. Puede durar minutos.
+
+### Lo que se pide
+
+- **Esa descarga va fuera del hilo principal**, con la misma pantalla y la misma barra
+  que preparar un valle, y la hidrografía que la acompaña también.
+- **Si la red falla**, se queda con el contorno que había, lo dice, y la partida sigue.
+
+### Criterios de aceptación
+
+- **La ventana no se para**: durante el contorno rehecho, ningún cuadro pasa de 500 ms
+  —el mismo tope que §9—. Sonda con red, presupuestada en el plan.
+- **La barra avanza** y dice qué se está haciendo.
+- **Sale el mismo contorno** que rehaciéndolo en el hilo principal: los datos son iguales
+  byte a byte. Prueba con datos guardados, sin red.
+- **Sin red no se cuelga**: con la descarga fallando, el valle se abre con el contorno
+  viejo y un aviso. Prueba.
+
+### Fuera de alcance
+
+- **Hacer más rápida la descarga** o cambiar de dónde sale el relieve.
+- **Los importadores de las herramientas** (`scripts/tools/`), que no son el juego.
+
+**Plan técnico (2026-09-17).**
+
+*Comprobado contra el código antes de planear, y la spec acierta de lleno.*
+`PreparaValle.preparar` ya hace lo largo en un `Thread` —`_hacer_el_valle`— y bombea
+cuadros mientras, pero **cuando el valle está en caché llama a
+`_refresh_surround_if_coarse`, y ésa trabaja en el hilo principal**: dos
+`await process_frame` de cortesía y luego `IGNImporter.import_area` para doce kilómetros
+de lado y `OSMWays.fetch_water` a Overpass, los dos bloqueando. Las etapas medidas dicen
+lo que cuesta: **43 s el relieve de alrededor**, y la ventana está parada todo ese rato.
+
+### La forma del arreglo
+
+La misma que ya funciona dos funciones más arriba, y no otra: **la receta de datos en un
+hilo, los avisos por el buzón, y el hilo principal bombeando cuadros**. `PreparaValle` ya
+tiene el buzón (`_avisar` guarda bajo `Mutex` y `_publicar` emite desde el principal,
+porque una señal no se emite desde otro hilo), así que lo que falta es separar la receta
+de la espera:
+
+| Qué | Dónde |
+|---|---|
+| La receta, sin árbol ni señales: mirar, bajar, pintar el agua y guardar | `PreparaValle._rehacer_el_contorno(sitio, local)` (nuevo, del actual `_refresh_surround_if_coarse`) |
+| La espera, que lanza el hilo y bombea cuadros con `al_cuadro` | `PreparaValle._poner_al_dia_el_contorno(arbol, sitio, local, al_cuadro)` |
+| Quien lo pide | `preparar`, que ya recibe `al_cuadro` — **las dos puertas** (el mapa regional al fundar y la ficha de campamento al migrar) lo heredan sin tocarlas |
+
+### La decisión que la spec obliga a tomar: dos costurones
+
+«Sale el mismo contorno que rehaciéndolo en el hilo principal, **byte a byte**, con datos
+guardados y **sin red**» no se puede comprobar si la receta llama al IGN y a Overpass por
+su cuenta. Así que las dos llamadas salen a dos `Callable` con el de verdad por defecto:
+`trae_el_relieve` y `trae_el_agua`. La prueba les pone un relieve de bote; el juego no se
+entera. **Son los dos únicos sitios donde esta receta toca la red**, y tenerlos con nombre
+vale por sí solo.
+
+### Las etapas de la barra
+
+La barra ya está abierta cuando esto pasa —la abre quien funda— con `ETAPAS`. El contorno
+rehecho usa **la 4** («Descargando el relieve de alrededor», 43 s medidos) para el MDT y
+para el agua, cambiando sólo el texto, y **la 5** para guardar. Así la barra nunca va
+hacia atrás, que es lo que pasaría poniendo el agua en la 3.
+
+### Riesgos y deuda que se nombra
+
+- **Si el IGN falla, hoy se reintenta en cada entrada al valle.** El contorno sigue basto,
+  así que la próxima vez se vuelve a pagar la espera. Con la descarga en un hilo la
+  ventana ya no se congela, pero la espera sigue estando. Es una decisión del usuario.
+- **`load` y `ResourceSaver.save` desde un hilo** ya se hacen en `_hacer_el_valle`, así
+  que el terreno está pisado; lo que no se puede es tocar un nodo ni emitir una señal, y
+  la receta no hace ninguna de las dos (invariante 9 de SPECS §7).
+- **El recuadro jugable no se toca**: esto sólo reescribe `site_<id>_surround.res`.
+
+### Cómo quedó (2026-09-17)
+
+**El contorno rehecho va en un hilo**, como preparar un valle nuevo y con el mismo
+aparato: `_rehacer_el_contorno` es la receta —mirar, bajar, pintarle el agua, guardar— y
+`_poner_al_dia_el_contorno` la espera, que lanza el hilo y bombea cuadros con el
+`al_cuadro` de la barra. Los avisos van por el buzón de `_avisar`, porque **una señal no
+se emite desde otro hilo**. Las dos puertas —fundar desde el mapa regional y migrar desde
+la ficha de un campamento— lo heredaron sin tocarlas: las dos llaman a `preparar`.
+
+**Todo va dentro del hilo, incluida la comprobación de si hace falta.** Mirar el contorno
+es leer un recurso de disco de varios megas, y leerlo en el principal sería justo el
+tirón que se viene a quitar. Si no hay nada que hacer, el hilo termina en el primer
+cuadro.
+
+**Dos costurones, y son los dos únicos sitios donde esto toca la red**:
+`trae_el_relieve` (el IGN) y `trae_el_agua` (Overpass), con el de verdad por defecto.
+Existen porque la spec pedía comprobar el contorno **con datos guardados y sin red**, y
+eso no se puede hacer si la receta llama a la red por su cuenta. De paso, tenerlos con
+nombre dice de un vistazo dónde está el coste.
+
+**Y `PreparaValle` ya no escribe en una ruta fija**: `carpeta_de_los_valles`, con la del
+juego por defecto y otra para las pruebas y las sondas, por lo mismo que
+`Guardado.carpeta` — una prueba no toca nunca los datos del jugador, y aquí lo que hay
+son ficheros de veinte megas que cuesta minutos de red volver a hacer.
+
+**Si el IGN no responde**, se queda el relieve que había y **se reintenta la próxima vez
+que se entre al valle** (decisión del usuario del 2026-09-17): sigue basto, así que la
+condición vuelve a dar verdad. Si la red va mal hoy y bien mañana, el contorno mejora
+solo.
+
+### Lo que la prueba destapó, y no era lo que se buscaba
+
+El aviso de «el IGN no responde» **duraba un cuadro y no lo leía nadie**. El buzón guarda
+UN texto y lo publica el hilo principal cuando puede: un aviso seguido de otro se pisa, y
+el paso siguiente —guardar— tarda milisegundos. Escrito así, la spec decía «lo dice» y el
+juego no decía nada. Ahora el fallo se guarda y sale **en el último cartel**, que es donde
+la barra se queda parada un momento:
+
+> Guardando el relieve de alrededor…
+> (El IGN no ha respondido: se queda el que había.)
+
+### Medido
+
+`CargaProbe CONTORNO=1` (ventana 1920×1080, sitio 56, con red), estropeando a propósito el
+contorno de un valle ya preparado —sobre una copia en la carpeta de las sondas—:
+
+| caso | lo que rehace | tarda | cuadro más largo | de más de 500 ms |
+|---|---|---|---|---|
+| **seco** | sólo el agua (Overpass) | 43,5 s | **73 ms** | **0** |
+| **basto** | el MDT del IGN, 25 s de descarga | 49,1 s | **40 ms** | **0** |
+
+La barra no retrocede nunca y se queda quieta como mucho 2,1 s en el caso seco y 7,7 s en
+el basto. **El criterio de la spec era que ningún cuadro pasara de 500 ms**, y el peor es
+de 73.
+
+Y una del instrumento, que costó una corrida entera: la sonda copia el valle preparado a
+su carpeta, y **la copia salía «de una versión anterior»**, así que `preparar` rehacía el
+valle entero —dos minutos de descarga— en vez de sólo el contorno. La sonda pone ahora el
+sello a mano, que es lo honesto: está fabricando el escenario «este valle ya está
+preparado».
+
+
+---
+
+## 13. La cámara sigue a la persona elegida (spec 2026-09-16, hecho 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-16**, a partir de un encargo del usuario:
+> «seleccionar un miembro de la banda centrará la cámara en él y además la cámara hará
+> seguimiento». Las decisiones de abajo salieron a preguntas.
+
+### Qué problema cierra
+
+Hoy elegir a alguien —con un clic sobre su figura en el valle, o desde la lista de
+trabajos— **abre su ficha y no mueve la cámara**. Si se eligió desde una lista, la
+persona puede estar al otro lado del valle y no hay forma de verla sin buscarla a ojo; y
+si se pinchó en el mundo, en cuanto echa a andar se sale del encuadre. La ficha dice qué
+hace, pero no deja **mirarla hacerlo**, que es justo lo que pide la cámara lenta de
+[GRAFICOS.md](GRAFICOS.md) §7.6.
+
+### Lo que se pide
+
+**Elegir a una persona la centra y la sigue.**
+
+- Vale **igual desde el clic en el valle que desde cualquier lista** que abra su ficha
+  (decisión del usuario).
+- **Centrar es como «llevar la cámara»** de las demás fichas: el punto que se mira pasa a
+  ser la persona, de una vez. Mientras se la sigue, ese punto **va con ella** cuadro a
+  cuadro.
+- **El zoom sólo se acerca si está lejos** (decisión del usuario): si la cámara está más
+  lejos que la distancia a la que las fichas ya enseñan lo pinchado —80 m, GRAFICOS §4.1—,
+  baja hasta ahí; si está más cerca, no se toca. Así elegir a alguien **no dispara por sí
+  solo la cámara lenta**, que empieza por debajo de 60 m.
+- **Se sigue lo que se ve** (decisión del usuario): la figura mientras anda y, en un viaje
+  abreviado (GRAFICOS §7.6), la marca que recorre la vereda. La persona queda siempre en
+  el centro de la pantalla, aunque la figura vaya con el retraso del tramo andado.
+- **Girar y hacer zoom no sueltan**: se puede rodear a la persona y acercarse a ella
+  mientras se la sigue.
+
+**Qué suelta el seguimiento** (las cuatro, decisión del usuario):
+
+- **Mover la cámara a mano**: las teclas de desplazamiento, arrastrar, o un clic en el
+  minimapa.
+- **Cerrar su ficha.**
+- **Elegir otra cosa**: otra persona pasa a seguirse a ella; una cueva, un recurso, una
+  cima, o el «llevar la cámara» de otra ficha lo suelta.
+- **ESC**: suelta, y esa pulsación no abre el modal de §7.
+
+Al soltar, la cámara **se queda donde está**: no vuelve a ningún sitio.
+
+**Y lo que se sigue de lo anterior**, sin decisión nueva:
+
+- Si la persona **deja el valle** —sale de expedición, se muda a otro campamento— o
+  **muere**, el seguimiento se suelta y la cámara se queda donde estaba.
+- Si se elige desde una lista a alguien que **no está en el valle**, se abre su ficha
+  como hoy y la cámara no se mueve.
+- **Con la partida en pausa** se sigue siguiendo; simplemente no se mueve nadie.
+- Pasar al mapa regional suelta el seguimiento.
+
+### Criterios de aceptación
+
+- **Centra desde el clic y desde la lista**: tras elegirla, el punto de órbita está a
+  **menos de 1 m en horizontal** de donde se dibuja la persona. Prueba, una por cada
+  camino.
+- **La sigue**: con la persona andando un trayecto corto (menos de 150 m, que se dibuja
+  entero), dando pasos de simulación y de vista, en **cada cuadro** el punto de órbita
+  está a menos de 1 m en horizontal de la figura. Prueba dando pasos, no esperando al
+  reloj.
+- **Sigue la marca en un viaje abreviado**: lo mismo, contra la marca, durante el tramo
+  abreviado; y contra la figura en los tramos andados. Prueba. *Depende de §7.6 de
+  GRAFICOS: si esa spec no está hecha, este criterio espera a ella.*
+- **El zoom**: con la cámara a 150 m, elegir a alguien la deja a 80 m; a 30 m, la deja a
+  30 m. Prueba.
+- **Girar y hacer zoom no sueltan**: tras girar y tras una muesca de rueda, sigue a menos
+  de 1 m. Prueba.
+- **Cada cosa que suelta, suelta**: por separado, desplazamiento con tecla, arrastre,
+  clic en el minimapa, cerrar la ficha, ESC, pinchar una cueva, un recurso, una cima y el
+  «llevar la cámara» de otra ficha. Después de cada una, con la persona andando, **el
+  punto de órbita no se mueve** en diez pasos. Prueba.
+- **Otra persona cambia a quién se sigue**: tras elegir a una segunda, el punto va con la
+  segunda y no con la primera. Prueba.
+- **ESC no abre el modal** al soltar: tras esa pulsación el modal de §7 está cerrado; la
+  siguiente, sin ventanas, lo abre. Prueba.
+- **Quien se va, se suelta**: una persona que sale de expedición, se muda o muere deja de
+  seguirse y la cámara se queda en el último punto. Prueba construyendo el estado, no
+  jugándolo.
+- **Nadie fuera del valle mueve la cámara**: elegir desde una lista a alguien ausente abre
+  la ficha y deja el punto de órbita donde estaba. Prueba.
+
+### Fuera de alcance
+
+- **Una cámara en primera persona** o pegada a los ojos de la persona.
+- **Deslizar la cámara** hasta la persona: centra de una vez, como el resto de «llevar la
+  cámara». Si se quiere suave, va para todas las fichas a la vez y es otra spec.
+- **Seguir a un animal, una obra o un grupo.**
+- **Seguir a alguien en el mapa regional** o durante un viaje entre campamentos.
+- **Una tecla propia** para soltar o volver a seguir: si hace falta, entra por §11.
+- **Mantener el seguimiento al guardar y cargar** la partida.
+
+**Plan técnico (2026-09-17).**
+
+*Comprobado contra el código antes de planear.* Tres cosas que la spec da por hechas y lo
+están, y una que no existe:
+
+- **«Centrar es como llevar la cámara»**: esa receta ya vive en `PanelCenso._look_at_world`
+  —`set_target` y, si la cámara estaba más lejos, `set_distance(distancia_para_mirar())`—
+  y `OrbitalCamera.distancia_para_mirar()` ya devuelve los **80 m** que la spec pide. No
+  hay número nuevo que inventar; hay que **sacar esa receta de `PanelCenso`** para que la
+  use también el seguimiento, que es la misma pregunta contestada desde un solo sitio
+  (invariante 3 de SPECS §7).
+- **Una sola puerta para elegir persona**: todo pasa por `GameUI.show_person`, tanto el
+  clic del valle (`DemoMain`) como las listas (`PanelTrabajos`, el censo). Engancharse ahí
+  cubre los dos caminos de una vez.
+- **Lo que se ve de alguien** ya lo sabe `Figuras` (GRAFICOS §7.6): la figura dibujada, o
+  la marca cuando el viaje va abreviado y la figura está escondida. Falta una función que
+  lo diga en una línea.
+- **«Arrastrar» no existe.** La spec lista cuatro gestos que sueltan y uno de ellos es
+  arrastrar la cámara: en el valle **no hay arrastre que la mueva** —el botón derecho
+  orbita y la rueda hace zoom, y no hay paneo con ratón—. Lo que sí arrastra es **el
+  minimapa**, que ya mueve el punto de órbita, y eso es lo que se suelta.
+
+### Módulos
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| A quién se sigue y qué punto se mira | `scripts/vista/Seguimiento.gd` (nuevo) | SPECS §4.7: la vista lee y dibuja, no decide |
+| Lo que se ve de una persona: figura o marca | `Figuras.donde_se_ve` | Ya existente |
+| Llevar la cámara a un punto, acercándose sólo si está lejos | `OrbitalCamera.mirar_a` (sale de `PanelCenso`) | Una pregunta, un sitio |
+| Enganchar al elegir persona | `GameUI.show_person` | La puerta única |
+| Mover la cámara cada cuadro y soltar con las teclas | `DemoMain` | — |
+| Soltar al cerrar, al elegir otra cosa, con ESC y con el minimapa | `GameUI`, `PanelCenso`, `PanelObras`, `Minimapa`, `DemoMain` | — |
+
+### Las decisiones que la spec obliga a tomar
+
+**1. El seguimiento es un objeto de la escena, no una estática.** Va colgado de `GameUI`
+—`ui.seguimiento`—, que es lo que ya tienen a mano los paneles que sueltan, y `DemoMain`
+llega por `ui`. **No es `static`** aunque sería más cómodo de alcanzar: es estado de una
+escena, y con estática habría que acordarse de soltarlo al pasar al mapa regional. Así se
+muere con la escena, que es lo que la spec pide.
+
+**2. Soltar con las teclas se avisa por señal, no preguntando.** `OrbitalCamera` emite
+`movida_a_mano` cuando el jugador desplaza el punto de órbita, y **no** cuando gira o hace
+zoom, que la spec dice expresamente que no sueltan. Preguntarle a `Teclas` desde
+`DemoMain` cada cuadro daría lo mismo pero repartiría la regla en dos sitios.
+
+**3. La cámara se mueve en `_process` de `DemoMain`, no dentro del paso de simulación.**
+Es vista: sigue a lo que se dibuja, y lo que se dibuja lo pone `Figuras` en su propio
+`_process`. Con la partida en pausa se sigue siguiendo, que es lo que la spec pide, y sale
+gratis.
+
+### Orden de dependencias
+
+`Seguimiento` y `donde_se_ve` antes que nada. La receta de la cámara sale de `PanelCenso`
+a la cámara **antes** de engancharla, para no escribirla dos veces. Los sueltos van
+después, uno por sitio. La prueba de la marca abreviada necesita §7.6 de GRAFICOS, que ya
+está hecho.
+
+### Riesgos y deuda que se nombra
+
+- **Los sitios que sueltan son seis**, y el que se olvide no da ningún error: se queda la
+  cámara pegada a alguien cuando el jugador ya está mirando otra cosa. La prueba los
+  recorre uno a uno, que es lo único que lo impide.
+- **El seguimiento no se guarda** con la partida (fuera de alcance en la spec): al cargar,
+  la cámara no sigue a nadie.
+- **`PanelCenso._look_at_world` se queda como pasamanos** de la receta que se muda a la
+  cámara: lo llaman las flechas del censo y las obras, y cambiar sus llamadas no aporta
+  nada.
+
+### Cómo quedó (2026-09-17)
+
+**Elegir a alguien la centra y la sigue**, y se engancha en `GameUI.show_person`, que es
+la puerta única: el clic en el valle, la lista de trabajos y el censo pasan todos por ahí.
+A quien no está en el valle —de expedición, mudada— se le abre la ficha y la cámara no se
+mueve. El zoom se acerca **sólo si estaba lejos**, con la receta que ya existía y que se
+mudó de `PanelCenso` a `OrbitalCamera.mirar_a`, porque ahora la usan tres.
+
+**Lo que se sigue es lo que se VE, no lo simulado.** `Figuras.donde_se_ve` contesta con la
+figura dibujada o, cuando el viaje va abreviado y la figura está escondida, con la marca
+(GRAFICOS §7.6). Seguir `person.position` dejaría a la figura fuera del centro justo en el
+único rato en que las dos no coinciden.
+
+**Y la sigue `Figuras` quien la manda mover**, no el `_process` de `DemoMain`: `Figuras`
+emite `pintadas` al acabar de poner las figuras del cuadro y la cámara se mueve ahí.
+
+**Lo que suelta**, y son seis: las teclas de desplazamiento, el minimapa, cerrar la ficha
+—la cruz y ESC—, ESC a secas, elegir otra cosa, y el «llevar la cámara» de otra ficha.
+**Girar y hacer zoom no sueltan**, y esa regla vive en la cámara: emite `movida_a_mano`
+cuando el jugador desplaza la vista y **no** cuando gira o hace zoom. Al soltar, la cámara
+se queda donde está.
+
+### Lo que costó, que fue el orden del cuadro
+
+La primera versión seguía desde `DemoMain._process` y **se quedaba a 54 metros de lo que
+se veía** —medido en el valle, con ventana—. Son dos cosas, y las dos se aprenden aquí:
+
+- **`DemoMain` es la raíz de la escena, así que su `_process` corre ANTES que el de sus
+  hijos.** La cámara leía las figuras del cuadro anterior. Ahora la mueve la señal de
+  `Figuras`, que es quien sabe cuándo están puestas.
+- **La marca se dibujaba con un valor y se leía con otro.** `donde_se_ve` recalculaba la
+  posición de la marca de `person.position` en vivo, y la simulación da su paso después:
+  a ×1 eso son decenas de metros entre dos cuadros. Ahora la marca se guarda cuando se
+  pone, y se lee guardada.
+
+Con las dos, el desvío es **cero desde el primer cuadro dibujado**. Queda **un solo cuadro
+con 6,4 m**: el de elegirla, porque la persona anda entre que se pincha y que se dibuja el
+cuadro siguiente. Es un fotograma y no se ve.
+
+### Comprobado
+
+`TestSeguimiento`, **16 pruebas y 36 comprobaciones**: que lo que se ve es la figura o la
+marca según la fase; que la cámara se acerca sólo si estaba lejos; que elegir centra,
+sigue y cambia de persona; que quien no está en el valle no mueve la cámara; que soltar
+deja el punto quieto aunque ella ande; y que quien se va del valle se suelta solo.
+
+**Dos de los seis gestos no se pueden ejercitar en la suite** —ESC y el minimapa viven en
+`DemoMain` y en `Minimapa`, que no se montan sin la escena—, así que de ésos se comprueba
+que **el suelto sigue escrito**: si alguien reescribe uno de esos sitios y se lo deja, no
+habría ningún error, sólo una cámara pegada a alguien que ya no se mira. Lo dice la prueba
+por su nombre.
+
+Y una corrida con ventana del valle, eligiendo a alguien y dejándola andar trescientos
+cuadros: sigue, se acerca a 80 m y no se suelta sola.
+
+### Lo que la spec pedía y no existe
+
+«Arrastrar la cámara» es uno de los cuatro gestos que la spec dice que sueltan. **En el
+valle no hay paneo con ratón**: el botón derecho orbita y la rueda hace zoom, y nada más.
+Lo que sí se arrastra es el minimapa, que ya mueve el punto de órbita, y eso es lo que
+suelta.
+
+
