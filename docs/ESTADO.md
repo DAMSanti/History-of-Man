@@ -927,7 +927,70 @@ Para no perderlo de vista mientras se habla de lo que falta.
 | Crónica y momentos | sólido | `TestChronicle`, `MomentoProbe` |
 | Parajes con nombre y conocimiento del territorio | sólido | `TestParajes` |
 
-**1 673 pruebas y 9 051 comprobaciones en verde (2026-09-17, con la cámara que sigue a la
+**Lo que gana dibujar a menos (2026-09-17).** Con la ventana a 1920 × 1080 en el valle del
+sitio 56, quieto en el mismo punto (`ResolucionProbe`): del 100 % al 50 % de escala, la GPU
+baja un **32 %** en una corrida y un **31 %** en otra, y los fps suben de 19,7 a 28,9 y de
+28,7 a 41,3. **Los absolutos se mueven mucho entre corridas** —49,2 y 33,7 ms para lo mismo
+al 100 %—, así que lo que vale es la bajada relativa, que se repite. Dibujar a la mitad de
+lado **no dobla los fotogramas**: la geometría y las llamadas de dibujo no bajan con la
+resolución. La tabla entera, en [INTERFAZ.md](INTERFAZ.md) §16.
+
+**Las texturas del suelo, con altura de verdad (2026-09-17).** Nueve capas de 1 024 px,
+**36 MB** de arrays, y la VRAM del juego en **1 847-1 848 MB** (antes, con ocho capas,
+1 843-1 876). La altura del relieve sale del `Displacement` y no del brillo del dibujo: la
+correlación entre uno y otro era de **0,02 en el roquedo calizo**. Detalle en
+[GRAFICOS.md](GRAFICOS.md) §7.7.
+
+**1 727 pruebas y 9 370 comprobaciones en verde (2026-09-18, con la banda rehecha sobre
+esqueletos, asentada en el suelo y vestida sólo cuando hay vestidos).** Suben de 1 709 y 9 166 con `TestBandaClips`, que recorre los ocho estados de
+`Inhabitant` y las veinte especialidades de `Profession` y falla si alguna se queda sin gesto,
+sin apero o con un nombre de clip que no existe en el pack, y hace lo mismo con la ropa de
+las cinco eras.
+
+> Bajan de los **1 725 y 9 367** que llegó a dar ese mismo día: `TestPrendas` se fue con su
+> asunto —las prendas horneadas en textura, que se sustituyeron por ropa modular de verdad—
+> y `TestBandaClips` se rehizo. El suelo del día, 1 709 y 9 166, se mantiene.
+
+**Lo que cuesta dibujar la banda (2026-09-18, `EsqueletosProbe`, valle 56 a 1080p en la
+1070): 0,38 ms de GPU y 0,57 de CPU**, con quince personas vestidas. Antes de este trabajo,
+con la animación horneada en textura y sin ropa ni herramientas, eran 0,18 y 0,05. El
+presupuesto de GRAFICOS §1 le da **2,0 ms** a «Personajes», así que se gasta la mitad. Las
+llamadas de dibujo de la escena suben de 603 a 998, y la VRAM de 1 402 a 1 455 MB.
+
+Antes: **1 709 pruebas y 9 166 comprobaciones en verde (2026-09-17, con las texturas del
+suelo y su hojarasca de otoño).** Suben de 1 707 y 9 158 con dos pruebas en `TestClima`: la
+hojarasca sube a lo largo del otoño y se va en invierno, y `asentar` la pone de golpe.
+
+Antes: **1 707 pruebas y 9 158 comprobaciones en verde (2026-09-17, con la resolución de
+dibujo en Pantalla).** Suben de 1 701 y 9 136 con seis pruebas en `TestConfiguracion`: los
+escalones en píxeles de la ventana, la traducción entre resolución y escala, cuándo manda
+el selector sobre el dibujo, que maximizado no se toca la ventana, que elegir a mano baja
+el nivel, y que «a cuánto se dibuja» ya sólo se elige en un sitio.
+
+Antes: **1 701 pruebas y 9 136 comprobaciones en verde (2026-09-17, tras el depurar de la noche:
+sin niebla en el regional, con el aviso de las técnicas que no se cierra y con las figuras
+que ya no se teletransportan).** Bajan dos pruebas —las de las nubes de la niebla, que se
+han retirado— y suben cuatro: dos en `TestSeguimiento` (la figura persigue en los viajes
+cortos; quien se para se ve entero aunque le quede ruta) y dos en `TestTecnicas` (el aviso
+abierto mientras el ratón esté encima, y que sin texto no se abre nada).
+
+Antes: **1 699 pruebas y 9 128 comprobaciones en verde (2026-09-17, con el mar de hoy
+rellenado, una sola verdad sobre el mar de cada mapa y el agua auditada).** Suben de 1 683 y 9 087 con
+`TestRelleno` (nueva, 8 pruebas: que la tierra de
+hoy no se toca, que no queda llano a cota cero, que la orilla se cose sin escalón, que
+nada queda bajo el agua sin salida al mar, que cambiar de época rehace el relleno igual
+que de nuevas, y que el río sigue por el relleno, y que el valle se prepara con el mar que
+le dicen), con `TestPrestado` y `TestFrontera` reescritas para las rías, con la prueba de
+`TestModoDebug` que fija con qué mar se monta el mapa regional, y con las dos de fidelidad
+del agua: que sólo se pinta agua natural —ni carreteras ni acequias— y que **un río
+alargado no remonta**.
+
+Antes: **1 683 pruebas y 9 087 comprobaciones en verde (2026-09-17, con el modo Debug)**,
+que subían de 1 673 y 9 051 con `TestModoDebug` (nueva: que entrar y salir no toca nada
+del jugador, byte a byte; todos a la vista y con marcador; fundar en cualquiera con banda
+nueva; y el botón sólo en desarrollo).
+
+Antes: **1 673 pruebas y 9 051 comprobaciones en verde (2026-09-17, con la cámara que sigue a la
 persona elegida).** Suben de 1 657 y 9 015 con `TestSeguimiento` (nueva: lo que se ve de
 alguien, centrar sin tocar el zoom si ya estaba cerca, seguir cuadro a cuadro, y los seis
 gestos que sueltan).

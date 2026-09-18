@@ -21,8 +21,6 @@ const CUENTA_ATRAS := 10.0
 const ANCHO := 640
 const ETIQUETA := 260
 
-## Las escalas de render que se ofrecen: las de los niveles y dos intermedias.
-const ESCALAS: Array[float] = [0.5, 0.6, 0.77, 0.9, 1.0]
 const VEGETACIONES: Array[float] = [0.25, 0.5, 0.75, 1.0]
 const PASOS_DE_NUBE: Array[int] = [0, 6, 12, 20, 32]
 ## Los escalones del agua, con el nombre del nivel que los pone. GRAFICOS §7.3.
@@ -109,6 +107,22 @@ func elegir_modo(modo: Configuracion.Modo) -> void:
 
 func elegir_resolucion(resolucion: Vector2i) -> void:
 	_cambiar_pantalla(func() -> void: Configuracion.resolucion = resolucion)
+
+
+## A CUÁNTO SE DIBUJA EL MUNDO, en fracción de la ventana (INTERFAZ §16).
+##
+## Es lo que hace el selector de «Resolución» cuando la ventana no la dimensiona el
+## jugador —maximizada y a pantalla completa—, que es como se juega.
+##
+## **Sin cuenta atrás**, a diferencia de cambiar el modo o el tamaño de la ventana: la
+## confirmación existe para que una resolución que el monitor no pueda dar no te deje sin
+## ver nada, y dibujar a menos no puede hacer eso. Se aplica y se guarda como cualquier
+## otro ajuste de gráficos.
+func elegir_dibujo(escala: float) -> void:
+	Configuracion.poner_ajuste("escala", escala)
+	Configuracion.aplicar_graficos(get_tree())
+	Configuracion.guardar()
+	_pintar.call_deferred()
 
 
 func elegir_vsync(si: bool) -> void:
@@ -281,19 +295,35 @@ func _pintar_pantalla() -> void:
 	_opciones(_pantalla, "Modo", modos, int(Configuracion.modo), func(i: int) -> void:
 		elegir_modo(i as Configuracion.Modo))
 
-	var lista := Configuracion.resoluciones()
-	if not lista.has(Configuracion.resolucion):
-		lista.append(Configuracion.resolucion)
-	var textos: Array = []
-	for r: Vector2i in lista:
-		textos.append("%d × %d" % [r.x, r.y])
-	var selector := _opciones(_pantalla, "Resolución", textos,
-		lista.find(Configuracion.resolucion), func(i: int) -> void: elegir_resolucion(lista[i]))
-	# SÓLO EN VENTANA, decisión del usuario del 2026-09-14: a pantalla completa y
-	# maximizada Godot usa el tamaño del monitor.
-	selector.disabled = Configuracion.modo != Configuracion.Modo.VENTANA
-	if selector.disabled:
-		_nota(_pantalla, "En pantalla completa y maximizada se usa la del monitor. Para dibujar a menos, la escala de render de Gráficos.")
+	# LA RESOLUCIÓN, DOS COSAS SEGÚN EL MODO (INTERFAZ §16). En ventana, el tamaño de la
+	# ventana, como siempre. Maximizada y a pantalla completa —que es como se juega— el
+	# tamaño lo manda el gestor de ventanas, así que lo que se elige es **a cuánto se
+	# dibuja el mundo**, y se enseña en píxeles de verdad y no en tanto por ciento: era la
+	# escala de render de Gráficos, que el usuario no encontraba.
+	if Configuracion.manda_sobre_el_dibujo():
+		var ventana := Configuracion.tamano_de_la_ventana()
+		var dibujos := Configuracion.dibujos_que_caben(ventana)
+		var pintados: Array = []
+		for r: Vector2i in dibujos:
+			pintados.append("%d × %d" % [r.x, r.y] if r.x > 0 else "—")
+		var puesta := Configuracion.dibujo_con(
+			float(Configuracion.graficos["escala"]), ventana)
+		_opciones(_pantalla, "Resolución de dibujo", pintados,
+			maxi(dibujos.find(puesta), 0), func(i2: int) -> void:
+				elegir_dibujo(Configuracion.ESCALAS_DE_DIBUJO[i2]))
+		_nota(_pantalla, "La ventana la manda el sistema. Esto es a cuánto se dibuja el "
+			+ "mundo, y se estira a la pantalla: cuanto menos, más fotogramas. Los paneles "
+			+ "y el texto no se tocan.")
+	else:
+		var lista := Configuracion.resoluciones()
+		if not lista.has(Configuracion.resolucion):
+			lista.append(Configuracion.resolucion)
+		var textos: Array = []
+		for r: Vector2i in lista:
+			textos.append("%d × %d" % [r.x, r.y])
+		_opciones(_pantalla, "Tamaño de la ventana", textos,
+			lista.find(Configuracion.resolucion),
+			func(i2: int) -> void: elegir_resolucion(lista[i2]))
 
 	_casilla(_pantalla, "Sincronización vertical", Configuracion.vsync, elegir_vsync)
 	var topes: Array = []
@@ -327,10 +357,10 @@ func _pintar_graficos() -> void:
 		return "Planas" if int(v) == 0 else "%d pasos" % int(v)),
 		PASOS_DE_NUBE.find(int(g["nubes"])), func(i: int) -> void:
 			elegir_ajuste("nubes", PASOS_DE_NUBE[i]))
-	_opciones(_graficos, "Escala de render", _textos(ESCALAS, func(v: Variant) -> String:
-		return "%d %%" % int(round(float(v) * 100.0))),
-		_indice_cercano(ESCALAS, float(g["escala"])), func(i: int) -> void:
-			elegir_ajuste("escala", ESCALAS[i]))
+	# LA ESCALA DE RENDER YA NO VIVE AQUÍ (2026-09-17, INTERFAZ §16): es la «Resolución de
+	# dibujo» de Pantalla, en píxeles. Dos controles sobre el mismo valor es la pregunta
+	# contestada desde dos sitios que prohíbe SPECS §7, y además el jugador no la
+	# encontraba aquí.
 	_opciones(_graficos, "Densidad de vegetación", _textos(VEGETACIONES, func(v: Variant) -> String:
 		return "%d %%" % int(round(float(v) * 100.0))),
 		_indice_cercano(VEGETACIONES, float(g["vegetacion"])), func(i: int) -> void:

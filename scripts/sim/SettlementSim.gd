@@ -1288,7 +1288,9 @@ func setup(terrain: TerrainGenerator, home: Vector3, population: int, food: floa
 		person.position = home + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
 		person.position.y = _terrain.get_height_at(person.position)
 		people.append(person)
-		var slot := _crowd.add_person()
+		# El cuerpo se monta con su sexo y su edad: desde el 2026-09-18 cada persona es un
+		# modelo propio, no un hueco en un `MultiMesh` (GRAFICOS §5.1).
+		var slot := _crowd.add_person(person.sex, person.age_group)
 		_bodies.append(slot)
 		_headings.append(angle)
 		_crowd.update(slot, person.position, angle, person.state, person.age_group)
@@ -1954,8 +1956,12 @@ func _pintar_a(person: Inhabitant, index: int) -> void:
 		# se moviera en ellos daria tirones justo cuando se la mira de cerca.
 		figuras.anotar(person, index)
 		return
+	# Sin `Figuras` -las pruebas montan la simulación sin vista- el reparto de vestidos se
+	# pregunta aquí, por el mismo sitio: la regla vive en [Vestuario] y no se copia.
+	var abrigados := Vestuario.quien_va_vestido(people, toolkit.count(Tool.Kind.VESTIDO))
 	_crowd.update(_bodies[index], person.position, _headings[index], person.state,
-		person.age_group)
+		person.age_group, person.current_speciality,
+		index < abrigados.size() and abrigados[index] == 1)
 
 
 ## Se lo lleva de la vista: ha salido de los cuatro kilómetros.
@@ -2433,6 +2439,10 @@ func plazas_abrigo() -> int:
 ## De 0 a 1: qué parte de la banda podría llevar un `VESTIDO` de sobra hoy.
 ## Cobertura AGREGADA -no se sabe ni hace falta saber quién lleva cuál, igual
 ## que `Tool.Kind.CESTO` no dice qué recolector usa qué cesto-.
+##
+## Para DIBUJARLA sí hace falta elegir a quién, y eso es cosa de la vista: lo
+## reparte [Vestuario.quien_va_vestido], primero entre los que salen del
+## campamento. La simulación sigue sin saberlo y sigue sin necesitarlo.
 func vestido_coverage() -> float:
 	var pop := population()
 	if pop <= 0:
@@ -2500,7 +2510,7 @@ func recibir(person: Inhabitant) -> void:
 	person.carrying = 0.0
 	people.append(person)
 	if _crowd != null:
-		var slot := _crowd.add_person()
+		var slot := _crowd.add_person(person.sex, person.age_group)
 		_bodies.append(slot)
 		_headings.append(angle)
 		_crowd.update(slot, person.position, angle, person.state, person.age_group)

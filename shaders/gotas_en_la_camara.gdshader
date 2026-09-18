@@ -63,8 +63,17 @@ void fragment() {
 	// Dos capas: gotas grandes y pocas, y pequeñas algo mas numerosas.
 	vec2 muestra_a; float borde_a; vec2 dentro_a;
 	vec2 muestra_b; float borde_b; vec2 dentro_b;
-	float a = capa(p, aspecto, 5.0, 0.42, 0.0, muestra_a, borde_a, dentro_a);
-	float b = capa(p, aspecto, 11.0, 0.16, 57.0, muestra_b, borde_b, dentro_b);
+	// MÁS CELDAS Y MÁS PEQUEÑAS. `celdas` es cuántas caben en el alto de la pantalla, así que
+	// subirlo encoge la gota: con 5 celdas una gota llegaba al 6 % del alto de la pantalla y
+	// el usuario las vio «muy grandes» (2026-09-18). A 14 y 30 quedan en poco más de un 2 %
+	// y un 1 %, que es el tamaño de una gota en un cristal de verdad.
+	//
+	// Y `hay` -qué parte de las celdas tiene gota- baja a la vez: con el mismo 0,42 sobre 196
+	// celdas saldrían ochenta gotas en vez de diez y la pantalla quedaría empañada del todo.
+	// Con 0,14 y 0,05 salen unas veinticinco y unas cuarenta y cinco: más gotas que antes,
+	// como debe ser cuando son pequeñas, pero sin tapar la vista.
+	float a = capa(p, aspecto, 14.0, 0.14, 0.0, muestra_a, borde_a, dentro_a);
+	float b = capa(p, aspecto, 30.0, 0.05, 57.0, muestra_b, borde_b, dentro_b);
 	float gota = max(a, b);
 	vec2 muestra = a >= b ? muestra_a : muestra_b;
 	float borde = a >= b ? borde_a : borde_b;

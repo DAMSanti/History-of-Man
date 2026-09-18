@@ -41,6 +41,29 @@ const RETRASO_TOPE := 1.5
 ## la spec permite. Ver GRAFICOS §7.6, «Cómo quedó».
 const TRAMO_M := PASO_MAXIMO * RETRASO_TOPE
 
+## De un salto de la simulacion a este tamano para arriba, la figura se pone sin mas.
+##
+## Por debajo persigue a la persona sin pasar de [PASO_MAXIMO] —y sin descolgarse mas de
+## [RETRASO_TOPE] segundos, corriendo mas si hace falta—. Por encima no hay nada que
+## disimular: eso no es andar, es cambiar de sitio —reaparecer, volver de una expedicion,
+## cargar una partida— y deslizar la figura por medio valle seria peor que el salto.
+const SALTO_SIN_DISIMULO_M := 60.0
+
+## Cuanto puede estar la persona quieta —EN HORAS DE JUEGO— antes de que la figura deje de
+## esconderse.
+##
+## **El fallo que cierra** (2026-09-17, jugando): la marca solo se pinta en mitad de un
+## viaje abreviado, y de MEDIO se salia mirando la ruta de la persona. Quien se quedaba
+## parado con una ruta larga sin recorrer —el reparto cambia, cae la noche, se cena— se
+## quedaba escondido **para siempre**: el usuario veia la marca en vez del modelo con la
+## banda cenando. Si no se mueve, no esta de viaje.
+##
+## **Se cuenta en horas de juego y no en segundos de reloj** porque el reloj de pared corre
+## igual con la partida EN PAUSA, y en pausa nadie se mueve: contando reloj, pausar sacaba
+## a todo el mundo de su viaje. Diez minutos de juego: una cena dura una hora y un viaje de
+## verdad avanza en cada paso.
+const QUIETA_TOPE_HORAS := 10.0 / 60.0
+
 ## De que color va la marca de cada oficio.
 ##
 ## **Es la primera paleta por oficio del juego** (decision del usuario, 2026-09-17): no
@@ -70,6 +93,10 @@ var crowd: BandaCrowd = null
 
 ## De quien son las figuras. Se lee `people`, `_bodies` y `_headings`.
 var sim: SettlementSim = null
+
+## Quién de la banda va vestido este cuadro, por índice en `sim.people`. Se rellena en
+## `_process` y lo usa `_pintar`.
+var _vestidos := PackedByteArray()
 
 var _marcas: MultiMeshInstance3D = null
 
@@ -183,6 +210,11 @@ func _process(delta: float) -> void:
 		_cuantos_habia = sim.people.size()
 		_pintadas.clear()
 		return
+	# QUIÉN VA VESTIDO, una vez por cuadro y no una por persona: el reparto mira a toda la
+	# banda -primero los que salen del campamento- así que preguntarlo persona a persona
+	# sería recorrerla veinticinco veces. Ver [Vestuario.quien_va_vestido].
+	_vestidos = Vestuario.quien_va_vestido(sim.people,
+		sim.toolkit.count(Tool.Kind.VESTIDO))
 	Cronometro.tramo_raiz("vista: figuras")
 	var en_viaje: Array[Dictionary] = []
 	for index in range(sim.people.size()):
@@ -230,12 +262,41 @@ func _llevar(ficha: Dictionary, person: Inhabitant, delta: float) -> Vector3:
 		# Sin camino: o no va a ninguna parte, o acaba de llegar. Si estaba llegando, se
 		# le deja terminar su tramo con la ruta que traía.
 		ruta = ficha.get("ruta", PackedVector3Array())
+	# ¿SE ESTÁ MOVIENDO? Lo que decide si sigue de viaje es que la persona avance, no que le
+	# quede ruta guardada. Ver [QUIETA_TOPE_HORAS].
+	var ahora := float(sim.day) * 24.0 + sim.hour if sim != null else 0.0
+	var antes: Vector3 = ficha.get("estaba", person.position)
+	var desde: float = float(ficha.get("se_movio", ahora))
+	if antes.distance_to(person.position) >= 0.05:
+		desde = ahora
+	ficha["estaba"] = person.position
+	ficha["se_movio"] = desde
+	var parada := ahora - desde > QUIETA_TOPE_HORAS
+
 	var largo := _largo_de(ruta)
-	if largo <= LARGO_M or ruta.size() < 2:
+	if largo <= LARGO_M or ruta.size() < 2 or parada:
 		ficha["fase"] = Fase.PEGADA
 		ficha["ruta"] = PackedVector3Array()
-		ficha["donde"] = person.position
-		return person.position
+		ficha["destino"] = Vector3.INF
+		# Y LA FIGURA PERSIGUE, NO SE TELETRANSPORTA. Un viaje corto no se abrevia, y hasta
+		# hoy se pintaba en la posición simulada tal cual: a ×1 la simulación mueve a
+		# alguien de quince a sesenta metros por cuadro, así que los recolectores
+		# **aparecían y desaparecían de tajo en tajo** (queja del usuario del 2026-09-17).
+		# Ahora anda hacia ella a [PASO_MAXIMO], y si se descuelga más de [RETRASO_TOPE]
+		# segundos corre lo justo para no pasar de ese retraso.
+		var donde_estaba: Vector3 = ficha.get("donde", person.position)
+		var salto := donde_estaba.distance_to(person.position)
+		if salto > SALTO_SIN_DISIMULO_M or salto < 0.001:
+			ficha["donde"] = person.position
+		else:
+			# El paso de siempre, y **lo que haga falta para no descolgarse más de
+			# [TRAMO_M]**: persiguiendo sólo a `PASO_MAXIMO` la figura se acercaba pero no
+			# llegaba nunca —la distancia decae y ya está—, y a `distancia / RETRASO_TOPE`
+			# tampoco: eso es una exponencial. Medido en la prueba: 12,9 m de retraso
+			# después de segundo y medio, con el tope en 12.
+			var paso := maxf(PASO_MAXIMO * delta, salto - TRAMO_M)
+			ficha["donde"] = donde_estaba.move_toward(person.position, paso)
+		return ficha["donde"]
 
 	# ¿Es otro viaje? Se mira por el destino: replanificar a medio camino cambia el
 	# principio de la ruta pero no adónde se va.
@@ -316,8 +377,11 @@ func _pintar(person: Inhabitant, index: int, donde_va: Vector3, escondida: bool)
 	# Bajo tierra, que es lo que la multitud hace con lo que no toca ver: los huecos son
 	# por índice y no se pueden quitar. Ver [SettlementSim._sacar_del_mapa].
 	var punto := donde_va + (Vector3(0.0, -1000.0, 0.0) if escondida else Vector3.ZERO)
+	# La especialidad que está ejerciendo AHORA, no la que tiene fijada: es la que decide
+	# el gesto y el apero que se le ven (GRAFICOS §5.1).
 	crowd.update(sim._bodies[index], punto, sim._headings[index], person.state,
-		person.age_group)
+		person.age_group, person.current_speciality,
+		index < _vestidos.size() and _vestidos[index] == 1)
 
 
 func _poner_las_marcas(en_viaje: Array[Dictionary]) -> void:

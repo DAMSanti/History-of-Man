@@ -599,7 +599,10 @@ func test_un_avistado_se_dibuja_pero_no_se_pincha_ni_sale_en_listas() -> void:
 	assert_eq(repartidos["avistados"], [avistado] as Array[Site], "el avistado se dibuja aparte")
 
 
-# ------------------------------------------- el viento de las nubes (2026-09-16) --
+# ------------------------------------------------------- el viento (2026-09-16) --
+#
+# Movía las nubes de la niebla del mapa regional, retirada el 2026-09-17. Lo que queda
+# mueve la lluvia y la hierba (`WorldEnvironmentSetup`).
 
 func test_el_viento_corre_con_el_reloj_de_la_partida_y_no_con_el_de_pared() -> void:
 	var a_las_siete := Viento.recorrido(3, 7.0, 120.0)
@@ -613,29 +616,3 @@ func test_el_viento_corre_con_el_reloj_de_la_partida_y_no_con_el_de_pared() -> v
 	assert_near(Viento.recorrido(3, 12.0, 120.0) - a_las_siete,
 		(Viento.recorrido(3, 8.0, 120.0) - a_las_siete) * 5.0, 0.001,
 		"cinco horas corren cinco veces lo que una")
-
-
-func test_sin_reloj_de_partida_las_nubes_del_regional_no_se_mueven() -> void:
-	var antes := Campamentos.reloj
-	Campamentos.reloj = null
-	var quieto := Viento.recorrido_del_reloj()
-	Campamentos.reloj = antes
-	assert_eq(quieto, 0.0, "sin reloj, el viento no corre")
-
-
-func test_la_losa_de_nubes_va_por_encima_del_relieve_y_no_pegada() -> void:
-	# La capa está entre 800 y 3 200 m sobre el mar de la época, pasados a unidades del
-	# mundo regional: 100 m por unidad y 2,5 de exageración.
-	var terreno := TerrainGenerator.new()
-	terreno.terrain_size = Vector2i(2000, 1430)
-	var nubes := NubesDeLaNiebla.new()
-	nubes.montar(terreno, null, 100.0, 2.5)
-	var caja := nubes.mesh as BoxMesh
-	var base := nubes.position.y - caja.size.y * 0.5
-	var techo := nubes.position.y + caja.size.y * 0.5
-	nubes.free()
-	terreno.free()
-	assert_near(base, NubesDeLaNiebla.BASE_M / 100.0 * 2.5, 0.01, "la base, a 800 m")
-	assert_near(techo, NubesDeLaNiebla.TECHO_M / 100.0 * 2.5, 0.01, "y el techo, a 3 200 m")
-	assert_gt(caja.size.x, 1999.0, "y cubre la comarca entera")
-

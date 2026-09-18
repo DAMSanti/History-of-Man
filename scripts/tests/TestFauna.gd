@@ -248,3 +248,26 @@ func test_las_charcas_salen_siempre_las_mismas() -> void:
 		"sin gastar ninguna tirada del azar de las manadas, que va detrás")
 	_suelta(a)
 	_suelta(b)
+
+
+## EL BISONTE, que es el animal de Altamira y faltaba en el monte: se podía pintar en la
+## pared un bicho que no existía en la comarca. Pedido por el usuario el 2026-09-18.
+func test_el_bisonte_es_pieza_mayor_y_pide_azagaya() -> void:
+	assert_true(Fauna.SPECIES.has("bisonte"), "el bisonte está entre las piezas")
+	var ficha: Dictionary = Fauna.SPECIES["bisonte"]
+	assert_eq(int(ficha["porte"]), int(Fauna.Porte.MAYOR), "y es pieza mayor")
+	# La regla que pediste: «no vamos a cazar un bisonte con las manos vacías».
+	assert_true((ficha["arma"] as Array).has(Tool.Kind.AZAGAYA),
+		"y no se le entra sin azagaya")
+	assert_gt(float(ficha["raciones"]), 100.0, "y da de comer como lo que pesa")
+
+
+func test_el_bisonte_se_topa_en_el_monte_y_se_dibuja() -> void:
+	var estaciones := 0
+	for estacion: int in Fauna.BY_SEASON:
+		if (Fauna.BY_SEASON[estacion] as Array).has("bisonte"):
+			estaciones += 1
+	assert_gt(float(estaciones), 0.5, "se puede topar en alguna estación")
+	# Y tiene malla, o saldría una manada de nada.
+	assert_true(WildlifeHerds.SPECIES_VISUAL.has("bisonte"), "y la vista sabe dibujarlo")
+	assert_true(Poblaciones.CRIA_AL_ANO.has("bisonte"), "y se repone como cualquier otra")

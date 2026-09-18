@@ -24,11 +24,18 @@ const PRIMERO := 90001
 
 ## Cota sobre el mar de la época a la que se abre el abrigo. La cota del sitio sale del
 ## relieve de la plataforma; ésta es sólo para decirlo en la ficha.
+##
+## **Movidos el 2026-09-17**, con permiso del usuario, a lo que propone `CostaCaptura`
+## sobre la plataforma nueva: relieve real prestado, rías y los ríos rehechos sobre él
+## (GRAFICOS §3). Con los sitios de antes, el Nansa y el Saja-Besaya se quedaban sin río
+## en su valle, porque sus cauces de la época ahora desembocan en otro sitio. *(Antes:
+## Nansa −4,4669/43,4845, Saja-Besaya −4,0519/43,5493, Pas −4,0821/43,5722, Asón
+## −3,3649/43,5682.)*
 const LOS_SITIOS := [
-	{"rio": "Nansa", "lon": -4.4669, "lat": 43.4845, "cota": -58.0, "del_mar_km": 0.22},
-	{"rio": "Saja-Besaya", "lon": -4.0519, "lat": 43.5493, "cota": -52.0, "del_mar_km": 0.25},
-	{"rio": "Pas", "lon": -4.0821, "lat": 43.5722, "cota": -55.0, "del_mar_km": 0.22},
-	{"rio": "Asón", "lon": -3.3649, "lat": 43.5682, "cota": -77.0, "del_mar_km": 0.16},
+	{"rio": "Nansa", "lon": -4.2566, "lat": 43.5015, "cota": -63.0, "del_mar_km": 0.11},
+	{"rio": "Saja-Besaya", "lon": -4.2085, "lat": 43.4915, "cota": -61.0, "del_mar_km": 0.87},
+	{"rio": "Pas", "lon": -4.0753, "lat": 43.5314, "cota": -52.0, "del_mar_km": 0.32},
+	{"rio": "Asón", "lon": -3.3594, "lat": 43.5374, "cota": -85.0, "del_mar_km": 0.22},
 ]
 
 ## Lo que se dice de ellos en la ficha, y por qué son hipótesis.

@@ -92,6 +92,56 @@ func test_lo_que_se_ve_es_la_figura_o_la_marca() -> void:
 		"y lo que se ve es la marca, que va en lo simulado")
 
 
+# --- lo que el usuario vio jugando (depurar del 2026-09-17) ----------------------
+
+func test_en_un_viaje_corto_la_figura_no_se_teletransporta() -> void:
+	# «Veo a los recolectores teletransportarse básicamente entre recolección y
+	# recolección.» Sólo se abrevian los viajes de más de 150 m; por debajo, la figura se
+	# pintaba en `person.position` tal cual, y a ×1 la simulación mueve a alguien de
+	# quince a sesenta metros por cuadro. O sea: saltos.
+	var sim := _sim()
+	var figuras := _figuras(sim)
+	var quien: Inhabitant = sim.people[0]
+	figuras._process(1.0 / 60.0)
+	var salida := figuras.donde(0, quien.position)
+	# Un paso de simulación que la lleva 40 m: viaje corto, sin ruta que abreviar.
+	quien.position += Vector3(40.0, 0.0, 0.0)
+	figuras._process(1.0 / 60.0)
+	var anduvo := _lejos(figuras.donde(0, quien.position), salida)
+	assert_eq(figuras.fase_de(0), Figuras.Fase.PEGADA, "no hay viaje largo que abreviar")
+	assert_true(anduvo < 30.0,
+		"la figura no salta los 40 m de golpe: anduvo %.1f m, y no se descuelga más de 12"
+		% anduvo)
+	# Y no se queda atrás para siempre: en metro y medio de reloj ya está encima.
+	for cuadro in range(100):
+		figuras._process(1.0 / 60.0)
+	assert_near(_lejos(figuras.donde(0, quien.position), quien.position), 0.0, 0.5,
+		"y acaba donde está la persona")
+
+
+func test_quien_esta_parado_se_ve_entero_aunque_le_quede_una_ruta_vieja() -> void:
+	# «En ocasiones se quedan representados por la marca y no por el modelo cuando no
+	# deberían, por ejemplo por la noche cenando.» La marca sólo se pinta en mitad de un
+	# viaje abreviado; si alguien se queda quieto con una ruta larga sin recorrer —el
+	# reparto cambia, cae la noche—, la figura se quedaba escondida para siempre.
+	var sim := _sim()
+	var figuras := _figuras(sim)
+	var quien: Inhabitant = sim.people[0]
+	quien.route = PackedVector3Array([quien.position, quien.position + Vector3(2000, 0, 0)])
+	for cuadro in range(100):
+		figuras._process(1.0 / 60.0)
+		quien.position += Vector3(5.0, 0.0, 0.0)
+	assert_eq(figuras.fase_de(0), Figuras.Fase.MEDIO, "va por el medio de su viaje")
+	# Y ahora se para a cenar, sin tocar la ruta. Pasa media hora de juego.
+	for cuadro in range(120):
+		sim.hour += 0.5 / 120.0
+		figuras._process(1.0 / 60.0)
+	assert_eq(figuras.fase_de(0), Figuras.Fase.PEGADA,
+		"parada, se la ve entera aunque le quede ruta")
+	assert_near(_lejos(figuras.donde_se_ve(0, quien), quien.position), 0.0, 0.5,
+		"y se la ve donde está")
+
+
 # --- llevar la cámara (tarea 2) --------------------------------------------------
 
 func _camara() -> OrbitalCamera:

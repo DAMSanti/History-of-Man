@@ -133,6 +133,21 @@ const SPECIES := {
 			Materia.Kind.TENDON: 5.0, Materia.Kind.GRASA: 8.0},
 		"arma": [Tool.Kind.AZAGAYA],
 	},
+	"bisonte": {
+		# EL ANIMAL DE ALTAMIRA. `Bison priscus`, el bisonte estepario, es la pieza mayor
+		# del Magdaleniense cantábrico: está en el techo de Altamira, en Castillo y en
+		# Covalanas, y por eso lo pidió el usuario (2026-09-18).
+		#
+		# **Las cifras salen del uro, no de la nada.** Los dos rondan la tonelada -un bisonte
+		# estepario adulto 700-900 kg, un uro 700-1000-, así que raciones y despiece son los
+		# del uro. Lo que cambia es lo que los distingue de verdad: el bisonte va en manada
+		# grande y se acorrala, el uro va suelto y embiste, así que el riesgo baja un punto y
+		# medio -de 0,22 a 0,19-: sigue siendo la segunda pieza más peligrosa del monte.
+		"name": "Bisonte", "porte": Porte.MAYOR, "raciones": 140.0, "riesgo": 0.19,
+		"despiece": {Materia.Kind.PIEL: 3.6, Materia.Kind.HUESO: 9.0,
+			Materia.Kind.TENDON: 5.0, Materia.Kind.GRASA: 8.0},
+		"arma": [Tool.Kind.AZAGAYA],
+	},
 	"lobo": {
 		# No se caza para comer: se caza por la piel y porque compite. La
 		# carne de lobo es mala y se aprovecha poco.
@@ -160,9 +175,9 @@ const SPECIES := {
 const BY_SEASON := {
 	Subsistence.Season.PRIMAVERA: ["ciervo", "jabali", "caballo",
 		"corzo", "liebre", "urogallo", "conejo", "anade"],
-	Subsistence.Season.VERANO: ["uro", "caballo", "jabali",
+	Subsistence.Season.VERANO: ["uro", "bisonte", "caballo", "jabali",
 		"corzo", "rebeco", "liebre", "urogallo", "conejo", "perdiz"],
-	Subsistence.Season.OTONO: ["ciervo", "jabali", "caballo", "uro",
+	Subsistence.Season.OTONO: ["ciervo", "bisonte", "jabali", "caballo", "uro",
 		"corzo", "urogallo", "perdiz"],
 	Subsistence.Season.INVIERNO: ["jabali", "ciervo",
 		"rebeco", "lobo", "liebre", "anade"],

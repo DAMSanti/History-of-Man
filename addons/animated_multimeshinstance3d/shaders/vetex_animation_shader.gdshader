@@ -83,22 +83,32 @@ void vertex() {
 
 #if CURRENT_RENDERER == RENDERER_FORWARD_PLUS
 	int custom_r = floatBitsToInt(INSTANCE_CUSTOM.r);
-	int main_starting_frame = custom_r & 0xFF;
-	int main_frame_length = (custom_r >> 16) & 0xFF;
+	// PARCHE DEL PROYECTO (2026-09-18): 16 bits, no 8. `MultimeshAnimationData` empaqueta
+	// estos dos campos con `encode_u16`, y aqui se leian con `& 0xFF`, asi que **un clip que
+	// empezara mas alla del fotograma 255 se dibujaba en `inicio % 256`, en silencio**. El
+	// horneado de la banda tiene 287 fotogramas y su ultimo clip empieza en el 244: pasaba
+	// por los pelos, y cualquier clip nuevo lo rompia. Comprobado con
+	// `scripts/tests/TechoDeClips.gd`, que es lo unico que lo ve: --headless no compila un
+	// .gdshader. Ver GRAFICOS §5.1.
+	int main_starting_frame = custom_r & 0xFFFF;
+	int main_frame_length = (custom_r >> 16) & 0xFFFF;
 
 	float y = fma(pixel, 0.5, float(VERTEX_ID) / total_vertex_count);
 #endif
 
 #if (USE_BLENDING and CURRENT_RENDERER == RENDERER_FORWARD_PLUS)
 	int custom_g = floatBitsToInt(INSTANCE_CUSTOM.g);
-	int blend_starting_frame = custom_g & 0xFF;
-	int blend_frame_length = (custom_g >> 16) & 0xFF;
+	// Mismo parche: el clip del que se viene tiene el mismo techo que al que se va.
+	int blend_starting_frame = custom_g & 0xFFFF;
+	int blend_frame_length = (custom_g >> 16) & 0xFFFF;
 
 	float animation_blend_timestamp = INSTANCE_CUSTOM.b;
 
 	int custom_a = floatBitsToInt(INSTANCE_CUSTOM.a);
-	float animation_blend_duration = float(custom_a & 0xFF) * 0.0625;
-	int animation_blend_out_time_bits = (custom_a >> 16) & 0xFF;
+	// Y lo mismo aqui, por coherencia: con 8 bits una mezcla de mas de 15,9 s se leia como
+	// otra cosa, y una salida de 16 s se leia como «sin salida».
+	float animation_blend_duration = float(custom_a & 0xFFFF) * 0.0625;
+	int animation_blend_out_time_bits = (custom_a >> 16) & 0xFFFF;
 	float animation_blend_out_time = float(animation_blend_out_time_bits) * 0.0625;
 
 	float blend_amount = smoothstep(

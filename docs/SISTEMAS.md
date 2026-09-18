@@ -257,6 +257,12 @@ campo nuevo en `Inhabitant`; el `enum Job` crece, el resto del sistema no.
 
 ## 4. La exploración en tres capas
 
+> **Una excepción, fuera de la partida** (spec del 2026-09-17, [INTERFAZ.md](INTERFAZ.md)
+> §14): el modo **Debug** del menú principal, sólo en la versión de desarrollo, enseña el
+> mapa regional **sin niebla** y deja **fundar en cualquier yacimiento del Paleolítico**,
+> con una banda nueva cada vez y sin guardar nada. **Las reglas de abajo no cambian**:
+> la niebla, el descubrimiento y fundar una sola vez siguen valiendo en la partida.
+
 El código de hoy resuelve una sola capa, y **la capa que falta es
 exactamente la que pide el objetivo de esta tanda de trabajo** ("nos falta
 todavía introducir la exploración fuera del mapa").

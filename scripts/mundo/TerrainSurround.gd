@@ -419,6 +419,65 @@ func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 ##
 ## Además tapa por completo cualquier resquicio entre el recuadro y las
 ## casillas de fuera, que es de donde venían las rendijas.
+## EL MAR DE LAS OCHO CASILLAS, en forma de marco alrededor del recuadro jugable.
+##
+## **El fallo que cierra** (2026-09-17, jugando): «los ríos/rías en los mapas costeros se
+## cortan cuando llegan a las 8 casillas que rodean la casilla principal». No era el
+## relieve ni el cauce —el contorno trae su agua de OSM y la pinta igual que el recuadro—:
+## era **el mar**. La lámina de agua de [TerrainGenerator._create_water] mide exactamente
+## `terrain_size`, o sea el recuadro jugable, así que en un valle de costa la ría llegaba a
+## la raya y se acababa el agua de golpe. Tierra adentro no se notaba, y por eso la queja
+## hablaba de mapas costeros.
+##
+## Va como MARCO y no como un plano grande por debajo: dos láminas a la misma cota se
+## pelean por el mismo píxel, y el mar del valle es el que lleva las olas finas.
+func montar_el_mar(terrain: TerrainGenerator) -> void:
+	var agua := terrain.get_node_or_null("Water") as MeshInstance3D
+	if agua == null:
+		return
+	var ancho := float(terrain.terrain_size.x)
+	var alto := float(terrain.terrain_size.y)
+	var malla := ArrayMesh.new()
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var normales := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	# Las cuatro piezas del marco: arriba, abajo, izquierda y derecha del recuadro.
+	for pieza: Rect2 in [
+			Rect2(-ancho, -alto, ancho * 3.0, alto),
+			Rect2(-ancho, alto, ancho * 3.0, alto),
+			Rect2(-ancho, 0.0, ancho, alto),
+			Rect2(ancho, 0.0, ancho, alto)]:
+		var base := vertices.size()
+		for esquina: Vector2 in [pieza.position, pieza.position + Vector2(pieza.size.x, 0.0),
+				pieza.position + pieza.size, pieza.position + Vector2(0.0, pieza.size.y)]:
+			vertices.append(Vector3(esquina.x, 0.0, esquina.y))
+			normales.append(Vector3.UP)
+			uvs.append(Vector2(esquina.x / maxf(ancho, 0.001),
+				esquina.y / maxf(alto, 0.001)))
+		indices.append_array([base, base + 2, base + 1, base, base + 3, base + 2])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normales
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	malla.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	var fuera := get_node_or_null("MarDeFuera") as MeshInstance3D
+	if fuera == null:
+		fuera = MeshInstance3D.new()
+		fuera.name = "MarDeFuera"
+		add_child(fuera)
+	fuera.mesh = malla
+	fuera.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# EL MISMO MATERIAL que el mar del valle: si fuera otro se vería el cambio justo en la
+	# raya, que es lo que se viene a quitar. Sin olas propias: el marco tiene cuatro
+	# vértices por pieza y la ola vive en el vértice, así que de lejos es lámina lisa.
+	fuera.material_override = agua.material_override
+	fuera.position = agua.position
+
+
 func build_border(terrain: TerrainGenerator) -> void:
 	var size_x := float(terrain.terrain_size.x)
 	var size_z := float(terrain.terrain_size.y)

@@ -59,6 +59,7 @@ func _load_arrays() -> void:
 	_material.set_shader_parameter("terrain_normal", _arrays.normal())
 	_material.set_shader_parameter("terrain_orm", _arrays.orm())
 	_material.set_shader_parameter("layer_tile_m", TerrainLayers.tiles_in_order())
+	_material.set_shader_parameter("layer_relieve", TerrainLayers.reliefs_in_order())
 	_material.set_shader_parameter("layer_tint", TerrainLayers.tints_in_order())
 	_material.set_shader_parameter("layer_saturation",
 		TerrainLayers.saturations_in_order())
@@ -105,8 +106,17 @@ func _configure_shader_params() -> void:
 	# Ese manto ya no es un degradado de color: entre el pasto y la pared hay
 	# una capa propia, el CANCHAL, que sale de la mitad baja de este mismo
 	# margen. Ver el reparto de pesos en el shader.
-	_material.set_shader_parameter("slope_threshold", 0.15)
-	_material.set_shader_parameter("slope_blend", 0.20)
+	# DÓNDE EMPIEZA EL DERRUBIO Y DÓNDE LA PARED, en `1 - |normal.y|`. Los cuatro números y
+	# su porqué están en el shader; aquí se ponen los del juego. Antes eran un umbral de
+	# 0,15 y un margen de 0,20, que dejaban medio canchal en una ladera de treinta grados.
+	_material.set_shader_parameter("canchal_desde", 0.18)
+	_material.set_shader_parameter("canchal_hasta", 0.43)
+	# La caliza desde 40° y hasta 60°, con el canchal donde estaba (35-55°): así la peña se
+	# come parte del derrubio y el resto del valle no cambia. Decisión del usuario del
+	# 2026-09-18 sobre las cifras medidas: con lo de antes, el valle del sitio 56 daba
+	# **2,4 % de canchal contra 0,2 % de caliza** —doce veces más derrubio que peña—.
+	_material.set_shader_parameter("pared_desde", 0.23)
+	_material.set_shader_parameter("pared_hasta", 0.50)
 
 	# La rugosidad ya no es una constante por material: la trae el canal verde
 	# del ORM. Aquí sólo queda el margen para retocarla en bloque.
@@ -156,6 +166,45 @@ func set_height_bands(sand_max: float, grass_max: float, rock_min: float, rock_m
 	_material.set_shader_parameter("snow_min_height", snow_min)
 
 
+## LA COMARCA NO TIENE CANCHALES (decisión del usuario, 2026-09-18): «no puede haber
+## canchales en la vista regional».
+##
+## El mapa regional usa el mismo shader que el valle, así que heredaba sus dos escalones de
+## roca —derrubio y pared—. Pero **el derrubio es un detalle de ladera**: a 111 m por
+## muestra no se distingue un canchal de una peña, y lo que se veía eran parches grises de
+## canto suelto donde debería haber caliza.
+##
+## Lo que hace: **iguala el escalón del canchal al de la pared**, con lo que el peso del
+## canchal —que es `scree − cliff`— sale cero en todas partes, y baja el umbral de la roca
+## al que tenía el derrubio. La pendiente regional es más suave que la del valle —111 m por
+## muestra promedian una ladera entera— así que con el umbral del valle no asomaría peña
+## casi en ningún sitio.
+func pintar_como_comarca() -> void:
+	if _material == null:
+		return
+	_material.set_shader_parameter("canchal_desde", 0.18)
+	_material.set_shader_parameter("canchal_hasta", 0.43)
+	_material.set_shader_parameter("pared_desde", 0.18)
+	_material.set_shader_parameter("pared_hasta", 0.43)
+
+
+## LA HUMEDAD DEL VALLE, que es lo que decide dónde hay bosque.
+##
+## Existe porque el suelo de bosque y los árboles **no se hablaban**: el shader pintaba
+## bosque según la curvatura del terreno y un ruido macro suyos, y `Forest` siembra según
+## este mapa de humedad, la pendiente y la cota. Eran dos criterios distintos, así que bajo
+## un pinar el suelo podía estar pintado de pradera —y la hojarasca de otoño, que cuelga de
+## esa capa, no aparecía—. Decisión del usuario del 2026-09-18: **manda la humedad, la
+## misma que los árboles**. GRAFICOS §7.7.
+func set_humedad(texture: Texture2D, world_size: Vector2, origen: Vector2) -> void:
+	if _material == null:
+		return
+	_material.set_shader_parameter("use_humedad", texture != null)
+	_material.set_shader_parameter("humedad_tex", texture)
+	_material.set_shader_parameter("humedad_extent", world_size)
+	_material.set_shader_parameter("humedad_origen", origen)
+
+
 ## Activa el apagado del terreno fuera de la region jugable
 func set_region_mask_enabled(enabled: bool) -> void:
 	if _material:
@@ -169,18 +218,6 @@ func set_region_mask_texture(texture: Texture2D, world_size: Vector2) -> void:
 		return
 	_material.set_shader_parameter("region_mask_tex", texture)
 	_material.set_shader_parameter("region_world_size", world_size)
-
-
-## La niebla del mapa regional: la textura de lo visto, el tamaño del mundo que
-## cubre y la cota del mar para el trazo de costa. Sin textura, apagada. Ver
-## SISTEMAS §4.
-func set_fog(texture: Texture2D, world_size: Vector2, sea_height: float) -> void:
-	if _material == null:
-		return
-	_material.set_shader_parameter("use_fog", texture != null)
-	_material.set_shader_parameter("fog_tex", texture)
-	_material.set_shader_parameter("fog_world_size", world_size)
-	_material.set_shader_parameter("fog_sea_height", sea_height)
 
 
 ## Actualiza la altura máxima del mundo en el shader

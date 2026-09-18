@@ -25,6 +25,13 @@ static var sea_level_m: float = 0.0
 ## Epoca en curso: decide que elementos existen ya en el mapa local
 static var era: Site.Era = Site.Era.PALEOLITICO
 
+
+## LA ERA QUE SE ESTÁ JUGANDO, para quien dibuja. Fuera de una expedición no hay era
+## elegida y vale la primera. Estaba escrito a mano en dos sitios -la piel de la interfaz y
+## la ropa de la banda- y es la misma pregunta: SPECS §7, invariante 3.
+static func la_de_ahora() -> Site.Era:
+	return era if is_active() else Site.Era.PALEOLITICO
+
 const REGION_SCENE := "res://scenes/region_map.tscn"
 const LOCAL_SCENE := "res://scenes/demo_main.tscn"
 

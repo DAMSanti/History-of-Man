@@ -2,7 +2,7 @@ extends SceneTree
 ## Hornea a textura de vértice los ocho bichos base de la fauna.
 ##
 ## Ver `VertexAnimBaker.gd` para el cómo -es el mismo horneado que
-## `BandaAtlas.gd` usa para la banda, sacado a un sitio común porque aquí hay
+## usaba la banda hasta el 2026-09-18, sacado a un sitio común porque aquí hay
 ## ocho mallas en vez de una-.
 ##
 ## No hay una malla por cada una de las doce especies de [Fauna.SPECIES], pero

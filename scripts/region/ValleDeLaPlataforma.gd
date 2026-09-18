@@ -16,14 +16,22 @@ extends RefCounted
 ## El mar no se pinta aquí: sale solo, porque el valle guarda cotas por debajo del mar de
 ## la época y el terreno lo dibuja (ver `DemoMain`, `sea_level`).
 
-## Sube si cambia la receta: va en el sello del recuadro (`PreparaValle.VERSION`).
-const VERSION := 1
+## Sube si cambia la receta. Va en `source` del recuadro guardado, y [PreparaValle] rehace
+## los valles inventados que no la traigan: subirla NO obliga a redescargar los valles
+## reales, que no salen de aquí.
+##
+## **2** (2026-09-17): el detalle fino es relieve real prestado y no ruido.
+const VERSION := 2
 
-## Cuánto detalle fino se le pone al relieve, en metros, y cada cuánto. La batimetría a
-## 111 m no tiene nada más fino que una loma; esto son las vaguadas y los lomos que se
-## ven al andar. Decisión mirando el valle del Nansa, no una medida.
-const DETALLE_M := 7.0
-const DETALLE_ONDA_M := 140.0
+## Cuánto detalle fino se le pone al relieve. La batimetría a 111 m no tiene nada más fino
+## que una loma; esto son las vaguadas y los lomos que se ven al andar.
+##
+## **Es relieve real prestado, no ruido** (depurar del 2026-09-17, GRAFICOS §3): trozos de
+## tierra del IGN a 5 m cosidos ([RelievePrestado.de_la_tierra]). Hasta entonces era un
+## FastNoiseLite de 7 m de amplitud y 140 m de onda, elegido mirando el valle del Nansa;
+## el usuario pidió que la orografía no se inventara, y el préstamo viene de ese mismo
+## valle. Aquí sólo queda cuánto se escala lo prestado: 1 es tal cual.
+const DETALLE := 1.0
 
 ## El cantil del abrigo: cuánto levanta y en cuántos metros.
 ##
@@ -58,6 +66,12 @@ const RAMPA_PASADA_LA_ORILLA_M := 140.0
 
 ## El recuadro jugable del sitio, inventado. `lado_m` es su lado y `metros` lo que mide
 ## una muestra.
+## Con qué receta se levantó un valle inventado: va en su `source` y [PreparaValle] lo
+## mira para rehacer los que sean de otra.
+static func firma() -> String:
+	return "ValleDeLaPlataforma v%d" % VERSION
+
+
 static func generar(sitio: Site, rios: RiosDeLaRegion, regional: HeightmapData,
 		mar: float, lado_m: float, metros: float) -> HeightmapData:
 	if regional == null:
@@ -76,14 +90,12 @@ static func generar(sitio: Site, rios: RiosDeLaRegion, regional: HeightmapData,
 	datos.lon_west = sitio.lon - medio_lon
 	datos.lon_east = sitio.lon + medio_lon
 	datos.geographic_rows = true
-	datos.source = "ValleDeLaPlataforma v%d" % VERSION
+	datos.source = firma()
 
-	var detalle := FastNoiseLite.new()
-	detalle.seed = sitio.id
-	detalle.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	detalle.fractal_type = FastNoiseLite.FRACTAL_FBM
-	detalle.fractal_octaves = 4
-	detalle.frequency = metros / DETALLE_ONDA_M
+	# EL DETALLE FINO ES TIERRA REAL PRESTADA. Cada sitio lo lee de un rincón distinto de
+	# la sábana —su id lo desplaza— para que dos abrigos no salgan calcados.
+	var detalle := RelievePrestado.de_la_tierra()
+	var corrimiento := Vector2(float((sitio.id * 977) % 2048), float((sitio.id * 1597) % 2048))
 
 	# Hacia dónde cae el terreno en el abrigo: el cantil se levanta al revés, tierra
 	# adentro, para que el abrigo mire al mar.
@@ -99,7 +111,8 @@ static func generar(sitio: Site, rios: RiosDeLaRegion, regional: HeightmapData,
 		for x in range(muestras):
 			var lon := lerpf(datos.lon_west, datos.lon_east, float(x) / float(muestras - 1))
 			var cota := plataforma.cota_en(lon, lat)
-			cota += detalle.get_noise_2d(float(x), float(z)) * DETALLE_M
+			cota += detalle.detalle(corrimiento.x + float(x) * metros,
+				corrimiento.y + float(z) * metros) * DETALLE
 			cota += _cantil(sitio, hacia_el_mar, lon, lat)
 			cota = _rampa(sitio, hacia_el_mar, hasta_el_agua, mar, lon, lat, cota)
 			cota = _rasa(cota, mar)

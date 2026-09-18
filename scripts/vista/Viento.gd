@@ -26,16 +26,3 @@ const METROS_POR_SEGUNDO := 0.012
 static func recorrido(dia: int, hora: float, segundos_por_dia: float) -> float:
 	var segundos := (float(dia) * 24.0 + hora) / 24.0 * segundos_por_dia
 	return fmod(segundos * METROS_POR_SEGUNDO * A_RUIDO, 1.0e6)
-
-
-## El recorrido de ahora mismo según el reloj de la partida, para lo que no tiene
-## simulación de escena —el mapa regional—. **Sin reloj, cero**: nada se mueve.
-static func recorrido_del_reloj() -> float:
-	var reloj := Campamentos.reloj
-	if reloj == null:
-		return 0.0
-	# El de la simulación por defecto; si hay campamento, el suyo.
-	var segundos_por_dia := 120.0
-	if not reloj.campamentos.is_empty():
-		segundos_por_dia = reloj.campamentos[0].seconds_per_day
-	return recorrido(reloj.dia, reloj.hora, segundos_por_dia)

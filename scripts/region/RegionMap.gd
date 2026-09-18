@@ -87,24 +87,6 @@ var _era_index: int = -1
 ## Fronteras ya trazadas, por indice de epoca: trazar cuesta segundos
 var _border_cache: Dictionary = {}
 
-## Las nubes con volumen sobre lo no descubierto. Ver [NubesDeLaNiebla].
-var _nubes: NubesDeLaNiebla = null
-
-## Si hay nubes sobre lo no descubierto o sólo la calima lisa del relieve. **Es para
-## medir**: el criterio de la spec compara las dos en la misma corrida (GRAFICOS §3).
-var con_nubes := true
-
-## La niebla que se pinta: la textura, la versión de [NieblaRegional] con la que se
-## hizo, y el material que comparten el mar y la frontera. Ver [_poner_la_niebla].
-var _niebla_tex: ImageTexture = null
-
-## Mandar una expedición desde aquí: desde qué campamento, la ficha y la flecha. Ver
-## [FichaDeRumbo] y SISTEMAS §4.
-var _campamento_del_rumbo: Campamento = null
-var _ficha_de_rumbo: FichaDeRumbo = null
-var _flecha: FlechaDeRumbo = null
-var _niebla_version := -1
-var _bajo_la_niebla: Shader = preload("res://shaders/bajo_la_niebla.gdshader")
 
 ## Color por tipo de emplazamiento
 const KIND_COLORS := {
@@ -150,6 +132,13 @@ const ETAPAS_CON_CACHE := [
 	["Marcando los lugares", 640.0],
 ]
 
+## Mandar una expedición desde aquí: desde qué campamento, la ficha y la flecha. Ver
+## [FichaDeRumbo] y SISTEMAS §4.
+var _campamento_del_rumbo: Campamento = null
+var _ficha_de_rumbo: FichaDeRumbo = null
+var _flecha: FlechaDeRumbo = null
+
+
 ## Si el mapa ya está en pie. Ver [DemoMain.montado].
 var montado := false
 signal se_monto
@@ -170,7 +159,7 @@ func _ready() -> void:
 	# del frío, y a media barra había pasado el 75 % de la carga.
 	if cargando:
 		var con_cache := ResourceLoader.exists(MallaDelTerreno.ruta_de_la_cache(heightmap_path,
-			sufijo_de_la_cache(GameState.sea_level_m if GameState.home != null else 0.0), resolution))
+			sufijo_de_la_cache(mar_del_mapa()), resolution))
 		Carga.etapas(ETAPAS_CON_CACHE if con_cache else ETAPAS)
 		Carga.etapa(0)
 	await _setup_terrain()
@@ -202,6 +191,9 @@ func _ready() -> void:
 	# La mascara buena es la de la epoca, que si la incluye. Se aplicaba, pero
 	# ANTES de generar, y la generacion la pisaba.
 	terrain.refresh_material_bands(_sea_level_m)
+	# SIN CANCHALES: esto es una comarca vista desde arriba, y el derrubio es un detalle de
+	# ladera que a 111 m por muestra sólo ensucia. Decisión del usuario del 2026-09-18.
+	terrain.pintar_como_comarca()
 	print("Region generada en %.1f s" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	var t_eras := Time.get_ticks_msec()
 	_eras = await Carga.cargar(eras_path) as RegionEras
@@ -220,7 +212,12 @@ func _ready() -> void:
 
 	if _site_set and not GameState.started:
 		GameState.begin(_site_set)
-	_poner_la_niebla()
+	# EN DEBUG, TODOS LOS YACIMIENTOS A LA VISTA (INTERFAZ §14). Cada vez que se monta el
+	# mapa: jugando en un valle se puede haber descubierto —o dejado de descubrir— algo.
+	if ModoDebug.activo:
+		ModoDebug.preparar_el_mapa(_site_set)
+		ModoDebug.rotulo(self)
+		_refresh_sites()
 
 	# El menú de la partida, el que abre ESC. Aquí no hay simulación que parar:
 	# lo que se guarda es lo que ya está en la carpeta de trabajo.
@@ -230,13 +227,18 @@ func _ready() -> void:
 	add_child(_menu_del_juego)
 	if GameState.home:
 		_era = GameState.era
-		# La cota del mar la fija la epoca, no el teclado
-		await _apply_era(GameState.sea_level_m, Carga.ceder)
+	# UN SOLO SITIO QUE CONTESTA CON QUÉ MAR SE MONTA ESTE MAPA, y es el mismo con el que se
+	# montó el relieve y con el que se trazan los ríos. Había dos llamadas aquí -una con
+	# `GameState.sea_level_m` si ya había campamento y otra con `mar_del_mapa()` si no-, y
+	# `mar_del_mapa` devolvía el mar de HOY mientras no hubiera campamento: una partida nueva
+	# dibujaba la Cantabria actual, sin plataforma emergida y por tanto **sin sus ríos**, y en
+	# cuanto fundabas y volvías aparecían. Es el invariante 3 de SPECS §7 roto en la línea de
+	# al lado. Depurado el 2026-09-18.
+	await _apply_era(mar_del_mapa(), Carga.ceder)
+	if GameState.home:
 		_select_site(GameState.home)
 		camera.set_target(terrain.geo_to_world(GameState.home.lon, GameState.home.lat))
 		camera.set_distance(float(maxi(terrain.terrain_size.x, terrain.terrain_size.y)) * 0.12)
-	else:
-		await _apply_era(0.0, Carga.ceder)
 
 	_update_info()
 	print("[TIMING] === RegionMap._ready() TOTAL: %d ms ===" % (Time.get_ticks_msec() - t_ready0))
@@ -313,6 +315,31 @@ func _resolve_season() -> void:
 	_update_info()
 
 
+## EL MAR CON EL QUE SE MONTA ESTE MAPA, y la única respuesta a esa pregunta.
+##
+## El relieve de la plataforma y los ríos que la cruzan **se congelan al montar**: son la
+## malla, y rehacerlos cuesta veinte segundos. Lo demás —el agua, las máscaras, los sitios—
+## sí cambia en caliente con la tecla E. Por eso hay que decidir bien este mar una vez.
+##
+## **Con partida, el suyo. En modo Debug, el de la época que Debug abre. Sin nada, el de
+## hoy**, que es el mapa que se ve al abrirlo a secas.
+##
+## *(Hasta el 2026-09-17 esto se preguntaba en tres sitios con `GameState.home != null`, y
+## el modo Debug —que no funda nada— se quedaba fuera: montaba el relieve con el mar de hoy
+## y luego pintaba encima la costa glacial, así que la plataforma salía pelada y **sin un
+## solo río**. El usuario: «cuando entro en debug el mapa regional no tiene ríos, pero
+## cargo un mapa, vuelvo y vuelve a tener ríos… ¿ya hay más de una verdad?». Había dos.)*
+static func mar_del_mapa() -> float:
+	# La cota de la época, siempre. `GameState.sea_level_m` vale -120 desde que arranca el
+	# juego y sólo lo cambian cargar una partida o el modo Debug, así que **una partida nueva
+	# ya sabe en qué época está antes de fundar nada**: se empieza en el Paleolítico y el mapa
+	# es el del Paleolítico desde el primer momento. Decisión del usuario del 2026-09-18.
+	#
+	# Devolvía el mar de hoy mientras no hubiera campamento, y eso hacía que el mapa saliera
+	# sin la plataforma emergida ni sus ríos hasta que fundabas.
+	return GameState.sea_level_m
+
+
 ## Cambia el territorio a la cota del mar dada: mascara del terreno, frontera
 ## dibujada y emplazamientos disponibles.
 ## `ceder` va al trazado de la frontera (ver [_trace_border]).
@@ -322,8 +349,6 @@ func _apply_era(sea_level_m: float, ceder: Callable = Callable()) -> void:
 	var water := terrain.get_node_or_null("Water") as MeshInstance3D
 	if water:
 		water.position.y = (sea_level_m / meters_per_unit) * vertical_exaggeration
-	# El trazo de costa de la niebla va con el mar de la época.
-	_poner_la_niebla(true)
 
 	# La arena va donde ROMPE EL MAR, y el mar rompia en otro sitio. Anclando
 	# la banda en la cota cero, toda la plataforma emergida -miles de
@@ -349,72 +374,6 @@ func _apply_era(sea_level_m: float, ceder: Callable = Callable()) -> void:
 		_update_detail()
 	_update_band()
 	_update_info()
-
-
-## Pinta la niebla de la partida en el relieve, el mar y la frontera. Rehace la
-## textura sólo si la niebla ha cambiado desde la última vez, salvo que se pida.
-##
-## Antes de empezar partida no hay niebla: el mapa regional se ve entero, que es
-## como se elige dónde asentarse.
-## Nubes o calima lisa, para medir una contra otra. Rehace los uniformes y enciende o apaga
-## la losa de nubes con volumen.
-func poner_las_nubes(hay: bool) -> void:
-	con_nubes = hay
-	if _nubes != null:
-		_nubes.visible = hay
-	_poner_la_niebla(true)
-
-
-## Lo que ha corrido el viento de la partida, a las nubes. Se llama cada cuadro.
-func _mover_las_nubes() -> void:
-	if _nubes != null:
-		_nubes.mover(Viento.recorrido_del_reloj())
-
-
-func _poner_la_niebla(forzar: bool = false) -> void:
-	if terrain == null or not GameState.started:
-		return
-	var niebla := GameState.la_niebla()
-	if niebla.version != _niebla_version or _niebla_tex == null:
-		var imagen := niebla.imagen()
-		if _niebla_tex == null:
-			_niebla_tex = ImageTexture.create_from_image(imagen)
-		else:
-			_niebla_tex.update(imagen)
-		_niebla_version = niebla.version
-	elif not forzar:
-		return
-	var mar := (_sea_level_m / meters_per_unit) * vertical_exaggeration
-	terrain.set_fog_texture(_niebla_tex, mar)
-	# LAS NUBES CON VOLUMEN, sobre la comarca: el relieve se queda con la calima lisa, que
-	# es la que tapa (GRAFICOS §3, petición del usuario del 2026-09-16).
-	if _nubes == null:
-		_nubes = NubesDeLaNiebla.new()
-		add_child(_nubes)
-		_nubes.montar(terrain, _niebla_tex, meters_per_unit, vertical_exaggeration)
-		_nubes.visible = con_nubes
-	else:
-		_nubes.poner_la_niebla(_niebla_tex)
-	var mundo := Vector2(float(terrain.terrain_size.x), float(terrain.terrain_size.y))
-	var water := terrain.get_node_or_null("Water") as MeshInstance3D
-	if water != null:
-		var agua := water.material_override as ShaderMaterial
-		if agua == null:
-			var antes := water.material_override as StandardMaterial3D
-			agua = ShaderMaterial.new()
-			agua.shader = _bajo_la_niebla
-			if antes != null:
-				agua.set_shader_parameter("albedo", antes.albedo_color)
-				agua.set_shader_parameter("metallic", antes.metallic)
-				agua.set_shader_parameter("roughness", antes.roughness)
-			water.material_override = agua
-		agua.set_shader_parameter("fog_tex", _niebla_tex)
-		agua.set_shader_parameter("fog_world_size", mundo)
-	for nodo: MeshInstance3D in _border_cache.values():
-		var frontera := nodo.material_override as ShaderMaterial
-		if frontera != null:
-			frontera.set_shader_parameter("fog_tex", _niebla_tex)
-			frontera.set_shader_parameter("fog_world_size", mundo)
 
 
 ## Abre la ficha de la expedición para un campamento: el que se pide —el del botón
@@ -468,13 +427,15 @@ func _cerrar_el_rumbo(mandada: bool, volver_al_valle: bool = false) -> void:
 		+ "vuelvan.") % desde.nombre()
 
 
-## La niebla cambia sola con el mapa regional abierto: los campamentos siguen y
-## las expediciones vuelven. Se mira una vez por segundo si hay algo nuevo.
+## LOS MARCADORES cambian solos con el mapa regional abierto: los campamentos siguen y
+## las expediciones vuelven, y lo que descubren saca yacimientos nuevos a la vista. Se mira
+## una vez por segundo si hay algo nuevo.
+##
+## *(Aquí iban también la calima y sus nubes, retiradas el 2026-09-17 a petición del
+## usuario: «quitamos la niebla en el mapa regional». Lo explorado se sigue guardando y
+## sigue decidiendo qué yacimientos se ven, que es conocimiento de la banda y no un velo.)*
 func _process(_delta: float) -> void:
-	# Las nubes de la niebla corren con el reloj de la partida (GRAFICOS §3).
-	_mover_las_nubes()
 	if Engine.get_process_frames() % 60 == 0:
-		_poner_la_niebla()
 		if GameState.niebla != null and GameState.niebla.version != _sitios_con_version:
 			_sitios_con_version = GameState.niebla.version
 			_refresh_sites()
@@ -501,16 +462,15 @@ func _show_border(index: int, ceder: Callable = Callable()) -> void:
 	var node := MeshInstance3D.new()
 	node.name = "Frontera_%d" % index
 	node.mesh = mesh
-	# Con el shader de la niebla, que la borra donde no se ha visto.
-	var material := ShaderMaterial.new()
-	material.shader = _bajo_la_niebla
-	material.set_shader_parameter("albedo", border_color)
-	material.set_shader_parameter("sin_luz", true)
-	material.set_shader_parameter("se_borra", true)
+	# Sin luz, que es una raya sobre el mapa y no una superficie del mundo.
+	# *(Hasta el 2026-09-17 llevaba el shader de la niebla, que además la borraba donde no
+	# se había explorado. Al retirarse la niebla del mapa regional se queda sólo el color.)*
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = border_color
 	add_child(node)
 	node.material_override = material
 	_border_cache[index] = node
-	_poner_la_niebla(true)
 
 
 ## Carga los emplazamientos ya derivados y los dibuja como marcadores.
@@ -598,6 +558,18 @@ static func sitios_que_se_dibujan(sitios: Array[Site]) -> Dictionary:
 	return {"vistos": vistos, "avistados": avistados}
 
 
+## Si un yacimiento visible lleva marcador en el mapa.
+##
+## Solo lo ATESTIGUADO: los inferidos son sitios potenciales, y llenar el mapa de
+## marcadores deducidos lo vuelve ilegible e insinua una certeza que no existe. **Salvo en
+## Debug**, que existe justo para verlos todos (INTERFAZ §14): ahi llevan marcador tambien
+## los inferidos y los hipoteticos de la costa. Sin esta excepcion, el mapa de Debug
+## dibujaba 63 de los 76 yacimientos que ofrece el Paleolitico —medido con ventana—, y la
+## prueba de la suite no lo veia porque miraba la niebla y no este filtro.
+static func se_marca(site: Site) -> bool:
+	return site.fidelity == Site.Fidelity.ATESTIGUADO or ModoDebug.activo
+
+
 ## Rellena el MultiMesh con los emplazamientos disponibles a la cota actual
 func _refresh_sites() -> void:
 	if _markers == null or _site_set == null or terrain == null:
@@ -619,7 +591,7 @@ func _refresh_sites() -> void:
 	for site: Site in visible_sites:
 		var kind := site.kind_at(_era_index)
 		_legend_counts[kind] = int(_legend_counts.get(kind, 0)) + 1
-		if site.fidelity == Site.Fidelity.ATESTIGUADO:
+		if se_marca(site):
 			marked.append(site)
 
 	mm.instance_count = marked.size() + avistados.size()
@@ -630,7 +602,12 @@ func _refresh_sites() -> void:
 		xform = xform.scaled(Vector3.ONE * 1.6)
 		xform.origin = world
 		mm.set_instance_transform(i, xform)
-		mm.set_instance_color(i, KIND_COLORS.get(site.kind_at(_era_index), Color.WHITE))
+		var color: Color = KIND_COLORS.get(site.kind_at(_era_index), Color.WHITE)
+		# En Debug, lo que no tiene su valle preparado va APAGADO y no de otro color: el
+		# color ya dice qué clase de yacimiento es. Fundar ahí descarga (INTERFAZ §14).
+		if ModoDebug.activo and not ModoDebug.esta_preparado(site):
+			color = color.darkened(0.6)
+		mm.set_instance_color(i, color)
 	# LOS AVISTADOS, MÁS APAGADOS Y AUNQUE ESTÉN BAJO LA NIEBLA (SISTEMAS §4, spec del
 	# 2026-09-15): se sabe que están ahí, no qué son. Van al MultiMesh pero NO a
 	# `_visible_sites`, que es lo que se pincha y lo que sale en las listas: no se
@@ -994,22 +971,27 @@ func _found_settlement() -> void:
 	if _selected == null or _founding:
 		return
 
-	# EL MAPA DE LA BANDA SE RETOMA; LOS DEMÁS SE VISITAN. Entrar en un mapa sin
-	# estado fundaba ahí otra banda —el usuario acabó con tres—, y el 2026-09-13
-	# pisaba la partida. Desde el 2026-09-14 la banda sólo se asienta en el primer
-	# mapa: «no debe traer a mi banda, sólo cargar y mostrarme el mapa». Ver
-	# [Guardado.sitio_de_la_banda].
-	# UN CAMPAMENTO VIVO SE MIRA: la partida lo lleva y no hay nada que leer de
-	# disco. SISTEMAS §23, punto 8.
-	var vivo := Campamentos.de_sitio(_selected.id)
-	if vivo != null:
-		_entrar_en_el_campamento(vivo)
-		return
-	var banda := Guardado.sitio_de_la_banda()
-	if banda == _selected.id:
-		_retomar_en(_selected.id)
-		return
-	Expedition.visita = banda >= 0 or not Campamentos.vivos.is_empty()
+	# EN DEBUG SE FUNDA EN CUALQUIERA, CON UNA BANDA NUEVA (INTERFAZ §14): ni campamento
+	# que retomar, ni visita. Lo demás —preparar el valle con su pantalla— es lo de siempre.
+	if ModoDebug.activo:
+		ModoDebug.nueva_fundacion(_site_set)
+	else:
+		# EL MAPA DE LA BANDA SE RETOMA; LOS DEMÁS SE VISITAN. Entrar en un mapa sin
+		# estado fundaba ahí otra banda —el usuario acabó con tres—, y el 2026-09-13
+		# pisaba la partida. Desde el 2026-09-14 la banda sólo se asienta en el primer
+		# mapa: «no debe traer a mi banda, sólo cargar y mostrarme el mapa». Ver
+		# [Guardado.sitio_de_la_banda].
+		# UN CAMPAMENTO VIVO SE MIRA: la partida lo lleva y no hay nada que leer de
+		# disco. SISTEMAS §23, punto 8.
+		var vivo := Campamentos.de_sitio(_selected.id)
+		if vivo != null:
+			_entrar_en_el_campamento(vivo)
+			return
+		var banda := Guardado.sitio_de_la_banda()
+		if banda == _selected.id:
+			_retomar_en(_selected.id)
+			return
+		Expedition.visita = banda >= 0 or not Campamentos.vivos.is_empty()
 
 	_founding = true
 
@@ -1022,6 +1004,9 @@ func _found_settlement() -> void:
 	Carga.abrir(get_tree(), "Preparando %s" % _selected.display_name())
 	Carga.etapas(PreparaValle.ETAPAS)
 	preparador.etapa_cambiada.connect(Carga.etapa)
+	# CON EL MAR DE ESTE MAPA, dicho a las claras: el valle se levanta y se rellena con la
+	# época que se está jugando, y `Expedition` todavía no la tiene puesta aquí.
+	preparador.mar_de_la_epoca = _sea_level_m
 	var local := await preparador.preparar(get_tree(), _selected, Carga.avanzar_por_tiempo)
 	if local == null:
 		_founding = false
@@ -1124,7 +1109,7 @@ func _ceder_al_generar() -> void:
 
 
 func _setup_terrain() -> void:
-	var mar := GameState.sea_level_m if GameState.home != null else 0.0
+	var mar := mar_del_mapa()
 	# EL RELIEVE YA PREPARADO, SI ESTÁ: con lomas, valles y ríos pintados. Pintar los ríos
 	# costaba 23 s en cada montaje del mapa (`PlataformaCaptura`, 2026-09-16), y es
 	# siempre lo mismo para un mar y unos ríos.
@@ -1191,8 +1176,7 @@ func _montar_el_terreno(data: HeightmapData) -> void:
 	# malla se rehacía en cada viaje. Con el mar y las lomas en el nombre, porque las
 	# dos cambian la copia. INTERFAZ §9, tarea 7.
 	terrain.origen_de_la_cache = heightmap_path
-	terrain.sufijo_de_la_cache = sufijo_de_la_cache(
-		GameState.sea_level_m if GameState.home != null else 0.0)
+	terrain.sufijo_de_la_cache = sufijo_de_la_cache(mar_del_mapa())
 	terrain.meters_per_unit = meters_per_unit
 	terrain.vertical_exaggeration = vertical_exaggeration
 	terrain.resolution = resolution
@@ -1531,7 +1515,11 @@ func _update_info() -> void:
 		"click       seleccionar emplazamiento",
 		"F           entrar al mapa seleccionado",
 		"R           mandar una expedición hacia un rumbo",
-		"WASD mover · click derecho rotar · rueda zoom · F3 rendimiento",
+		# LA DEL PANEL SE PREGUNTA, NO SE ESCRIBE: es remapeable (INTERFAZ §11) y este
+		# cartel decía F3 cuando el panel ya vivía en F4. Las otras dos no son acciones del
+		# catálogo de teclas, así que siguen escritas.
+		"WASD mover · click derecho rotar · rueda zoom · %s rendimiento"
+			% Teclas.nombre_de_la_tecla(Teclas.tecla_de("panel_de_rendimiento")),
 	])
 
 

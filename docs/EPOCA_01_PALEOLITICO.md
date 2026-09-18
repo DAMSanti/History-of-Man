@@ -2317,6 +2317,18 @@ El usuario: «que salgan dibujados los ríos y la orografía en el mapa regional
 - **Lo que cuesta**: GPU del mapa regional con ríos y sin ellos, alternando, a 1080p. Se
   mide y se dice.
 
+> **Depurar del 2026-09-17**: el mar de hoy salía **plano** en los valles de los
+> yacimientos reales de la costa, y los ríos morían en la orilla de hoy. Se rellena con
+> **fondo marino real y detalle prestado de relieve real**, y los ríos siguen. La regla,
+> las decisiones y los 16 valles afectados, en [GRAFICOS.md](GRAFICOS.md) §3.
+>
+> **Y retira una frase de aquí arriba**: «las lomas de la plataforma —su relieve es
+> ruido, sin drenaje—». Ya no hay ruido en ninguna de las dos escalas, y el valle de un
+> abrigo de la costa toma su detalle fino de una **sábana de tierra real del IGN** a 5 m
+> (`data/sites/detalle_de_tierra.res`, del valle del Nansa, horneada por
+> `tools/HornearPrestado.gd`). Lo que sí sigue: **cada río va por su valle** también en el
+> relieve nuevo.
+
 ### Fuera de alcance
 
 - **Mareas**, **barcas** —la piragua es del Mesolítico— y **mamíferos marinos**.

@@ -157,7 +157,8 @@ func _refresh() -> void:
 		"draw calls %5d    triangulos %s" % [int(draw_calls), _format_count(primitives)],
 		"objetos    %5d    nodos %d" % [int(objects), int(nodes)],
 		"VRAM     %6.0f MB  RAM %.0f MB" % [vram, ram],
-	] + _lineas_del_tiron() + ["F3 para ocultar"])
+	] + _lineas_del_tiron() + ["%s para ocultar" % Teclas.nombre_de_la_tecla(
+		Teclas.tecla_de("panel_de_rendimiento"))])
 
 
 ## Se vacia la bandeja de picos que ha ido dejando [Cronometro].

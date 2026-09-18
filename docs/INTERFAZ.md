@@ -2321,3 +2321,420 @@ Lo que sí se arrastra es el minimapa, que ya mueve el punto de órbita, y eso e
 suelta.
 
 
+---
+
+## 14. El modo Debug: todos los yacimientos del Paleolítico, sin niebla (spec y hecho, 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-17**, a partir de un encargo del usuario: «una
+> forma de depurar y ver todos los yacimientos del Paleolítico, quizá un botón en el menú
+> principal "Debug" que me enseñe el mapa regional, sin niebla, y permitiéndome fundar en
+> CUALQUIER yacimiento paleolítico, mostrándolos todos». Las decisiones de abajo salieron
+> a preguntas.
+
+### Qué problema cierra
+
+**Para ver un valle hoy hay que jugarse la llegada.** Una partida empieza con la niebla
+cubriendo el mapa regional y **un solo yacimiento a la vista**: los demás se descubren
+explorando (SISTEMAS §4). Y **sólo se funda una vez**: elegir otro yacimiento después es
+una visita sin banda (SISTEMAS §23). Así que comprobar cómo sale un valle concreto —su
+relieve, su agua, dónde nacen los parajes, si la banda arranca— pide o jugar hasta
+descubrirlo, o tocar a mano los datos de una sonda.
+
+Con las tandas de la costa y los valles inventados (EPOCA_01 §10.2), los sitios que
+merece la pena mirar uno a uno son decenas, y ninguno se puede elegir desde el juego.
+
+### Lo que se pide
+
+**Un botón «Debug» en el menú principal** que abre el mapa regional en un modo de
+depuración:
+
+- **Sólo en la versión de desarrollo** (decisión del usuario): sale al abrir el juego
+  desde el proyecto y **no** en un ejecutable exportado para jugar.
+- **Sin niebla**, y con **todos los yacimientos que el juego ofrece en el Paleolítico** a
+  la vista (decisión del usuario): los habitables con el mar a −120 m y en esa época, que
+  son los que un jugador acabaría viendo, incluidos los cuatro abrigos hipotéticos de la
+  costa. **Los que el filtro de la época quita hoy siguen fuera**.
+- **Se funda en cualquiera de ellos, y cada uno con una banda nueva** (decisión del
+  usuario): elegir un yacimiento monta su valle con una banda recién llegada, como una
+  partida nueva. Desde el valle se vuelve al mapa regional de depuración y se puede
+  elegir otro, **tantas veces como se quiera**. No hay visitas: cada elección es una
+  fundación.
+- **Es una partida aparte y no se guarda nada** (decisión del usuario): entrar en Debug
+  no lee ni pisa ninguna partida guardada, y lo que pase dentro no se escribe en disco.
+  Al volver al menú principal, las partidas y la configuración están como estaban.
+- **Se sabe que se está en Debug**: un rótulo visible en el mapa regional y en el valle,
+  para no confundirlo con una partida.
+- Un yacimiento **cuyo valle no está preparado** se prepara al fundar, como en una partida
+  —descarga con su pantalla de carga—; **el mapa dice cuáles lo están y cuáles no**, para
+  saber antes de pinchar si va a costar uno o dos minutos de red.
+
+### Criterios de aceptación
+
+- **El botón sólo en desarrollo**: con la marca de versión de desarrollo, el menú
+  principal tiene «Debug»; sin ella, no lo tiene. Prueba de lo que pinta el menú, con las
+  dos marcas.
+- **Todos a la vista**: en el mapa regional de Debug, el número de yacimientos dibujados
+  es **exactamente** el de los que el juego ofrece en el Paleolítico con el mar a −120 m,
+  y **ninguno** queda bajo la niebla. Prueba.
+- **Fundar en cualquiera**: para tres yacimientos escogidos —uno de interior, uno de los
+  abrigos de la costa y el que esté más lejos de la cueva de arranque—, elegirlo en Debug
+  monta su valle con una banda de la población inicial. Prueba de lo que queda preparado
+  para la escena del valle, sin montarla.
+- **Banda nueva cada vez**: fundar en A, volver, fundar en B deja en B una banda recién
+  llegada —la misma población y el mismo día inicial que en A—, no la de A mudada. Prueba.
+- **No toca nada guardado**: con una partida guardada y la configuración escritas antes,
+  entrar en Debug, fundar dos veces y volver al menú deja **los mismos ficheros, byte a
+  byte**. Prueba, con las carpetas de las pruebas y no las del jugador.
+- **Salir de Debug deja el juego como estaba**: tras volver al menú, «Nueva partida»
+  empieza con la niebla y un solo yacimiento a la vista, igual que sin haber pasado por
+  Debug. Prueba.
+- **Se sabe dónde se está**: el rótulo de Debug está en el mapa regional y en el valle, y
+  no está en una partida normal. Prueba de lo que pinta.
+- **Preparados y sin preparar se distinguen** en el mapa de Debug. Prueba de lo que pinta
+  contra lo que hay en disco.
+
+### Fuera de alcance
+
+- **Las demás épocas**: el Debug es del Paleolítico. Elegir época es otra spec.
+- **Los yacimientos que el filtro esconde** —bajo el mar de la época, fuera de la región
+  jugable, sin nada paleolítico— (decisión del usuario).
+- **Trucos dentro del valle**: dar recursos, adelantar el tiempo, saltar técnicas.
+- **Guardar una partida de Debug**, o convertirla en una partida normal.
+- **Cambiar las reglas de la partida normal**: la niebla, el descubrimiento y la regla de
+  fundar una sola vez siguen como están fuera de Debug.
+
+**Plan técnico (2026-09-17).**
+
+*Comprobado contra el código antes de planear.* Lo que hay hoy, y lo que lo condiciona:
+
+- **«Nueva partida» vacía el borrador del jugador.** `MenuPrincipal._nueva` llama a
+  `Partidas.nueva()`, que hace `Campamentos.vaciar()`, **borra la carpeta
+  `Partidas.borrador`** y apunta `Guardado.carpeta` a ella. Un Debug que reutilizara ese
+  camino **tiraría la partida sin guardar que el jugador tuviera a medias**. Es la razón
+  de la primera decisión de abajo.
+- **Se escribe en disco sin pedirlo**: al salir de un valle, `DemoMain._dejar_la_escena`
+  autoguarda el mapa en `Guardado.carpeta`; y el menú de ESC ofrece «Guardar», «Guardar
+  como…» y «Guardar y salir».
+- **Sin niebla es casi gratis**: `RegionMap.sitios_que_se_dibujan` ya enseña un
+  yacimiento si está descubierto y `GameState.niebla` no lo tapa, y la capa de calima la
+  pinta `_poner_la_niebla` desde `GameState.la_niebla()`.
+- **Fundar una vez es una regla en `_found_settlement`**: si hay un campamento vivo en el
+  sitio se entra en él; si el sitio es el de la banda guardada se retoma; y en cualquier
+  otro caso, con banda o campamentos ya existentes, `Expedition.visita = true`.
+- **Los campamentos siguen vivos al salir del valle** (SISTEMAS §23): colgados de la raíz
+  del árbol y simulando. Volver al regional y fundar en otro dejaría el anterior andando.
+
+### Las decisiones que la spec obliga a tomar
+
+**1. Todo lo que el Debug toca de estado global se guarda al entrar y se devuelve al
+salir, y la escritura va a una carpeta suya.** Una clase estática, `ModoDebug`
+(`scripts/region/`), con `activo`, `entrar()` y `salir()` —estado global sin autoload,
+como `GameState` (SPECS §2.2)—. Al entrar recuerda `Guardado.carpeta`,
+`Partidas.borrador`, `Partidas.abierta` y lo que `GameState` lleva de la partida, y
+**apunta las dos carpetas a `user://debug/`**, vaciada. Así **lo que se escriba sin
+pedirlo** —el autoguardado de un valle— cae en la carpeta del Debug y no en la del
+jugador. Es la misma receta que ya usan las pruebas («las pruebas no tocan los datos del
+jugador»), y es más segura que perseguir cada sitio que guarda: el que se olvide escribe
+igual, pero en otro sitio.
+
+**2. Se arranca como una partida y luego se quita la niebla**, no al revés. Con
+`GameState.started` a falso el mapa ya enseñaría todo, pero **media partida da por hecho
+que hay casa, población y despensa** —`GameState.begin` las pone—. Así que en Debug se
+llama a `begin` como siempre y después se descubre **todo lo que ofrece la época** y se
+deja la niebla vacía. La capa de calima lleva **una sola rama** para no pintarse en Debug.
+
+**3. «Banda nueva cada vez» es limpiar antes de cada fundación.** Antes de fundar,
+`ModoDebug.nueva_fundacion(sitio)` vacía los campamentos vivos y la carpeta del Debug,
+repone la población, la despensa y la fecha de arranque, y deja `Expedition.visita` a
+falso. Después sigue la fundación de siempre, con su pantalla de carga y su preparación
+del valle. **Una pregunta, un sitio**: `_found_settlement` sólo pregunta
+`ModoDebug.activo` y le cede el arranque.
+
+**4. El botón pregunta una marca que la prueba puede cambiar.**
+`ModoDebug.hay_version_de_desarrollo`, que vale `OS.is_debug_build()` y que la prueba
+pone a mano para pintar el menú con las dos.
+
+**5. Lo que se ve.** El rótulo «DEBUG» lo pone `ModoDebug.rotulo(escena)` en el mapa
+regional y en el valle —una sola función para los dos—. **Un yacimiento sin preparar se
+dibuja con su color apagado**: el color del marcador ya dice qué clase de yacimiento es, y
+cambiarlo por otro color perdería eso. Qué está preparado lo contesta
+`PreparaValle` —el fichero existe y tiene su sello de versión—, que es quien lo sabe.
+Y el menú de ESC, en Debug, **no ofrece guardar**: sólo seguir y volver al menú principal.
+
+### Módulos
+
+| Qué | Dónde |
+|---|---|
+| Entrar, salir, fundar de nuevo, rótulo y marca de desarrollo | `scripts/region/ModoDebug.gd` (nuevo) |
+| El botón | `scripts/ui/MenuPrincipal.gd` |
+| Sin guardar en el menú de ESC, y salir por `ModoDebug.salir` | `scripts/ui/MenuDelJuego.gd` |
+| Sin niebla, todos, apagados los sin preparar, fundar siempre | `scripts/region/RegionMap.gd` |
+| El rótulo en el valle | `scripts/DemoMain.gd` |
+| Qué valle está preparado | `scripts/region/PreparaValle.gd` |
+
+### Riesgos que se nombran
+
+- **Si algo escribe en una ruta fija y no en `Guardado.carpeta`**, se salta la
+  redirección. La prueba «no toca nada guardado» es la que lo caza: escribe ficheros del
+  jugador de mentira, pasa por el Debug fundando dos veces, y compara byte a byte.
+- **Fundar en un valle sin preparar descarga**, como siempre, y la sonda con ventana sólo
+  funda en valles preparados para no depender de la red.
+- **La configuración no se toca en Debug, pero se puede cambiar desde el menú de ESC**:
+  eso sí se guarda, porque es del equipo y no de la partida (INTERFAZ §8). No es partida,
+  así que no entra en «no se guarda nada».
+
+### Cómo quedó (2026-09-17)
+
+**Un botón «Debug» en el menú principal**, sólo cuando `OS.is_debug_build()` —al abrir el
+juego desde el proyecto—. Lleva al mapa regional **sin niebla, sin calima y con los 76
+yacimientos que ofrece el Paleolítico** con el mar a −120 m, cada uno con su marcador, y
+con un rótulo rojo abajo: «DEBUG — no se guarda nada». Pinchar cualquiera funda **con una
+banda nueva de 15**, en primavera del año uno; volver al regional deja elegir otro. Los
+yacimientos cuyo valle no está en disco salen **con su color apagado**: fundar ahí
+descarga. Y el menú de ESC no ofrece guardar ni cargar.
+
+**Todo pasa por `ModoDebug`** (`scripts/region/`), estado global sin autoload como
+`GameState`. Al entrar **aparta** las carpetas de partida y lo que `GameState` lleva, y
+**apunta las carpetas a `user://debug/`**; al salir lo devuelve todo. Así lo que el juego
+escribe sin pedirlo —el autoguardado al salir de un valle— cae en la carpeta del Debug.
+
+### Lo que se encontró por el camino
+
+- **«Nueva partida» vacía el borrador del jugador.** `Partidas.nueva` borra la carpeta de
+  la partida a medias. Un Debug que reutilizara ese camino se habría llevado lo que el
+  jugador no hubiera guardado, sin avisar. Por eso el Debug no lo llama y aparta las
+  carpetas.
+- **El mapa regional sólo pone marcador a lo atestiguado**, y la prueba de la suite no lo
+  vio. Miraba el filtro de la niebla —que en Debug dejaba pasar los 76— y en la ventana
+  **salían 63**: los inferidos y los hipotéticos no llevan marcador. Ahora
+  `RegionMap.se_marca` es la pregunta, y en Debug dice que sí a todos.
+- **Y eso vale también fuera de Debug, y es una cosa que mirar: los cuatro abrigos de la
+  costa no tienen marcador en una partida.** Son hipotéticos, y por la misma regla no se
+  dibujan aunque estén descubiertos. No se ha tocado —la spec dejaba las reglas de la
+  partida como están—: va por `/depurar` si no es lo que se quería.
+
+### Comprobado
+
+`TestModoDebug`, **10 pruebas y 36 comprobaciones**. La que vale: con una partida guardada
+y un borrador a medias escritos antes, **entrar, autoguardar como lo haría un valle, fundar
+dos veces y salir deja los dos ficheros byte a byte**, y lo autoguardado en Debug no cae en
+la carpeta del jugador. Las demás: todos a la vista y todos con marcador, fundar en un
+sitio de interior, en un abrigo de la costa y en el más lejano, una banda nueva cada vez,
+«Nueva partida» con niebla después, el botón con las dos marcas, el menú de ESC sin
+guardar, el rótulo y «preparado» contra lo que hay en disco.
+
+Y **una corrida con ventana**: menú → Debug → mapa regional (76 marcadores, sin niebla,
+rótulo) → fundar en el sitio 56 (banda de 15, rótulo en el valle) → volver → fundar en el
+33 (otra banda de 15) → salir al menú por ESC. Al acabar, el Debug apagado, las carpetas
+de vuelta y el fichero de mentira «del jugador» intacto.
+
+**Lo que no hace, y se dice**: «preparado» mira que el fichero del valle exista, no su
+sello de versión —el sello está dentro de un recurso de veinte megas—. Un valle de una
+versión anterior sale como preparado y se rehace al fundar, igual que en una partida.
+
+
+> **Depurar del 2026-09-17 (la misma noche).** El modo Debug abría el mapa regional **sin
+> ríos en la plataforma emergida** y preparaba los valles **sin el relleno de la época**.
+> Las dos cosas salían de lo mismo: Debug no funda nada, y el mapa y el valle preguntaban
+> «¿con qué mar?» a `GameState.home` y a `Expedition`, que en ese momento no lo saben.
+> Ahora lo dice `RegionMap.mar_del_mapa()` —que cuenta con Debug— y se le pasa al preparar
+> el valle. Medido: **22 414 celdas de cauce sobre la plataforma** donde antes no había
+> ninguna (`tests/DebugCaptura.gd`). La regla está en GRAFICOS §3.
+
+## 15. Depurar del 2026-09-17 (noche): el rótulo de la tecla y el aviso que se cerraba
+
+Dos quejas del usuario, las dos de cosas que se leen en pantalla.
+
+**El rótulo del panel de rendimiento decía F3 y el panel vive en F4.** Pasó porque la tecla
+estaba **escrita** en el texto, y desde §11 las teclas son remapeables. Ahora el panel y el
+cartel del mapa regional preguntan la tecla (`Teclas.nombre_de_la_tecla`), así que cambiarla
+cambia lo que se lee. Las teclas que NO son acciones del catálogo —la F y la R del mapa
+regional— siguen escritas, que para eso no son remapeables.
+
+**El aviso de una técnica se abría y se cerraba solo.** Era el tooltip del motor: tiene
+temporizador propio, se esconde al mover el ratón dentro del mismo control y se vuelve a
+pedir después. `_make_custom_tooltip` sólo cambia lo que hay DENTRO del globo, no cuándo se
+abre ni cuándo se cierra, así que la queja se repetía por más que se retocara.
+
+La regla que pidió el usuario, literal, es **abierto siempre que el ratón esté encima**. Hoy
+el globo es nuestro (`CasillaTecnica`): se abre al entrar el ratón, se cierra al salir y no
+lo toca nada más —ni un temporizador, ni un redibujado—. Es uno solo para todas las
+casillas, no se come el ratón (si lo capturase, taparía la casilla, la casilla se daría por
+abandonada y el aviso se cerraría: justo lo que se venía a quitar) y se recorta contra los
+bordes de la ventana. Dos pruebas en `TestTecnicas` lo fijan.
+
+
+## 16. La resolución, también con la ventana maximizada (spec 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-17.** Sale de una petición del usuario: «quiero
+> hacer algo para poder cambiar la resolución en ventana maximizada». Las decisiones las
+> tomó él con preguntas y están marcadas donde salen.
+
+### Qué problema cierra
+
+El juego se juega **maximizado**, y maximizado el selector de «Resolución» no hace nada: se
+usa el tamaño del monitor. Fue una decisión explícita del 2026-09-14 —«la resolución sólo
+vale en ventana»— porque eso es lo que Godot puede hacer con el tamaño de una ventana que
+el gestor de ventanas manda. Y para dibujar a menos ya existe otra cosa, la **escala de
+render** con FSR2, pero vive en la pestaña de Gráficos, se expresa en tanto por ciento y no
+se llama resolución. Hay hasta una nota en la ventana que manda de un sitio al otro.
+
+O sea: **lo que el usuario quiere ya se puede hacer, y aun así no lo encuentra**. Eso no es
+un fallo del motor, es un fallo de la ventana: dos ajustes que hacen lo mismo para el
+jugador —«que esto se vea más grande y vaya más suelto»— viven separados, con nombres
+distintos y unidades distintas.
+
+Y hay un motivo de fondo para arreglarlo ahora: el juego va **a 21-27 fps** en un valle con
+bosque (medido en las capturas del 2026-09-17, GTX 1070 a 3651×2054). Bajar a cuánto se
+dibuja es la palanca más grande que tiene el jugador, y hoy está escondida.
+
+### Lo que se pide
+
+- **Maximizado y a pantalla completa, el selector de «Resolución» manda sobre el dibujo**
+  (decisión del usuario). Se elige a cuánto se dibuja el mundo y el resultado se estira a
+  la pantalla; la ventana no se toca. En modo ventana sigue haciendo lo de siempre: cambiar
+  el tamaño de la ventana.
+- **Las opciones se leen en píxeles reales** (decisión del usuario): «1280 × 720», no
+  «67 %». Se calculan sobre el tamaño real de la ventana, así que la lista dice a qué se
+  está dibujando de verdad en ese monitor.
+- **El escalado sigue siendo FSR2 por debajo del 100 %** (decisión del usuario), que es lo
+  que ya usan los niveles de gráficos y lo que midió `GpuProfile`. No se añade un ajuste
+  para elegir el filtro.
+- **Un solo ajuste manda.** Elegir resolución de dibujo y escala de render son la misma
+  cosa: lo que el jugador toque en un sitio tiene que verse reflejado en el otro, sin dos
+  valores que se contradigan.
+- **Se aplica en caliente y se guarda**, como el resto de la configuración.
+- **La interfaz no se escala**: los paneles, el texto y los iconos siguen a la resolución de
+  la ventana. Sólo se dibuja a menos el mundo 3D.
+
+### Criterios de aceptación
+
+- **Gana fotogramas, medido** (decisión del usuario sobre cómo darlo por hecho). Una sonda
+  con ventana mide **ms de GPU y fps en el mismo sitio de un valle** con la ventana
+  maximizada, a cada escalón de la lista, y la tabla va a `ESTADO.md`. El criterio es que
+  cada escalón por debajo del tope **baje los ms de GPU de forma medible** (no dentro del
+  ruido de la sonda) respecto al de encima.
+- **Maximizado, elegir un escalón cambia lo que se dibuja**: la resolución interna del
+  viewport 3D pasa a ser la elegida, comprobado con una prueba que lea el viewport, no a
+  ojo.
+- **La ventana no se mueve**: maximizado, elegir resolución no cambia el modo de ventana ni
+  su tamaño. Prueba.
+- **La interfaz se queda nítida**: el tamaño de la capa de interfaz no cambia al cambiar de
+  escalón. Prueba.
+- **Sobrevive**: se guarda y al abrir de nuevo el juego está lo elegido. Prueba con la
+  carpeta de configuración de las pruebas, que no toca la del jugador.
+- **Un solo valor**: no se puede dejar el juego con una resolución de dibujo elegida en
+  Pantalla y una escala distinta en Gráficos. Prueba.
+
+### Fuera de alcance
+
+- **Cambiar el tamaño de la ventana desde maximizado.** Si el jugador quiere una ventana de
+  1280 × 720, para eso está el modo ventana.
+- **Elegir el filtro de escalado** (FSR2 frente a bilineal): se queda FSR2, decidido.
+- **Escalar la interfaz.** Es otro trabajo y tiene su propio riesgo: el texto pequeño de los
+  paneles es lo primero que se rompe.
+- **Resolución por encima de la de la ventana** (supersampling): no se ofrece.
+- **Tocar los niveles de gráficos** (Bajo/Medio/Alto/Ultra) ni lo que cada uno pone en la
+  escala. Si el jugador elige a mano, manda lo que elija.
+- **Las otras dos peticiones del mismo día** —los gráficos de la banda con su ropa y sus
+  herramientas, y las mejoras de texturas del terreno—: son trabajos aparte, cada uno con
+  su spec.
+
+### Plan técnico (2026-09-17)
+
+**Lo que ya existe, y es la mitad del trabajo.** El motor de esto está hecho:
+`Configuracion.graficos["escala"]` guarda a cuánto se dibuja y `aplicar_graficos` lo
+aplica al viewport raíz con FSR2 por debajo de 1. Lo que hay que hacer no es motor, es
+**quitar la duplicidad**: hoy «a cuánto se dibuja» se contesta desde dos sitios con dos
+unidades —la escala en Gráficos, en tanto por ciento, y el selector de Resolución en
+Pantalla, en píxeles pero sólo en modo ventana—, y eso es justo el invariante 3 de
+`SPECS.md` §7: *una pregunta, un sitio que la contesta*.
+
+**Módulos afectados**
+
+| Script | Qué cambia |
+|---|---|
+| `vista/Configuracion.gd` | La traducción entre resolución de dibujo y escala vive aquí, al lado de `resoluciones()` y de `aplicar_pantalla()`. Es el único sitio donde se convierte. |
+| `ui/VentanaDeConfiguracion.gd` | El selector de «Resolución» de Pantalla pasa a mandar sobre el dibujo cuando la ventana no la dimensiona el jugador; sale de Gráficos la fila «Escala de render»; la nota que remitía de una a otra sobra. |
+| `tests/TestConfiguracion.gd` | Las reglas nuevas: qué escala sale de qué resolución, que maximizado no se toca la ventana, que no quedan dos valores y que se guarda. |
+| `tests/ResolucionProbe.gd` (nueva) | La medida con ventana: ms de GPU y fps por escalón. |
+| `docs/INTERFAZ.md`, `docs/GRAFICOS.md`, `docs/ESTADO.md`, `docs/ROADMAP.md` | Lo aprendido y la tabla medida. |
+
+Ninguno es un módulo nuevo del contrato de `SPECS.md` §4: `Configuracion` ya es el sitio
+de los ajustes, y la ventana es sólo su cara.
+
+**Decisiones de arquitectura** —las tres que la spec obliga a tomar, y ninguna más:
+
+1. **El dato que manda es la escala**, no la resolución elegida. La resolución de dibujo
+   depende del tamaño de la ventana, que cambia cuando el jugador mueve el juego a otro
+   monitor; la escala no. Así que se guarda la escala —lo que ya se guardaba— y la lista
+   se **deriva** de ella para enseñarla en píxeles.
+2. **El selector de Pantalla hace dos cosas según el modo**, que es lo que pidió el
+   usuario: en ventana cambia el tamaño de la ventana; maximizado y a pantalla completa
+   cambia la escala de dibujo. La fila dice cuál de las dos está haciendo, para que nadie
+   tenga que adivinarlo.
+3. **La escala desaparece de Gráficos.** No se queda «también ahí»: dos controles sobre el
+   mismo valor es el fallo que se viene a cerrar. Los niveles (Bajo/Medio/Alto/Ultra)
+   siguen poniendo su escala al cambiar de nivel —Bajo la deja en 0,6— y elegir a mano
+   sigue bajando el nivel a «personalizado», que es lo que ya hace `_nivel_que_encaja`.
+
+**Orden de dependencias**: la traducción (1) antes que la ventana (2), y las dos antes de
+medir (5): la sonda recorre los escalones que la ventana ofrezca.
+
+**Riesgos que se nombran**
+
+- **La resolución elegida no sale exacta.** Los escalones son escalas (0,5 · 0,6 · 0,77 ·
+  0,9 · 1) y la ventana puede tener cualquier tamaño: 0,77 de 3651 px son 2811, no una
+  cifra redonda. La lista enseñará **lo que de verdad se va a dibujar**, aunque no sea un
+  número bonito. La alternativa —elegir píxeles redondos y deducir la escala— dejaría al
+  jugador pidiendo 1280 y viendo 1284; peor.
+- **Cambiar la escala en caliente rehace los búferes del render.** Da un tirón de un
+  cuadro. Se acepta: es un ajuste que se toca una vez.
+- **FSR2 a 0,5 sobre una ventana pequeña deja poca información**: por debajo de 1280 px de
+  ancho efectivo la imagen se nota blanda. No se pone tope; se dice en la ventana.
+- **Las sondas con ventana abren a la resolución del escritorio** —3651 × 2054 en esta
+  máquina—, y el presupuesto de GPU está escrito a 1080p (GRAFICOS §7). La sonda fija el
+  tamaño de ventana antes de medir, o las cifras no se pueden comparar con las de la tabla.
+
+### Cómo quedó (2026-09-17)
+
+**El selector de Pantalla hace dos cosas, y lo dice.** En modo ventana es «Tamaño de la
+ventana» y cambia la ventana, con su cuenta atrás de confirmación, como siempre. Maximizada
+y a pantalla completa —que es como se juega— es **«Resolución de dibujo»**: los mismos
+cinco escalones de siempre (100 · 90 · 77 · 60 · 50 %) enseñados en píxeles de verdad
+calculados sobre la ventana, y elegir uno cambia a cuánto se dibuja el mundo.
+
+**Sin cuenta atrás**, a diferencia del tamaño: la confirmación existe para que una
+resolución que el monitor no pueda dar no te deje sin ver nada, y dibujar a menos no puede
+hacer eso. Se aplica y se guarda como cualquier otro ajuste de gráficos, y baja el nivel a
+personalizado igual que los demás.
+
+**Y la escala de render ya no está en Gráficos.** No se ha quedado «también ahí»: dos
+controles sobre el mismo valor, con dos unidades, es la pregunta contestada desde dos
+sitios que prohíbe SPECS §7. La lista de escalones vive ahora en `Configuracion`, que es
+quien la aplica; la ventana sólo la enseña.
+
+**Lo que gana, medido** (`ResolucionProbe`, ventana fijada a 1920 × 1080, valle del sitio
+56, quieto en el mismo punto, 90 cuadros por escalón):
+
+| Se dibuja a | Escala | GPU (ms) | fps |
+|---|---|---|---|
+| 1920 × 1080 | 100 % | 49,2 · 33,7 | 19,7 · 28,7 |
+| 1728 × 972 | 90 % | 43,5 · 31,5 | 22,2 · 30,7 |
+| 1478 × 832 | 77 % | 41,0 · 29,0 | 23,7 · 33,1 |
+| 1152 × 648 | 60 % | 36,5 · 25,9 | 26,6 · 36,9 |
+| 960 × 540 | 50 % | 33,5 · 23,1 | 28,9 · 41,3 |
+
+**Van dos cifras por casilla porque son dos corridas del mismo código**, y es la lección
+que el repositorio ya tenía escrita: los absolutos se mueven mucho entre corridas —49,2 y
+33,7 ms para lo mismo— y una diferencia leída de una sola no es una diferencia. Lo que **sí**
+se repite es la bajada: **−32 % y −31 % de GPU** del escalón más alto al más bajo, y cada
+escalón por debajo del anterior en las dos. El criterio de la spec se cumple.
+
+**Y dibujar a la mitad de lado no dobla los fotogramas**: de 19,7 a 28,9 en una corrida, de
+28,7 a 41,3 en la otra. Es lo esperable y conviene decirlo, porque la mitad del coste de
+este juego no depende de la resolución —geometría, draw calls, el bosque— y ésos no bajan
+por dibujar más pequeño.
+
+**La interfaz no se toca**: en las dos corridas y en los cinco escalones, la capa 2D se
+queda a 1920 × 1080. Lo comprueba la propia sonda, columna «UI».

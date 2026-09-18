@@ -54,6 +54,9 @@ const CRIA_AL_ANO := {
 	"ciervo": 0.30,
 	"caballo": 0.20,
 	"uro": 0.18,
+	# Como el uro: una cría cada dos años y manada que tarda en rehacerse. Cazar bisonte a
+	# destajo lo vacía del valle, que es lo que pasó de verdad.
+	"bisonte": 0.18,
 	"lobo": 0.26,
 }
 const CRIA_POR_DEFECTO := 0.35

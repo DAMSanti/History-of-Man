@@ -68,6 +68,10 @@ func _ready() -> void:
 	_boton(columna, "Nueva partida", _nueva)
 	_boton(columna, "Cargar", _abrir_lista)
 	_boton(columna, "Configuración", func() -> void: abrir_configuracion())
+	# EL MODO DEBUG, SOLO EN LA VERSION DE DESARROLLO (INTERFAZ §14): quien juega a un
+	# ejecutable exportado no se lo encuentra.
+	if ModoDebug.hay_version_de_desarrollo:
+		_boton(columna, "Debug", _debug)
 	_boton(columna, "Salir del juego", _salir)
 
 	_panel_de_carga = PanelContainer.new()
@@ -105,6 +109,14 @@ func _nueva() -> void:
 	GameState.niebla = null
 	Expedition.clear()
 	Carga.abrir(get_tree(), "Saliendo a la comarca")
+	Carga.cambiar_de_escena(get_tree(), Expedition.REGION_SCENE)
+
+
+## El mapa regional sin niebla, con todos los yacimientos del Paleolitico. Ver [ModoDebug]:
+## **no se llama a `Partidas.nueva`**, que vaciaria el borrador del jugador.
+func _debug() -> void:
+	ModoDebug.entrar()
+	Carga.abrir(get_tree(), "Debug: todos los yacimientos del Paleolítico")
 	Carga.cambiar_de_escena(get_tree(), Expedition.REGION_SCENE)
 
 

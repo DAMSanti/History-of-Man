@@ -1,7 +1,7 @@
 class_name VertexAnimBaker
 extends RefCounted
 ## El horneado de animación a textura de vértice, para cualquier bicho con
-## esqueleto -no sólo la banda-. Extraído de `BandaAtlas.gd`: ver ese fichero
+## esqueleto. Lo estrenó la banda, que desde el 2026-09-18 ya no lo usa -va con
 ## para el porqué de hornear a mano en vez de usar el botón del addon
 ## (`AnimatedMultiMeshInstance3D`) o `bake_mesh_from_current_skeleton_pose()`
 ## -ninguno de los dos funciona en un `--script` headless sin GPU real-.
@@ -132,7 +132,7 @@ static func bake(tree: SceneTree, scene_path: String, armature_path: String,
 	ResourceSaver.save(normal_texture, "%s/%s_normal.res" % [out_dir, prefix])
 	# Recargados desde el fichero: el objeto recién creado no lleva
 	# `resource_path`, y sin él el material de abajo INCRUSTA la textura
-	# entera en vez de apuntar al fichero -ver el aviso igual en BandaAtlas.gd-.
+	# entera en vez de apuntar al fichero.
 	vertex_texture = load("%s/%s_vertex.res" % [out_dir, prefix])
 	normal_texture = load("%s/%s_normal.res" % [out_dir, prefix])
 

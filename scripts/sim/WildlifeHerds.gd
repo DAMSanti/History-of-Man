@@ -98,7 +98,7 @@ enum State { VAGANDO, BEBIENDO, CAZANDO, HUYENDO }
 ##
 ## `escala` sale de medir la caja del primer fotograma horneado y calibrarla
 ## contra el tamaño real de la especie -no es un número puesto a ojo-, igual
-## que `BandaCrowd.HEIGHT_SCALE`.
+## que la talla de la banda, `BandaCrowd.TARGET_HEIGHT_M`.
 const SPECIES_VISUAL := {
 	# Y el PERRO, que es una especie aparte y no un lobo teñido: desde que hay
 	# camino del perro -ver [ElLobo]- el hito de la partida es justo que el
@@ -111,6 +111,12 @@ const SPECIES_VISUAL := {
 		"diet": "herbivoro", "speed": 6.5, "herd": 5, "groups": 2},
 	"uro": {"model": "cow", "scale": 0.25, "tint": Color(0.20, 0.17, 0.15),
 		"diet": "herbivoro", "speed": 5.5, "herd": 4, "groups": 2},
+	# El bisonte va con la malla del toro, que es la única bovina con giba y cuello corto:
+	# de las dos que hay, la vaca hace de uro -lomo recto- y el toro se parece más a un
+	# bisonte que a un jabalí. Tinte pardo rojizo, el de Altamira. Manada de seis y dos
+	# grupos: es lo que lo distingue del uro en pantalla antes que la silueta.
+	"bisonte": {"model": "bull", "scale": 0.27, "tint": Color(0.33, 0.21, 0.14),
+		"diet": "herbivoro", "speed": 5.5, "herd": 6, "groups": 2},
 	# La caza mayor ya no anda prestada de caballo, oveja ni cerdo. Las tallas
 	# se han recalculado para que cada especie mida EN PANTALLA lo mismo que
 	# medía antes -ver `scripts/tools/FaunaTallaProbe.gd`, que da la caja del
@@ -345,7 +351,7 @@ func _raise_groups() -> void:
 
 
 ## Los fotogramas de cada clip, calculados por `FaunaAtlas.gd` y pegados aquí
-## a mano -mismo motivo que en `BandaCrowd.CLIPS`-.
+## a mano: son los mismos cuerpos siempre que no se vuelva a hornear.
 static func _clip_table(model: String) -> Dictionary:
 	match model:
 		"wolf": return {"idle": [0, 20], "walk": [20, 20]}

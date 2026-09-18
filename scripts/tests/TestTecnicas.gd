@@ -157,3 +157,42 @@ func test_lo_de_hoy_de_la_laminar_dice_para_cuantas_piezas_da_el_abrigo() -> voi
 	assert_true(TechTree.lo_de_hoy(TechTree.Tech.HOJA, sim).contains("20 piezas"),
 		"la cuenta sale de la receta que la banda sabe")
 	sim.free()
+
+
+# --- el aviso de una casilla (depurar del 2026-09-17) ----------------------------
+
+func test_el_aviso_de_una_tecnica_se_queda_abierto_con_el_raton_encima() -> void:
+	# «El tooltip de las técnicas sigue apareciendo y desapareciendo. TIENE QUE MANTENERSE
+	# ABIERTO SIEMPRE QUE TENGA EL RATÓN ENCIMA.» El de Godot no puede: tiene temporizador
+	# propio y se esconde al mover el ratón dentro del mismo control. Desde el 2026-09-17
+	# el globo es nuestro, y esto fija la regla: se abre al entrar y se cierra al salir, y
+	# nada más lo toca.
+	var casilla := CasillaTecnica.new()
+	casilla.aviso = "[b]Arpón[/b]
+falta red"
+	assert_eq(casilla._get_tooltip(Vector2.ZERO), "",
+		"el aviso del motor, callado: si no, salen los dos")
+
+	casilla.mouse_entered.emit()
+	assert_true(CasillaTecnica._globo != null and CasillaTecnica._globo.visible,
+		"con el ratón encima, el aviso está abierto")
+	assert_eq(CasillaTecnica._texto.text, casilla.aviso, "y dice lo suyo")
+
+	# Pase lo que pase mientras el ratón siga encima —otro cuadro, otra casilla dibujada—,
+	# el aviso no se cierra solo.
+	for cuadro in range(10):
+		casilla.notification(Control.NOTIFICATION_DRAW)
+	assert_true(CasillaTecnica._globo.visible, "sigue abierto, cuadro tras cuadro")
+
+	casilla.mouse_exited.emit()
+	assert_false(CasillaTecnica._globo.visible, "y al salir el ratón, se cierra")
+	casilla.queue_free()
+
+
+func test_una_casilla_sin_aviso_no_abre_nada() -> void:
+	var casilla := CasillaTecnica.new()
+	var abierto_antes := CasillaTecnica._globo != null and CasillaTecnica._globo.visible
+	casilla.mouse_entered.emit()
+	var abierto := CasillaTecnica._globo != null and CasillaTecnica._globo.visible
+	casilla.queue_free()
+	assert_eq(abierto, abierto_antes, "sin texto no hay globo que enseñar")

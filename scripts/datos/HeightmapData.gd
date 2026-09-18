@@ -82,6 +82,27 @@ extends Resource
 ## "lo que hay en el DEM" de "lo que es la region".
 @export var region_mask: PackedFloat32Array = PackedFloat32Array()
 
+## EL MAR DE HOY RELLENADO ([RellenoDelMarDeHoy]). El LiDAR de un valle de costa da el
+## mar a cota cero; con el mar de una época por debajo, eso se rellena con el suelo de la
+## época. Como el valle guardado es uno para todas las épocas, se guarda lo justo para
+## rehacerlo sin red cuando cambia el mar:
+##
+## - `mar_de_hoy`: qué celdas eran mar en el LiDAR, 1 byte por celda. Vacía si no hay.
+## - `agua_de_osm`: los `channels` y `bodies` de OSM tal cual, para alargar los ríos de
+##   nuevo por el relleno nuevo.
+## - `relleno_mar` y `relleno_version`: para qué mar y con qué receta está hecho. Los
+##   dos a cero por defecto, que es «sin rellenar» —con el mar a cero no hay nada que
+##   rellenar—, y así no hace falta que Godot guarde un valor igual a su defecto.
+@export var mar_de_hoy: PackedByteArray = PackedByteArray()
+## Las cotas de antes de que el agua encajara su cauce ([Hydrography] aplana el terreno
+## hasta la lámina): qué celdas y cuánto valían. Sin esto, rehacer el agua en otra época
+## la encajaría encima de la de la anterior.
+@export var cauce_celdas: PackedInt32Array = PackedInt32Array()
+@export var cauce_cotas: PackedFloat32Array = PackedFloat32Array()
+@export var agua_de_osm: Dictionary = {}
+@export var relleno_mar: float = 0.0
+@export var relleno_version: int = 0
+
 
 ## Tamaño del recuadro en metros reales (ancho, alto)
 func get_world_size_meters() -> Vector2:

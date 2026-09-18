@@ -33,6 +33,8 @@ encima y **Ultra sin límite**. Ver §7.)*
 | La sala de la cueva y la pared pintada (spec en SISTEMAS §13) | §7.2 |
 | **El agua: ríos con rápidos y espuma, y el mar del valle** (spec) | §7.3 |
 | **El clima en pantalla: lluvia, nieve que cuaja, niebla de valle** (spec) | §7.4 |
+| **Las texturas del suelo, con su altura de verdad** (spec) | §7.7 |
+| **La banda: cuerpos, oficios en las manos y ropa por era** (spec) | §5.1 |
 | La niebla del mapa regional como nubes (spec) | §3 |
 | El relieve de las texturas, que no existía (depurar del 2026-09-16) | §4 |
 | **El día y la noche**: está encendido desde el 2026-09-07, y la spec de apagarlo era falsa | §7.5 |
@@ -194,6 +196,17 @@ muestreo.
 | Personajes | 2,0 |
 | Sombras direccionales | 2,5 |
 | Entorno y post (niebla, SSAO, tonemap) | 2,0 |
+
+> **La escala de render ya no se elige aquí (2026-09-17, INTERFAZ §16).** Sigue siendo lo
+> mismo por dentro —dibujar el mundo 3D a menos y reconstruir con FSR2, y los niveles
+> siguen poniendo la suya: Bajo la deja en 0,6—, pero **se elige en Pantalla**, como
+> «Resolución de dibujo» y en píxeles reales. Ya no hay fila «Escala de render» en
+> Gráficos: dos controles sobre el mismo valor eran la pregunta contestada desde dos sitios
+> que prohíbe SPECS §7.
+>
+> Lo que gana, medido con `ResolucionProbe` a 1080p en el valle del sitio 56: **−32 % y
+> −31 % de GPU** del escalón más alto (100 %) al más bajo (50 %), en dos corridas. La tabla
+> entera, en INTERFAZ §16.
 | UI y resto | 1,0 |
 | **Total** | **16,5** |
 
@@ -284,6 +297,41 @@ Visto con `RegionCaptura`.
 > —lomas, valles y ríos— se hornea en `data/dem/cantabria_region_mar…_hidro.res` (55 MB,
 > no se versiona): con él, la sonda que monta el mapa y captura pasa de 110 s a 38 s.
 
+> **Depurar del 2026-09-17: el mar de hoy, plano en los valles de la época, y la
+> plataforma inventada.** Queja del usuario: «los mapas que hoy son costa, en el
+> Paleolítico, cuando entro a ellos, la parte del mar es completamente plana… No te la
+> inventes, busca orografía que cuadre con esos mapas, aunque sea de otro lugar, y
+> sticheala para que no se note que está pegada. Los ríos deben continuar… ahora esos ríos
+> desembocan en la nada».
+>
+> **Caso C: la documentación no decía nada.** El valle de un yacimiento real es el LiDAR
+> del IGN, que se acaba en la orilla de hoy: el mar sale **a cota cero y plano**, y con el
+> mar a −120 m ese llano queda en seco. La costa de la época (EPOCA_01 §10.2) sólo inventó
+> valles para los cuatro abrigos hipotéticos. **Medido**: 16 de los 72 yacimientos reales
+> del Paleolítico tienen mar de hoy dentro de su recuadro de 4 km (5, 19, 36, 38, 39, 41,
+> 47, 49, 50, 51, 52, 54, 57, 60, 61 y 750). Y **el relieve de arriba, el de la
+> plataforma en el mapa regional, está inventado**: es ruido ajustado a las alturas de la
+> costa de Santander.
+>
+> **Lo que se decidió que debería pasar** (decisiones del usuario):
+>
+> 1. **Nada inventado.** La forma grande sale **del fondo marino real** —el relieve
+>    regional trae batimetría de verdad: 3 414 cotas distintas bajo cero, hasta
+>    −3 413 m— y el detalle fino **se presta de relieve real de otro sitio** de
+>    Cantabria, cosido para que no se note la costura.
+> 2. **En cada época, donde esa zona sea tierra**: por debajo de la orilla de hoy y por
+>    encima del mar de la época.
+> 3. **Los ríos que hoy mueren en la orilla siguen, bajando por el relieve nuevo**, hasta
+>    el mar de la época o el borde del valle. Pueden no coincidir con el trazado del mapa
+>    regional, y es a sabiendas.
+> 4. **El mapa regional también**: su plataforma deja el ruido y usa la misma regla —fondo
+>    real y detalle prestado—, para que los dos mapas cuenten lo mismo.
+>
+> **Esto retira dos decisiones escritas arriba**: el mapeo del ruido a los percentiles de
+> la costa de Santander y la amplitud ×1,6 que el usuario eligió sobre capturas
+> (2026-09-16). Aquellas capturas eran de relieve inventado; con relieve prestado se
+> vuelve a elegir sobre capturas. Tareas en ROADMAP «En curso».
+
 **Y la plataforma tiene relieve** (`RelieveDeLaPlataforma`). La batimetría a 111 m
 sale lisa, y con el mar a −120 m se veía una llanura sin un bulto.
 
@@ -293,24 +341,219 @@ sale lisa, y con el mar a −120 m se veía una llanura sin un bulto.
 > **saturando hacia la cota cero de hoy** —para no mover la costa actual—, así que
 > las lomas se quedaban en 20-30 m sobre un mapa de 200 km: invisibles.
 >
-> Ahora **las alturas están medidas** en esa misma franja
-> (43,33–43,48 N, 4,08–3,78 O; 28 637 celdas de tierra): p05 **3 m**, p25 **19**,
-> p50 **48**, p75 **100**, p90 **159**, p99 **312**, máx **515**, y **22 m de
-> desnivel por kilómetro** de mediana (86 en el décimo más quebrado). El ruido se
-> mapea a esa escalera de percentiles, con onda de 2 km, así que la plataforma
-> tiene la repartición de alturas de esa costa. Medido con la prueba: el mayor
-> bulto sube **288 m** y más de mil celdas pasan de 100.
+> La primera versión medía las alturas de esa franja (43,33–43,48 N, 4,08–3,78 O;
+> 28 637 celdas de tierra: p05 **3 m**, p25 **19**, p50 **48**, p75 **100**, p90 **159**,
+> p99 **312**, máx **515**, y **22 m de desnivel por kilómetro** de mediana) y **mapeaba
+> ruido a esa escalera de percentiles**. Tenía la repartición de alturas de la costa, pero
+> era ruido. **Eso se retiró el 2026-09-17** —«no te la inventes»—: hoy el relieve es
+> **detalle real prestado**, y las medidas de arriba se quedan como lo que se le pedía
+> parecer.
 >
-> **La costa no se mueve, por construcción**: sólo se sube lo que YA es tierra con
-> **el mar de la época que se dibuja** —subir tierra la deja tierra—, y lo que está
-> bajo el agua no se toca. Por eso el relieve depende del mar: `RegionMap` lo aplica
-> con el de la partida —o con el de hoy si no hay partida, y entonces la plataforma
-> sigue siendo fondo marino— y `HornearEras` hornea **cada época con el suyo**.
-> Cambiar de época con la tecla E no rehace el relieve: es el de la época con la que
-> se montó el mapa. Y **la orilla queda llana**: el relieve entra con una rampa de
-> 600 m desde la costa, que es lo que deja sitio a la playa —decisión del usuario—.
+> **El relieve depende del mar**: `RegionMap` lo aplica con el de la partida —o con el de
+> hoy si no hay partida, y entonces la plataforma sigue siendo fondo marino— y
+> `HornearEras` hornea **cada época con el suyo**. Cambiar de época con la tecla E no
+> rehace el relieve: es el de la época con la que se montó el mapa.
 >
 > Visto en `PlataformaCaptura` (ventana, partida empezada y sin niebla).
+
+### Cómo quedó: relieve prestado, rías y el mar de hoy rellenado (2026-09-17)
+
+**De dónde sale cada cosa**, que es la regla entera en tres líneas:
+
+| | Forma grande | Detalle fino |
+|---|---|---|
+| Plataforma del mapa regional (111 m) | batimetría real del propio mapa | trozos de tierra de la franja costera del mismo mapa (`RelievePrestado.de_la_comarca`) |
+| Mar de hoy dentro de un valle real (5 m) | la plataforma regional en ese punto | trozos de **la tierra del propio valle** (`RellenoDelMarDeHoy`) |
+| Valle de un abrigo de la costa (5 m) | la plataforma regional | la **sábana de tierra real** del IGN a 5 m (`RelievePrestado.de_la_tierra`) |
+
+Nada de ruido en ninguna de las tres. El detalle de un trozo es lo que queda al quitarle
+su forma grande —tres pasadas de emborronado—, y se cose por bloques con cuatro trozos
+mezclados, dividiendo por la raíz de la suma de cuadrados de los pesos para que la costura
+no baje el relieve: medido, **80,2 m de desviación típica en el centro de un bloque y
+87,6 m en la costura**, o sea que la costura no se nota por ser más lisa.
+
+**Las rías y los valles**, que es lo que el usuario pidió al ver las primeras capturas
+(«x1, pero veo mucho terreno marrón; cuando esté en costa crea rías, y si no, soluciónalo
+con valles»): el detalle prestado **baja además de subir**, así que una vaguada puede
+quedar por debajo del mar. Si llega al mar, **se inunda: es una ría**. Si no llega, **no
+es un lago bajo el nivel del mar** —el plano del agua lo pintaría de mar— sino el fondo de
+un valle, y se levanta con una curva continua que le conserva la forma. La regla es una
+sola función, `RelieveDeLaPlataforma.rias_y_valles`, y la usan **las dos escalas**.
+
+Medido sobre las 273 325 celdas de plataforma del mapa regional: **4,8 % de tierra en la
+franja de orilla** (la banda marrón; era **14,3 %** con la llanura costera y el recorte
+que impedía que el mar entrase, y **7,8 %** con las rías pero sin lo de abajo) y **6,2 %
+convertido en ría**. De referencia, la costa real de hoy da **8,1 %** de esa misma franja.
+
+**Y los tres cortes que había que quitar** (la tarde del 2026-09-17, después de mirar el
+valle del sitio 36 celda a celda). La plataforma sólo llevaba relieve **entre** el mar de
+la época y la costa de hoy; en los bordes de esa franja el relieve entraba de golpe, y eso
+dibujaba **rayas de escalones** por todo el mapa: medido, **saltos de hasta 49,5 m entre
+celdas contiguas a 5 m**, cuando el LiDAR real de ese mismo valle no pasa de 21,6 m.
+
+1. **Por abajo, el fondo sumergido también lleva detalle**, hasta 60 m bajo la lámina y
+   desvaneciéndose ahí (`HONDO_DEL_DETALLE_M`). Así no hay frontera que cruzar en la
+   isolínea del mar, que es justo donde se ve. Más abajo sigue siendo batimetría medida y
+   nada más. Lo que se recorta es lo que **emergería**: medio metro bajo el agua, donde el
+   recorte no se ve. *(El primer intento fue desvanecer el detalle por cota cerca del mar
+   y **se comió el relieve**: la plataforma está casi toda a menos de 30 m de esa cota. El
+   perfil de delante del Pas pasó de −152..+80 m a −120..−20.)*
+2. **Por arriba, el valle del río también se desvanece** en la costa de hoy
+   (`ORILLAS_M`, 30 m de cota), no sólo el detalle: el cauce llegaba excavado hasta 25 m y
+   se cortaba en seco contra el dato crudo de tierra. Ésa era la raya larga que cruzaba el
+   valle entero.
+3. **La máscara del mar de hoy se come la orla de la orilla** (`CEJA_DEL_MAR_M`, 1,5 m):
+   playa, marisma e intermareal, que el LiDAR da a unos decímetros y que con el mar de la
+   época tampoco existían. Sin eso, el relleno quedaba a −25 m pegado a celdas que seguían
+   a 0,4 m.
+
+**Cómo quedó, medido en el valle del sitio 36** (360 401 celdas de mar de hoy, el 44,4 %
+del recuadro), comparando el relleno con el LiDAR real del mismo valle:
+
+| Salto entre celdas contiguas (5 m) | p50 | p90 | p99 | p999 | máximo |
+|---|---|---|---|---|---|
+| Tierra de hoy (LiDAR del IGN) | 1,18 | 3,29 | 5,49 | 10,33 | **21,6 m** |
+| Relleno, al empezar | 0,93 | 2,30 | 3,95 | 29,40 | **49,5 m** |
+| Relleno, al acabar | 0,83 | 2,20 | 3,67 | 5,36 | **17,0 m** |
+
+O sea: **el relleno es más suave que el terreno real en todos los percentiles, y su peor
+escalón está por debajo del peor escalón real**. Las celdas con salto de más de 12 m
+pasaron de **423 a 22**.
+
+**Lo que se retiró por el camino**, con su porqué:
+
+- El mapeo del ruido a percentiles y la **amplitud ×1,6** que el usuario eligió sobre
+  capturas el 2026-09-16: aquellas capturas eran de relieve inventado. Con relieve
+  prestado eligió **×1**.
+- La **llanura costera de 600 m** sin lomas (decisión del 2026-09-14). Con relieve real
+  era buena parte del marrón: ahora son **200 m**, y sólo frenan las lomas —las vaguadas
+  llegan hasta el agua, que es de donde salen las rías—.
+- El recorte que subía la costa a un metro sobre el mar para que la costa no se moviera:
+  dejaba **el 10,7 % de la plataforma pegada a esa cota**, un llano marrón. Ahora la costa
+  sí se mueve, pero sólo hacia dentro y por rías.
+
+**El mar de hoy de un valle real** (`RellenoDelMarDeHoy`) se rellena con la plataforma
+regional de ese punto más el detalle prestado de la tierra del propio valle, **cosido en la
+orilla**: en la orilla vale lo que valía el mar y llega a su cota a 250 m, sin escalón. Y
+después, la misma regla de rías y valles. Dos cosas que costaron:
+
+- **El valle guardado es uno para todas las épocas**, y el mar cambia de una a otra. Por
+  eso el relleno lleva **su propio sello** (`relleno_mar`, `relleno_version`) y se
+  **deshace** antes de rehacerse, con la máscara del mar de hoy guardada en el propio
+  recuadro. Subir el sello del valle habría obligado a redescargar los 56 que no tienen
+  mar.
+- **El agua de OSM rebaja el terreno** del cauce para que la lámina sea horizontal
+  (`Hydrography._settle_water_surface`). Si no se apuntan las cotas de antes, cada época
+  hunde el cauce otra vez; se guardan (`cauce_celdas`, `cauce_cotas`) y se restauran.
+
+**Y los ríos siguen.** Desde donde cada cauce de OSM toca la orilla de hoy, se baja por el
+relleno hasta el mar de la época o el borde del valle: inundación por prioridad sobre el
+relleno a un cuarto de resolución —20 m por casilla—, y el camino de vuelta desde la boca.
+Como baja por el relieve nuevo, **puede no coincidir con el trazado del mapa regional**, y
+es a sabiendas (decisión del usuario).
+
+### Y una verdad sola: con qué mar se monta cada mapa (2026-09-17, por la noche)
+
+Nada más probarlo, el usuario vio dos cosas que no cuadraban: «el mapa regional ha perdido
+sus ríos en la plataforma emergida» y «los mapas de detalle están igual que antes». Y dio
+él la pista que lo resolvió: «cuando entro en debug, el mapa regional no tiene ríos; pero
+cargo un mapa, vuelvo y vuelve a tener ríos… ¿ya hay más de una verdad?».
+
+**Había dos, y eran la misma pregunta contestada en dos sitios**: *¿con qué mar se monta
+esto?*
+
+- El **mapa regional** congela al montarse el relieve de la plataforma y los ríos que la
+  cruzan —son la malla, y rehacerlos son veinte segundos—, pero preguntaba
+  `GameState.home != null ? GameState.sea_level_m : 0.0`. El modo Debug **no funda nada**,
+  así que caía en el 0: montaba el relieve con el mar de hoy y luego pintaba encima la
+  costa glacial. Plataforma pelada y **sin un solo cauce**. Al cargar una partida sí había
+  casa, y los ríos volvían. Hoy lo contesta `RegionMap.mar_del_mapa()` y nadie más.
+- El **valle** se preparaba con `Expedition.sea_level_m`, que al fundar desde el mapa
+  **todavía no está puesto** —se pone al entrar al valle, después—. Así que el relleno se
+  hacía «para el mar de hoy», es decir, no se hacía… **y quedaba sellado como hecho**, con
+  lo que no se reintentaba nunca. Medido en los valles guardados del jugador: el 60 con el
+  sello puesto, mar 0 y 106 470 celdas a cota cero intactas. Hoy el mar se lo pasa quien
+  manda preparar (`PreparaValle.mar_de_la_epoca`).
+
+Medido después, con el modo Debug abierto en el Paleolítico: **255 287 celdas de plataforma
+emergida y 22 414 con cauce pintado** (antes, ninguna). Lo enseña `tests/DebugCaptura.gd`.
+
+La moraleja, que ya estaba escrita en CLAUDE.md y volvió a pasar: **una pregunta, un sitio
+que la contesta**. Las dos quejas del usuario eran el mismo fallo visto desde dos mapas.
+
+### ¿Son ríos de verdad? La auditoría del agua (2026-09-17)
+
+El usuario lo pidió con todas las letras: «comprueba que todos los ríos que hayas metido,
+tanto en mapa regional como en el mapa detalle, sean fieles a la realidad; que no hayas
+convertido carreteras en ríos». La hace `tools/AuditarRios.gd`, sin red, sobre lo que hay
+horneado y guardado.
+
+**De dónde sale el agua, y qué se descarta.** La consulta de hidrografía y la de obra
+humana son distintas y no se tocan: el agua pide `way["waterway"]` y `way["natural"=water]`,
+y las vías —que se usan para **borrar** carreteras del relieve, no para pintarlas— piden
+`way["highway"]` y `way["railway"]`. Además, la tabla de anchos de `OSMWays` da **ancho
+cero** a lo artificial (canal, acequia, drenaje, presa, azud, compuerta, tubería), y un
+cauce de ancho cero no se pinta. Lo comprueba `TestRelleno`, con una carretera colada a
+propósito en la respuesta.
+
+**Lo que dice el dato de hoy:**
+
+| | Qué hay | Clases |
+|---|---|---|
+| Mapa regional, de OSM | **1 599 tramos, 4 107 km** | `river` 1 599, y nada más |
+| Mapa regional, por la plataforma | 58 tramos, 1 490 km | **deducidos del relieve**, no son dato de OSM |
+| Valle del sitio 36 | 15 cauces, 60,2 km | `stream` 13, `river` 2 |
+| Valle del sitio 60 | 41 cauces, 73,2 km | `stream` 40, `river` 1 |
+
+Los quince cauces con más kilómetros del mapa regional son ríos de verdad y con su nombre:
+Pisuerga, Ebro, Carrión, Esla, Nela, **Deva**, Cea, **Saja**, **Pas**, Baia, Valdavia,
+**Cares**, Urbel, **Nansa**, Oca. Los de la meseta salen porque el recuadro regional son
+200 × 143 km y baja bastante al sur de la divisoria: están donde deben estar.
+
+**Y dos cosas que la auditoría destapó en lo que acabábamos de hacer**, las dos en los ríos
+que siguen por el relleno:
+
+1. **Cada cauce bajaba solo hasta el mar**, sin unirse a nadie. El «Caño de la Portilla»
+   —un caño de marisma de tres metros— recorría **12,7 km** él solo, y el Gandarilla salía
+   **dos veces por el mismo sitio**, una por cada tramo en que OSM lo parte. Ahora **los
+   afluentes confluyen**: el camino se para en cuanto pisa otro cauce ya trazado, y se
+   trazan de mayor a menor para que el colector sea el río y no el arroyo que llegó antes.
+   El caño quedó en 1,6 km.
+2. **Los ríos remontaban.** El camino sale de una inundación por prioridad, que busca el
+   paso más bajo pero **puede cruzar un collado**: el Deva subía 56 m y el Cabra 181,5 m.
+   Ahora el tramo nuevo **abre su cauce** —como ya lo abre el mapa regional en la
+   plataforma—, con pendiente mínima de 2,5 por mil y excavando a paso de celda, no por
+   discos sueltos. Medido después: el sitio 36 se queda en **0,5 m** de remonte y el 60 en
+   **0,7 m**, y eso comprobándolo sólo por encima del agua, que por debajo ya es estuario.
+
+Lo único que sigue sin ser dato real es lo que nunca lo fue y está dicho desde el principio:
+**la prolongación por la plataforma**, que es deducción sobre el relieve. Y el drenaje que
+se deduce de la propia malla cuando Overpass no responde, que es la reserva de última hora
+y sí podría seguir una cuneta —por eso la obra humana se borra del relieve **antes** de
+calcularlo—.
+
+### Y el agua que cruza la raya del recuadro (2026-09-17, jugando)
+
+Queja del usuario: «los ríos/rías en los mapas costeros se cortan cuando llegan a las 8
+casillas que rodean la casilla principal». **No era el dato**: el contorno trae su agua de
+OSM y la pinta —medido, del 1,6 % al 4,4 % de sus celdas, y cruzando la raya—. Eran dos
+cosas de cómo se ve:
+
+1. **Las ocho casillas se desaturan y se oscurecen a propósito** —son fondo, no tablero— y
+   eso **se comía el azul del cauce**: el río salía del recuadro y se volvía una raya gris.
+   Ahora la desaturación de fuera **no se aplica donde hay agua** (`triplanar.gdshader`):
+   el agua es lo único que cruza esa raya y tiene que verse igual a los dos lados.
+2. **El mar se acababa en el borde del recuadro.** La lámina de `TerrainGenerator` mide
+   exactamente `terrain_size`, así que en un valle de costa la ría llegaba a la raya y se
+   quedaba sin agua. `TerrainSurround.montar_el_mar` le pone un **marco** de mar alrededor,
+   con el mismo material —un plano grande por debajo se pelearía con el del valle por el
+   mismo píxel, y el del valle es el que lleva las olas finas—.
+
+Y de paso, una cosa que conviene saber: **un valle sin rellenar no tiene mar en el
+Paleolítico**. El juego sólo pone lámina de agua si algo queda por debajo del nivel del
+mar, y el mar de hoy sin rellenar está a cota cero: con el mar de la época a −120 m, el
+valle sale entero en seco. Por eso el relleno no es un adorno.
+
 
 Y deja escrita una trampa: `Resource.duplicate()` **no copia** `elevations`; la
 copia y el recurso cacheado de `load()` compartían el array, y escribir en uno
@@ -428,6 +671,20 @@ después de la elección.
 enseñarla. **Tapar del todo**: las nubes tienen claros y sombras, pero donde no se ha visto
 tienen que seguir sin dejar ver ni un río; se mira en la captura de partida recién
 empezada. **Lo avistado** son marcas aparte, por encima: no debería cambiar, y se mira.
+
+### Retirada: la niebla del mapa regional (2026-09-17)
+
+> **Fuera, por decisión del usuario**: «quitamos la niebla en el mapa regional». Se retiran
+> la calima del relieve, las nubes con volumen y el shader que las borraba del mar y de la
+> frontera —`NubesDeLaNiebla`, `bajo_la_niebla.gdshader`, `nubes_con_volumen.gdshader` y el
+> bloque `fog` de `triplanar.gdshader`—, y con ellas su sonda y su prueba de la losa.
+>
+> **Lo que NO se ha quitado es la exploración**: `NieblaRegional` sigue guardando qué ha
+> visto la banda, y los yacimientos siguen apareciendo sólo cuando se descubren. Eso es
+> conocimiento y lo usan las expediciones, los campamentos y el guardado; lo que se ha
+> quitado es el velo que tapaba el mapa.
+>
+> Lo de abajo queda como estaba escrito, porque cuenta cómo se hizo y qué costó.
 
 ### Cómo quedó: la niebla como nubes (2026-09-16)
 
@@ -692,6 +949,25 @@ horneado y la cueva tiene su glifo (`MateriaIcon.Glyph.CUEVA`).
 
 ## 5. Las personas
 
+> **AVISO (2026-09-18): esto es el plan que se escribió, no lo que se construyó.** Lo que
+> hay hoy en el juego es **otra cosa**: un único modelo genérico (`Animated Human.fbx`) con
+> **siete clips** —ocioso, andar, correr, saltar, golpear, trabajar, morir—, horneado a una
+> **textura de vértices** y dibujado como un `MultiMesh` (`BandaAtlas`, `BandaCrowd`). La
+> ropa son **cuatro materiales** —vestido/desnudo × piel clara/oscura—, no piezas de
+> geometría. Es decir: se construyó justo la técnica de multitudes que esta sección decía
+> dejar «anotada para épocas tardías, no construida ahora», y no se construyeron ni los
+> seis cuerpos ni el rig ni los slots de ropa.
+>
+> Gana el código: lo de abajo se conserva porque sigue siendo el destino al que se quiere
+> llegar —y porque explica por qué—, pero **no describe el juego de hoy**. La spec que cierra
+> ese hueco es §5.1.
+>
+> **Al día 2026-09-18 esto está HECHO, y por otro camino.** La banda va con `Skeleton3D` de
+> verdad —no con la técnica de multitudes que esta sección proponía dejar para después—, con
+> cuerpos de 12 566 triángulos, 45 animaciones, ropa modular por era y el apero del oficio
+> colgado del hueso de la mano. Lo que no hay es el rig propio ni los seis cuerpos: se usan
+> tres packs CC0. Ver §5.1, «Cómo quedó».
+
 **Escala real, 1,70 m.** La legibilidad que daba la cápsula de 3,2 m tiene que
 darla el tope de zoom cercano y la silueta a distancia.
 
@@ -719,7 +995,285 @@ problema que no se tiene.
 
 ---
 
+## 5.1. La banda: cuerpos, oficios en las manos y ropa por era (spec 2026-09-18)
+
+> **Spec escrita con `/spec` el 2026-09-18.** Sale de una petición del usuario: «modelos
+> mejorados de los miembros de la banda, con animaciones para trabajar, sentarse, andar…
+> también tendrá que tener posibilidad de equipar diferentes ropas por las diferentes eras y
+> diferentes herramientas». Las decisiones las tomó él con preguntas y están marcadas donde
+> salen.
+
+### Qué problema cierra
+
+**La banda es hoy veinticinco copias de la misma persona haciendo lo mismo.** Un modelo
+genérico, siete clips y cuatro materiales. Un tallador sentado percutiendo una lasca, una
+peletera raspando en bastidor y alguien avivando el fuego **se ven idénticos**: el mismo
+bucle de «trabajar». Y como la animación va horneada en una textura de vértices, **no hay
+huesos en tiempo real**: no hay dónde colgar una azagaya ni cómo cambiar una prenda.
+
+Eso choca con lo que el juego ya sabe de sí mismo. `Inhabitant.State` dice en qué situación
+está cada persona, `Profession.Speciality` qué está haciendo, el árbol de técnicas dice qué
+sabe hacer y las once fichas de época dicen cómo iba vestida la gente. **La simulación tiene
+la información y la vista no la enseña.**
+
+Y hay un motivo de juego, no sólo de vista: el jugador reparte oficios y no puede comprobar
+de un vistazo quién está en qué. Lo que se ve en pantalla debería contestar «¿quién está
+tallando?» sin abrir un panel.
+
+### Lo que se pide
+
+- **Cuerpos mejores, de packs CC0 ya animados** (decisión del usuario). Nada de
+  bibliotecas con licencia dudosa ni de assets que haya que comprar: el catálogo del juego
+  es CC0 y se queda así. Si un pack no trae un clip, se resuelve con otro CC0 o se deja
+  fuera y se dice.
+- **Animaciones que distingan lo que se hace**: andar, sentarse, trabajar y las de los
+  oficios que se ven. El catálogo sale de `Profession.Speciality`, que ya existe: no se
+  inventa una lista nueva.
+- **Herramienta en la mano, la del oficio que se está viendo** (decisión del usuario):
+  lasca, buril, raspador, azagaya, arpón, cesto, haz de leña. El criterio es el de §6:
+  **arponear y forrajear no pueden leerse igual**.
+- **Ropa por era, con el sistema completo y un conjunto por cada una de las once**
+  (decisión del usuario). Aviso dado y aceptado: son once conjuntos de prendas, y eso es la
+  partida más cara con diferencia.
+- **Y que el PC del usuario lo mueva** (decisión del usuario, literal: «lo necesario para
+  conseguir lo que he pedido y que mi PC lo pueda mover»). Esto **decide la arquitectura**,
+  y por eso la arquitectura no se fija aquí: se elige **con la medida delante** en el plan
+  técnico. Hoy el valle va a 20-22 fps en una GTX 1070, así que el margen es estrecho y la
+  decisión entre esqueletos en tiempo real, horneado o una mezcla de los dos es una cuestión
+  de milisegundos medidos, no de gusto.
+
+### Criterios de aceptación
+
+- **Se distingue el oficio a la distancia de juego.** Sobre una captura del campamento con
+  la banda trabajando, **cada especialidad visible se reconoce por su postura y su apero**
+  sin leer ningún panel. Lo juzga el usuario sobre capturas, como se eligieron las texturas.
+- **Cada especialidad tiene clip y apero, y se comprueba sin abrir el juego**: una prueba
+  recorre `Profession.Speciality` y falla si alguna se queda sin animación asignada o sin
+  objeto en la mano. Es la red contra el «treinta y cinco clips a medias» que §6 ya temía.
+- **La ropa cambia con la era**: una prueba recorre las once eras y comprueba que cada una
+  tiene su conjunto y que cambiar de era cambia las prendas de la persona.
+- **Cabe en la máquina**: con la banda entera a la vista en el campamento, **la banda se
+  queda por debajo de los 2,0 ms de GPU** que el presupuesto de §1 le da a «Personajes»,
+  medido en dos corridas con `BandaProbe` y con la ventana fijada a 1080p. Si no cabe, se
+  dice y se cambia la arquitectura, no el criterio.
+
+  > **Este criterio decía «no subir más de un 15 %» y se cambió el 2026-09-18, al medir la
+  > línea base.** La banda de hoy cuesta **0,15 y 0,21 ms de GPU** en dos corridas: el 15 %
+  > de eso son 0,03 ms, **menos que el ruido entre corridas**. Un listón que no se puede
+  > medir no es un listón. El presupuesto de §1 sí: da diez veces el margen que hace falta
+  > y está escrito desde antes de este trabajo.
+- **Nadie se queda en pose T**: una prueba comprueba que todo `Inhabitant.State` tiene clip.
+- **Se entrega por oficios completos** (regla heredada de §6): caza entera, luego ribera
+  entera. Nunca treinta y cinco clips a medias.
+
+### Fuera de alcance
+
+- **Multitudes de cientos de personas.** Veinticinco es la banda; lo demás es de épocas
+  tardías y ya está anotado en §5.
+- **Cara, pelo y expresión.** A la distancia a la que se juega no se ven, y abren un
+  agujero sin fondo.
+- **Física de tela y de pelo**: las prendas son geometría rígida cosida al cuerpo.
+- **Cinemática inversa** para que los pies se posen en la pendiente: es el paso siguiente
+  natural, y va aparte.
+- **Que la herramienta de la mano sea la misma pieza del utillaje** que la simulación gasta
+  y rompe (`Toolkit`): aquí se enseña un apero, no se lleva su contabilidad.
+- **Animación facial, hablar, gestos de relación**: el juego no los pide todavía.
+
+### Cómo quedó (2026-09-18)
+
+> **Esta sección se reescribió entera.** La primera versión del trabajo montó la fontanería
+> —una tabla de gestos, una pose de mano horneada, aperos de cubos y cilindros y una
+> «prenda» que era la piel del propio cuerpo inflada y teñida— **sin tocar ni el modelo ni
+> las animaciones**, que era el grueso de lo que se había pedido. El usuario lo dijo claro.
+> Lo que sigue es el trabajo hecho.
+
+**La banda ya no es un `MultiMesh` con la animación horneada: es una persona por nodo, con
+su `Skeleton3D`.** Esa decisión la forzó la aritmética, no el gusto: con el cuerpo nuevo
+—12 566 triángulos contra 1 578— y **ropa modular de verdad**, cada pieza de ropa habría
+necesitado su propia textura de vértices, unos 25 MB por pieza y 60 por atuendo.
+
+| | GPU | CPU | draw calls |
+|---|---|---|---|
+| Horneado en textura (antes) | 0,18 ms | 0,05 ms | 603 |
+| Esqueletos con ropa (ahora) | 0,38 ms | 0,57 ms | 998 |
+
+Medido con `scripts/tests/EsqueletosProbe.gd` en el valle 56 a 1080p en la 1070, con las dos
+cosas en la misma escena y midiendo la diferencia. **El presupuesto de §1 para «Personajes»
+son 2,0 ms**, así que se gasta la mitad y se compra todo lo demás.
+
+#### De dónde sale todo
+
+Tres packs **CC0 de Quaternius**, y lo importante es que **comparten esqueleto**: 65 huesos
+con los mismos nombres en los tres, comprobado antes de tocar nada.
+
+| Pack | Qué da |
+|---|---|
+| Universal Base Characters | 2 cuerpos con cara, ojos y cejas, y 8 peinados con barba |
+| Modular Character Outfits | 20 piezas de ropa: torso, brazos, calzas, botas, capucha |
+| Universal Animation Library | 45 animaciones |
+
+Los dos primeros **sólo están en itch.io, que no deja descargar por script**: se intentó por
+el flujo con cookies y token, por POST al fichero y por GET directo, y devuelve 404. El
+espejo de poly.pizza sí deja, pero **les quita el esqueleto** —cero *skins*, cero
+animaciones—, así que los bajó el usuario a mano. La biblioteca de animaciones sí se pudo,
+desde OpenGameArt.
+
+#### Las tres reglas del pack que no se adivinan
+
+Están en [CatalogoDeCuerpos], y las tres se pagaron con capturas:
+
+1. **La ropa trae su propia piel.** La pieza de brazos lleva dos materiales, el del atuendo
+   y el de la carne. Así que el cuerpo desnudo **no se dibuja**: dejarlo puesto es lo que
+   hacía que asomara por las costuras —«el cuerpo atraviesa la ropa»—.
+2. **Pero el cuerpo es una sola malla con la cabeza dentro**, así que esconderlo deja a la
+   persona **sin cabeza**. Se vio en captura. La cabeza se parte en frío con
+   `scripts/tools/CabezaSuelta.gd`, quedándose con los triángulos que cuelgan de `Head` y
+   `neck_01`: 2 912 de 12 566.
+3. **Las animaciones vienen de otro fichero** y con sus pistas apuntando al esqueleto de su
+   propio maniquí. Se re-enraizan a la persona. Y el export que vale es **el de Unreal**: el
+   de Godot usa nombres de Rigify (`DEF-hips`) y los cuerpos usan los de Unreal (`pelvis`).
+
+#### Los gestos: once posturas de trabajo donde había una
+
+`ClipsDeLaBanda` reparte los ocho estados y las veinte especialidades entre los clips del
+pack. No hay ninguno de tallar sílex —no existe en ningún pack libre— así que cada oficio usa
+**el gesto real que más se le parece**, y lo que remata la lectura es el apero:
+
+| Oficio | Gesto | En la mano |
+|---|---|---|
+| Talla, asta, peletería, cantera, ahumado | `Fixing_Kneeling` | percutor / buril / raspador |
+| Forrajeo, leña | `PickUp_Table` | cesto / rollo de fibra |
+| Trampas, caza menor, marisqueo | `Crouch_Idle` | — / azagaya / cesto |
+| Caza mayor, orilla | `Sword_Attack` | azagaya / arpón |
+| Yesquero | `Idle_Torch` | tea |
+| Cordelería, cuidado | `Sitting_Idle`, `Sitting_Talking` | — |
+| Batida | `Crouch_Fwd` | — |
+| Altura | `Push` | arpón |
+
+Y fuera del trabajo: se duerme sentado, se cena sentado y hablando, se bate la comarca al
+trote y se prospecta agachado. **Sentarse, andar y trabajar, que era lo que se pidió.**
+
+#### La ropa, y los aperos
+
+`Vestuario` da un conjunto por era: qué piezas se ponen, de qué color y cuánto tapan. Son
+cinco eras porque el código tiene cinco (`Site.Era`); las once de `docs/EPOCA_NN_*.md` son el
+reparto del diseño. El pack libre trae dos atuendos —aldeano y montero— así que la era se
+nota en las tres cosas a la vez, y el tinte hace más de lo que parece: acerca una lana
+verdosa de fantasía a un cuero curtido sin gastar un triángulo.
+
+Los aperos cuelgan de un `BoneAttachment3D` en `hand_r`. **Seis salen del «Fantasy Props
+MegaKit»** (CC0, de OpenGameArt) y **dos hay que componerlos**: la azagaya y el arpón, que
+ningún pack libre trae. El primer intento usó la «piedra de afilar» del pack como percutor y
+resultó ser **una rueda de molino con su bancada**; se vio en captura y se cambió por una
+primitiva.
+
+#### Lo que se quedó por el camino
+
+- **El horneado en textura de la banda**, con su `BandaAtlas`, su `Percha` y sus prendas
+  infladas. `VertexAnimBaker` sigue vivo porque **la fauna sí lo usa**.
+- **El modelo «Animated Human»**, que era lo que había, y sus cuatro materiales de piel.
+- El arreglo del techo de 256 fotogramas del addon **se queda**: la fauna sigue con ese
+  shader, y su bug era real. La sonda que lo cazaba (`TechoDeClips`) se fue con la banda:
+  los horneados de la fauna no pasan de 132 fotogramas, así que ya no hay con qué
+  reproducirlo.
+
+#### Depurar del 2026-09-18: la banda hundida hasta la cintura
+
+Al jugar, la gente salía **enterrada de medio cuerpo**. Medido con
+`scripts/tests/PiesProbe.gd`, que pone una persona en `y = 0` y lee la cota de los huesos:
+con el clip de estar de pie, **la planta caía a −0,83 m** y la pelvis a 8 mm del suelo. O
+sea que el esqueleto estaba **aplastado**, no simplemente bajo.
+
+**La causa no era el código de la vista: era el fichero de animaciones.** Comparando las dos
+poses de reposo:
+
+| | `root` | `pelvis` | `Head` | `ball_l` |
+|---|---|---|---|---|
+| Cuerpo (glTF) | 0,000 | **0,949** | **1,600** | 0,015 |
+| Animaciones (FBX) | 0,000 | **0,0005** | **−0,0001** | −0,0011 |
+
+El FBX trae **todos los huesos amontonados en el origen**. Es exactamente el fallo del que
+avisa el propio pack en su léeme: *«The Unreal Engine models were exported in GLTF because of
+a known scaling bug when importing rigged FBXs from Blender»*. Se leyó ese aviso al montar el
+trabajo y se entendió como una advertencia sobre los **modelos**; era sobre cualquier FBX
+riggeado, incluido el de animaciones.
+
+**Las rotaciones del FBX sí valen** —no tienen unidades ni dependen del reposo, y por eso las
+posturas se leían bien aunque el cuerpo estuviera aplastado—. Así que ahora
+[CatalogoDeCuerpos] **se queda sólo con las pistas de rotación** y tira las de posición y
+escala: las longitudes de hueso salen del esqueleto del cuerpo, que está sano. Es lo mismo
+que hace el «rest fixer» de Godot al reorientar un rig.
+
+**Y eso destapó la otra mitad.** Sin la traslación de la cadera, al doblar las piernas el
+cuerpo no baja: ya no se hundía nadie, pero quien se agachaba o se arrodillaba quedaba
+**flotando entre 36 y 46 cm**. Se arregla con una sola regla que vale para los dos casos:
+[Cuerpo] mira cada cuadro dónde ha quedado el pie más bajo y **asienta el modelo** para que
+apoye. Dos consultas de hueso por persona y cuadro.
+
+El resultado, con los mismos diez clips:
+
+| | planta antes | sólo rotaciones | asentado |
+|---|---|---|---|
+| De pie | −0,833 | +0,046 | **+0,015** |
+| Andando | −0,865 | +0,011 | +0,018 |
+| En cuclillas | −0,423 | +0,459 | +0,014 |
+| Arrodillado | −0,527 | +0,363 | +0,032 |
+| Sentado | −0,503 | +0,379 | +0,014 |
+
+La planta en reposo está a 0,015 m —el hueso de la almohadilla va por encima de la suela—,
+así que ésa es la diana, no el cero. Y la pelvis baja ya como debe: 0,85 m de pie, 0,44
+en cuclillas, 0,52 arrodillado.
+
+Coste tras el arreglo: **0,37 ms de GPU y 0,43 de CPU**, sin cambio apreciable.
+
+#### Depurar del 2026-09-18: vestidos los que tienen vestido
+
+La banda salía **abrigada siempre**, incluso el día 1 — que es justo cuando el utillaje
+tiene cero vestidos y la barra superior pone «sin vestidos». La vista contradecía a la
+partida en algo que el jugador ya podía leer en pantalla.
+
+**La simulación no sabe quién lleva qué, y es a propósito.** Está escrito en tres sitios:
+`SettlementSim.vestido_coverage` —«cobertura AGREGADA, no se sabe ni hace falta saber quién
+lleva cuál»—, `Cumbres` —«el vestido es de la banda y no de nadie en concreto»— y
+`Toolkit.wear_all` —«cada pieza se desgasta un poco cada jornada, la use quien la use»—. Lo
+que hay es un número, `Tool.Kind.VESTIDO`.
+
+Así que **elegir a quién se dibuja abrigado es una decisión de la vista**, y la tomó el
+usuario: **primero los que salen del campamento**, porque el frío se pasa fuera y porque así
+se lee de un vistazo quién va vestido al tajo. Si sobran, visten a los de dentro; si faltan,
+van por orden de banda, que es estable —sin eso la ropa cambiaría de dueño cada cuadro y la
+gente parpadearía—. El reparto vive en `Vestuario.quien_va_vestido` y lo calcula `Figuras`
+**una vez por cuadro**, no una por persona.
+
+Y salió gratis una coincidencia que no lo es: «estar fuera del campamento» es **la misma
+lista de estados** con la que ya se decidía si se le ve el apero en la mano. Se renombró a
+`ClipsDeLaBanda.FUERA_DEL_CAMPAMENTO` y contesta las dos preguntas desde un sitio.
+
+Quien no tiene vestido va **con el cuerpo tal cual** (decisión del usuario). Cuesta un
+`visible`, no rehacer nada, así que cambia en el mismo cuadro en que se cose o se rompe una
+prenda. **Con un cuidado**: la malla del cuerpo entero trae la cabeza dentro, así que al
+enseñarla hay que esconder la cabeza suelta o se dibujan las dos encima.
+
+Y la banda desnuda es **más barata**: 785 llamadas de dibujo contra 991, y 0,29 ms de GPU
+contra 0,37.
+
+#### Lo que sigue sin estar
+
+- **Los pies no se posan en la pendiente.** Estaba fuera de alcance en la spec y sigue fuera.
+- **Sólo hay dos cuerpos**, hombre y mujer de proporción «superhéroe»: los otros cuatro van
+  en la versión de pago del pack.
+- **El atuendo es medieval teñido**, no una piel magdaleniense. A cuarenta píxeles se lee
+  como cuero; de cerca es una túnica con cordones.
+
+---
+
 ## 6. Las animaciones: el catálogo sale del código
+
+> **AVISO (2026-09-18): ya no son siete clips genéricos, son 45.** De un pack CC0, con
+> sentarse, agacharse, arrodillarse a trabajar, coger del suelo, empujar y sostener una tea.
+> Ninguno es literalmente «tallar sílex» —eso no existe libre—, así que cada oficio usa el
+> gesto que más se le parece y el apero acaba de separarlos: son **once posturas de trabajo
+> distintas** donde había una. La tabla está en `ClipsDeLaBanda`. Ver §5.1.
 
 **La máquina de estados ya está escrita.** `Inhabitant.State` dice en qué
 situación está cada persona y `Profession.Speciality` qué está haciendo. La
@@ -2024,6 +2578,29 @@ Dos cosas más que aparecieron y ninguna era obvia:
   m/s**. Si el camino nuevo no empieza donde está la figura, ya no se la ve salir: se
   esconde y se va al medio del viaje.
 
+### Depurar del 2026-09-17: se teletransportaban, y a veces eran una marca
+
+Dos quejas del usuario jugando, las dos de esta sección:
+
+**«Veo a los recolectores teletransportarse entre recolección y recolección.»** Sólo se
+abrevian los viajes de más de 150 m; por debajo, la figura se pintaba **en la posición
+simulada tal cual**, y a ×1 la simulación mueve a alguien de quince a sesenta metros por
+cuadro. La cámara lenta frena eso al acercarse, pero el salto seguía ahí. Ahora, en viajes
+cortos, la figura **persigue**: anda a 8 m/s y, si se descuelga más de 12 m, corre lo justo
+para no pasar de ese retraso. Un salto de más de 60 m —reaparecer, volver de una
+expedición, cargar— se pone sin disimulo: eso no es andar.
+
+**«A veces se quedan representados por la marca y no por el modelo, por ejemplo por la
+noche cenando.»** La marca sólo se pinta en mitad de un viaje abreviado, y de ahí se salía
+mirando la ruta de la persona. Quien se quedaba parado con una ruta larga sin recorrer —el
+reparto cambia, cae la noche— se quedaba **escondido para siempre**. Ahora lo que decide es
+que la persona avance: diez minutos de juego sin moverse y la figura vuelve a verse entera.
+
+**Se cuenta en horas de juego y no en segundos de reloj**, y eso importa: el reloj de pared
+corre igual con la partida en pausa, y en pausa nadie se mueve. Contando reloj, pausar
+sacaba a toda la banda de su viaje —lo dijo la prueba vieja de `TestSeguimiento` en cuanto
+se tocó—.
+
 ### Medido
 
 `VerTrabajarProbe` (ventana, 1280×720, valle del sitio 56, tres horas de juego a ×1, sin
@@ -2109,3 +2686,302 @@ en un proyecto que no termina**.
 > **El agua y el clima salieron de esta lista el 2026-09-15**: el usuario los pidió
 > como trabajos propios, cada uno con su spec —§7.3 y §7.4—, que es justo lo que esta
 > lista pedía de ellos. Siguen fuera los edificios y el ciclo día/noche.
+
+
+## 7.7. Las texturas del suelo, con su altura de verdad (spec 2026-09-17)
+
+> **Spec escrita con `/spec` el 2026-09-17.** Sale de una petición del usuario: «mejora de
+> las texturas terrestres… quiero que encuentres texturas con heightmaps, PBR… para algunas
+> zonas textura de pared de caliza con sus grietas y tal… en los rocales texturas de rocas
+> con heightmaps de cada una de las rocas… para la hierba también… busca texturas de gran
+> calidad». Las decisiones las tomó él con preguntas y están marcadas donde salen.
+
+### Qué problema cierra
+
+**Las texturas del terreno ya son PBR con altura, y la altura no se usa.** Se descargan de
+ambientCG —CC0— con su `Displacement`, se empaquetan en el canal alfa del ORM y ahí se
+quedan: el relieve que se ve sale del **brillo del color** (§3, «el relieve de las
+texturas», 2026-09-16). Fue una decisión del usuario de aquel día —«que se hunda lo oscuro
+del dibujo»— tomada cuando la altura de verdad no estaba enchufada a nada.
+
+Eso tiene una consecuencia que hoy se ve en el juego: **se hunde lo que está oscuro, no lo
+que está hundido**. Un liquen negro sobre una caliza lisa sale como un agujero, y una
+grieta iluminada por el sol sale plana. Y hace que mejorar las texturas no sirva de mucho:
+por buena que sea la piedra nueva, su relieve seguirá saliendo de las manchas del dibujo.
+
+Y aparte está lo que el usuario pide de las texturas mismas: **la pared de caliza tiene que
+tener grietas**, **el canchal tiene que leerse canto a canto** y no como una manta de
+grava, y **la hierba tiene que ser hierba** y no una alfombra verde. Las ocho capas de hoy
+son las primeras que se eligieron y nunca se han vuelto a mirar.
+
+### Lo que se pide
+
+- **El relieve sale de la altura descargada** (decisión del usuario): el parallax con
+  oclusión lee el canal de altura del ORM, que ya está ahí, en vez de deducirla del brillo.
+  **Esto retira la decisión del 2026-09-16**; se retira con su porqué escrito, porque aquel
+  día la alternativa no existía.
+- **Texturas nuevas para las capas que el usuario nombra**: la pared de caliza con sus
+  grietas, el canchal con cantos que se lean uno a uno, y la hierba. De ambientCG y CC0,
+  como las de ahora: mismo sitio, misma licencia, misma herramienta que las trae.
+  **Elegidas el 2026-09-17 sobre las hojas de contacto** (`tools/CandidatasDeTextura.gd`,
+  color y altura de cada candidata): caliza **Rock023** —estratos y grietas, y las grietas
+  están en el mapa de altura—, canchal **Rocks002** —cantos que se leen uno a uno—, hierba
+  **la de siempre** (Grass007: entre las candidatas no había mejora), suelo de bosque
+  **Ground003** y, en otoño, la hojarasca **Ground041**.
+- **Se quedan en 1K** (decisión del usuario). No se sube la resolución: el juego va a 20-28
+  fps y usa 1 876 MB de VRAM, y cuadruplicar los píxeles de una capa no es lo que falta.
+  Lo que falta es que la altura sea la de la piedra.
+- **Los rocales son la capa de canchal** (decisión del usuario), no los modelos 3D de roca
+  sueltos, que son otro trabajo.
+- **Las elige el usuario sobre capturas** (decisión del usuario): del mismo sitio, a la
+  altura a la que se juega, con la textura de ahora al lado de las candidatas.
+
+### Criterios de aceptación
+
+- **El hundido sigue a la altura y no al color.** Con una capa preparada a propósito donde
+  el dibujo y la altura discrepan —una franja oscura y plana, y una grieta clara y honda—,
+  el relieve hunde la grieta y deja la franja lisa. Se comprueba sobre captura, y es la
+  única forma honrada de decir que el cambio hizo algo.
+- **No cuesta más GPU que hoy**: mismos pasos de parallax, mismo número de muestras. Se
+  mide con la sonda de GPU que ya existe, con el relieve encendido, antes y después, y la
+  diferencia tiene que caber en el ruido de dos corridas —que en esta máquina es grande:
+  49,2 y 33,7 ms para lo mismo (INTERFAZ §16)—.
+- **La VRAM no sube**: se queda en 1K y se mide antes y después.
+- **Las tres capas nuevas elegidas por el usuario** sobre capturas del mismo encuadre, y la
+  elección queda escrita aquí con el nombre del asset, como está la de ahora.
+- **Los créditos dicen de dónde sale cada una**: `CREDITOS.md` se regenera y nombra los
+  assets nuevos.
+- **La suite sigue en verde** y el total de comprobaciones no baja.
+
+### Fuera de alcance
+
+- **Subir de 1K**, decidido arriba.
+- **Los modelos 3D de roca** —las peñas y bloques de Poly Haven repartidos por el valle—:
+  otro trabajo, con su spec.
+- **Desplazar la malla de verdad** (tessellation): el parallax mueve píxeles, no vértices, y
+  cambiar eso es rehacer el terreno.
+- ~~**Cambiar cuántas capas hay ni cómo se mezclan por altura y pendiente**~~. **Retirado
+  el 2026-09-17, al elegir el usuario las texturas**: pidió que el suelo de bosque fuera uno
+  normalmente y **hojarasca en otoño**, y eso no es cambiar una imagen sino **una capa que
+  aparece con la estación**. Entra una novena capa —la hojarasca—, con su peso mandado por
+  el otoño como la nieve cuaja con el frío, y **sube y baja progresivamente** (decisión del
+  usuario). Lo que sigue fuera es tocar cómo se mezclan las otras ocho por altura y
+  pendiente.
+- **Texturas que no sean CC0.** Ni de pago ni con atribución obligatoria: el catálogo de
+  hoy es CC0 y se queda así.
+- **La hierba en 3D** (las briznas de `HierbaAtlas`): eso es vegetación, no textura de
+  suelo.
+
+### Plan técnico (2026-09-17)
+
+**Dónde está el cambio, exactamente.** `altura_de_la_capa` en `shaders/triplanar.gdshader`
+lee el brillo del albedo y devuelve una altura deducida de él; el parallax con oclusión
+—`relieve_desplazado`— la llama tres veces por píxel. La altura de verdad está a un
+muestreo de distancia: es el **canal alfa de `terrain_orm`**, que `TerrainTextureIngest` ya
+empaqueta desde el `Displacement` de ambientCG. Todo lo demás del relieve —los pasos, la
+hondura de las juntas, el bulto con luz, el desenfoque— se queda como está.
+
+**Módulos afectados**
+
+| Script | Qué cambia |
+|---|---|
+| `shaders/triplanar.gdshader` | `altura_de_la_capa` lee el alfa del ORM. `media_de_la_capa` deja de hacer falta para el relieve: un heightmap ya viene centrado, no hay que restarle su media. |
+| `mundo/TerrainLayers.gd` | Los assets de las tres capas que cambian, con su `tile_m` si la textura nueva pide otro. Es el catálogo, y vive ahí y sólo ahí. |
+| `tools/TerrainTextureIngest.gd` | Nada de fondo: ya descarga el `Displacement`. Se corre para traer las candidatas. |
+| `tests/MapasProbe.gd` | Ya mira los mapas empaquetados; se le añade que diga si el alfa del ORM trae altura de verdad o está plano. |
+| `tests/TexturasCaptura.gd` (nueva) | Las capturas para elegir, y la capa de prueba donde el dibujo y la altura discrepan. |
+| `docs/GRAFICOS.md`, `docs/CREDITOS.md`, `docs/ESTADO.md`, `docs/ROADMAP.md` | Lo elegido, de dónde sale y lo que cuesta. |
+
+**Decisiones de arquitectura** —dos, y las dos obligadas por la spec:
+
+1. **La altura sale del ORM y de ningún otro sitio.** No se mezcla con el brillo ni se deja
+   un mando para volver al brillo: sería la misma pregunta contestada desde dos sitios
+   (`SPECS.md` §7, invariante 3). Lo que se retira queda escrito arriba con su fecha.
+2. **Sin altura no hay relieve.** El ORM se apaga en el escalón Bajo (`graficos["orm"]`), y
+   ahí el parallax ya está apagado (`relieve_pasos = 0` en Bajo y Medio). Así que no hace
+   falta reserva: donde no hay ORM tampoco se pide relieve, y eso ya lo garantizan los
+   niveles.
+
+**Orden de dependencias**: la capa de prueba (2) antes que el cambio del shader (1), porque
+es lo que demuestra que el cambio hizo algo. Las candidatas (3) después, porque hasta que
+la altura no mande, una textura mejor no se distingue. Y la medida (5) al final, con todo
+puesto.
+
+**Riesgos que se nombran**
+
+- **La descarga necesita red, y en `--headless` esta máquina no la tiene**: el módulo SSL
+  de Godot no arranca ahí —visto el 2026-09-17 con el IGN y con Overpass, que sí responden
+  con ventana—. La herramienta de texturas se corre **sin `--headless`**. Si aun así no
+  hubiera red, la tanda se queda en enchufar la altura, que no necesita descargar nada.
+- **Las candidatas pueden no existir con ese nombre.** El catálogo de ambientCG se nombra
+  por id (`Rock030`, `Grass007`), y pedir uno que no existe falla en la descarga. Se prueba
+  bajando, no adivinando.
+- **El relieve puede salir peor al principio.** Con el brillo, lo oscuro se hundía y eso
+  «se leía» aunque fuera mentira; con la altura real, una textura cuyo `Displacement` sea
+  flojo puede quedar más plana que antes. Es justo lo que el usuario tiene que juzgar sobre
+  capturas, y es la razón de que las candidatas vayan después del cambio.
+- **El disco del usuario va justo** (2,1 GB libres el 2026-09-18): cada asset de ambientCG
+  a 1K son unos 10 MB comprimidos y `textures/` ya pesa 56 MB. Se borra lo descargado que
+  no se quede.
+
+### Cómo quedó (2026-09-17)
+
+**El relieve sale del mapa de altura.** `altura_de_la_capa` lee el alfa del ORM —donde
+`TerrainTextureIngest` empaqueta el `Displacement` desde el principio— en vez de deducir la
+altura del brillo del dibujo. Se retira así la decisión del 2026-09-16 («que se hunda lo
+oscuro»), que se tomó cuando la altura de verdad no estaba enchufada a nada.
+
+**Y no era lo mismo, medido** (`tools/AlturaDeLasTexturas.gd`, que se queda como
+herramienta):
+
+| capa | altura σ | brillo σ | correlación |
+|---|---|---|---|
+| Pradera | 0,114 | 0,055 | **0,09** |
+| Suelo de bosque (el viejo, Ground037) | 0,053 | 0,104 | 0,18 |
+| **Roquedo calizo** | **0,220** | 0,069 | **0,02** |
+| Canchal | 0,107 | 0,136 | 0,60 |
+| Cantos de río | 0,107 | 0,108 | 0,43 |
+| Arena | 0,183 | 0,014 | 0,66 |
+| Limo | 0,055 | 0,046 | 0,18 |
+| Nieve | 0,135 | 0,010 | 0,39 |
+
+O sea: el alfa **sí traía altura** —hasta 0,22 de desviación típica en la caliza, la mayor
+de las ocho— y **no se parecía al brillo**: 0,02 de correlación en el roquedo. El relieve
+que se veía en la caliza no tenía nada que ver con su relieve.
+
+**Las texturas nuevas, elegidas por el usuario sobre hojas de contacto**
+(`tools/CandidatasDeTextura.gd`, que baja candidatas y compone color + altura de cada una):
+
+| capa | antes | ahora | por qué |
+|---|---|---|---|
+| Roquedo calizo | Rock030 | **Rock023** | caliza en estratos, y **las grietas están en el mapa de altura** |
+| Canchal | Rocks006 | **Rocks002** | cantos que se leen uno a uno; el viejo era grava fina y su altura, ruido |
+| Suelo de bosque | Ground037 | **Ground003** | el viejo tenía la altura más floja de las ocho (σ 0,053) |
+| Pradera | Grass007 | **Grass007** | entre las candidatas no había mejora |
+| Hojarasca (nueva) | — | **Ground041** | las hojas, dibujadas en el mapa de altura |
+
+**La novena capa: la hojarasca de otoño.** No es un sitio del valle sino una estación del
+suelo de bosque, así que su peso no sale de la altura ni de la pendiente: sale del propio
+peso del bosque multiplicado por cuánto otoño hay (`Temporada.hojarasca`, con la misma
+transición de doce días que la cota de nieve, decisión del usuario: «sube y baja con la
+estación»). Con otoño a cero la capa no pinta nada.
+
+**Lo que cuesta**: nueve capas de 1 024 px son **36 MB** de arrays, y la VRAM del juego se
+queda en **1 847-1 848 MB** contra 1 843-1 876 con las ocho viejas. Cabe en el ruido.
+
+### Lo que esto destapó, y que no es de aquí
+
+**La hojarasca no se ve en el juego**, y la culpa no es suya: **el suelo de bosque casi no
+se pinta donde hay árboles**. La máscara `wood` del shader sale de la curvatura del terreno
+y un ruido macro —zonas cóncavas, manchas grandes—, mientras que los árboles los planta la
+vista del bosque con su propia regla. Bajo un pinar, el suelo puede estar pintado de
+pradera; y si no hay suelo de bosque, no hay hojas que caer sobre él.
+
+El desajuste **ya existía** —la textura del suelo y los árboles llevan desde siempre sin
+hablarse— y la capa nueva sólo lo ha hecho visible. Arreglarlo es otro trabajo: que la capa
+de bosque siga a los árboles de verdad, o al revés. Queda escrito aquí y en ROADMAP para
+que no se pierda.
+
+### Depurar del 2026-09-18: la lepra, la caliza que no salía y el bosque que no coincidía
+
+Tres quejas del usuario al jugar con lo de ayer, y las tres eran de código.
+
+**«Parece que tiene lepra.»** Al enchufar el mapa de altura cambié **una sola mitad**: el
+desplazamiento del parallax pasó a usar la altura, y el **bulto con luz** —que es lo que de
+verdad se ve a la distancia de juego, según esta misma sección— se quedó sacando su cuesta
+del **brillo del dibujo**. Dos fuentes contradiciéndose en el mismo píxel: donde una decía
+hueco y la otra bulto salían manchas. Es el invariante 3 de SPECS §7 roto por mí en el
+propio arreglo que lo invocaba. Ahora las dos leen el alfa del ORM.
+
+Y la fuerza del bulto **baja de 3 a 1,2**: estaba calibrada contra el brillo, cuya
+desviación típica es 0,069 en la caliza, y la altura tiene 0,22. Con el número viejo la
+piedra salía rayada.
+
+**«Hay muchos sitios que deberían ser piedra caliza y sin embargo son rocal.»** El reparto
+roca/derrubio iba con un umbral y un margen —`slope_threshold`, `slope_blend`— y la pared se
+calculaba en `umbral + margen × 2,5`. Con lo que el material ponía de verdad (umbral 0,15),
+eso daba:
+
+| | empezaba | llena |
+|---|---|---|
+| Canchal | slope −0,05 (**casi llano**) | 0,35 (49°) |
+| Pared | 0,25 (41°) | 0,65 (70°) |
+
+O sea que **a 30 grados ya había medio canchal** y el derrubio se comía la roca en toda la
+ladera. Ahora son cuatro números con su ángulo escrito, y la decisión del usuario fue
+**pared desde 55-60°**: canchal de 35° a 55°, pared de 55° a 73°.
+
+**El suelo de bosque no coincidía con los árboles.** El shader pintaba bosque con la
+curvatura del terreno y un ruido macro suyos; `Forest` siembra con el **mapa de humedad**, la
+pendiente y la cota. Dos criterios para la misma pregunta, y por eso bajo un pinar el suelo
+podía estar pintado de pradera —y la hojarasca de otoño, que cuelga de esa capa, no
+aparecía—. Decisión del usuario: **manda la humedad**. El terreno la pasa al shader como
+textura (`TerrainMaterialManager.set_humedad`) y el bosque sale de ella con las bandas de
+`Forest.NICHOS` —0,34 a 0,55— por la pendiente. Visto en captura: el suelo de bosque cae
+ahora bajo los árboles, y en otoño se cubre de hojarasca hasta donde llega el bosque.
+
+**Y una trampa que costó tres intentos**: en las sondas no vale poner el uniforme de la
+hojarasca a mano. `WeatherView` lo reescribe **cada cuadro** con lo que diga la temporada,
+así que lo que hay que cambiar es la estación (`Temporada.asentar`), no el uniforme.
+
+
+### Depurar del 2026-09-18 (segunda vuelta): el canchal de la comarca y los árboles que flotaban
+
+**«En el mapa regional sólo hay parches de canchal… no puede haber canchales en la vista
+regional.»** El mapa regional usa el mismo shader que el valle, así que heredaba sus dos
+escalones de roca. Pero **el derrubio es un detalle de ladera**: a 111 m por muestra no se
+distingue un canchal de una peña, y lo que salían eran manchas de canto suelto donde debería
+haber caliza. Ahora `TerrainMaterialManager.pintar_como_comarca()` **iguala el escalón del
+canchal al de la pared** —con lo que su peso, que es `scree − cliff`, sale cero en todas
+partes— y baja el umbral de la roca al que tenía el derrubio, porque a esa escala las
+pendientes se promedian y con el umbral del valle no asomaría peña casi en ningún sitio.
+Decisión del usuario: «sin canchal: todo caliza».
+
+**«No estás usando las texturas que escogí.»** Aquí el usuario no llevaba razón, y se
+comprobó sobre el dato en vez de discutirlo: `tools/_Capas.gd` saca del `Texture2DArray`
+guardado el albedo de cada capa y lo pinta con y sin el tinte del catálogo. La capa 2 es
+**Rock023** —la caliza de estratos y grietas— y la 3 **Rocks002** —los cantos sueltos—, las
+dos elegidas por él, y el tinte apenas las cambia. Lo que sí es cierto es que **en el mapa
+regional no se leen**: la tesela mide de 3 a 6 m y la muestra 111 m, así que cada textura se
+repite unas treinta veces por muestra y de lejos sólo se ve su color medio. Eso queda sin
+tocar: es una vista de comarca, no de suelo.
+
+**«Algunos árboles no están colocados en el suelo, flotan… aunque la mayoría están bien.»**
+`Forest` tomaba la cota del **vértice de la celda**, sin interpolar, mientras la malla del
+terreno sí interpola entre vértices. En llano las cuatro esquinas valen casi lo mismo —de ahí
+que la mayoría estuvieran bien—, pero en ladera, entre dos vértices a 4,9 m hay metros de
+diferencia. Ahora la cota se interpola entre los cuatro, que es lo que hace la malla.
+
+
+### Depurar del 2026-09-18 (tercera vuelta): la caliza que no salía y el relieve por capa
+
+**«Aún hay demasiado canchal con respecto a caliza.»** Medido antes de tocar nada, sobre el
+relieve del valle del sitio 56 (807 302 celdas):
+
+| umbrales | canchal | caliza | tierra |
+|---|---|---|---|
+| los de la mañana (canchal 35-55°, caliza 55-73°) | **2,4 %** | **0,2 %** | 97,4 % |
+| caliza desde 45° | 1,9 % | 0,7 % | 97,4 % |
+| caliza desde 40° | 3,6 % | 1,4 % | 95,0 % |
+
+Y el reparto de pendientes del valle: mediana **22°**, p90 **36°**, p99 **51°**. O sea que
+**el problema no era el exceso de canchal sino la ausencia de caliza**: con la peña pidiendo
+55° en un valle cuya mediana son 22°, salía en el 0,2 % del suelo y el derrubio la superaba
+doce veces. Decisión del usuario con esas cifras delante: **caliza desde 40° y el canchal
+donde estaba**, que es lo que hace que la peña se coma parte del derrubio sin cambiar el
+resto del valle.
+
+**«El canchal apenas tiene relieve, debe tener MUCHO más relieve.»** No se podía: la fuerza
+del relieve era **una sola para las nueve capas**. El usuario lo apuntó bien —«¿no podemos
+darle relieve sólo al canchal con normal map o algo así?»— y eso es exactamente la vía
+barata: el mapa de normales ya viene descargado por capa y sólo faltaba un multiplicador.
+
+Ahora el catálogo lleva un `relieve` por capa que escala **las tres cosas que dan bulto**: el
+mapa de normales, la cuesta de la altura y el desplazamiento del parallax. Canchal **×3**,
+roquedo **×2**, el resto ×1. Un canto suelto tiene bulto de canto; un limo de marisma no
+tiene ninguno.
+
+**Lo que no salió**: las capturas para elegir esa fuerza. La sonda busca una ladera con la
+pendiente del derrubio, y el punto de 46° del valle 56 cae **dentro de un cauce**: la cámara
+acabó bajo el agua, a 9 fps. El número queda en `TerrainLayers.CATALOGUE`, una línea por
+capa, para subirlo o bajarlo en cuanto se vea jugando.

@@ -674,7 +674,7 @@ func _levantar_interfaz() -> void:
 	# La interfaz se viste con los materiales de la era ANTES de construir
 	# nada: los colores son `static var` y quien ya los leyo no se entera.
 	# Ver [PielDeEra] y docs/INTERFAZ.md.
-	UISkin.vestir(Expedition.era if Expedition.is_active() else Site.Era.PALEOLITICO)
+	UISkin.vestir(Expedition.la_de_ahora())
 
 	ui = GameUI.new()
 	ui.name = "GameUI"
@@ -692,6 +692,8 @@ func _levantar_interfaz() -> void:
 	census.setup(sim, herds, props, forest)
 	ui.census = census
 	ui.camera = camera
+	# El rótulo del modo Debug, si se viene de él (INTERFAZ §14).
+	ModoDebug.rotulo(self)
 	ui.cave_action.connect(_on_cave_action)
 	ui.ir_al_campamento.connect(_ir_al_campamento)
 	add_child(ui)
@@ -876,6 +878,8 @@ func _build_surroundings() -> void:
 	surround.name = "Alrededores"
 	add_child(surround)
 	surround.build(terrain, region, terrain.heightmap)
+	# Y el mar, que se acababa en la raya del recuadro (GRAFICOS §3, 2026-09-17).
+	surround.montar_el_mar(terrain)
 	# Y un ribete que marque hasta donde se juega: ahora que la costura encaja,
 	# sin el no se distingue el recuadro del fondo
 	surround.build_border(terrain)

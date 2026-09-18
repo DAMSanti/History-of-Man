@@ -804,8 +804,13 @@ func _carvings_hash() -> int:
 func _detail_hash() -> int:
 	# La amplitud EFECTIVA, no la del inspector: depende del paso del dato, asi
 	# que el mismo sitio con MDT del IGN y con terrarium no comparten malla.
+	# Y EL SELLO DEL RELLENO DEL MAR DE HOY ([RellenoDelMarDeHoy]): un valle de costa es el
+	# mismo fichero en todas las épocas y su relieve cambia con el mar. Sin esto, la malla
+	# guardada de una época se reusaba tal cual en otra —visto el 2026-09-17 haciendo dos
+	# capturas seguidas del sitio 36: salían idénticas—.
 	return hash([terreno._effective_detail_amplitude(), terreno.detail_frequency, terreno.detail_octaves,
-		terreno.detail_slope_gain, terreno.detail_slope_max, terreno.shelf_relief_m])
+		terreno.detail_slope_gain, terreno.detail_slope_max, terreno.shelf_relief_m,
+		terreno.heightmap.relleno_mar, terreno.heightmap.relleno_version])
 
 
 ## Si una cache ya cargada sigue describiendo lo que este generador pide ahora.

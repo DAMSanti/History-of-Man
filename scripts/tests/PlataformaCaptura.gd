@@ -47,8 +47,6 @@ func _init() -> void:
 		# Ni las nubes con volumen, que se ponen encima de lo no descubierto y tapaban
 		# justo la plataforma (primera captura del 2026-09-16). ANTES de quitar la niebla:
 		# apagar las nubes la vuelve a poner, y la segunda captura salió gris entera.
-		mapa.poner_las_nubes(false)
-		mapa.terrain.set_fog_texture(null, 0.0)
 		var terreno: TerrainGenerator = mapa.terrain
 		var casa := GameState.home
 		var mirar := Vector2(casa.lon, casa.lat + 0.12)

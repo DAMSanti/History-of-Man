@@ -61,7 +61,8 @@ func test_la_cota_de_un_punto_casa_con_la_rejilla_con_lomas() -> void:
 func test_fuera_de_la_plataforma_no_sube_nada() -> void:
 	var limpia := _rejilla()
 	var plataforma := RelieveDeLaPlataforma.para(limpia, -120.0)
-	# Mar adentro (−400 m) y tierra de hoy (+200 m): se quedan como estaban.
+	# Mar adentro (−400 m, más hondo que [HONDO_DEL_DETALLE_M] bajo la lámina) y tierra de
+	# hoy (+200 m): se quedan como estaban.
 	assert_near(plataforma.cota_en(-4.6, 43.35), limpia.sample_bilinear(0.0,
 		limpia.v_for_lat(43.35)), 0.01, "el fondo del mar no se toca")
 	assert_near(plataforma.cota_en(-3.8, 43.35), limpia.sample_bilinear(1.0,
@@ -158,23 +159,32 @@ func _rio_recto(datos: HeightmapData) -> Array:
 
 
 func test_el_rio_de_la_plataforma_va_por_su_valle() -> void:
-	var datos := _rejilla()
-	var rio := _rio_recto(datos)
-	RelieveDeLaPlataforma.aplicar(datos, -120.0, rio)
-	var en_el_valle := 0
+	# EL RÍO ABRE SU VALLE EN LA PLATAFORMA: donde pasa, el terreno queda más bajo que
+	# sin él. **Hasta el 2026-09-17 se comprobaba contra el terreno a 1 km**, y valía
+	# porque las lomas de ruido sólo subían. Con relieve real prestado (GRAFICOS §3) a un
+	# kilómetro puede haber una vaguada más honda que el propio río, y eso no es un fallo
+	# del valle: es el terreno. Así que se compara el mismo punto con valle y sin él.
+	var con_valle := _rejilla()
+	var rio := _rio_recto(con_valle)
+	RelieveDeLaPlataforma.aplicar(con_valle, -120.0, rio)
+	var sin_valle := _rejilla()
+	RelieveDeLaPlataforma.aplicar(sin_valle, -120.0)
 	var puntos_de_plataforma := 0
-	# 1 km a cada lado son nueve filas de 111 m.
+	var mas_alto := 0
+	var hunde := 0.0
 	for x in range(22, 42):
-		var e := datos.get_elevation(x, 24)
+		var e := con_valle.get_elevation(x, 24)
 		if e <= -120.0:
 			continue
 		puntos_de_plataforma += 1
-		if e < datos.get_elevation(x, 24 - 9) and e < datos.get_elevation(x, 24 + 9):
-			en_el_valle += 1
+		var sin := sin_valle.get_elevation(x, 24)
+		if e > sin + 0.01:
+			mas_alto += 1
+		hunde += sin - e
 	assert_true(puntos_de_plataforma > 5, "el río cruza plataforma")
-	assert_true(float(en_el_valle) >= 0.9 * float(puntos_de_plataforma),
-		"junto al río es más bajo que a 1 km, en %d de %d puntos" % [en_el_valle,
-			puntos_de_plataforma])
+	assert_eq(mas_alto, 0, "el valle nunca deja el cauce más alto que sin valle")
+	assert_gt(hunde / float(maxi(puntos_de_plataforma, 1)), 5.0,
+		"y lo hunde de media: %.1f m" % (hunde / float(maxi(puntos_de_plataforma, 1))))
 
 
 func test_el_rio_de_la_plataforma_nunca_sube() -> void:
@@ -232,13 +242,23 @@ func test_la_amplitud_sube_las_lomas() -> void:
 	RelieveDeLaPlataforma.aplicar(alta, -120.0)
 	RelieveDeLaPlataforma.amplitud = antes
 	var base := _rejilla()
-	var sube_normal := 0.0
-	var sube_alta := 0.0
+	# LO QUE CAMBIA, EN VALOR ABSOLUTO, y sólo donde ninguna de las dos toca el suelo del
+	# mar: desde el 2026-09-17 el detalle es relieve real y baja además de subir, y lo que
+	# bajaría del mar se queda en él (la costa no se mueve), así que ahí deja de ser lineal.
+	var cambia_normal := 0.0
+	var cambia_alta := 0.0
+	var cuenta := 0
 	for i in range(base.elevations.size()):
-		sube_normal += normal.elevations[i] - base.elevations[i]
-		sube_alta += alta.elevations[i] - base.elevations[i]
-	assert_near(sube_alta, sube_normal * 2.0, absf(sube_normal) * 0.01 + 0.01,
-		"con el doble de amplitud, el doble de subida")
+		if base.elevations[i] <= -120.0 or base.elevations[i] >= 0.0:
+			continue
+		if normal.elevations[i] <= -118.9 or alta.elevations[i] <= -118.9:
+			continue
+		cambia_normal += absf(normal.elevations[i] - base.elevations[i])
+		cambia_alta += absf(alta.elevations[i] - base.elevations[i])
+		cuenta += 1
+	assert_gt(float(cuenta), 10.0, "hay plataforma que mirar")
+	assert_near(cambia_alta, cambia_normal * 2.0, absf(cambia_normal) * 0.01 + 0.01,
+		"con el doble de amplitud, el doble de relieve")
 
 
 # --- El ancho de los ríos (tarea 5) --------------------------------------------
@@ -572,3 +592,41 @@ func test_el_valle_trae_el_rio_de_la_epoca() -> void:
 	assert_true(mojadas > 50, "el río del mapa cruza el valle (%d celdas)" % mojadas)
 	assert_eq(valle.water_level.size(), valle.elevations.size(),
 		"y trae su lámina, que es lo que hace que se dibuje como agua")
+
+
+## EL MAPA REGIONAL SE MONTA CON EL MAR DE LA ÉPOCA, haya campamento o no.
+##
+## Había dos respuestas a esa pregunta en líneas contiguas de `RegionMap._ready`, y la del
+## caso «todavía no he fundado» devolvía el mar de HOY: una partida nueva dibujaba la
+## Cantabria actual, sin plataforma emergida y **sin los ríos que corren por ella**. En
+## cuanto fundabas y volvías al mapa, aparecían. Depurado el 2026-09-18; GRAFICOS §3.
+func _region() -> GDScript:
+	return load("res://scripts/region/RegionMap.gd") as GDScript
+
+
+func test_el_mapa_regional_usa_el_mar_de_la_epoca_sin_campamento() -> void:
+	var mapa := _region()
+	var antes_home := GameState.home
+	var antes_mar := GameState.sea_level_m
+	GameState.home = null
+	GameState.sea_level_m = -120.0
+	assert_eq(float(mapa.mar_del_mapa()), -120.0,
+		"sin campamento, el mapa es el de la época")
+	GameState.sea_level_m = -45.0
+	assert_eq(float(mapa.mar_del_mapa()), -45.0, "y sigue a la época si la época cambia")
+	GameState.home = antes_home
+	GameState.sea_level_m = antes_mar
+
+
+func test_el_mapa_regional_usa_el_mismo_mar_con_campamento() -> void:
+	var mapa := _region()
+	var antes_home := GameState.home
+	var antes_mar := GameState.sea_level_m
+	GameState.sea_level_m = -120.0
+	GameState.home = null
+	var sin_campamento := float(mapa.mar_del_mapa())
+	GameState.home = Site.new()
+	assert_eq(float(mapa.mar_del_mapa()), sin_campamento,
+		"fundar no cambia con qué mar se dibuja el mapa")
+	GameState.home = antes_home
+	GameState.sea_level_m = antes_mar

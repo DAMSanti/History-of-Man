@@ -291,6 +291,8 @@ func _preparar(hasta: Site) -> void:
 	Carga.abrir(ui.get_tree(), "Preparando el valle de %s" % hasta.display_name())
 	Carga.etapas(PreparaValle.ETAPAS)
 	preparador.etapa_cambiada.connect(Carga.etapa)
+	# Con el mar de la partida, dicho a las claras: ver [PreparaValle.mar_de_la_epoca].
+	preparador.mar_de_la_epoca = GameState.sea_level_m
 	await preparador.preparar(ui.get_tree(), hasta, Carga.avanzar_por_tiempo)
 	Carga.cerrar()
 	_preparando = false

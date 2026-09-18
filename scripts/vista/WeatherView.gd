@@ -178,6 +178,10 @@ func _pintar_el_suelo() -> void:
 		terreno.set_shader_parameter("clima_mojado", mojado_visto)
 		terreno.set_shader_parameter("clima_nieve", nieve_vista)
 		terreno.set_shader_parameter("clima_cota_de_nieve", cota_fraccion)
+		# LA HOJARASCA DEL OTOÑO: la novena capa del terreno, que sube y baja con la
+		# estación como la cota de nieve. Ver [Temporada.hojarasca] y GRAFICOS §7.7.
+		terreno.set_shader_parameter("hojarasca",
+			_temporada.hojarasca() if _temporada != null else 0.0)
 	# EL AGUA PICADA DE GOTAS mientras llueve. No es lo mojado del suelo —que se seca
 	# despacio y dura horas—: esto es lo que cae AHORA, así que sale de lo que está
 	# cayendo y no de `mojado_visto` (petición del usuario del 2026-09-16).

@@ -585,7 +585,19 @@ func _sow() -> void:
 			var gx := clampi(int((wx - origin.x) / spacing), 0, res - 1)
 			var gz := clampi(int((wz - origin.y) / spacing), 0, res - 1)
 			var idx := gz * res + gx
-			var ground := height[idx]
+			# LA COTA, INTERPOLADA ENTRE LOS CUATRO VÉRTICES. Con la de la celda entera el
+			# árbol se planta a la altura de la esquina y **la malla interpola**: en una
+			# ladera, entre dos vértices vecinos hay metros de diferencia, y el árbol queda
+			# flotando o enterrado. El usuario: «algunos árboles no están colocados en el
+			# suelo, flotan… aunque la mayoría están bien» (2026-09-18) —la mayoría, porque
+			# en llano las cuatro esquinas valen casi lo mismo—.
+			var fx := clampf((wx - origin.x) / spacing - float(gx), 0.0, 1.0)
+			var fz := clampf((wz - origin.y) / spacing - float(gz), 0.0, 1.0)
+			var gx1 := mini(gx + 1, res - 1)
+			var gz1 := mini(gz + 1, res - 1)
+			var ground := lerpf(
+				lerpf(height[idx], height[gz * res + gx1], fx),
+				lerpf(height[gz1 * res + gx], height[gz1 * res + gx1], fx), fz)
 
 			# Ni en el agua ni en la orilla.
 			if ground <= water_y + 0.6:

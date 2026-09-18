@@ -51,7 +51,23 @@ func _init() -> void:
 		print("   %s: %d tramos" % [nombre, tramos])
 
 	var t0 := Time.get_ticks_msec()
-	var prolongados := RioDeLaPlataforma.prolongar(rios.de_hoy, datos, MAR)
+	# SOBRE LA PLATAFORMA CON SU RELIEVE, no sobre el fondo liso: desde el 2026-09-17 las
+	# lomas son relieve real prestado (GRAFICOS §3), y un río deducido sobre la batimetría
+	# lisa cruzaba las lomas por encima en vez de bajar por las vaguadas. Sobre una COPIA:
+	# `aplicar` reescribe las cotas, y el recurso cargado es el mismo que lee todo el
+	# proceso (ver la memoria de `Resource.duplicate`).
+	var con_relieve := HeightmapData.new()
+	con_relieve.width = datos.width
+	con_relieve.height = datos.height
+	con_relieve.meters_per_sample = datos.meters_per_sample
+	con_relieve.lat_north = datos.lat_north
+	con_relieve.lat_south = datos.lat_south
+	con_relieve.lon_west = datos.lon_west
+	con_relieve.lon_east = datos.lon_east
+	con_relieve.geographic_rows = datos.geographic_rows
+	con_relieve.elevations = PackedFloat32Array(datos.elevations)
+	RelieveDeLaPlataforma.aplicar(con_relieve, MAR)
+	var prolongados := RioDeLaPlataforma.prolongar(rios.de_hoy, con_relieve, MAR)
 	rios.de_la_plataforma.assign(prolongados["cauces"])
 	rios.pasos_abiertos = int(prolongados["abiertos"])
 	rios.mar_de_la_plataforma = MAR

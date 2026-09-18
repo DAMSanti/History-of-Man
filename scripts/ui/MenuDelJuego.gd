@@ -96,9 +96,12 @@ func _menu() -> void:
 	_columna.add_child(HSeparator.new())
 
 	_boton("Seguir jugando", cerrar)
-	_boton("Guardar", _guardar_rapido)
-	_boton("Guardar como…", _pedir_nombre)
-	_boton("Cargar", _abrir_lista)
+	# EN DEBUG NO SE GUARDA NADA (INTERFAZ §14): ni guardar, ni cargar encima, ni el aviso
+	# de «hay cambios sin guardar» al salir.
+	if not ModoDebug.activo:
+		_boton("Guardar", _guardar_rapido)
+		_boton("Guardar como…", _pedir_nombre)
+		_boton("Cargar", _abrir_lista)
 	_boton("Configuración", func() -> void: abrir_configuracion())
 	_boton("Salir al menú principal", func() -> void: _salir(false))
 	_boton("Salir del juego", func() -> void: _salir(true))
@@ -213,7 +216,7 @@ func _cargar(id: String) -> void:
 ## 2026-09-13. Lo que no se ha guardado a mano se guarda solo, con su nombre o
 ## con [Partidas.SIN_TITULO], y aparece en la lista como una partida más.
 func _salir(del_juego: bool) -> void:
-	if not Partidas.hay_cambios():
+	if ModoDebug.activo or not Partidas.hay_cambios():
 		_irse(del_juego)
 		return
 	_limpiar()
@@ -249,6 +252,8 @@ func _irse(del_juego: bool) -> void:
 		return
 	# Al menú principal la partida no sigue: lo guardado ya está en disco.
 	Campamentos.vaciar()
+	# Y del Debug se sale devolviendo lo del jugador. Ver [ModoDebug.salir].
+	ModoDebug.salir()
 	get_tree().change_scene_to_file(Expedition.MENU_SCENE)
 
 

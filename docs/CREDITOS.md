@@ -9,13 +9,24 @@ verdad se usa. No se edita a mano.
 [ambientCG](https://ambientcg.com), CC0.
 
 - Pradera — `Grass007`
-- Suelo de bosque — `Ground037`
-- Roquedo calizo — `Rock030`
-- Canchal — `Rocks006`
+- Suelo de bosque — `Ground003`
+- Roquedo calizo — `Rock023`
+- Canchal — `Rocks002`
 - Cantos de río — `Gravel041`
 - Arena — `Ground095A`
 - Limo de marisma — `Ground026`
+- Hojarasca de otoño — `Ground041`
 - Nieve — `Snow010A`
+
+> **Tres cambiaron el 2026-09-17** —caliza, canchal y suelo de bosque, elegidas por el
+> usuario sobre hojas de contacto— y **entró la novena**, la hojarasca de otoño. El porqué
+> de cada una, en [GRAFICOS.md](GRAFICOS.md) §7.7.
+>
+> **Ojo con esta lista**: `PropIngest` la genera, pero la escribe en `CREDITOS.md` **de la
+> raíz del repositorio**, no aquí. Este fichero es el que lee la documentación y tiene
+> además secciones escritas a mano —clima, árboles, agua, arte parietal, iconos— que el
+> generador no produce, así que apuntarlo aquí sin más lo borraría. Mientras eso no se
+> arregle, esta sección se actualiza a mano y se compara con la generada.
 
 ## Modelos del suelo
 
@@ -46,7 +57,32 @@ verdad se usa. No se edita a mano.
 
 ## Personas
 
-«Animated Human» de [Quaternius](https://quaternius.com) ([OpenGameArt](https://opengameart.org/content/animated-human-low-poly)), CC0. `scripts/tools/BandaAtlas.gd` hornea sus siete animaciones -reposo, andar, correr, salto, golpe, trabajo, muerte- a textura de vértice para dibujar la banda entera en un solo `MultiMesh`; ver ese fichero para el porqué.
+**Tres packs de [Quaternius](https://quaternius.com), todos CC0**, y lo que los hace servir
+juntos es que **comparten esqueleto**: 65 huesos con los mismos nombres en los tres.
+
+| Pack | Dónde vive | Qué se usa |
+|---|---|---|
+| **Universal Base Characters** | `models/people/universal/cuerpos`, `/pelo` | Los dos cuerpos y ocho peinados con barba |
+| **Modular Character Outfits - Fantasy** | `models/people/universal/ropa` | Veinte piezas: torso, brazos, calzas, botas, capucha |
+| **Universal Animation Library** | `models/people/universal/animaciones` | Las 45 animaciones (el export de **Unreal**, que es el que usa los mismos nombres de hueso) |
+
+Las texturas vienen a 4K y se guardan reducidas a 1K: la banda se dibuja a unos cuarenta
+píxeles de alto, así que 4K serían trescientos megas de repositorio por nada.
+
+Los dos primeros están sólo en itch.io y **no se pueden descargar por script**; el espejo de
+poly.pizza sí deja, pero les quita el esqueleto. Si hay que volver a bajarlos es a mano,
+desde `quaternius.itch.io`.
+
+**Y una licencia que se fue**: hasta el 2026-09-18 la banda era «Animated Human» del mismo
+autor, también CC0, horneado a textura de vértice. Se retiró entero con su horneado; git lo
+guarda.
+
+**El addon `animated_multimeshinstance3d`** pone el shader y el `play()` de la multitud.
+**Lleva un parche del proyecto (2026-09-18)**: su shader descodificaba con ocho bits el
+fotograma inicial y la longitud del clip, que su propio código empaqueta con `encode_u16`,
+así que un clip que empezara más allá del fotograma 255 se dibujaba en `inicio % 256` sin
+avisar. Está marcado en el fichero y contado en GRAFICOS §5.1; si algún día se actualiza el
+addon, hay que volver a aplicarlo.
 
 ## Fauna
 
@@ -57,6 +93,16 @@ Lobo, caballo, vaca, cerdo, oveja, águila y pájaro pequeño de [Quaternius](ht
 - **Cabra montés y rebeco.** No hay bóvido de montaña CC0 descargable por script. El rebeco lleva la malla del corzo con otra talla y otro tinte: anda bien, pero comparte silueta con él.
 - **Jabalí.** Tampoco hay suido con ciclo de marcha. Lleva la del toro, que es lo más parecido que anda: cuerpo bajo y macizo con la cabeza pesada delante.
 - **La cuerna del venado.** El `Stag.fbx` trae las astas en una malla aparte, colgada de un hueso, y el horneado a textura de vértice sólo se lleva una malla con pesos. Se hornea el cuerpo; las astas se pierden, que en la época de la berrea se nota.
+
+## Aperos de la banda
+
+**«Fantasy Props MegaKit» de [Quaternius](https://quaternius.com)**
+([OpenGameArt](https://opengameart.org/content/fantasy-props-megakit)), CC0. En
+`models/props/aperos` viven cuatro de sus 94 modelos: el cuchillo de mesa hace de buril, el
+cubo de madera de cesto, el rollo de cuerda de haz de fibra y el hachón de tea. Los demás
+aperos —el percutor, el raspador, la azagaya y el arpón— **se componen en código**
+(`scripts/vista/Aperos.gd`): una punta de sílex enmangada no es un objeto medieval y no la
+trae ningún pack libre.
 
 ## Clima
 

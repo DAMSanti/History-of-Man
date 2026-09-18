@@ -393,3 +393,107 @@ func test_en_personalizado_el_relieve_va_con_el_agua_de_alto() -> void:
 	assert_true(Configuracion.pasos_de_relieve() > 0, "con el agua de Alto, relieve")
 	Configuracion.poner_ajuste("agua", 1)
 	assert_eq(Configuracion.pasos_de_relieve(), 0, "con el agua de Medio, no")
+
+
+# --- a cuánto se dibuja (INTERFAZ §16) -------------------------------------------
+
+func test_los_escalones_de_dibujo_salen_en_pixeles_de_la_ventana() -> void:
+	# «Quiero poder cambiar la resolución en ventana maximizada.» Maximizado no se puede
+	# tocar el tamaño de la ventana, así que lo que se elige es **a cuánto se dibuja**, y
+	# se ofrece en píxeles de verdad: los de esta ventana por cada escalón de escala.
+	var ventana := Vector2i(1920, 1080)
+	var escalones := Configuracion.dibujos_que_caben(ventana)
+	assert_eq(escalones.size(), Configuracion.ESCALAS_DE_DIBUJO.size(),
+		"un escalón por escala")
+	assert_eq(escalones[0], ventana, "el primero es la ventana entera")
+	assert_eq(escalones[escalones.size() - 1], Vector2i(960, 540),
+		"y el último, la mitad de lado")
+	for i in range(1, escalones.size()):
+		assert_true(escalones[i].x < escalones[i - 1].x, "y van de mayor a menor")
+
+
+func test_de_una_resolucion_de_dibujo_sale_su_escala_y_al_reves() -> void:
+	var ventana := Vector2i(1920, 1080)
+	assert_near(Configuracion.escala_de_dibujo_para(Vector2i(960, 540), ventana), 0.5, 0.001,
+		"la mitad de lado es media escala")
+	assert_near(Configuracion.escala_de_dibujo_para(ventana, ventana), 1.0, 0.001,
+		"y la ventana entera, escala uno")
+	assert_eq(Configuracion.dibujo_con(0.6, ventana), Vector2i(1152, 648),
+		"y al revés: 0,6 de 1920 son 1152")
+	# Sin ventana —una sonda sin pantalla— no se inventa nada.
+	assert_eq(Configuracion.dibujo_con(0.5, Vector2i.ZERO), Vector2i.ZERO,
+		"sin ventana no hay resolución de dibujo")
+
+
+func test_el_selector_manda_sobre_el_dibujo_solo_si_la_ventana_no_se_puede_tocar() -> void:
+	# En modo ventana el selector sigue haciendo lo de siempre: cambiar el tamaño. En
+	# maximizada y a pantalla completa manda el gestor de ventanas, así que lo único que
+	# queda por elegir es a cuánto se dibuja.
+	Configuracion.modo = Configuracion.Modo.VENTANA
+	assert_false(Configuracion.manda_sobre_el_dibujo(), "en ventana, el tamaño de la ventana")
+	Configuracion.modo = Configuracion.Modo.MAXIMIZADA
+	assert_true(Configuracion.manda_sobre_el_dibujo(), "maximizada, el dibujo")
+	Configuracion.modo = Configuracion.Modo.PANTALLA_COMPLETA
+	assert_true(Configuracion.manda_sobre_el_dibujo(), "y a pantalla completa, también")
+
+
+func test_maximizada_elegir_resolucion_cambia_el_dibujo_y_no_la_ventana() -> void:
+	# INTERFAZ §16: maximizado el tamaño lo manda el gestor de ventanas, así que el
+	# selector elige a cuánto se dibuja. Y no pide confirmación: dibujar a menos no puede
+	# dejarte sin ver la pantalla, que es para lo que está la cuenta atrás.
+	Configuracion.modo = Configuracion.Modo.MAXIMIZADA
+	Configuracion.resolucion = Vector2i(1920, 1080)
+	Configuracion.poner_ajuste("escala", 1.0)
+	var ventana := VentanaDeConfiguracion.new()
+	ventana.elegir_dibujo(0.6)
+	var escala := float(Configuracion.graficos["escala"])
+	var modo := Configuracion.modo
+	var de_la_ventana := Configuracion.resolucion
+	var esperando := ventana.pendiente
+	Configuracion.cargar()
+	var en_disco := float(Configuracion.graficos["escala"])
+	ventana.free()
+	assert_near(escala, 0.6, 0.001, "se dibuja al 0,6 de la ventana")
+	assert_eq(modo, Configuracion.Modo.MAXIMIZADA, "y el modo no se toca")
+	assert_eq(de_la_ventana, Vector2i(1920, 1080), "ni el tamaño de la ventana")
+	assert_false(esperando, "ni hay cuenta atrás que confirmar")
+	assert_near(en_disco, 0.6, 0.001, "y queda guardado")
+
+
+func test_elegir_a_cuanto_se_dibuja_baja_el_nivel_a_personalizado() -> void:
+	# Lo mismo que cualquier otro ajuste de gráficos elegido a mano: manda lo que el
+	# jugador elija, y el nivel deja de ser uno de los cuatro.
+	Configuracion.poner_nivel(Configuracion.Nivel.ULTRA)
+	var ventana := VentanaDeConfiguracion.new()
+	ventana.elegir_dibujo(0.5)
+	var nivel := Configuracion.nivel
+	ventana.free()
+	assert_true(nivel != Configuracion.Nivel.ULTRA,
+		"dibujar a menos que Ultra ya no es Ultra")
+
+
+func test_a_cuanto_se_dibuja_se_elige_en_un_solo_sitio() -> void:
+	# SPECS §7, invariante 3: una pregunta, un sitio que la contesta. Hasta el 2026-09-17
+	# «a cuánto se dibuja» se elegía en dos —la escala de render de Gráficos, en tanto por
+	# ciento, y el selector de resolución de Pantalla— con unidades distintas.
+	var ventana := VentanaDeConfiguracion.new()
+	ventana._pintar()
+	var filas := _rotulos_de(ventana)
+	ventana.free()
+	assert_false(filas.has("Escala de render"),
+		"la escala ya no tiene fila propia en Gráficos")
+	assert_true(filas.has("Resolución de dibujo") or filas.has("Tamaño de la ventana"),
+		"y lo que hay es el selector de Pantalla, con el nombre de lo que hace")
+
+
+## Los rótulos de las filas de la ventana, mirando lo que de verdad hay montado.
+func _rotulos_de(ventana: VentanaDeConfiguracion) -> Array:
+	var salida: Array = []
+	var pendientes: Array[Node] = [ventana]
+	while not pendientes.is_empty():
+		var nodo: Node = pendientes.pop_back()
+		for hijo: Node in nodo.get_children():
+			pendientes.append(hijo)
+		if nodo is Label:
+			salida.append((nodo as Label).text)
+	return salida

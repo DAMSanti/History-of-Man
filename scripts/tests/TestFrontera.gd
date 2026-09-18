@@ -104,28 +104,66 @@ func _borde(mascara: PackedByteArray, z: int, w: int, lado: int) -> int:
 
 func test_la_plataforma_tiene_relieve_y_no_mueve_la_costa() -> void:
 	# «La plataforma emergida es totalmente plana; deberíamos hacer algún
-	# montículo, monte…» (2026-09-14). Sin cambiar qué es tierra y qué mar ni con
-	# el mar de hoy ni con el del Paleolítico: la costa y la frontera siguen.
+	# montículo, monte…» (2026-09-14).
+	#
+	# **Hasta el 2026-09-17 esto comprobaba que la costa no se movía en absoluto.** Con
+	# relieve real prestado, las vaguadas que llegan al mar se inundan —rías, decisión del
+	# usuario, GRAFICOS §3—, así que la promesa es otra: **la tierra sólo se vuelve mar como
+	# ría, unida al mar**. Nunca un lago bajo el nivel del mar, que el plano del agua
+	# pintaría de mar sin serlo.
+	#
+	# Y **el mar tampoco queda intacto desde esa misma tarde**: el fondo de los primeros
+	# 60 m bajo la lámina lleva detalle para que la isolínea de la costa no sea un corte
+	# —sin eso salía una raya de escalones de hasta 49,5 m—. Lo que se promete ahora es que
+	# **el mar sigue siendo mar**: nada sumergido emerge.
 	var original: HeightmapData = load("res://data/dem/cantabria_region.res")
 	if original == null:
 		assert_true(false, "falta el relieve")
 		return
 	var con := original.duplicate() as HeightmapData
 	RelieveDeLaPlataforma.aplicar(con, -120.0)
-	var cambian := 0
+	var mar_tocado := 0
 	var sube_mas := 0.0
 	var por_encima_de_cien := 0
+	var nuevo_mar := PackedByteArray()
+	nuevo_mar.resize(original.elevations.size())
+	var rias := 0
 	for i in range(original.elevations.size()):
 		var antes := original.elevations[i]
 		var ahora := con.elevations[i]
-		# Lo que era mar con el mar de la época sigue igual, y lo que era tierra
-		# sigue siendo tierra: el relieve sólo sube lo que ya emergía.
-		if (antes > -120.0) != (ahora > -120.0) or (antes <= -120.0 and ahora != antes):
-			cambian += 1
+		if antes <= -120.0 and ahora > -120.0:
+			mar_tocado += 1
+		if antes > -120.0 and ahora <= -120.0:
+			nuevo_mar[i] = 1
+			rias += 1
 		sube_mas = maxf(sube_mas, ahora - antes)
 		if ahora - antes > 100.0:
 			por_encima_de_cien += 1
-	assert_eq(cambian, 0, "con el mar a -120 la costa no se mueve")
+	# Cada celda de ría, unida al mar de antes por otras de ría.
+	var ancho := original.width
+	var cola := PackedInt32Array()
+	var visto := PackedByteArray()
+	visto.resize(original.elevations.size())
+	for i in range(original.elevations.size()):
+		if original.elevations[i] <= -120.0:
+			visto[i] = 1
+			cola.append(i)
+	var leido := 0
+	var rias_unidas := 0
+	while leido < cola.size():
+		var i := cola[leido]
+		leido += 1
+		for vecino: int in [i - 1, i + 1, i - ancho, i + ancho]:
+			if vecino < 0 or vecino >= visto.size() or visto[vecino] == 1:
+				continue
+			if absi(vecino % ancho - i % ancho) > 1 or nuevo_mar[vecino] == 0:
+				continue
+			visto[vecino] = 1
+			rias_unidas += 1
+			cola.append(vecino)
+	assert_eq(mar_tocado, 0, "con el mar a -120, lo que era mar sigue siendo mar")
+	assert_gt(float(rias), 0.0, "hay rías: %d celdas de tierra inundadas" % rias)
+	assert_eq(rias_unidas, rias, "y todas unidas al mar: ningún lago bajo su nivel")
 	# 288 m medido: el ruido casi nunca llega al percentil 99 de la franja real
 	# (312 m), y ése es el tope que se ve.
 	assert_gt(sube_mas, 250.0, "y hay orografía de verdad: el mayor sube %.0f m" % sube_mas)
@@ -134,13 +172,21 @@ func test_la_plataforma_tiene_relieve_y_no_mueve_la_costa() -> void:
 
 
 func test_con_el_mar_de_hoy_la_plataforma_sigue_bajo_el_agua() -> void:
-	# La otra promesa: el relieve es de la época que se juega, y con el mar de hoy
-	# la plataforma es mar y no se toca.
+	# La otra promesa: el relieve es de la época que se juega, y con el mar de hoy la
+	# plataforma **sigue siendo mar**. Su fondo sí cambia —lleva detalle hasta 60 m bajo la
+	# lámina, 2026-09-17— pero no emerge ni una celda.
 	var original: HeightmapData = load("res://data/dem/cantabria_region.res")
 	var con := original.duplicate() as HeightmapData
 	RelieveDeLaPlataforma.aplicar(con, 0.0)
-	var cambian := 0
+	var emergen := 0
+	var hondas := 0
 	for i in range(original.elevations.size()):
-		if original.elevations[i] <= 0.0 and con.elevations[i] != original.elevations[i]:
-			cambian += 1
-	assert_eq(cambian, 0, "ninguna celda bajo el agua de hoy se levanta")
+		if original.elevations[i] > 0.0:
+			continue
+		if con.elevations[i] > 0.0:
+			emergen += 1
+		# Y el fondo de verdad, el que está más abajo del detalle, intacto.
+		if original.elevations[i] < -80.0 and con.elevations[i] != original.elevations[i]:
+			hondas += 1
+	assert_eq(emergen, 0, "ninguna celda bajo el agua de hoy emerge")
+	assert_eq(hondas, 0, "y por debajo de 80 m el fondo se queda como estaba")

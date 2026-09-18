@@ -489,6 +489,9 @@ func generate(ceder: Callable = Callable()) -> void:
 
 	var t3 := Time.get_ticks_msec()
 	_create_water()
+	# La humedad al shader: es lo que decide dónde se pinta suelo de bosque, y tiene que
+	# ser la misma con la que se siembran los árboles (GRAFICOS §7.7).
+	_mandar_la_humedad()
 	print("[TIMING] TerrainGenerator._create_water: %d ms" % (Time.get_ticks_msec() - t3))
 	# La lámina del río, para Alto y Ultra. Se hace siempre que el agua siga el ajuste,
 	# para poder encenderla en caliente. Ver GRAFICOS §7.3.
@@ -906,6 +909,24 @@ func _apply_basic_material() -> void:
 ## Se devuelven las rejillas tal cual, sin copiar: son `PackedFloat32Array` y en
 ## GDScript se pasan por referencia con copia perezosa, así que esto no duplica
 ## varios megas cada vez que alguien pregunta.
+## La humedad como textura, para el shader. Ver [TerrainMaterialManager.set_humedad].
+##
+## Se hace una vez por mapa, al generar: son `resolution x resolution` valores que ya
+## están en memoria, y pasarlos a R8 cuesta un pestañeo. En 8 bits sobra: la humedad sólo
+## decide una mezcla entre pradera y bosque.
+func _mandar_la_humedad() -> void:
+	if _material_manager == null or _humidity_map.is_empty():
+		return
+	var imagen := Image.create(resolution, resolution, false, Image.FORMAT_R8)
+	for z in range(resolution):
+		for x in range(resolution):
+			var v := clampf(_humidity_map[z * resolution + x], 0.0, 1.0)
+			imagen.set_pixel(x, z, Color(v, v, v))
+	var extent := Vector2(float(terrain_size.x), float(terrain_size.y))
+	_material_manager.set_humedad(ImageTexture.create_from_image(imagen), extent,
+		Vector2(_origen().x, _origen().z))
+
+
 func sample_maps() -> Dictionary:
 	return {
 		"resolution": resolution,
@@ -1013,17 +1034,6 @@ func set_region_mask_texture(texture: Texture2D) -> void:
 	_material_manager.set_region_mask_texture(
 		texture, Vector2(float(terrain_size.x), float(terrain_size.y)))
 	_material_manager.set_region_mask_enabled(texture != null)
-
-
-## Pone la niebla del mapa regional. `sea_height` en unidades del mundo. Ver
-## [TerrainMaterialManager.set_fog].
-func set_fog_texture(texture: Texture2D, sea_height: float) -> void:
-	if _material_manager == null:
-		return
-	_material_manager.set_fog(texture,
-		Vector2(float(terrain_size.x), float(terrain_size.y)), sea_height)
-
-
 func aplicar_configuracion() -> void:
 	if _material_manager != null:
 		_material_manager.aplicar_configuracion()
@@ -1335,7 +1345,7 @@ func _apply_shader_height_setup() -> void:
 		if bands_relative:
 			# Fracciones del rango propio del recuadro: arena solo en la orilla
 			# y el grueso del mapa como pasto, dejando que la roca la ponga la
-			# pendiente a traves de slope_threshold.
+			# pendiente a traves de `canchal_desde` y `pared_desde` (ver el shader).
 			var floor_h := _height_range.x
 			var span := maxf(_height_range.y - floor_h, 0.001)
 			var shore := clampf(
@@ -1519,6 +1529,12 @@ func get_vegetation_positions(min_humidity: float = 0.4, max_slope: float = 0.5,
 ## Existe porque el nivel del mar cambia de epoca en epoca y regenerar el
 ## terreno entero por eso seria pagar varios segundos por cambiar cuatro
 ## numeros de un shader.
+## Sin canchales, para el mapa regional. Ver [TerrainMaterialManager.pintar_como_comarca].
+func pintar_como_comarca() -> void:
+	if _material_manager != null:
+		_material_manager.pintar_como_comarca()
+
+
 func refresh_material_bands(sea_level_meters: float) -> void:
 	band_sea_level_m = sea_level_meters
 

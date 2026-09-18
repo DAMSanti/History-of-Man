@@ -12,7 +12,7 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
 // anadir una capa significaba tocar el shader. Con arrays, anadir capas cuesta
 // VRAM y no codigo, y sobre todo no cuesta MUESTREOS: se muestrean siempre las
 // DOS capas de mas peso, sean ocho o veinte.
-#define LAYERS 8
+#define LAYERS 9
 
 group_uniforms textures;
 uniform sampler2DArray terrain_albedo : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -25,6 +25,10 @@ group_uniforms texture_settings;
 // escala para las cuatro, que es lo que hacia imposible que un canto rodado y
 // una mata de hierba tuviesen su tamano real a la vez.
 uniform float layer_tile_m[LAYERS];
+// CUANTO RELIEVE TIENE CADA CAPA. Multiplica el mapa de normales, la cuesta de la altura y
+// el desplazamiento: un canchal tiene bulto de canto y un limo de marisma no tiene ninguno,
+// y hasta el 2026-09-18 iban todas con la misma fuerza. Ver [TerrainLayers.reliefs_in_order].
+uniform float layer_relieve[LAYERS];
 
 // Graduacion de color por capa. Ver TerrainLayers.CATALOGUE para el porque de
 // cada numero: en corto, la fotogrametria de la biblioteca esta hecha en un
@@ -52,8 +56,30 @@ uniform float max_world_height : hint_range(1.0, 500.0) = 50.0;
 uniform float cota_base = 0.0;
 
 group_uniforms slope_settings;
-uniform float slope_threshold : hint_range(0.0, 1.0) = 0.7;
-uniform float slope_blend : hint_range(0.01, 1.0) = 0.2;
+// DESDE QUE INCLINACION HAY DERRUBIO Y DESDE CUAL PARED, en `1 - |normal.y|`, que va de 0
+// —llano— a 1 —pared vertical—. En grados: el angulo es `acos(1 - valor)`.
+//
+// **Rehechos el 2026-09-18.** Estaban escritos como un umbral y un margen —`slope_threshold`
+// y `slope_blend`— con la pared en `umbral + margen*2,5`, y el material ponia el umbral en
+// 0,15: el canchal empezaba **casi en llano** —a 30 grados ya era medio canchal— y la pared
+// necesitaba 0,65 de pendiente para asomar, con lo que el derrubio se comia la roca. El
+// usuario: «hay muchos sitios que deberian ser piedra caliza y sin embargo son rocal».
+//
+// Ahora son cuatro numeros con su angulo, y la decision del usuario fue **pared desde
+// 55-60 grados**:
+//   canchal   0,18 (35°) → 0,43 (55°)
+//   pared     0,43 (55°) → 0,70 (73°)
+// LA HUMEDAD DEL VALLE, la que siembra los arboles. La pone `TerrainMaterialManager`; sin
+// ella el bosque se reparte como antes, por curvatura y ruido.
+uniform bool use_humedad = false;
+uniform sampler2D humedad_tex : hint_default_white, filter_linear, repeat_disable;
+uniform vec2 humedad_extent = vec2(1.0, 1.0);
+uniform vec2 humedad_origen = vec2(0.0, 0.0);
+
+uniform float canchal_desde : hint_range(0.0, 1.0) = 0.18;
+uniform float canchal_hasta : hint_range(0.0, 1.0) = 0.43;
+uniform float pared_desde : hint_range(0.0, 1.0) = 0.43;
+uniform float pared_hasta : hint_range(0.0, 1.0) = 0.70;
 
 group_uniforms material_properties;
 // La rugosidad ya no es una constante por material: viene en el canal verde del
@@ -69,8 +95,12 @@ group_uniforms relieve;
 // -«altura→A»- «alimenta el parallax», y NO LO ALIMENTABA: se muestreaba, se
 // guardaba en `surface_height` y nadie lo miraba. Lo unico que daba relieve era el
 // mapa de normales, que no tapa nada porque no mueve nada. La primera version leyo
-// ese canal; el usuario la vio y pidio que se hundiera lo oscuro del dibujo, asi
-// que la altura sale del brillo del color (ver `altura_de_la_capa`).
+// ese canal; el usuario la vio y pidio que se hundiera lo oscuro del dibujo, asi que
+// durante un dia la altura salio del brillo del color.
+//
+// **Desde el 2026-09-17 sale del alfa del ORM otra vez**, que es la altura de verdad
+// (GRAFICOS §7.7, y el porque en `altura_de_la_capa`): con el brillo se hundia lo
+// oscuro y no lo hundido, y en la caliza las dos cosas no se parecen en nada.
 //
 // 0 pasos = apagado, que es lo que se queda en Bajo y Medio.
 uniform int relieve_pasos : hint_range(0, 32) = 0;
@@ -90,7 +120,10 @@ uniform float contraste_del_relieve : hint_range(0.5, 6.0) = 1.8;
 // de la sombra se oscurezca.
 // «Demasiada diferencia entre picos y valles» (usuario, 2026-09-16, con 7): a la
 // mitad larga.
-uniform float fuerza_del_bulto : hint_range(0.0, 20.0) = 3.0;
+// **Bajado de 3 a 1,2 el 2026-09-18**, al pasar la cuesta a salir de la altura: el mapa de
+// altura tiene mucho mas contraste que el brillo —desviacion tipica 0,22 contra 0,069 en la
+// caliza— y con el numero de antes la piedra salia rayada.
+uniform float fuerza_del_bulto : hint_range(0.0, 20.0) = 1.2;
 // Cada cuantos texeles se mide la cuesta. Tiene que ir con el desenfoque: medir a
 // tres texeles sobre una textura desenfocada a ocho es medir dentro de una mancha.
 uniform float texeles_del_bulto : hint_range(1.0, 32.0) = 22.0;
@@ -165,24 +198,6 @@ uniform vec2 region_world_size = vec2(1.0, 1.0);
 uniform float outside_desaturation : hint_range(0.0, 1.0) = 0.85;
 uniform float outside_dim : hint_range(0.0, 1.0) = 0.45;
 
-group_uniforms fog;
-// LA NIEBLA DEL MAPA REGIONAL (SISTEMAS §4, GRAFICOS §3): lo que nadie ha visto
-// se tapa con una calima clara —«no se sabe», no «no existe»—, dejando un trazo
-// tenue donde la tierra toca el mar de la época para no perder la orientación.
-// Ni relieve, ni ríos, ni color: bajo la niebla la luz tampoco dibuja laderas.
-// En el valle está apagada.
-uniform bool use_fog = false;
-// Blanca donde se ha visto. Una celda por celda del relieve regional.
-uniform sampler2D fog_tex : hint_default_white, filter_linear, repeat_disable;
-uniform vec2 fog_world_size = vec2(1.0, 1.0);
-uniform vec3 fog_color : source_color = vec3(0.80, 0.79, 0.74);
-uniform vec3 fog_coast_color : source_color = vec3(0.58, 0.57, 0.53);
-// La cota del mar de la época, en unidades del mundo: donde va el trazo.
-uniform float fog_sea_height = 0.0;
-// Cuánto se funde el borde entre lo visto y lo no visto, en unidades del mundo:
-// cinco muestras a esa distancia. Con el mapa a 100 m por unidad, 3 son 300 m.
-uniform float fog_blur = 3.0;
-
 group_uniforms rivers;
 // El agua del cauce, encendida o apagada entera. Existe para medirla: con ella se
 // alterna agua sí y no en la misma corrida (`AguaCaptura GPU=1`, GRAFICOS §7.3).
@@ -202,6 +217,10 @@ uniform int ver_termino = 0;
 // y la cota de nieve de hoy en la MISMA fraccion del relieve que `snow_min_height`
 // (`Temporada.cota_de_nieve`). Los pone `WeatherView`; con el clima apagado, a cero.
 uniform float clima_mojado : hint_range(0.0, 1.0) = 0.0;
+// CUANTA HOJARASCA hay en el suelo del bosque, de 0 a 1. Lo pone `WeatherView` con lo que
+// dice `Temporada.hojarasca`: sube a lo largo del otoño y se va en invierno, con la misma
+// transicion de doce dias que la cota de nieve. A cero, la novena capa no pinta nada.
+uniform float hojarasca : hint_range(0.0, 1.0) = 0.0;
 uniform float clima_nieve : hint_range(0.0, 1.0) = 0.0;
 uniform float clima_cota_de_nieve = 2.0;
 // Cuanto se hunde el lecho bajo la lamina, en unidades de mundo; lo pone la malla.
@@ -605,7 +624,7 @@ vec2 uv_de_la_capa(float tile, vec3 pos, vec3 weights) {
 
 const vec3 BRILLO = vec3(0.299, 0.587, 0.114);
 
-// La cuesta del brillo en la capa, en el plano dominante, lista para sumarla a la
+// La cuesta de la ALTURA en la capa, en el plano dominante, lista para sumarla a la
 // normal de `triplanar_normal`: cada plano mete las dos componentes en los mismos
 // ejes de mundo que mete ahi las de su textura de normales.
 //
@@ -613,7 +632,7 @@ const vec3 BRILLO = vec3(0.299, 0.587, 0.114);
 // muestras mas, y la cuesta es la de la piedra y no la de sus motas.
 vec3 bulto_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
 	float s = 1.0 / max(tile, 0.001);
-	float e = texeles_del_bulto / float(textureSize(terrain_albedo, 0).x);
+	float e = texeles_del_bulto / float(textureSize(terrain_orm, 0).x);
 	vec2 uv;
 	int plano;
 	if (weights.y >= weights.x && weights.y >= weights.z) {
@@ -626,12 +645,17 @@ vec3 bulto_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
 		uv = pos.xy * s;
 		plano = 2;
 	}
-	float h = dot(texture(terrain_albedo, vec3(uv, layer), desenfoque_de_la_piedra).rgb, BRILLO);
-	float hu = dot(texture(terrain_albedo, vec3(uv + vec2(e, 0.0), layer), desenfoque_de_la_piedra).rgb, BRILLO);
-	float hv = dot(texture(terrain_albedo, vec3(uv + vec2(0.0, e), layer), desenfoque_de_la_piedra).rgb, BRILLO);
+	// DE LA ALTURA, COMO EL DESPLAZAMIENTO. Desde el 2026-09-17 el parallax mueve el dibujo
+	// segun el mapa de altura, y esto seguia sombreandolo segun el BRILLO: dos fuentes que
+	// se contradecian, y donde una decia hueco y la otra bulto salian manchas. El usuario
+	// lo conto asi: «o no se esta aplicando el height map correcto o hay otra cosa
+	// interfiriendo... parece que tiene lepra» (2026-09-18).
+	float h = texture(terrain_orm, vec3(uv, layer), desenfoque_de_la_piedra).a;
+	float hu = texture(terrain_orm, vec3(uv + vec2(e, 0.0), layer), desenfoque_de_la_piedra).a;
+	float hv = texture(terrain_orm, vec3(uv + vec2(0.0, e), layer), desenfoque_de_la_piedra).a;
 	// Normal de una cuesta: (-dh/du, -dh/dv). La escala va por texel, no por uv,
 	// para que la fuerza no cambie con la resolucion de la textura.
-	vec2 cuesta = -vec2(hu - h, hv - h) * fuerza_del_bulto;
+	vec2 cuesta = -vec2(hu - h, hv - h) * fuerza_del_bulto * layer_relieve[int(layer)];
 	if (plano == 1) {
 		return vec3(cuesta.x, 0.0, cuesta.y);
 	} else if (plano == 0) {
@@ -640,17 +664,27 @@ vec3 bulto_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
 	return vec3(cuesta.x, cuesta.y, 0.0);
 }
 
-// La media de la zona: bastante mas ancha que una piedra, para que la piedra
-// entera suba sobre ella y no solo su mitad clara.
-float media_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
-	return dot(textureLod(terrain_albedo, vec3(uv_de_la_capa(tile, pos, weights), layer),
-		7.5).rgb, BRILLO);
-}
-
-float altura_de_la_capa(float layer, float tile, vec3 pos, vec3 weights, float media) {
-	float brillo = dot(texture(terrain_albedo,
-		vec3(uv_de_la_capa(tile, pos, weights), layer), desenfoque_de_la_piedra).rgb, BRILLO);
-	return clamp(0.5 + (brillo - media) * contraste_del_relieve, 0.0, 1.0);
+// LA ALTURA DE LA PIEDRA, del mapa de altura y no del dibujo.
+//
+// Viene en el ALFA del ORM, empaquetada desde el `Displacement` de ambientCG por
+// `TerrainTextureIngest`. Estaba ahi desde el principio y no la miraba nadie: hasta el
+// 2026-09-17 esto sacaba la altura del brillo del albedo, porque el dia que se hizo el
+// parallax la de verdad no estaba enchufada y el usuario pidio «que se hunda lo oscuro del
+// dibujo» (2026-09-16). Esa decision se retira con esta.
+//
+// **Y no era lo mismo**, medido capa por capa sobre las texturas de verdad: la correlacion
+// entre brillo y altura es de **0,02 en el roquedo calizo** y 0,09 en la pradera. O sea que
+// el relieve que se veia en la caliza no tenia NADA que ver con su relieve. De paso, el
+// alfa trae relieve de sobra donde hace falta: desviacion tipica de 0,22 en el roquedo.
+//
+// El desenfoque sigue siendo el mismo ([desenfoque_de_la_piedra]): la altura tambien tiene
+// motas, y lo que se quiere leer son las piedras, no sus granos.
+float altura_de_la_capa(float layer, float tile, vec3 pos, vec3 weights) {
+	float alto = texture(terrain_orm, vec3(uv_de_la_capa(tile, pos, weights), layer),
+		desenfoque_de_la_piedra).a;
+	// El contraste se queda como mando: un `Displacement` flojo se puede subir sin tocar
+	// la textura. A 1 es la altura tal cual.
+	return clamp(0.5 + (alto - 0.5) * contraste_del_relieve, 0.0, 1.0);
 }
 
 // Lo que hay que desplazar la textura para que se vea el relieve.
@@ -674,18 +708,17 @@ vec3 relieve_desplazado(float layer, float tile, vec3 pos, vec3 normal_mundo,
 	// Mirando de frente no hay nada que desplazar, pero la junta sigue siendo
 	// honda: se devuelve la altura igual.
 	if (largo < 0.001) {
-		altura = altura_de_la_capa(layer, tile, pos, weights,
-			media_de_la_capa(layer, tile, pos, weights));
+		altura = altura_de_la_capa(layer, tile, pos, weights);
 		return vec3(0.0);
 	}
 	// Cuanto mas rasante se mira, mas se desplaza: es el mismo triangulo de
 	// siempre, la tangente partida por la componente que mira de frente.
 	float de_frente = max(abs(dot(vista, normal_mundo)), 0.15);
-	vec3 paso_total = tangente / de_frente * tile * relieve_de_la_tesela * fuerza;
+	vec3 paso_total = tangente / de_frente * tile * relieve_de_la_tesela * fuerza
+		* layer_relieve[int(layer)];
 	float paso = 1.0 / float(relieve_pasos);
 	float rayo = 0.0;
-	float media = media_de_la_capa(layer, tile, pos, weights);
-	float alto = altura_de_la_capa(layer, tile, pos, weights, media);
+	float alto = altura_de_la_capa(layer, tile, pos, weights);
 	float rayo_antes = 0.0;
 	float alto_antes = alto;
 	for (int i = 0; i < relieve_pasos; i++) {
@@ -695,7 +728,7 @@ vec3 relieve_desplazado(float layer, float tile, vec3 pos, vec3 normal_mundo,
 		rayo_antes = rayo;
 		alto_antes = alto;
 		rayo += paso;
-		alto = altura_de_la_capa(layer, tile, pos + paso_total * rayo, weights, media);
+		alto = altura_de_la_capa(layer, tile, pos + paso_total * rayo, weights);
 	}
 	// SIN ESCALONES: el rayo se para en el primer paso que queda por debajo, y eso
 	// dibuja la piedra en terrazas, una por paso. Se busca el cruce entre ese paso y
@@ -848,10 +881,8 @@ void fragment() {
 	// que baja de la pared -el canchal- y el fuerte es la pared en si. Antes
 	// habia un solo escalon y la transicion se pintaba como un degradado de
 	// color; ahora es un material propio, que es lo que de verdad hay ahi.
-	float scree_factor = smoothstep(slope_threshold - slope_blend,
-		slope_threshold + slope_blend, slope);
-	float cliff_factor = smoothstep(slope_threshold + slope_blend * 0.5,
-		slope_threshold + slope_blend * 2.5, slope);
+	float scree_factor = smoothstep(canchal_desde, canchal_hasta, slope);
+	float cliff_factor = smoothstep(pared_desde, pared_hasta, slope);
 
 	// Un hondo suave acumula tierra, pero una vaguada marcada en ladera es un
 	// barranco: cauce de temporal escarbado hasta la roca. Hacen falta las DOS
@@ -861,16 +892,30 @@ void fragment() {
 		* smoothstep(ravine_slope - 0.06, ravine_slope + 0.10, slope)
 		* ravine_strength;
 
-	// Lo concavo y humedo cria bosque; lo convexo y expuesto, pasto. La mancha
-	// de UV2.y rompe la homogeneidad para que una ladera entera no salga de un
-	// solo material.
-	// El reparto pradera/bosque iba con un `clamp`, y un clamp SATURA: en casi
-	// todo el mapa valia 0 o 1, asi que el paso de uno a otro era un escalon con
-	// forma organica pero borde duro. Con `smoothstep` sobre un margen ancho la
-	// mezcla ocupa una franja de verdad y el bosque se deshilacha en el prado,
-	// que es lo que hace un bosque.
-	float wood_raw = curvature * curvature_influence + patch * macro_influence;
-	float wood = smoothstep(-0.55, 0.55, wood_raw);
+	// DONDE HAY BOSQUE LO DICE LA HUMEDAD, la misma con la que se siembran los arboles
+	// (`Forest`). Antes salia de la curvatura del terreno y un ruido macro propios: dos
+	// criterios distintos para la misma pregunta, asi que **bajo un pinar el suelo podia
+	// estar pintado de pradera**. Se vio al entrar la hojarasca de otoño, que cuelga de
+	// esta capa y no aparecia (2026-09-18). Decision del usuario: manda la humedad.
+	//
+	// Con la pendiente, como los arboles: en una ladera empinada no hay bosque aunque
+	// haya humedad, y ahi lo que hay es derrubio y peña.
+	// Sin textura de humedad —una sonda, el editor— se cae a lo de antes.
+	float wood;
+	if (use_humedad) {
+		vec2 uv_humedad = (world_position.xz - humedad_origen)
+			/ max(humedad_extent, vec2(0.001));
+		float humedo = texture(humedad_tex, uv_humedad).r;
+		// Las bandas salen de las de `Forest.NICHOS`: por debajo de 0,34 no crece casi
+		// ninguna especie y por encima de 0,55 crecen todas. El margen ancho es a
+		// proposito: con un borde duro el bosque se recorta contra el prado, y lo que hace
+		// un bosque de verdad es deshilacharse.
+		wood = smoothstep(0.34, 0.55, humedo)
+			* (1.0 - smoothstep(0.35, 0.55, slope));
+	} else {
+		float wood_raw = curvature * curvature_influence + patch * macro_influence;
+		wood = smoothstep(-0.55, 0.55, wood_raw);
+	}
 
 	// La marisma se queda en lo hondo y lo LLANO: un limo no se sostiene en
 	// pendiente. Sin la condicion de pendiente el fango trepaba por la ladera
@@ -889,6 +934,12 @@ void fragment() {
 	w[5] = band_low * (1.0 - marsh) * ground;             // arena
 	w[6] = band_low * marsh * ground;                     // limo
 	w[7] = band_top * (1.0 - scree_factor * 0.5);         // nieve
+	// LA HOJARASCA NO ES UN SITIO, ES UNA ESTACION (GRAFICOS §7.7). Las otras ocho se
+	// reparten por altura, pendiente y orilla; ésta se lleva el suelo de bosque cuando cae
+	// la hoja y se lo devuelve en invierno. Por eso sale de su peso y no de otro sitio: en
+	// otoño el bosque ES hojarasca, no hojarasca ADEMAS de bosque.
+	w[8] = w[1] * hojarasca;                              // hojarasca de otoño
+	w[1] -= w[8];                                         // lo que deja de ser bosque
 
 	// Recortar la cola y renormalizar. Es lo que permite quedarse con las dos
 	// de mas peso sin que se vea el cambio: una capa que iba a entrar por un
@@ -969,6 +1020,11 @@ void fragment() {
 	if (use_normal_maps) {
 		final_normal = triplanar_normal(terrain_normal, layer0, tile0,
 			tex_position, dpdx, dpdy, triplanar_weights) * w0;
+		// Y EL MAPA DE NORMALES TAMBIEN VA POR CAPA: inclinar mas sus componentes
+		// horizontales es dar mas bulto sin tocar un solo muestreo, que era la via barata
+		// que pidio el usuario -«¿no podemos darle relieve solo al canchal con normal map o
+		// algo asi?», 2026-09-18-.
+		final_normal.xz *= layer_relieve[int(layer0)];
 		// Y el bulto que sale del dibujo, con la misma distancia que el relieve.
 		if (hondo_del_relieve > 0.0) {
 			final_normal += bulto_de_la_capa(layer0, tile0, tex_position,
@@ -1246,38 +1302,17 @@ void fragment() {
 	if (use_region_mask) {
 		vec2 mask_uv = world_position.xz / max(region_world_size, vec2(0.001));
 		float outside = 1.0 - clamp(texture(region_mask_tex, mask_uv).r, 0.0, 1.0);
+		// EL AGUA NO SE APAGA (2026-09-17). Lo de fuera del recuadro se desatura y se
+		// oscurece a proposito -es fondo, no tablero-, pero eso se comia el azul del
+		// cauce: el rio salia del recuadro y al entrar en las ocho casillas se volvia una
+		// raya gris. El usuario lo conto como «los rios/rias se cortan cuando llegan a las
+		// 8 casillas que rodean la casilla principal». El agua es lo unico que cruza esa
+		// raya y tiene que verse igual a los dos lados.
+		outside *= 1.0 - clamp(river * 1.4, 0.0, 1.0);
 		if (outside > 0.001) {
 			float grey = dot(final_color, vec3(0.299, 0.587, 0.114));
 			final_color = mix(final_color, vec3(grey), outside * outside_desaturation);
 			final_color *= mix(1.0, 1.0 - outside_dim, outside);
-		}
-	}
-
-	// La niebla, encima de todo lo que es mundo —agua y máscara de la época
-	// incluidas— y debajo del overlay de lectura, que en el regional no se usa.
-	float niebla = 0.0;
-	if (use_fog) {
-		vec2 fog_uv = world_position.xz / max(fog_world_size, vec2(0.001));
-		vec2 d = vec2(fog_blur) / max(fog_world_size, vec2(0.001));
-		float visto = texture(fog_tex, fog_uv).r * 2.0;
-		visto += texture(fog_tex, fog_uv + vec2(d.x, 0.0)).r;
-		visto += texture(fog_tex, fog_uv - vec2(d.x, 0.0)).r;
-		visto += texture(fog_tex, fog_uv + vec2(0.0, d.y)).r;
-		visto += texture(fog_tex, fog_uv - vec2(0.0, d.y)).r;
-		niebla = 1.0 - clamp(visto / 6.0, 0.0, 1.0);
-		if (niebla > 0.001) {
-			// El trazo de costa, del mismo grueso en pantalla sea la ladera
-			// empinada o llana: la anchura sale de cuánto cambia la cota de un
-			// píxel al siguiente.
-			float cerca = abs(world_position.y - fog_sea_height);
-			float grueso = fwidth(world_position.y) * 1.5 + 0.0001;
-			float costa = 1.0 - smoothstep(0.0, grueso, cerca);
-			// La calima lisa: lo que TAPA lo no descubierto. Las nubes con volumen van
-			// aparte, en una losa sobre la comarca (`NubesDeLaNiebla`, GRAFICOS §3).
-			vec3 calima = mix(fog_color, fog_coast_color, costa);
-			final_color = mix(final_color, calima, niebla);
-			final_roughness = mix(final_roughness, 1.0, niebla);
-			specular_out = mix(specular_out, 0.0, niebla);
 		}
 	}
 
@@ -1309,11 +1344,11 @@ void fragment() {
 	// sol. Con AO_LIGHT_AFFECT a cero la oclusion solo toca la luz indirecta,
 	// que es la unica que una grieta puede tapar.
 	if (use_orm) {
-		AO = mix(mix(1.0, occlusion, ao_strength), 1.0, niebla);
+		AO = mix(1.0, occlusion, ao_strength);
 		AO_LIGHT_AFFECT = 0.0;
 	}
 	if (use_normal_maps && length(final_normal) > 0.001) {
-		NORMAL_MAP = mix(normalize(final_normal) * 0.5 + 0.5, vec3(0.5, 0.5, 1.0), niebla);
+		NORMAL_MAP = normalize(final_normal) * 0.5 + 0.5;
 	}
 	ROUGHNESS = final_roughness;
 	METALLIC = 0.0;
@@ -1323,11 +1358,5 @@ void fragment() {
 		EMISSION = vec3(termino_sin_luz);
 		SPECULAR = 0.0;
 		ROUGHNESS = 1.0;
-	}
-	// Bajo la niebla la luz no dibuja el relieve: la normal mira al cielo y la
-	// calima sale lisa. Si no, las laderas se leían a través de ella.
-	if (niebla > 0.001) {
-		vec3 arriba = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
-		NORMAL = normalize(mix(NORMAL, arriba, niebla));
 	}
 }

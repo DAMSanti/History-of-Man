@@ -26,7 +26,10 @@ const RIOS := [
 ]
 
 ## Cuánto se busca alrededor de la desembocadura de la época, en metros.
-const ALREDEDOR_M := 4000.0
+## *(Eran 4 000 m hasta el 2026-09-17: con la plataforma nueva el mejor resalte del Nansa
+## salía a más de dos kilómetros de su boca, y el valle del abrigo, de 4,5 km de lado, se
+## quedaba sin río —`TestCosta`—. Con 1 800 la boca cabe siempre en el valle.)*
+const ALREDEDOR_M := 1800.0
 
 ## Entre qué cotas sobre el mar de la época puede estar un abrigo: bastante para no
 ## inundarse, poco para no ser un risco.
@@ -169,7 +172,12 @@ func _del_mar(datos: HeightmapData, plataforma: RelieveDeLaPlataforma, x: int,
 			var nz := z + dz
 			if nx < 0 or nz < 0 or nx >= datos.width or nz >= datos.height:
 				continue
-			if datos.elevations[nz * datos.width + nx] > MAR:
+			# EL MAR CON SUS RÍAS, no el de los datos a secas: desde el 2026-09-17 las vaguadas
+			# que llegan al mar se inundan (GRAFICOS §3), y una desembocadura al fondo de una
+			# ría quedaba a más de un kilómetro del mar de antes. Salía el Asón «sin resalte».
+			var lon := lerpf(datos.lon_west, datos.lon_east, float(nx) / float(datos.width - 1))
+			var lat := datos.lat_for_v(float(nz) / float(datos.height - 1))
+			if plataforma.cota_en(lon, lat) > MAR:
 				continue
 			cerca = minf(cerca, sqrt(float(dx * dx + dz * dz)) * paso)
 	return cerca
@@ -197,8 +205,6 @@ func _capturar(propuestas: Array[Dictionary]) -> void:
 		print("MAL: sin mapa regional")
 		return
 	# Sin niebla ni nubes: lo que se mira es la costa de la época.
-	mapa.poner_las_nubes(false)
-	mapa.terrain.set_fog_texture(null, 0.0)
 	var terreno: TerrainGenerator = mapa.terrain
 
 	for sitio: Dictionary in propuestas:

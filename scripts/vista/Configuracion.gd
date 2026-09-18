@@ -250,6 +250,59 @@ static func cargar() -> bool:
 
 # --- aplicar ---------------------------------------------------------------------
 
+## A CUÁNTO SE DIBUJA EL MUNDO, en fracción de la ventana. De mayor a menor.
+##
+## Son las mismas cinco de siempre —las que ponen los niveles de gráficos y las que midió
+## `GpuProfile`—; lo que cambió el 2026-09-17 es **dónde se eligen y cómo se leen**: antes
+## era una fila «Escala de render» en Gráficos, en tanto por ciento, y ahora es el selector
+## de «Resolución» de Pantalla, en píxeles de verdad (INTERFAZ §16).
+##
+## Vive aquí y no en la ventana porque **la pregunta «a cuánto se dibuja» se contesta en un
+## solo sitio** (SPECS §7, invariante 3): la ventana sólo la enseña.
+const ESCALAS_DE_DIBUJO: Array[float] = [1.0, 0.9, 0.77, 0.6, 0.5]
+
+
+## Si el selector de «Resolución» manda sobre el DIBUJO en vez de sobre el tamaño de la
+## ventana. Maximizada y a pantalla completa el tamaño lo pone el gestor de ventanas, así
+## que lo único que queda por elegir es a cuánto se dibuja.
+static func manda_sobre_el_dibujo() -> bool:
+	return modo != Modo.VENTANA
+
+
+## La resolución a la que se dibuja el mundo con esa escala, en píxeles de esa ventana.
+##
+## **Es lo que de verdad va a salir**, no un número redondo: los escalones son fracciones y
+## una ventana puede tener cualquier tamaño —0,77 de 3 651 px son 2 811—. Enseñar 2 811 y
+## dibujar 2 811 es mejor que ofrecer «1 280» y dibujar 1 284 (decisión del 2026-09-17).
+static func dibujo_con(escala: float, ventana: Vector2i) -> Vector2i:
+	if ventana.x <= 0 or ventana.y <= 0:
+		return Vector2i.ZERO
+	return Vector2i(maxi(1, roundi(float(ventana.x) * escala)),
+		maxi(1, roundi(float(ventana.y) * escala)))
+
+
+## La escala que corresponde a esa resolución de dibujo en esa ventana.
+static func escala_de_dibujo_para(dibujo: Vector2i, ventana: Vector2i) -> float:
+	if ventana.x <= 0 or dibujo.x <= 0:
+		return 1.0
+	return clampf(float(dibujo.x) / float(ventana.x), 0.1, 1.0)
+
+
+## Los escalones de dibujo que se ofrecen para esa ventana, en píxeles y de mayor a menor.
+static func dibujos_que_caben(ventana: Vector2i) -> Array[Vector2i]:
+	var salida: Array[Vector2i] = []
+	for escala: float in ESCALAS_DE_DIBUJO:
+		salida.append(dibujo_con(escala, ventana))
+	return salida
+
+
+## El tamaño de la ventana ahora mismo, o cero si no hay ventana —una sonda headless—.
+static func tamano_de_la_ventana() -> Vector2i:
+	if DisplayServer.get_name() == "headless":
+		return Vector2i.ZERO
+	return DisplayServer.window_get_size()
+
+
 ## Las resoluciones que se ofrecen: la nativa del monitor donde está la ventana y
 ## las habituales que quepan en él, de mayor a menor. Sin monitor —una sonda sin
 ## ventana—, las habituales.

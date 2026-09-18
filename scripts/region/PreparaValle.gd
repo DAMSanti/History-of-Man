@@ -153,6 +153,24 @@ var surround_meters: float = 8.0
 ## De donde sale la cota de la plataforma para los valles inventados (EPOCA_01 §10.2).
 const RELIEVE_REGIONAL := "res://data/dem/cantabria_region.res"
 
+## EL MAR DE LA EPOCA CON EL QUE SE PREPARA EL VALLE, que decide dos cosas grandes: el
+## relieve de un valle inventado ([ValleDeLaPlataforma]) y si el mar de hoy se rellena
+## ([RellenoDelMarDeHoy]).
+##
+## **Lo dice quien manda preparar**, que es el que sabe qué época se va a jugar. Sin él se
+## cae a [Expedition.sea_level_m], que es lo que se hacia hasta el 2026-09-17 — y estaba
+## MAL: al fundar desde el mapa regional, `Expedition` todavia no lo tiene puesto (se pone
+## al entrar al valle, despues), asi que el valle se preparaba **con el mar a cero** y el
+## relleno no rellenaba nada. Quedaba ademas sellado como «hecho para el mar de hoy», con
+## lo que no se volvia a intentar: medido en el valle 60 del jugador, sello puesto y 106 470
+## celdas a cota cero intactas.
+var mar_de_la_epoca: float = NAN
+
+
+## El mar con el que preparar, con su reserva.
+func _mar() -> float:
+	return Expedition.sea_level_m if is_nan(mar_de_la_epoca) else mar_de_la_epoca
+
 
 ## El relieve fino del sitio, preparado, o null si no se ha podido descargar.
 ## Si ya estaba guardado y es de esta versión, se lee.
@@ -168,8 +186,23 @@ func preparar(arbol: SceneTree, sitio: Site, al_cuadro: Callable = Callable()) -
 	var cache_path := ruta_del_valle(sitio.id)
 	if ResourceLoader.exists(cache_path):
 		var cached: HeightmapData = load(cache_path)
-		if cached != null and cached.pipeline_version == VERSION:
+		var de_otra_receta := sitio.fidelity == Site.Fidelity.HIPOTETICO 			and cached != null and cached.source != ValleDeLaPlataforma.firma()
+		if cached != null and cached.pipeline_version == VERSION and not de_otra_receta:
 			print("PreparaValle: recuadro local leido de %s" % cache_path)
+			# EL MAR DE HOY, RELLENADO PARA ESTA EPOCA. El valle guardado es uno para todas
+			# y el mar cambia de una a otra: si el relleno es de otra, se rehace en un hilo
+			# y sin red. Ver [RellenoDelMarDeHoy].
+			if sitio.fidelity != Site.Fidelity.HIPOTETICO \
+					and RellenoDelMarDeHoy.hace_falta(cached, _mar()):
+				var relleno := Thread.new()
+				relleno.start(_rellenar_lo_guardado.bind(sitio, cached, cache_path))
+				while relleno.is_alive():
+					_publicar()
+					if al_cuadro.is_valid():
+						al_cuadro.call()
+					await arbol.process_frame
+				relleno.wait_to_finish()
+				_publicar()
 			# El contorno tiene su propia resolucion y su propia vida: si se
 			# ha quedado mas basto de lo que ahora se pide, se rehace SOLO el.
 			# Subir el sello del recuadro para esto obligaria a volver a
@@ -295,6 +328,9 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 		local.lat_north, local.lat_south, local.lon_west, local.lon_east)
 	var canales: Array = hidro.get("channels", [])
 	var laminas: Array = hidro.get("bodies", [])
+	# Se guarda tal cual: el relleno del mar de hoy alarga los rios con ella, y lo rehace
+	# en cada epoca sin volver a pedirla.
+	local.agua_de_osm = hidro
 
 	if canales.is_empty() and laminas.is_empty():
 		# Reserva: sin OSM se vuelve al drenaje deducido, que es poco pero es
@@ -302,7 +338,7 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 		print("PreparaValle: sin hidrografia de OSM, se deduce del relieve")
 		importer.compute_river_mask(local, 20, 0.35)
 	else:
-		Hydrography.apply(local, canales, laminas)
+		RellenoDelMarDeHoy.pintar_el_agua(local, canales, laminas)
 		var mojadas := 0
 		for v in local.river_mask:
 			if v > 0.01:
@@ -344,12 +380,18 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 	if surround != null:
 		_apply_surround_water(surround)
 		surround.pipeline_version = VERSION
-		ResourceSaver.save(surround, surround_path)
+		# Se guarda abajo, con el mar de hoy ya rellenado.
 		print("PreparaValle: contorno bakeado en %d ms, %d x %d a %.1f m (%s)" % [
 			Time.get_ticks_msec() - t_sur, surround.width, surround.height,
 			surround.meters_per_sample, surround.source])
 	else:
 		print("PreparaValle: sin contorno propio, se usara el MDT regional")
+
+	# EL MAR DE HOY, RELLENADO con el suelo de la epoca: valle y contorno a la vez, que el
+	# sello de los dos va en el valle. Antes de guardar el contorno, que va dentro.
+	_rellenar_el_mar(local, surround)
+	if surround != null:
+		ResourceSaver.save(surround, surround_path)
 
 	_avisar("Guardando el valle...", 5)
 	local.pipeline_version = VERSION
@@ -358,6 +400,43 @@ func _hacer_el_valle(sitio: Site, cache_path: String) -> HeightmapData:
 	ResourceSaver.save(local, cache_path)
 	print("PreparaValle: recuadro local bakeado en %s" % cache_path)
 	return local
+
+
+## Rellena el mar de hoy del valle y de su contorno para el mar de la epoca en curso.
+## Ver [RellenoDelMarDeHoy]. Devuelve si ha cambiado algo.
+func _rellenar_el_mar(local: HeightmapData, surround: HeightmapData) -> bool:
+	var mar_actual := _mar()
+	if not RellenoDelMarDeHoy.hace_falta(local, mar_actual) and (surround == null
+			or not RellenoDelMarDeHoy.hace_falta(surround, mar_actual)):
+		return false
+	_avisar("Poniendo el suelo de la época bajo el mar de hoy...", 3)
+	var t0 := Time.get_ticks_msec()
+	var regional: HeightmapData = load(RELIEVE_REGIONAL)
+	var rios := RiosDeLaRegion.cargar()
+	var mar := _mar()
+	if surround != null:
+		RellenoDelMarDeHoy.poner_al_dia(surround, regional, mar, rios, trae_el_agua)
+	RellenoDelMarDeHoy.poner_al_dia(local, regional, mar, rios, trae_el_agua)
+	var cuantas := 0
+	for v in local.mar_de_hoy:
+		cuantas += v
+	print("PreparaValle: mar de hoy rellenado para %.0f m en %d ms, %d celdas del valle" % [
+		mar, Time.get_ticks_msec() - t0, cuantas])
+	return true
+
+
+## El valle guardado, con el relleno de otra epoca: se rehace el de esta y se guarda.
+func _rellenar_lo_guardado(sitio: Site, local: HeightmapData, cache_path: String) -> void:
+	var surround_path := ruta_del_contorno(sitio.id)
+	var surround: HeightmapData = null
+	if ResourceLoader.exists(surround_path):
+		surround = load(surround_path)
+	if not _rellenar_el_mar(local, surround):
+		return
+	_avisar("Guardando el valle...", 5)
+	if surround != null:
+		ResourceSaver.save(surround, surround_path)
+	ResourceSaver.save(local, cache_path)
 
 
 ## El valle de un abrigo de la costa, inventado. Ver [ValleDeLaPlataforma].
@@ -373,7 +452,7 @@ func _valle_inventado(sitio: Site, cache_path: String) -> HeightmapData:
 		_avisar("No esta el relieve regional.", -1)
 		return null
 	var rios := RiosDeLaRegion.cargar()
-	var mar := Expedition.sea_level_m
+	var mar := _mar()
 	var t0 := Time.get_ticks_msec()
 	var local := ValleDeLaPlataforma.generar(sitio, rios, regional, mar,
 		float(Expedition.local_size_m) * 1.1, 5.0)
@@ -488,6 +567,13 @@ func _rehacer_el_contorno(sitio: Site, local: HeightmapData) -> bool:
 	if dry:
 		_avisar("Trazando los rios de alrededor...", 4)
 		_apply_surround_water(surround)
+		# EL AGUA NUEVA ES SIN ALARGAR, y un contorno bajado de nuevo viene sin rellenar
+		# (su sello esta a cero y lo sabe solo). Uno que solo estaba seco conserva su
+		# mascara, asi que se le rompe el sello del mar para que se rehaga con ella.
+		if sitio.fidelity != Site.Fidelity.HIPOTETICO:
+			if surround.relleno_version != 0:
+				surround.relleno_mar = 1.0
+			_rellenar_el_mar(local, surround)
 
 	var final := "Guardando el relieve de alrededor..."
 	if no_respondio:
@@ -514,11 +600,12 @@ func _apply_surround_water(surround: HeightmapData) -> void:
 		surround.lon_west, surround.lon_east)
 	var canales: Array = hidro.get("channels", [])
 	var laminas: Array = hidro.get("bodies", [])
+	surround.agua_de_osm = hidro
 
 	if canales.is_empty() and laminas.is_empty():
 		print("PreparaValle: sin hidrografia para el contorno, se queda seco")
 		return
 
-	Hydrography.apply(surround, canales, laminas)
+	RellenoDelMarDeHoy.pintar_el_agua(surround, canales, laminas)
 	print("PreparaValle: %d cauces y %d laminas en el contorno"
 		% [canales.size(), laminas.size()])

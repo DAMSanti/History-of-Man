@@ -340,3 +340,38 @@ func test_apagado_no_dibuja_nada_del_tiempo() -> void:
 		assert_false(bool(apagado[que]), "apagado, sin %s" % que)
 	assert_true(vuelve, "y al encenderlo vuelve a llover")
 
+
+func test_la_hojarasca_sube_en_otono_y_se_va_con_el() -> void:
+	# GRAFICOS §7.7: el suelo de bosque tiene dos caras y la de otoño es una capa aparte,
+	# con su peso mandado por la estación. «Sube y baja con la estación», pidió el usuario:
+	# nada de interruptor, la misma transición de doce días que la cota de nieve.
+	var temporada := Temporada.new()
+	temporada.relieve = Vector2(0.0, 800.0)
+	temporada.asentar(Subsistence.Season.VERANO)
+	assert_near(temporada.hojarasca(), 0.0, 0.001, "en verano no hay hojas caídas")
+
+	# Llega el otoño: sube, y no de golpe.
+	temporada.nuevo_dia(Subsistence.Season.OTONO)
+	var primer_dia := temporada.hojarasca()
+	assert_gt(primer_dia, 0.0, "el primer día de otoño ya cae algo")
+	assert_true(primer_dia < 0.5, "pero no está el suelo cubierto: %.2f" % primer_dia)
+	for dia in range(20):
+		temporada.nuevo_dia(Subsistence.Season.OTONO)
+	assert_near(temporada.hojarasca(), 1.0, 0.001, "y al cabo del otoño, cubierto")
+
+	# Y en invierno se va, también poco a poco.
+	temporada.nuevo_dia(Subsistence.Season.INVIERNO)
+	assert_true(temporada.hojarasca() < 1.0, "en invierno empieza a irse")
+	for dia in range(20):
+		temporada.nuevo_dia(Subsistence.Season.INVIERNO)
+	assert_near(temporada.hojarasca(), 0.0, 0.001, "y acaba sin hojas")
+
+
+func test_asentar_pone_la_hojarasca_de_la_estacion() -> void:
+	# Las sondas y el arranque de partida no pueden esperar doce días a que caiga la hoja.
+	var temporada := Temporada.new()
+	temporada.relieve = Vector2(0.0, 800.0)
+	temporada.asentar(Subsistence.Season.OTONO)
+	assert_near(temporada.hojarasca(), 1.0, 0.001, "asentado en otoño, el suelo cubierto")
+	temporada.asentar(Subsistence.Season.PRIMAVERA)
+	assert_near(temporada.hojarasca(), 0.0, 0.001, "y en primavera, limpio")

@@ -81,6 +81,9 @@ const FRENA_LA_NIEVE := 0.36
 const TRANSICION := 12.0
 
 var _cota := 0.95
+## Cuánta hojarasca hay en el suelo del bosque, de 0 a 1. Sube en otoño y se va con él.
+## Ver [hojarasca].
+var _hojarasca := 0.0
 var _charca := 0.0
 var _caudal := 1.0
 
@@ -93,6 +96,8 @@ var _tinte := Color.WHITE
 func nuevo_dia(season: Subsistence.Season) -> void:
 	var paso := 1.0 / TRANSICION
 	_cota = move_toward(_cota, fraccion_de(season), paso)
+	_hojarasca = move_toward(_hojarasca, 1.0 if season == Subsistence.Season.OTONO else 0.0,
+		paso)
 	_charca = move_toward(_charca, float(ENCHARCA.get(season, 0.0)), paso)
 	_caudal = move_toward(_caudal, float(CAUDAL.get(season, 1.0)), paso * 1.5)
 	# El color va MAS DESPACIO que el resto: la hierba no amarillea en doce
@@ -104,6 +109,7 @@ func nuevo_dia(season: Subsistence.Season) -> void:
 ## para las sondas, que si no medirían doce jornadas de otra estación.
 func asentar(season: Subsistence.Season) -> void:
 	_cota = fraccion_de(season)
+	_hojarasca = 1.0 if season == Subsistence.Season.OTONO else 0.0
 	_charca = float(ENCHARCA.get(season, 0.0))
 	_caudal = float(CAUDAL.get(season, 1.0))
 	_tinte = TerrainLayers.tint_of_season(season)
@@ -120,6 +126,17 @@ func fraccion_de(season: Subsistence.Season) -> float:
 		# Sin relieve conocido no hay contra qué medir. Por encima de todo.
 		return 2.0
 	return (Termometro.cota_de_hielo(season) - relieve.x) / alto
+
+
+## CUÁNTA HOJARASCA CUBRE EL SUELO DEL BOSQUE, de 0 a 1, para el shader del terreno.
+##
+## El suelo de bosque tiene dos caras (GRAFICOS §7.7, decisión del usuario del 2026-09-17):
+## la de siempre y la de **otoño**, con las hojas caídas. Pasar de una a otra no es un
+## interruptor —«sube y baja con la estación», dijo— así que va con la misma transición de
+## doce días que la cota de nieve: las hojas caen a lo largo del otoño y se pudren en
+## invierno.
+func hojarasca() -> float:
+	return _hojarasca
 
 
 ## La cota de nieve de hoy, para el shader del terreno.

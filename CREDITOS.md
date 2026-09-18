@@ -9,13 +9,14 @@ verdad se usa. No se edita a mano.
 [ambientCG](https://ambientcg.com), CC0.
 
 - Pradera — `Grass007`
-- Suelo de bosque — `Ground037`
-- Roquedo calizo — `Rock030`
-- Canchal — `Rocks006`
+- Suelo de bosque — `Ground003`
+- Roquedo calizo — `Rock023`
+- Canchal — `Rocks002`
 - Cantos de río — `Gravel041`
 - Arena — `Ground095A`
 - Limo de marisma — `Ground026`
 - Nieve — `Snow010A`
+- Hojarasca de otoño — `Ground041`
 
 ## Modelos del suelo
 

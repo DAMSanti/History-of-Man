@@ -139,8 +139,483 @@ cuando se cierre. Lo que la tarea aprenda sobre el juego se funde en el
 documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 [ESTADO.md](ESTADO.md), la ficha de época— y de la tarea sólo queda la línea.
 
+### La banda: cuerpos, oficios en las manos y ropa por era
+
+**Spec y relato en [GRAFICOS.md](GRAFICOS.md) §5.1.** Se hizo **dos veces el mismo día**, y
+la primera no valía.
+
+> **PRIMERA PASADA (2026-09-18, mañana): la fontanería sin el fondo.** Se montó una tabla de
+> gestos, se horneó la pose de la mano para colgar un apero, se hicieron los aperos con cubos
+> y cilindros y se sacó una «prenda» que era la piel del propio cuerpo inflada un centímetro
+> y teñida. **No se tocó ni el modelo ni las animaciones**, que era el grueso de lo que se
+> había pedido: la banda seguía siendo el mismo muñeco de 1 578 triángulos con siete clips.
+> Se dio por bueno con un resumen que sonaba a más de lo que era, y el usuario lo dijo sin
+> rodeos. La lección, que es la que hay que llevarse: **entregar la tubería y llamarlo hecho
+> es peor que no entregar nada**, porque además gasta la confianza.
+>
+> También se descartó el apartado de animaciones por una búsqueda mal hecha —«no hay packs
+> CC0 con gestos de tallar sílex», que es cierto y es irrelevante: lo que había que buscar
+> era una biblioteca de animación general, y existe—.
+
+> **SEGUNDA PASADA (2026-09-18, tarde): hecho.** Tres packs CC0 de Quaternius que comparten
+> esqueleto —65 huesos con los mismos nombres—, y la banda reescrita sobre `Skeleton3D` de
+> verdad:
+>
+> - **Cuerpos**: 12 566 triángulos con cara, ojos, cejas, ocho peinados y barba, contra los
+>   1 578 de antes.
+> - **45 animaciones**: sentarse, levantarse, andar, trotar, correr, agacharse, arrodillarse
+>   a trabajar con las manos, coger del suelo, empujar, sostener una tea, lanzar. **Once
+>   posturas de trabajo distintas** donde había una.
+> - **Ropa modular de verdad**: veinte piezas —torso, brazos, calzas, botas, capucha—,
+>   mallas sueltas cosidas al mismo esqueleto, un conjunto por era con su tinte.
+> - **Aperos**: seis del «Fantasy Props MegaKit», dos compuestos, colgados de un
+>   `BoneAttachment3D` en `hand_r`.
+>
+> **La arquitectura cambió, y la cambió la aritmética**: con ropa modular el horneado en
+> textura pedía 25 MB por pieza, así que se tiró entero —`BandaAtlas`, `Percha`, las prendas
+> horneadas— y se midió lo que costaba lo otro antes de escribir nada. Quince personas
+> vestidas: **0,38 ms de GPU y 0,57 de CPU** de los 2,0 que da §1 (`EsqueletosProbe`).
+>
+> **Tres cosas se descubrieron en captura, no pensando**, y las tres eran de las que no dan
+> error: la ropa del pack trae su propia piel y hay que esconder el cuerpo; esconderlo deja a
+> la persona sin cabeza porque el cuerpo es una malla sola; y el export de animaciones que
+> vale es el de Unreal, no el de Godot, porque es el que usa los nombres de hueso de los
+> cuerpos.
+>
+> Suite: **1 721 pruebas, 9 345 comprobaciones**, en verde; `llamadas huerfanas: 0`.
+
+> **DEPURADO el 2026-09-18 (tarde): la banda salía hundida hasta la cintura.** El FBX de
+> animaciones trae la pose de reposo aplastada —todos los huesos en el origen—, que es el
+> fallo que su propio léeme avisa para FBX riggeados. Se leyó ese aviso y se entendió como
+> una advertencia sobre los modelos; era sobre cualquier FBX. Ahora sólo se usan sus
+> **rotaciones**, y el asiento en el suelo lo pone `Cuerpo._plantar` mirando el pie más bajo
+> cada cuadro. Medido con `PiesProbe`: de −0,83 m a +0,015 en los diez clips. El relato, en
+> GRAFICOS §5.1.
+>
+> **Y una cosa del entorno, no del juego**: el disco C: estaba al 100 % —254 MB libres de
+> 111 GB—, en buena parte por registros de mis propias sondas. Con el disco así, Godot no
+> puede reservar memoria (`mem_new is null` a millones de líneas, que a su vez llenan más el
+> disco) y las capturas salen de cero bytes. Se liberó 1,5 GB; sigue al 99 %.
+
+> **DEPURADO el 2026-09-18 (noche): la banda salía vestida aunque no tuviera vestidos.** El
+> utillaje empieza la partida a cero y la barra superior lo dice; la vista vestía a los
+> quince igual. Ahora sólo va abrigado quien tenga un vestido, y quién lo tiene lo reparte
+> `Vestuario.quien_va_vestido`: **primero los que salen del campamento** (decisión del
+> usuario). La simulación no cambia —el vestido sigue sin ser de nadie, como estaba
+> escrito—: lo que cambia es que la vista ya no se adelanta a ella. Cuatro pruebas nuevas.
+
+**Lo que queda, dicho por mí antes de que se pregunte:**
+
+- [ ] **Los pies no se posan en la pendiente.** Estaba fuera de alcance en la spec y sigue
+      fuera; es cinemática inversa y va aparte.
+- [ ] **Sólo hay dos cuerpos**, hombre y mujer de proporción «superhéroe». Los otros cuatro
+      —regular y adolescente— van en la versión de pago del pack.
+- [ ] **El atuendo es medieval teñido**, no una piel magdaleniense: a cuarenta píxeles se lee
+      como cuero, de cerca es una túnica con cordones. Arreglarlo de verdad es modelar.
+- [ ] **No hay LOD**: las veinticinco personas se dibujan con su esqueleto estén a cinco
+      metros o a cuatrocientos. Cabe hoy; con una aldea de cien no cabría.
+- [ ] **No hay cinemática inversa**: el asiento pone la persona a la altura del pie más bajo,
+      pero en una cuesta el otro pie queda en el aire. A la distancia de juego no se nota;
+      de cerca sí.
+
+### Las texturas del suelo, con su altura de verdad
+
+> **CERRADA el 2026-09-17, y rematada el 2026-09-18** con un `/depurar` de las tres cosas
+> que el usuario vio jugando: el bulto con luz seguía saliendo del brillo mientras el
+> desplazamiento usaba la altura —«parece que tiene lepra»—, la pared de caliza no ganaba
+> nunca al canchal, y el suelo de bosque no coincidía con los árboles. Las tres arregladas;
+> el relato, en GRAFICOS §7.7, «Depurar del 2026-09-18». **Queda abierto** un hallazgo
+> menor: hay **dos ficheros de créditos** y el generador escribe en el que no lee nadie.
+
+**Spec y plan técnico del 2026-09-17 en [GRAFICOS.md](GRAFICOS.md) §7.7.** Las texturas ya
+vienen con su `Displacement` de ambientCG y **el shader no lo usa**: el relieve sale del
+brillo del color, así que se hunde lo oscuro y no lo hundido. Se enchufa la altura de
+verdad —retirando la decisión del 2026-09-16, con su porqué— y se cambian las capas que el
+usuario nombra: **pared de caliza con grietas, canchal canto a canto y hierba**. Se quedan
+en 1K y **las elige él sobre capturas**. Tareas, en orden:
+
+- [x] **1. La capa de prueba que delata al relieve.** `tests/TexturasCaptura.gd` (nueva):
+  una capa preparada a mano donde el dibujo y la altura **discrepan a propósito** —franja
+  oscura y plana, grieta clara y honda— y una captura del suelo con ella. Con el shader de
+  hoy tiene que hundirse la franja: eso es el fallo, fotografiado.
+  > **HECHO (2026-09-17), y no como estaba planeado.** La capa sintética se probó y **salió
+  > mal**: reconstruir los tres `Texture2DArray` con una capa cambiada rompió los colores de
+  > todas —la captura salió morada— porque no se puede sustituir una capa suelta y al
+  > rehacerlos se pierde el formato de las originales. La pregunta se contesta **mejor y más
+  > barata sin ventana**: `tools/AlturaDeLasTexturas.gd` (nueva) mide, capa por capa, cuánto
+  > relieve trae el alfa del ORM y **cuánto se parece al brillo del dibujo**.
+- [x] **2. La altura, del heightmap.** `shaders/triplanar.gdshader`: `altura_de_la_capa`
+  lee el alfa de `terrain_orm`. Se comprueba con la captura de la tarea 1: ahora se hunde
+  la grieta y la franja queda lisa.
+  > **HECHO (2026-09-17).** `altura_de_la_capa` lee el alfa de `terrain_orm` con el mismo
+  > desenfoque de antes; `media_de_la_capa` se va, que era del brillo y ya no la usa nadie.
+  > El contraste se queda como mando para subir un `Displacement` flojo. **Lo que demuestra
+  > que el cambio importa son las cifras**: la correlación entre brillo y altura es de
+  > **0,02 en el roquedo calizo** y 0,09 en la pradera; o sea que el relieve que se veía en
+  > la caliza no tenía nada que ver con su relieve.
+- [x] **3. Que el alfa traiga altura de verdad.** `tests/MapasProbe.gd`: que diga, capa por
+  capa, si el alfa del ORM tiene relieve o está plano —y cuánto—. Sirve de red para que
+  nadie vuelva a empaquetar sin altura sin enterarse.
+  > **HECHO (2026-09-17).** Lo hace `tools/AlturaDeLasTexturas.gd`, que se queda como
+  > herramienta: dice capa por capa la desviación típica de la altura —el alfa trae relieve
+  > de sobra, de 0,05 a 0,22— y su correlación con el brillo. Es la red para que nadie
+  > vuelva a empaquetar sin altura sin enterarse.
+- [x] **4. Candidatas y capturas.** `tools/TerrainTextureIngest.gd` **sin `--headless`**
+  para bajar candidatas de caliza con grietas, canchal y hierba; capturas del mismo
+  encuadre con la de hoy al lado. **Aquí se para y elige el usuario.**
+  > **HECHO (2026-09-17).** `tools/CandidatasDeTextura.gd` (nueva) baja las candidatas con
+  > `curl` y compone **una hoja de contacto por capa**, con el color y la altura de cada
+  > una. **El riesgo del plan era falso**: la descarga no necesita ventana, porque la hace
+  > `curl` y no el motor —ya estaba resuelto y escrito en `TerrainTextureIngest`—. El
+  > usuario eligió: caliza **Rock023**, canchal **Rocks002**, hierba **la de hoy**, bosque
+  > **Ground003**, y pidió además **hojarasca en otoño** (Ground041), que es la tarea 6.
+- [x] **5. Poner las elegidas y medir lo que cuestan.** Elegidas el 2026-09-17: caliza
+  **Rock023**, canchal **Rocks002**, hierba **la de hoy** y bosque **Ground003**.
+   `mundo/TerrainLayers.gd` con los
+  assets nuevos, arrays regenerados, y VRAM y ms de GPU antes y después **en dos corridas**
+  —en esta máquina los absolutos bailan mucho—.
+  > **HECHO (2026-09-17).** Arrays rehechos: **nueve capas de 1 024 px, 36 MB**. VRAM en el
+  > juego **1 847-1 848 MB**, contra 1 843-1 876 medidos hoy con las ocho capas viejas: el
+  > cambio cabe en el ruido, como se esperaba de una capa más a 1K. **Una sorpresa**: la
+  > descarga del limo (Ground026) falló con un **404 que era pasajero** —el mismo fichero se
+  > bajaba bien con `curl` a mano— y abortó la primera reconstrucción; al reintentar, fue.
+- [x] **6. La hojarasca de otoño, capa nueva.** `mundo/TerrainLayers.gd` y
+  `shaders/triplanar.gdshader`: novena capa con Ground041, con su peso mandado por el otoño
+  —sube y baja con la estación, como la nieve cuaja—. **Salió al elegir el usuario las
+  texturas**, y la spec lo excluía: se retiró ese «fuera de alcance» con su porqué. Prueba:
+  con otoño a cero la capa no pinta nada y las otras ocho suman lo mismo que antes.
+  > **HECHO A MEDIAS, y lo digo (2026-09-17).** La capa está: novena en el catálogo y en el
+  > shader, con su peso `w[8] = w[1] * hojarasca`, y la estación la maneja
+  > `Temporada.hojarasca()` con la misma transición de doce días que la cota de nieve —dos
+  > pruebas en `TestClima`: sube a lo largo del otoño, se va en invierno, y `asentar` la
+  > pone de golpe—.
+  >
+  > **Pero no se ve en el juego**, y la razón no es la capa: **la máscara de «bosque» del
+  > terreno sale de la curvatura y un ruido**, no de dónde están los árboles
+  > (`triplanar.gdshader`, `wood`). Bajo un pinar el suelo puede estar pintado de pradera, y
+  > entonces no hay suelo de bosque que cubrir de hojas. El desajuste **ya existía** y la
+  > hojarasca sólo lo ha destapado. Arreglarlo —que el suelo de bosque siga a los árboles de
+  > verdad— es otro trabajo, con su spec.
+- [x] **7. Documentar.** GRAFICOS §7.7 «Cómo quedó» con lo elegido y lo medido, `CREDITOS`
+  regenerado, ESTADO si cambia una cifra. Suite entera y `llamadas huerfanas: 0`.
+  > **HECHO (2026-09-17).** GRAFICOS §7.7 con «Cómo quedó» —la tabla de altura contra
+  > brillo, las texturas elegidas y lo que costó— y una sección aparte para lo que esto
+  > destapó: **el suelo de bosque no sigue a los árboles**. ESTADO con la VRAM y el total de
+  > la suite. **Y un hallazgo de paso**: `PropIngest` genera los créditos en `CREDITOS.md`
+  > de la raíz, no en `docs/CREDITOS.md`, que es el que lee la documentación y el que tiene
+  > las secciones escritas a mano. Son **dos ficheros de créditos** y sólo uno se
+  > actualiza; queda anotado en el propio `docs/CREDITOS.md`.
+
+### La resolución, también con la ventana maximizada
+
+> **CERRADA el 2026-09-17.** Las seis tareas hechas; lo aprendido, en INTERFAZ §16 «Cómo
+> quedó» —con la tabla de las dos corridas—, GRAFICOS §7 y ESTADO. **Lo que no se hizo, y
+> es a propósito**: no se puede cambiar el TAMAÑO de la ventana desde maximizado, que para
+> eso está el modo ventana; y el filtro sigue siendo FSR2 sin opción de elegir.
+
+**Spec y plan técnico del 2026-09-17 en [INTERFAZ.md](INTERFAZ.md) §16** (nota en
+GRAFICOS §7). El juego se juega maximizado y ahí el selector de «Resolución» no hace nada;
+lo que sí se puede hacer —dibujar a menos con FSR2— vive escondido en Gráficos, en tanto
+por ciento y con otro nombre. Pasa a ser **el mismo selector, en píxeles reales**, y el
+criterio para darlo por hecho es que **gane fotogramas, medido** con ventana. Tareas, en
+orden:
+
+- [x] **1. La traducción, en un solo sitio.** `vista/Configuracion.gd`: de resolución de
+  dibujo a escala y al revés, con el tamaño real de la ventana, y los escalones que se
+  ofrecen. Prueba en `tests/TestConfiguracion.gd`: de una ventana de 1920 × 1080 salen los
+  escalones esperados en píxeles, y elegir uno deja la escala que le toca.
+  > **HECHO (2026-09-17).** `Configuracion.ESCALAS_DE_DIBUJO` —los mismos cinco escalones,
+  > que ahora viven donde se aplican y no en la ventana—, más `dibujos_que_caben`,
+  > `dibujo_con`, `escala_de_dibujo_para`, `manda_sobre_el_dibujo` y `tamano_de_la_ventana`.
+  > Tres pruebas en `TestConfiguracion`.
+- [x] **2. El selector de Pantalla manda maximizado.** `ui/VentanaDeConfiguracion.gd`: la
+  lista en píxeles reales, la fila dice si está cambiando la ventana o el dibujo, y en
+  ventana sigue haciendo lo de siempre. Prueba: maximizado, elegir un escalón **no toca el
+  modo ni el tamaño de la ventana** y sí cambia la escala.
+  > **HECHO (2026-09-17).** `elegir_dibujo` en la ventana, y la fila de Pantalla se llama
+  > «Tamaño de la ventana» o «Resolución de dibujo» según lo que esté haciendo. **Sin cuenta
+  > atrás**, a diferencia del tamaño: la confirmación existe para que una resolución
+  > imposible no te deje sin ver, y dibujar a menos no puede hacer eso. Dos pruebas: no
+  > toca modo ni tamaño de ventana, y baja el nivel a personalizado.
+- [x] **3. Fuera la escala de Gráficos.** `ui/VentanaDeConfiguracion.gd`: se retira la fila
+  «Escala de render» y la nota que remitía a ella. Los niveles siguen poniéndola. Prueba:
+  no queda ningún control que escriba `escala` fuera de Pantalla, y elegir a mano baja el
+  nivel a personalizado.
+  > **HECHO (2026-09-17).** Fuera la fila «Escala de render» y la nota que remitía a ella.
+  > Prueba nueva que recorre los rótulos montados de la ventana y comprueba que ya no
+  > está.
+- [x] **4. Que se aplique, se guarde y la interfaz no se pixele.** Prueba: cambiar de
+  escalón aplica la escala al viewport en el momento, sobrevive a `guardar`/`cargar` con la
+  configuración de las pruebas, y el tamaño de la capa de interfaz no cambia.
+  > **HECHO (2026-09-17).** Se guarda y se recupera (prueba), y **lo que necesita ventana se
+  > comprobó con ventana**: la sonda de la tarea 5 imprime el tamaño de la capa de interfaz
+  > en cada escalón y se queda en 1920 × 1080 en los cinco. La suite corre en `_init` de un
+  > `SceneTree`, donde todavía no hay raíz, así que el viewport no se puede mirar desde una
+  > prueba.
+- [x] **5. Medir lo que gana.** `tests/ResolucionProbe.gd` (nueva), con ventana **fijada a
+  1080p** para poder comparar con el presupuesto de GRAFICOS §7: ms de GPU y fps en el
+  mismo punto de un valle, por escalón. La tabla va a `ESTADO.md`.
+  > **HECHO (2026-09-17).** `tests/ResolucionProbe.gd`. **Dos sorpresas**: la primera corrida
+  > midió a 3 840 × 2 054 porque `window_set_size` no hace nada con la ventana maximizada
+  > —que es justo el fallo del que va todo esto—, y hubo que pasar a modo ventana antes; y
+  > los absolutos bailan tanto entre corridas (49,2 y 33,7 ms para lo mismo) que la cifra
+  > que vale es la bajada relativa: **−32 % y −31 %** de GPU del escalón más alto al más
+  > bajo. Tabla en INTERFAZ §16 y cifra en ESTADO.
+- [x] **6. Documentar.** INTERFAZ §16 «Cómo quedó», GRAFICOS §7 (la escala vive ahora en
+  Pantalla) y ESTADO con la tabla medida. Suite entera y `llamadas huerfanas: 0`.
+  > **HECHO (2026-09-17).** INTERFAZ §16 «Cómo quedó» con la tabla de las dos corridas,
+  > GRAFICOS §7 —la escala ya no se elige allí— y ESTADO con la bajada medida.
+
 El contexto largo de los bloques que se cerraron antes de este cambio sigue
 íntegro en [archivo/](archivo/); no se edita.
+
+---
+
+### Depurar del 2026-09-17 (noche): cinco cosas que se veían jugando
+
+> **CERRADO el mismo día.** Lo aprendido, en GRAFICOS §3 y §7.6 e INTERFAZ §15. De la lista
+> que dio el usuario quedan fuera, **a propósito y con su permiso**, tres que no son fallos
+> sino trabajos con spec propia: los gráficos de la banda con su ropa y sus herramientas,
+> las mejoras de texturas del terreno y el selector de resolución en ventana maximizada
+> —para éste ya eligió: **render a menos resolución y estirado**, no cambiar el tamaño de
+> la ventana—.
+
+- [x] **1. Fuera la niebla del mapa regional.** «Quitamos la niebla en el mapa regional.»
+  > **HECHO.** Se retiran la calima, las nubes con volumen, el shader que borraba el mar y
+  > la frontera, su sonda y su prueba de la losa. **La exploración se queda**: qué ha visto
+  > la banda sigue guardándose y sigue decidiendo qué yacimientos se ven; lo que se ha
+  > quitado es el velo. Al limpiar el shader del terreno se rompió —dos llaves huérfanas— y
+  > **la suite no lo vio**: los shaders sólo fallan con ventana, y salió en la primera
+  > captura.
+- [x] **2. El rótulo del panel de rendimiento decía F3.**
+  > **HECHO.** La tecla se pregunta (`Teclas.nombre_de_la_tecla`) en vez de ir escrita, en
+  > el panel y en el cartel del mapa regional. INTERFAZ §15.
+- [x] **3. El aviso de las técnicas se cerraba solo.**
+  > **HECHO.** Era el tooltip del motor, que tiene temporizador propio: no se puede
+  > mantener abierto. Ahora el globo es nuestro (`CasillaTecnica`), abierto mientras el
+  > ratón esté encima, con dos pruebas. INTERFAZ §15.
+- [x] **4. La gente se teletransportaba, y a veces salía como marca.**
+  > **HECHO.** En viajes cortos la figura persigue con tope en vez de pintarse en la
+  > posición simulada; y lo que decide si sigue de viaje es que la persona avance, no que
+  > le quede ruta. **Se cuenta en horas de juego**: contando reloj de pared, pausar sacaba
+  > a todos de su viaje. GRAFICOS §7.6.
+- [x] **5. Los ríos y las rías se cortaban en las ocho casillas.**
+  > **HECHO, y no era lo que parecía.** El dato estaba bien —el contorno pinta su agua y
+  > cruza la raya—: lo que fallaba era que las ocho casillas **se desaturan a propósito** y
+  > eso apagaba el azul del cauce, y que **el mar se acababa** en el borde del recuadro.
+  > Hoy el agua no se desatura y el contorno lleva su marco de mar. GRAFICOS §3.
+
+---
+
+### Depurar: la plataforma con relieve real, y los ríos que siguen
+
+> **CERRADA el 2026-09-17.** Las nueve tareas hechas; lo aprendido, en GRAFICOS §3
+> «Cómo quedó» y EPOCA_01 §10.2. **Queda dicho lo que no se hizo**: de los 16 valles
+> reales con mar de hoy sólo se ha preparado con red el **36**; los otros quince se
+> rellenan solos la primera vez que se entre, y los que ya estuvieran guardados de
+> antes piden una vuelta a OSM para alargar sus ríos.
+>
+> **Y un remate, esa misma noche, con el juego delante** (GRAFICOS §3, «Y una verdad
+> sola»): nada de esto se veía en la partida, porque el mapa regional y el valle
+> preguntaban **con qué mar se montan** a sitios que en el modo Debug no lo saben
+> (`GameState.home` y `Expedition`). En Debug el mapa salía sin ríos en la plataforma y
+> los valles sin rellenar —y encima **sellados como hechos**, así que no se reintentaban—.
+> Hoy lo contesta `RegionMap.mar_del_mapa()` y se le pasa al preparador
+> (`PreparaValle.mar_de_la_epoca`), con prueba en `TestModoDebug` y en `TestRelleno`.
+> Medido con `tests/DebugCaptura.gd` (nueva): **22 414 celdas de cauce sobre la plataforma
+> emergida** donde no había ninguna.
+>
+> **Y una auditoría del agua** a petición del usuario («que los ríos sean fieles a la
+> realidad; que no hayas convertido carreteras en ríos»), con `tools/AuditarRios.gd`
+> (nueva) y el detalle en GRAFICOS §3: el mapa regional trae **1 599 tramos y todos son
+> `waterway=river`**, con sus nombres reales, y los valles sólo `river` y `stream`; lo
+> artificial ya entraba con ancho cero. **Pero destapó dos fallos míos** en los ríos que
+> siguen por el relleno: cada cauce bajaba solo hasta el mar —el «Caño de la Portilla»,
+> 12,7 km él solo, y el Gandarilla duplicado— y **los ríos remontaban** hasta 181,5 m.
+> Arreglado: los afluentes **confluyen**, y el tramo nuevo **abre su cauce** con pendiente
+> mínima. Medido después: remonte de **0,5 m** en el valle 36 y **0,7 m** en el 60. Las dos
+> reglas quedan en `TestRelleno`.
+
+La regla y las decisiones del usuario en [GRAFICOS.md](GRAFICOS.md) §3 (depurar del
+2026-09-17). **16 valles reales** tienen mar de hoy en su recuadro, y la plataforma del
+mapa regional está inventada. Tareas, en orden:
+
+- [x] **1. La biblioteca de relieve prestado.** Trozos de relieve **real** de tierra
+  —lomas y valles costeros de Cantabria—, a las dos escalas: a 111 m, sacados del propio
+  relieve regional (sin red); y a 5 m, del MDT del IGN (**con red, una vez**, guardados
+  en `data/dem/`, que no se versiona, con la herramienta que los rehace). Se guarda su
+  **detalle** —lo que queda al quitarles la forma grande—, que es lo que se presta.
+  Prueba: el detalle de un trozo tiene media cero y su desnivel por kilómetro es el del
+  terreno real del que sale.
+  > **HECHO (2026-09-17).** A 111 m, `datos/RelievePrestado.gd` (nuevo) saca ventanas
+  > enteras de tierra de la franja costera del propio mapa regional y guarda su **detalle**
+  > —la cota menos tres pasadas de emborronado—. A 5 m son dos fuentes: la **tierra del
+  > propio valle** que se rellena, y una **sábana de tierra real** (`HornearPrestado`,
+  > sitio 14 del Nansa, 512x512 a 5 m) para lo que no tiene tierra propia. **No hizo falta
+  > red**: el MDT05 ya estaba descargado, y así la sábana cabe en el repositorio
+  > (`data/sites/`), que `data/dem/` no se versiona. Medido con `TestPrestado` (4 pruebas):
+  > el detalle de un trozo tiene media cero, y la costura del cosido no se nota —desviación
+  > típica **80,2 m en el centro de un bloque y 87,6 m en la junta**—.
+- [x] **2. La plataforma del mapa regional, con fondo real y detalle prestado.** Sale el
+  ruido de percentiles. Prueba: **la costa de la época no se mueve** —las mismas celdas
+  son tierra y mar con el mar a −120 m que antes—, y la plataforma deja de ser plana. **Y
+  capturas con dos o tres fuerzas del detalle: aquí se para y elige el usuario**, como se
+  eligió el ×1,6.
+  > **HECHO (2026-09-17).** `RelieveDeLaPlataforma` deja el ruido de percentiles: la forma
+  > grande es la batimetría real y el detalle es prestado. **El usuario eligió la amplitud
+  > ×1 sobre capturas** —retirando el ×1,6 del 2026-09-16, que era de relieve inventado— y
+  > pidió lo que salió de ahí: **rías donde la vaguada llega al mar y valles donde no**
+  > (`rias_y_valles`, la misma función para las dos escalas). La franja marrón de orilla
+  > pasó del **14,3 % al 4,8 %** de la plataforma, con un **6,2 %** hecho ría; la costa
+  > real de hoy da 8,1 %.
+- [x] **3. Los ríos de la plataforma, rehechos.** Se deducen otra vez sobre el relieve
+  nuevo (la parte sin red de `HornearRios`). Prueba: siguen llegando las 54 bocas, o se
+  dice cuántas.
+  > **HECHO (2026-09-17).** `HornearRios` deduce los cauces sobre el relieve nuevo (aplica
+  > `RelieveDeLaPlataforma` a una copia antes de prolongar). Última corrida, ya con el
+  > relieve de la tarde: **58 ríos por la plataforma, 1 490 km**, 4 633 pasos abiertos en
+  > llano, 13,5 s, con los 1 599 tramos de hoy (4 107 km) de partida. Se rehornea cada vez
+  > que cambia la receta del relieve, porque el río baja por él.
+- [x] **4. El valle de un yacimiento real, rellenado.** Donde el LiDAR da mar de hoy y la
+  época da tierra: la plataforma regional a 5 m más el detalle prestado a 5 m, **cosido
+  en la orilla** —el relieve de hoy manda en tierra, y el relleno se acerca a él en una
+  franja para que no haya escalón—. Prueba: **ningún salto en la orilla** mayor que el de
+  la tierra de alrededor, y **el relleno no es plano** (su desnivel por kilómetro, del
+  orden del detalle prestado).
+  > **HECHO (2026-09-17).** `region/RellenoDelMarDeHoy.gd` (nuevo), con `HeightmapData`
+  > guardando lo justo para deshacerlo (`mar_de_hoy`, `agua_de_osm`, `cauce_celdas`, y el
+  > sello `relleno_mar`/`relleno_version`), enganchado en `PreparaValle`. Mide con
+  > `TestRelleno` (nueva, 8 pruebas): la tierra de hoy no se toca, no queda llano a cota
+  > cero, el mayor salto entre dos celdas de la orilla se queda **por debajo de
+  > 3 m en 5 m** —la pendiente de la propia ladera— y nada queda bajo el agua sin salida al mar. **Dos sorpresas**: el valle
+  > guardado es **uno para todas las épocas** y el mar cambia de una a otra, así que el
+  > relleno lleva sello y se deshace antes de rehacerse; y el agua de OSM **rebaja el
+  > terreno** del cauce (`Hydrography._settle_water_surface`), así que hay que apuntar las
+  > cotas de antes o el cauce se hunde una vez por época.
+- [x] **5. Los ríos del valle, que bajan.** Desde donde cada río de OSM toca la orilla de
+  hoy, siguiendo la pendiente del relleno hasta el mar de la época o el borde del valle.
+  Prueba: **ningún río termina en la orilla de hoy** si la época tiene tierra delante.
+  > **HECHO (2026-09-17).** `RellenoDelMarDeHoy.alargar_los_rios`: inundación por
+  > prioridad sobre el relleno a un cuarto de resolución, con salida en el mar de la época
+  > o el borde, y el cauce se sigue de vuelta desde la boca de cada río de OSM (hasta tres
+  > casillas de búsqueda, porque OSM y el LiDAR no ponen la orilla en el mismo sitio).
+  > Comprobado en `TestRelleno`: el río sale más largo, acaba en el mar de la época o en el
+  > borde, y el agua se pinta por el relleno.
+- [x] **6. Los valles de los abrigos de la costa, con la misma regla.** Su detalle es hoy
+  ruido (`ValleDeLaPlataforma`): pasa a detalle prestado. Prueba: la de `TestCosta`,
+  que la cota del abrigo casa con la de la plataforma, sigue en verde.
+  > **HECHO (2026-09-17).** `RelievePrestado.de_la_tierra()` presta el detalle de una
+  > **sábana de tierra real a 5 m** (`data/sites/detalle_de_tierra.res`, 512x512, cotas
+  > 156..679 m), horneada por `tools/HornearPrestado.gd`. **El IGN no respondía desde
+  > aquí** —el módulo SSL no arranca en esta máquina—, así que la sábana sale de un valle
+  > del IGN **ya descargado**, el del sitio 14 (Nansa, 43,2965 / −4,4101): es el mismo
+  > MDT05. `ValleDeLaPlataforma` cambia su `FastNoiseLite` por ese detalle, con un
+  > corrimiento por sitio para que dos abrigos no salgan calcados, y sube a `VERSION := 2`
+  > con `firma()` en `source`: **los valles inventados se rehacen solos y los reales no se
+  > redescargan**.
+- [x] **7. Rehacer los valles afectados**, y **sólo esos**: el sello de versión del valle
+  invalida todos, así que el relleno lleva **su propio sello**, para no redescargar los
+  otros 56. Los tres ya preparados (36, 47, 49) se rehacen con red.
+  > **HECHO (2026-09-17).** El sello propio es `HeightmapData.relleno_mar` +
+  > `relleno_version`, con la máscara del mar de hoy y el agua de OSM guardadas en el
+  > propio recuadro: un valle sin mar de hoy no se entera de nada y **no se redescarga**.
+  > Los valles inventados llevan además `ValleDeLaPlataforma.firma()` en `source`, que
+  > `PreparaValle` mira para rehacer sólo ésos. El 36 se ha rehecho entero con red desde
+  > la sonda de capturas: IGN (contorno 1 689 x 1 689 a 8 m, 105 s), OSM (15 cauces y 8
+  > láminas; el contorno pidió un reintento por un 504 de Overpass) y **el relleno de
+  > 315 320 celdas —el 38,9 % del recuadro— en 55 s**, dentro del hilo. **Hallazgo**: el
+  > IGN y Overpass **sí responden con ventana**; lo que no arranca en esta máquina es el
+  > módulo SSL de Godot **en `--headless`**, que es donde fallaban las descargas.
+- [x] **8. Capturas del valle, y que el usuario las juzgue.** El 36 en el Paleolítico,
+  antes y después, desde la orilla de hoy mirando a la plataforma.
+  > **HECHO (2026-09-17).** `tests/RellenoCaptura.gd` (nueva) monta el valle 36 con el mar
+  > del Paleolítico y captura la misma vista con el relleno deshecho y puesto, sobre una
+  > copia en `user://sondas` para no tocar los valles del jugador. **El usuario las juzgó y
+  > pidió quitar la costura primero**, y de ahí salieron los tres cortes de GRAFICOS §3.
+  > **Tres cosas aparecieron por el camino**: la malla guardada del terreno **no miraba si
+  > el relieve había cambiado** —las dos capturas salían idénticas—, así que el sello del
+  > relleno entra ahora en `MallaDelTerreno._detail_hash`; la captura del juego **engaña**
+  > y hubo que volcar el relieve y medir saltos entre celdas para ver dónde estaba la raya;
+  > y **el disco C: del usuario estaba al 100 %**, por lo que los primeros png salieron de
+  > cero bytes.
+- [x] **9. Documentar.** GRAFICOS §3 «Cómo quedó», EPOCA_01 §10.2, CREDITOS (de dónde
+  sale el relieve prestado), ESTADO; suite entera.
+  > **HECHO (2026-09-17).** GRAFICOS §3 con «Cómo quedó» —de dónde sale cada cosa, las
+  > rías y los valles, los tres cortes que hubo que quitar y la tabla de saltos frente al
+  > LiDAR real—, EPOCA_01 §10.2 con la nota de lo que se retira, y ESTADO §3 con la cifra
+  > nueva. La suite entera: **1 695 pruebas y 9 118 comprobaciones en verde** (subían de
+  > 1 683 y 9 087), `llamadas huerfanas: 0`. Borradas las sondas de usar y tirar
+  > (`_Marron`, `_Perfil`, `_Costura`); se queda `tests/RellenoCaptura.gd`, que es la que
+  > enseña un valle antes y después.
+
+Medir: casi todo son pruebas de segundos. **Lo caro es red y ventanas**: bajar los trozos
+de 5 m del IGN (unos 5-10 min), rehornear el relieve regional con capturas (unos 5 min),
+rehacer los ríos de la plataforma (unos 2 min), preparar los tres valles con red (unos 5
+min) y las capturas del valle (unos 5 min). **Entre 25 y 45 minutos de máquina, casi todo
+de red**, y **dos paradas** para que el usuario elija sobre capturas (tareas 2 y 8).
+
+---
+
+### El modo Debug: todos los yacimientos del Paleolítico
+
+> **CERRADA el 2026-09-17.** Las ocho tareas hechas; lo aprendido en INTERFAZ §14 «Cómo
+> quedó» y SPECS §2.2. **Queda abierto un hallazgo que no era de este trabajo**: los cuatro
+> abrigos de la costa no llevan marcador en el mapa regional de una partida normal.
+
+Spec y **plan técnico** en [INTERFAZ.md](INTERFAZ.md) §14 (spec y plan del 2026-09-17).
+Tareas, en orden:
+
+- [x] **1. Entrar y salir sin tocar lo del jugador.** `region/ModoDebug.gd` (nuevo),
+  `tests/TestModoDebug.gd` (nueva), `tests/RunTests.gd`. Guarda al entrar las carpetas de
+  partida y lo que `GameState` lleva, las apunta a `user://debug/` y lo devuelve todo al
+  salir. Prueba: ficheros del jugador de mentira, entrar, escribir un guardado, salir, y
+  **los mismos bytes**; y «Nueva partida» después empieza con niebla y un yacimiento.
+  > **HECHO (2026-09-17).** `ModoDebug.entrar`/`salir`. **No llama a `Partidas.nueva`**, que
+  > vacía el borrador del jugador.
+- [x] **2. Todos a la vista, sin niebla.** `region/ModoDebug.gd`,
+  `region/RegionMap.gd`. Descubre lo que ofrece la época y deja la niebla vacía; la capa
+  de calima no se pinta. Prueba: lo que se dibuja es **exactamente** lo que ofrece el
+  Paleolítico con el mar a −120 m, y nada queda bajo niebla.
+  > **HECHO (2026-09-17), y la prueba se quedaba corta.** Miraba la niebla y pasaba, y en
+  > la ventana salían 63 de 76: el mapa sólo pone marcador a lo atestiguado. Ahora lo
+  > decide `RegionMap.se_marca`, que en Debug dice que sí a todos, y la prueba lo mira.
+- [x] **3. Fundar en cualquiera, con banda nueva.** `region/ModoDebug.gd`,
+  `region/RegionMap.gd`. `nueva_fundacion` limpia campamentos y carpeta, repone la banda y
+  la fecha y quita la visita. Prueba con tres sitios —uno de interior, un abrigo de la
+  costa y el más lejano de la cueva de arranque—, y que fundar en B después de A deja una
+  banda recién llegada.
+  > **HECHO (2026-09-17).** `ModoDebug.nueva_fundacion`; `_found_settlement` sólo pregunta
+  > si se está en Debug.
+- [x] **4. El botón, sólo en desarrollo.** `ui/MenuPrincipal.gd`. Prueba con las dos
+  marcas.
+  > **HECHO (2026-09-17).** `ModoDebug.hay_version_de_desarrollo`, que vale
+  > `OS.is_debug_build()` y la prueba cambia.
+- [x] **5. El menú de ESC no guarda en Debug.** `ui/MenuDelJuego.gd`. Sólo «Seguir» y
+  «Volver al menú principal», que sale por `ModoDebug.salir`. Prueba de lo que pinta.
+  > **HECHO (2026-09-17).** Quedan «Seguir jugando», «Configuración» y las dos salidas;
+  > salir no pregunta por cambios sin guardar.
+- [x] **6. El rótulo y los sin preparar.** `region/ModoDebug.gd`, `region/RegionMap.gd`,
+  `DemoMain.gd`, `region/PreparaValle.gd`. «DEBUG» en los dos mapas; los yacimientos sin
+  preparar, con el color apagado. Prueba: el rótulo sólo en Debug, y «preparado» contra
+  lo que hay en disco, con la carpeta de las pruebas.
+  > **HECHO (2026-09-17).** «Preparado» mira que exista el fichero y no su sello: el sello
+  > está dentro de veinte megas, y leerlo por marcador sería un tirón.
+- [x] **7. Que funcione de verdad.** Con ventana: menú → Debug → regional → fundar en un
+  valle preparado → volver → fundar en otro → menú. Que no revienta, que el número de
+  marcadores es el esperado, y que al acabar los ficheros del jugador no han cambiado.
+  > **HECHO (2026-09-17), y es la que cazó los 63 de 76.** Tras el arreglo: 76 marcadores,
+  > fundar en el 56 y en el 33 con bandas de 15, salir por ESC y el fichero «del jugador»
+  > intacto. **Y destapó otra cosa, que no se ha tocado**: los abrigos de la costa no llevan
+  > marcador en una partida normal, por la misma regla. Va por `/depurar`.
+- [x] **8. Documentar.** INTERFAZ §14 «Cómo quedó», SPECS §2.2 (`ModoDebug` en la tabla
+  de estado global), ESTADO §3; suite entera y `LlamadasHuerfanas`.
+  > **HECHO (2026-09-17).** Suite **1 683 pruebas y 9 087 comprobaciones** y
+  > `llamadas huerfanas: 0`.
+
+Medir: de la 1 a la 6 son **pruebas de segundos**. La 7 es una corrida con ventana de unos
+**cinco minutos** —dos valles preparados, sin red—. Con la suite dos veces, **menos de
+veinte minutos de máquina**. Nada se paraleliza: casi todo pasa por `ModoDebug` y
+`RegionMap`.
 
 ---
 

@@ -133,7 +133,10 @@ func _node_box(tech: TechTree.Tech) -> Control:
 	frame.custom_minimum_size = NODE
 	frame.size = NODE
 	frame.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	frame.tooltip_text = _tooltip(tech)
+	# El texto va a NUESTRO globo ([CasillaTecnica]); `tooltip_text` se conserva porque es
+	# por donde las sondas encuentran una casilla por lo que dice.
+	frame.aviso = _tooltip(tech)
+	frame.tooltip_text = frame.aviso
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
