@@ -22,7 +22,3 @@ docs/AGENTES.md §3. No se anota aquí: se toma con `mkdir`.
 
 <!-- Los bloques van debajo de esta línea. Si no hay ninguno, nadie está
      trabajando y el repositorio está libre. -->
-
-## opus-banda — 19:05
-tarea: depurar de ocho puntos (ríos regional, bisonte, ríos 8 casillas, aperos, botón de pintar, gotas, pasarelas, caminar)
-toco: scripts/region/RegionMap.gd, scripts/vista/Aperos.gd, y lo que vaya saliendo

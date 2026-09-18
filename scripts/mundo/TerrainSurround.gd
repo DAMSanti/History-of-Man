@@ -597,6 +597,15 @@ func _make_material(terrain: TerrainGenerator) -> Material:
 	# El overlay de recursos es cosa del tablero: fuera no hay nada que marcar
 	material.set_shader_parameter("use_overlay", false)
 
+	# NI EL MAPA DE HUMEDAD, que es del recuadro jugable y sólo cubre sus 4,5 km. El shader
+	# lo mapea con `humedad_extent`/`humedad_origen`, así que fuera del recuadro las UV se
+	# salen de [0,1] y la textura se repite: **bandas rectas y paralelas por todo el
+	# contorno, ignorando el relieve**. Se coló al hacer que el suelo de bosque siguiera a la
+	# humedad (2026-09-17, GRAFICOS §7.7): el contorno duplica este material y heredaba el
+	# mapa sin que nadie lo apagara. Sin él vuelve a la máscara de bosque de siempre, que es
+	# procedural y no depende de dónde esté el vértice.
+	material.set_shader_parameter("use_humedad", false)
+
 	return material
 
 
