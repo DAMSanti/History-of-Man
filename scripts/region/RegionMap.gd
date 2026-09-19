@@ -717,9 +717,31 @@ func _add_border_quad(st: SurfaceTool, a2: Vector2, b2: Vector2, half: float, li
 	dir = dir.normalized()
 	var perp := Vector3(-dir.z, 0.0, dir.x) * half
 
-	for v: Vector3 in [a - perp, a + perp, b + perp, a - perp, b + perp, b - perp]:
+	for v: Vector3 in tramo_de_la_cinta(a, b, perp):
 		st.set_normal(Vector3.UP)
 		st.add_vertex(v)
+
+
+## LOS SEIS VÉRTICES de un tramo de cinta, en el orden que hace que se vea DESDE ARRIBA.
+##
+## Aparte y estático porque lo que hay que comprobar aquí es el **giro**, y el giro no se
+## ve en una captura de pasada: se ve cuando la cinta entera desaparece.
+##
+## Y desapareció. La cinta se trazaba con los triángulos girados al revés, o sea mirando
+## hacia abajo; desde la cámara del mapa —que mira el suelo— el motor los descartaba por
+## cara trasera y no se dibujaba ni uno. **No se notó porque hasta el 2026-09-17 la cinta
+## llevaba el shader de la niebla, que no descarta caras**; al retirarse la niebla se le
+## puso un `StandardMaterial3D`, que por defecto sí, y la línea amarilla se apagó sin que
+## nada fallara: el nodo seguía ahí, visible, con sus 13 036 triángulos y despejado 2,14
+## unidades sobre el terreno. Medido con `PartidaNuevaProbe` el 2026-09-19, y confirmado
+## con un A/B: quitando sólo el descarte de caras, la cinta vuelve entera.
+##
+## El giro bueno es el que deja `(v1-v0) x (v2-v0)` apuntando **hacia abajo**, porque la
+## cara delantera de Godot es la de giro horario vista desde delante. No se apaga el
+## descarte: una cinta que sólo se ve desde abajo es geometría mal hecha, y apagarlo lo
+## taparía en vez de arreglarlo.
+static func tramo_de_la_cinta(a: Vector3, b: Vector3, perp: Vector3) -> Array[Vector3]:
+	return [a - perp, b + perp, a + perp, a - perp, b - perp, b + perp]
 
 
 ## Cambia la epoca desde el teclado

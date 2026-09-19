@@ -22,3 +22,9 @@ docs/AGENTES.md §3. No se anota aquí: se toma con `mkdir`.
 
 <!-- Los bloques van debajo de esta línea. Si no hay ninguno, nadie está
      trabajando y el repositorio está libre. -->
+
+## opus-banda — 05:20
+tarea: depurar 2026-09-19 — la cinta de la frontera que no se ve, el botón de pintar dentro de la cueva 3D, y los fallos de caminar
+toco: scripts/region/RegionMap.gd, scripts/tests/TestMapaRegional.gd
+puede que toque: scripts/vista/SalaDeLaCueva.gd, scripts/ui/PanelTecnicas.gd, scripts/mundo/Wayfinder.gd, scripts/sim/Marcha.gd, scripts/ui/PanelRastros.gd
+

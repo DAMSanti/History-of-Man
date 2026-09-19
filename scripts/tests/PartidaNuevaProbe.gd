@@ -14,6 +14,20 @@ extends SceneTree
 ## Cuenta lo mismo que aquélla —celdas emergidas y celdas con cauce sobre la plataforma— y
 ## deja dos capturas: la comarca entera y un primer plano del mar de hoy al norte del valle.
 
+## Un punto cualquiera de la cinta de frontera, para encuadrarla de cerca.
+func _en_medio_de_la_frontera(mapa: Node) -> Vector3:
+	for nodo: Node in mapa.get_children():
+		if not nodo.name.begins_with("Frontera_"):
+			continue
+		var malla := (nodo as MeshInstance3D).mesh as ArrayMesh
+		if malla == null or malla.get_surface_count() == 0:
+			continue
+		var puntos: PackedVector3Array = malla.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		if not puntos.is_empty():
+			return puntos[puntos.size() / 2]
+	return Vector3.INF
+
+
 ## El valle de referencia, el mismo de las demás sondas del agua.
 const SITIO := 56
 
@@ -69,6 +83,70 @@ func _init() -> void:
 	print("plataforma emergida: %d celdas · con cauce %d · relieve medio %.1f m sobre el mar" % [
 		emergida, con_cauce, sobre_el_mar / maxf(float(emergida), 1.0)])
 
+	# LA CINTA AMARILLA DE LA FRONTERA: si está, dónde está y si se ve. Se pregunta aquí
+	# porque «no se ve» tiene dos causas muy distintas —que no se dibuje, o que se dibuje en
+	# otro sitio— y la captura sola no las distingue.
+	for nodo: Node in mapa.get_children():
+		if not nodo.name.begins_with("Frontera_"):
+			continue
+		var malla := (nodo as MeshInstance3D).mesh
+		var caja := malla.get_aabb() if malla != null else AABB()
+		print("%s: visible %s · %d triángulos · caja x %.0f..%.0f  y %.1f..%.1f  z %.0f..%.0f" % [
+			nodo.name, (nodo as MeshInstance3D).visible,
+			malla.surface_get_array_len(0) / 3 if malla != null else 0,
+			caja.position.x, caja.position.x + caja.size.x,
+			caja.position.y, caja.position.y + caja.size.y,
+			caja.position.z, caja.position.z + caja.size.z])
+		# ¿CUÁNTO LEVANTA LA CINTA sobre el terreno que tiene debajo? Si la cifra es la que
+		# dice `border_lift_m` y aun así no se ve, el problema es que ese alzado se ha
+		# quedado corto; si no lo es, la cinta se trazó contra otra cota que la malla.
+		var puntos: PackedVector3Array = malla.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		var bajo := 0
+		var suma := 0.0
+		var peor := INF
+		for i in range(0, puntos.size(), 37):
+			var hueco: float = puntos[i].y - mapa.terrain.get_height_at(puntos[i])
+			suma += hueco
+			peor = minf(peor, hueco)
+			if hueco < 0.0:
+				bajo += 1
+		var cuantos := int(ceil(float(puntos.size()) / 37.0))
+		print("  alza media %.2f u · la peor %.2f u · %d de %d muestras POR DEBAJO del terreno" % [
+			suma / float(cuantos), peor, bajo, cuantos])
+
+	# ¿POR QUÉ NO SE DIBUJA? La geometría está despejada, así que quedan la transformada,
+	# el descarte de caras y la máscara de la cámara. Se dicen las tres y se prueba a quitar
+	# el descarte: si aparece, era eso.
+	var cinta: MeshInstance3D = null
+	for nodo: Node in mapa.get_children():
+		if nodo.name.begins_with("Frontera_"):
+			cinta = nodo as MeshInstance3D
+	if cinta != null:
+		var mat := cinta.material_override as StandardMaterial3D
+		print("cinta: capas %d · transform %s · terreno %s · camara ve %d" % [
+			cinta.layers, cinta.global_transform.origin,
+			mapa.terrain.global_transform.origin, mapa.camera.get_node_or_null("Camera3D").cull_mask
+				if mapa.camera.get_node_or_null("Camera3D") != null else -1])
+		print("material: %s · cull %d · color %s · transparencia %d" % [
+			"nulo" if mat == null else "StandardMaterial3D",
+			mat.cull_mode if mat != null else -1,
+			mat.albedo_color if mat != null else Color.BLACK,
+			mat.transparency if mat != null else -1])
+		var prueba := OS.get_environment("PRUEBA")
+		if mat != null and not prueba.is_empty():
+			if prueba == "cull" or prueba == "ambas":
+				mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			if prueba == "fondo" or prueba == "ambas":
+				mat.no_depth_test = true
+			if prueba == "alza":
+				cinta.position.y += 20.0
+			print("  (prueba: %s)" % prueba)
+
+	print("el terreno mide %d x %d unidades · el agua a %.1f" % [
+		mapa.terrain.terrain_size.x, mapa.terrain.terrain_size.y,
+		(mapa.terrain.get_node_or_null("Water") as MeshInstance3D).position.y
+			if mapa.terrain.get_node_or_null("Water") != null else 0.0])
+
 	var sitios: SiteSet = load("res://data/sites/cantabria_sites.res")
 	var valle: Site = null
 	for s: Site in sitios.sites:
@@ -80,9 +158,21 @@ func _init() -> void:
 			# está la cordillera, y las dos primeras capturas de esta sonda la retrataron a
 			# ella: se veían idénticas antes y después del arreglo porque no salía la
 			# plataforma en ninguna.
-			["plataforma", Vector2(valle.lon, valle.lat + 0.20), 0.12]]:
+			["plataforma", Vector2(valle.lon, valle.lat + 0.20), 0.12],
+			# ENCIMA DE LA CINTA DE LA FRONTERA, de cerca: a la escala de la comarca son
+			# cuatro píxeles y la captura ancha no distingue «no está» de «no se aprecia».
+			["frontera", Vector2.ZERO, 0.05]]:
 		var donde: Vector2 = encuadre[1]
-		mapa.camera.set_target(mapa.terrain.geo_to_world(donde.x, donde.y))
+		var mirar: Vector3 = mapa.terrain.geo_to_world(donde.x, donde.y)
+		if encuadre[0] == "frontera":
+			mirar = _en_medio_de_la_frontera(mapa)
+			if mirar == Vector3.INF:
+				continue
+		mapa.camera.set_target(mirar)
+		# Casi cenital sobre la cinta: de lado la tapan los montes de delante, y con el
+		# relieve a x2.5 eso no distingue «no está» de «está detrás de un cerro».
+		if encuadre[0] == "frontera":
+			mapa.camera.orbit_angle_v = -85.0
 		mapa.camera.set_distance(float(maxi(mapa.terrain.terrain_size.x,
 			mapa.terrain.terrain_size.y)) * float(encuadre[2]))
 		mapa.camera._update_camera()

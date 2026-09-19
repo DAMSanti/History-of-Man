@@ -139,6 +139,31 @@ cuando se cierre. Lo que la tarea aprenda sobre el juego se funde en el
 documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 [ESTADO.md](ESTADO.md), la ficha de época— y de la tarea sólo queda la línea.
 
+### Depurar del 2026-09-19 (tarde): la línea amarilla, el botón de pintar y los caminos
+
+- [x] **La cinta amarilla de la frontera no se ve.**
+
+  > **HECHO (2026-09-19).** No era el trazado ni el color ni la época: los triángulos
+  > estaban girados al revés —mirando hacia abajo— y la cámara del mapa los descartaba por
+  > cara trasera. Llevaba así desde que se retiró la niebla el 2026-09-17: el shader de la
+  > niebla no descartaba caras y el `StandardMaterial3D` que lo sustituyó sí. Relato en
+  > GRAFICOS §3. Se arregla el giro, no el descarte, y lo fija
+  > `TestFrontera.test_la_cinta_de_la_frontera_mira_hacia_arriba` (falla en los cuatro
+  > triángulos con el giro viejo).
+  >
+  > **Qué marca la cinta no cambia** (decisión del usuario): el territorio de la época,
+  > Cantabria más la plataforma emergida, no el polígono administrativo.
+
+- [ ] **El botón de pintar, dentro de la vista 3D de la cueva.** Hoy vive en el panel de
+  Técnicas, una fila por relato. Se **mueve** —decisión del usuario, no se deja en los dos
+  sitios—: apagado mientras no haya arte parietal, con la lista de hitos sin pintar, y
+  poder verlo pintar. Técnicas pasa a decir dónde se pinta.
+
+- [ ] **Los fallos de caminar**: en 109 jornadas, 19× sin camino a donde iba, 5× llegó y el
+  estado no se enteró, 1× no avanza por el camino trazado. Las cifras salen de la ventana
+  **Rastros**, que ya los va sumando. Se ataca con pruebas baratas que construyan cada
+  situación, y **una corrida larga al final como confirmación** (decisión del usuario).
+
 ### Depurar del 2026-09-19: los ríos, el mapa local y el mapa regional
 
 **Relato en [GRAFICOS.md](GRAFICOS.md) §3.** Viene de cuatro vueltas seguidas sobre lo

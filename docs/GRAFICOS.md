@@ -771,6 +771,34 @@ empezada. **Lo avistado** son marcas aparte, por encima: no debería cambiar, y 
 >
 > Lo de abajo queda como estaba escrito, porque cuenta cómo se hizo y qué costó.
 
+#### Y se llevó por delante la línea amarilla (visto el 2026-09-19)
+
+Queja: «la línea amarilla que marca el límite de la provincia no se ve, ha desaparecido».
+No era el trazado, ni el color, ni la cota, ni la época: **la cinta se trazaba con los
+triángulos girados al revés**, mirando hacia abajo, y la cámara del mapa —que mira el
+suelo— los descartaba por cara trasera. El nodo estaba ahí, `visible`, con 13 036
+triángulos y despejado **2,14 unidades de media sobre el terreno** (medido con
+`tests/PartidaNuevaProbe.gd`); de 1 057 muestras sólo 14 caían por debajo.
+
+Estuvo bien tres semanas porque **la cinta llevaba el shader de la niebla, que no descarta
+caras**. Al retirarse la niebla se le puso un `StandardMaterial3D`, que por defecto sí
+descarta, y la línea se apagó sin que fallara nada. A/B que lo cerró: quitando **sólo** el
+descarte de caras, la cinta vuelve entera; quitando sólo la prueba de profundidad, no.
+
+Se arregla el giro, no el descarte: una cinta que sólo se ve desde abajo es geometría mal
+hecha, y apagar el descarte lo taparía. El giro bueno es el que deja `(v1-v0) x (v2-v0)`
+apuntando hacia abajo —la cara delantera de Godot es la de giro horario vista desde
+delante—, y lo fija `TestFrontera.test_la_cinta_de_la_frontera_mira_hacia_arriba`, que
+falla en los cuatro triángulos con el giro viejo.
+
+**La lección**: cambiar un material por otro cambia también lo que el material daba por
+supuesto. Aquí, que no había descarte de caras. Y no lo coge ninguna prueba de las que
+había ni una captura de pasada, porque no falla nada: sale un mapa sin línea.
+
+**Lo que la cinta marca no ha cambiado** y es decisión del usuario del 2026-09-19: el
+**territorio de la época** —Cantabria más la plataforma que esté emergida—, que es lo que
+dice el rótulo y lo que hornea `RegionEras`. No el polígono administrativo de hoy.
+
 ### Cómo quedó: la niebla como nubes (2026-09-16)
 
 **Se le enseñaron tres aspectos al usuario**, con captura del mismo encuadre —de lejos y el

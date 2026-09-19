@@ -190,3 +190,35 @@ func test_con_el_mar_de_hoy_la_plataforma_sigue_bajo_el_agua() -> void:
 			hondas += 1
 	assert_eq(emergen, 0, "ninguna celda bajo el agua de hoy emerge")
 	assert_eq(hondas, 0, "y por debajo de 80 m el fondo se queda como estaba")
+
+
+## LA CINTA SE TIENE QUE VER DESDE ARRIBA, que es de donde se mira el mapa.
+##
+## Nació de una queja de bulto —«la línea amarilla que marca el límite ha desaparecido»—
+## cuyo fallo no era ni el trazado ni el color ni la cota: los triángulos estaban girados al
+## revés, o sea mirando hacia abajo, y la cámara del mapa los descartaba por cara trasera.
+## El nodo seguía ahí, visible, con 13 036 triángulos y despejado 2,14 unidades sobre el
+## terreno; medido con `PartidaNuevaProbe` el 2026-09-19.
+##
+## **Ninguna prueba lo habría cogido, y una captura tampoco**, porque no falla nada: sale
+## un mapa sin línea. Lo que se fija aquí es el giro, que es lo único que estaba mal.
+##
+## La cara delantera de Godot es la de giro horario vista desde delante, así que para que
+## la cara de arriba sea la delantera, `(v1-v0) x (v2-v0)` tiene que apuntar hacia ABAJO.
+func test_la_cinta_de_la_frontera_mira_hacia_arriba() -> void:
+	var Mapa := load("res://scripts/region/RegionMap.gd")
+	# Los dos únicos tramos que traza [RegionMap._trace_border]: el que sigue un borde
+	# vertical de la trama y el que sigue uno horizontal.
+	var tramos := {
+		"vertical": [Vector3(10.0, 0.0, 0.0), Vector3(10.0, 0.0, 20.0), Vector3(-2.0, 0.0, 0.0)],
+		"horizontal": [Vector3(0.0, 0.0, 10.0), Vector3(20.0, 0.0, 10.0), Vector3(0.0, 0.0, 2.0)],
+	}
+	for nombre: String in tramos:
+		var t: Array = tramos[nombre]
+		var v: Array[Vector3] = Mapa.tramo_de_la_cinta(t[0], t[1], t[2])
+		assert_eq(v.size(), 6, "un tramo de cinta son dos triángulos")
+		for i in range(0, 6, 3):
+			var hacia: Vector3 = (v[i + 1] - v[i]).cross(v[i + 2] - v[i])
+			assert_true(hacia.y < 0.0,
+				"tramo %s, triángulo %d: la cara de arriba tiene que ser la delantera" % [
+					nombre, i / 3])
