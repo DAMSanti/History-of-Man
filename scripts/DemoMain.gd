@@ -238,7 +238,7 @@ func _ready() -> void:
 
 	# Las ocho casillas de alrededor, en gris: sin ellas el mapa se corta a
 	# cuchillo y detras no hay nada
-	_phase_start(); _build_surroundings(); _phase_end("_build_surroundings (8 casillas)")
+	_phase_start(); await _build_surroundings(); _phase_end("_build_surroundings (8 casillas)")
 	await Carga.ceder()
 
 	# Ahora si: el minimapa se pinta del relieve ya generado
@@ -877,7 +877,7 @@ func _build_surroundings() -> void:
 	var surround := TerrainSurround.new()
 	surround.name = "Alrededores"
 	add_child(surround)
-	surround.build(terrain, region, terrain.heightmap)
+	await surround.build(terrain, region, terrain.heightmap)
 	# Y el mar, que se acababa en la raya del recuadro (GRAFICOS §3, 2026-09-17).
 	surround.montar_el_mar(terrain)
 	# Y un ribete que marque hasta donde se juega: ahora que la costura encaja,

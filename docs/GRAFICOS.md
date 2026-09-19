@@ -554,6 +554,44 @@ Paleolítico**. El juego sólo pone lámina de agua si algo queda por debajo del
 mar, y el mar de hoy sin rellenar está a cota cero: con el mar de la época a −120 m, el
 valle sale entero en seco. Por eso el relleno no es un adorno.
 
+#### Y una tercera causa, la que de verdad quedaba: la lámina (2026-09-19)
+
+La queja volvió cuatro veces después de aquello —«el río sigue sin continuar por las 8
+tiles que rodean el mapa»—, y las dos primeras veces **el instrumento estaba roto**: la
+sonda muestreaba el contorno *en el mismo punto de dentro del recuadro* y devolvía 100 %
+sin haber mirado nunca hacia fuera. Medir hacia fuera dio 3 de 61.
+
+Lo que faltaba es esto: **desde el escalón «Agua» Alto, el río del recuadro no se pinta en
+el suelo, se dibuja con una malla de agua encima** —la lámina, §7.3— y el contorno no tenía
+ninguna. El agua pintada es mucho más apagada que la lámina, así que el río salía del
+recuadro y **se cortaba en una raya recta justo en el borde**; en «Agua» bajo, donde los dos
+lados se pintan igual, no se cortaba. Ése era el A/B que lo dejó claro.
+
+El tejedor de la lámina estaba pegado al `TerrainGenerator` del recuadro: leía sus arrays,
+su resolución y su tamaño. Ahora es `MallaDelTerreno.tejer_la_lamina`, **estático y sobre
+una rejilla cualquiera**, y lo llaman los dos; el material y el escalón a partir del cual
+hay lámina (`LAMINA_DESDE`) viven también en un solo sitio, porque dos reglas a los dos
+lados de la raya es exactamente lo que se veía. `TerrainSurround` acumula cauce, corriente y
+cota mientras malla cada casilla, teje su lámina y la guarda en la caché (v2).
+
+Medido con `AguaDeFueraProbe` en el sitio 56 —que pregunta **a 20 unidades por fuera** de la
+raya, no dentro—:
+
+| | antes | ahora |
+|---|---|---|
+| casillas del contorno con lámina | 0 de 8 | **8 de 8** |
+| cruces de río en la raya con cauce en el MDT de fuera | 6 de 6 | 6 de 6 |
+| cruces con **lámina** al otro lado | 0 de 6 | **6 de 6** |
+
+Cuesta 106 828 triángulos de agua para las ocho casillas, frente a los 2,1 millones de
+relieve que ya tenían, y sólo se dibujan desde «Agua» Alto. La caché del contorno las
+guarda, así que el arranque no paga nada: 292 ms con caché.
+
+Y una trampa que costó dos corridas: **`tejer_la_lamina` es corrutina** —cede el hilo cada
+64 filas para que la barra de carga respire—, así que llamarla sin `await` es un error de
+*parseo* que deja `TerrainSurround` entero sin compilar. **La suite no lo vio**: no
+instancia el contorno. Compilar no es funcionar, y la suite en verde tampoco.
+
 
 Y deja escrita una trampa: `Resource.duplicate()` **no copia** `elevations`; la
 copia y el recurso cacheado de `load()` compartían el array, y escribir en uno

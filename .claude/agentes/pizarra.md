@@ -22,3 +22,7 @@ docs/AGENTES.md §3. No se anota aquí: se toma con `mkdir`.
 
 <!-- Los bloques van debajo de esta línea. Si no hay ninguno, nadie está
      trabajando y el repositorio está libre. -->
+
+## opus-banda — 03:55
+tarea: lámina de agua para las 8 casillas del contorno, y luego el mapa regional en la plataforma
+toco: scripts/mundo/MallaDelTerreno.gd, scripts/mundo/TerrainSurround.gd, scripts/mundo/TerrainGenerator.gd

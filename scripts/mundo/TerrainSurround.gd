@@ -79,6 +79,12 @@ var _shared_material: Material
 ## tiene que llegar la normalización de altura del shader.
 var _highest: float = -1e9
 
+## LAS LÁMINAS DE AGUA de las casillas que tienen cauce. Ver [aplicar_configuracion].
+var laminas: Array[MeshInstance3D] = []
+
+var _terreno: TerrainGenerator = null
+var _agua_material: ShaderMaterial = null
+
 
 ## Construye las ocho casillas alrededor del recuadro.
 ##
@@ -90,6 +96,10 @@ func build(terrain: TerrainGenerator, region: HeightmapData,
 		return
 
 	_highest = -1e9
+	_terreno = terrain
+	# El ajuste «Agua» enciende y apaga la lámina en caliente, igual que en el recuadro.
+	if not is_in_group(Configuracion.GRUPO):
+		add_to_group(Configuracion.GRUPO)
 
 	var size_x := float(terrain.terrain_size.x)
 	var size_z := float(terrain.terrain_size.y)
@@ -102,12 +112,15 @@ func build(terrain: TerrainGenerator, region: HeightmapData,
 			instance.mesh = mesh
 			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(instance)
+		for i in range(cache.lamina_meshes.size()):
+			_montar_la_lamina(cache.lamina_meshes[i], cache.lamina_origenes[i], i)
 		_highest = cache.highest
 		terrain.extend_height_ceiling(_highest)
 		_shared_material = _make_material(terrain)
 		for child in get_children():
-			if child is MeshInstance3D:
+			if child is MeshInstance3D and not laminas.has(child):
 				(child as MeshInstance3D).material_override = _shared_material
+		aplicar_configuracion()
 		return
 
 	# Grados de latitud y longitud que abarca UNA casilla, sacados de lo que
@@ -128,6 +141,8 @@ func build(terrain: TerrainGenerator, region: HeightmapData,
 		* (terrain.heightmap_region_offset.y / local_size.y)
 
 	var built_meshes: Array[ArrayMesh] = []
+	var aguas: Array[ArrayMesh] = []
+	var origenes: Array[Vector3] = []
 	for dz in range(-1, 2):
 		for dx in range(-1, 2):
 			if dx == 0 and dz == 0:
@@ -140,8 +155,10 @@ func build(terrain: TerrainGenerator, region: HeightmapData,
 			var tile_resolution := resolution
 			if dx != 0 and dz != 0:
 				tile_resolution = maxi(resolution / 2, 8)
-			built_meshes.append(_build_tile(terrain, region, dx, dz, origin_lon, origin_lat,
-				lon_span, lat_span, size_x, size_z, tile_resolution))
+			var malla: ArrayMesh = await _build_tile(terrain, region, dx, dz,
+				origin_lon, origin_lat, lon_span, lat_span, size_x, size_z,
+				tile_resolution, aguas, origenes)
+			built_meshes.append(malla)
 
 	# AHORA, con las ocho casillas hechas y sabiendo hasta dónde suben: el
 	# shader normaliza la cota contra el techo del recuadro jugable y satura
@@ -152,10 +169,11 @@ func build(terrain: TerrainGenerator, region: HeightmapData,
 
 	_shared_material = _make_material(terrain)
 	for child in get_children():
-		if child is MeshInstance3D:
+		if child is MeshInstance3D and not laminas.has(child):
 			(child as MeshInstance3D).material_override = _shared_material
+	aplicar_configuracion()
 
-	_save_cache(terrain, region, built_meshes)
+	_save_cache(terrain, region, built_meshes, aguas, origenes)
 
 
 ## Corrección de cota para un punto, medida CONTRA EL TERRENO JUGABLE.
@@ -198,7 +216,7 @@ func _seam_offset(terrain: TerrainGenerator, region: HeightmapData,
 func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 		dx: int, dz: int, origin_lon: float, origin_lat: float,
 		lon_span: float, lat_span: float, size_x: float, size_z: float,
-		resolution: int) -> ArrayMesh:
+		resolution: int, aguas: Array[ArrayMesh], origenes: Array[Vector3]) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var indices := PackedInt32Array()
@@ -229,6 +247,16 @@ func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 	uv2.resize(count)
 	tangents.resize(count * 4)
 	colors.fill(Color(0.5, 0.5, 0.0, 0.0))
+
+	# Y LO MISMO EN CRUDO, para tejer la lámina de agua al final: el cauce, la corriente y
+	# la cota de cada vértice. El color de arriba ya no basta desde que la casilla tiene
+	# lámina propia —lleva la corriente comprimida a 0..1 y no lleva altura ninguna—.
+	var alturas := PackedFloat32Array()
+	var rios := PackedFloat32Array()
+	var flujos := PackedVector2Array()
+	alturas.resize(count)
+	rios.resize(count)
+	flujos.resize(count)
 
 	# El borde SE SOLAPA medio vértice con el recuadro jugable: si encajaran
 	# justo, la diferencia de resolución entre los 5 m del local y los 111 m
@@ -276,10 +304,12 @@ func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 			# corriente, b agua quieta, a lámina— para que el shader no sepa
 			# distinguir un vértice de dentro de uno de fuera.
 			var wetness := region.sample_river_mask(mu, mv)
+			rios[z * resolution + x] = wetness
 			if wetness > 0.01:
 				var flow := region.sample_flow_meters(
 					mu * region.get_world_size_meters().x,
 					mv * region.get_world_size_meters().y)
+				flujos[z * resolution + x] = flow
 				colors[z * resolution + x] = Color(
 					flow.x * 0.5 + 0.5,
 					flow.y * 0.5 + 0.5,
@@ -310,6 +340,7 @@ func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 				height -= inside * 0.35
 
 			vertices[z * resolution + x] = Vector3(world_x, height, world_z)
+			alturas[z * resolution + x] = height
 			normals[z * resolution + x] = Vector3.UP
 
 	# Segunda pasada: las MISMAS cuentas por vértice que hace el recuadro
@@ -406,7 +437,67 @@ func _build_tile(terrain: TerrainGenerator, region: HeightmapData,
 
 	var box := mesh.get_aabb()
 	_highest = maxf(_highest, box.position.y + box.size.y)
+
+	# Y LA LÁMINA DE AGUA de esta casilla, con el mismo tejedor que el recuadro jugable.
+	#
+	# **El fallo que cierra** (2026-09-19, A/B de la misma vista en el sitio 56): con el
+	# ajuste «Agua» en bajo el río cruzaba la raya del mapa y seguía; en alto **se cortaba
+	# en una línea recta justo en el borde**. No era la costura ni el cauce —el contorno
+	# trae su agua y la pinta en el suelo—: es que desde Alto el río del recuadro se dibuja
+	# con una malla de agua encima, y aquí no había ninguna. El agua pintada en el suelo es
+	# mucho más apagada, así que el corte salía donde se acababa la malla.
+	#
+	# Devuelve `null` en una casilla de monte sin cauces, que es lo normal.
+	var arriba := 0.03 / maxf(terrain.meters_per_unit, 0.0001) * terrain.vertical_exaggeration
+	var sube := AguaDelCauce.LAMINA_SUBE_M / maxf(terrain.meters_per_unit, 0.0001)
+	var agua: ArrayMesh = await MallaDelTerreno.tejer_la_lamina(alturas, rios, flujos,
+		resolution, spacing_x, spacing_z, arriba, sube * terrain.vertical_exaggeration)
+	if agua != null:
+		var origen := Vector3(vertices[0].x, 0.0, vertices[0].z)
+		aguas.append(agua)
+		origenes.append(origen)
+		_montar_la_lamina(agua, origen, aguas.size() - 1)
 	return mesh
+
+
+## Cuelga una lámina ya tejida en su sitio. La posición va en el nodo y no en los vértices
+## porque [MallaDelTerreno.tejer_la_lamina] teje desde el origen de SU rejilla, y la de una
+## casilla del contorno empieza a un tile de distancia del mapa.
+func _montar_la_lamina(malla: ArrayMesh, origen: Vector3, cual: int) -> void:
+	if malla == null:
+		return
+	var nodo := MeshInstance3D.new()
+	nodo.name = "AguaDeFuera_%d" % cual
+	nodo.mesh = malla
+	nodo.position = origen
+	nodo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if _agua_material == null:
+		_agua_material = MallaDelTerreno.material_del_agua(
+			_terreno.meters_per_unit / maxf(_terreno.vertical_exaggeration, 0.0001))
+	nodo.material_override = _agua_material
+	add_child(nodo)
+	laminas.append(nodo)
+
+
+## El ajuste «Agua», en caliente y con la MISMA regla que el recuadro jugable: la lámina se
+## enciende desde [MallaDelTerreno.LAMINA_DESDE], y sólo entonces el shader del suelo hunde
+## el lecho debajo. Con reglas distintas a los dos lados de la raya el río cambiaba de
+## aspecto al cruzarla, que es justo lo que se veía.
+func aplicar_configuracion() -> void:
+	if _terreno == null:
+		return
+	var nivel := MallaDelTerreno.nivel_del_agua(_terreno.agua_con_niveles)
+	var encendida := nivel >= MallaDelTerreno.LAMINA_DESDE
+	for nodo: MeshInstance3D in laminas:
+		nodo.visible = encendida
+	if _agua_material != null:
+		_agua_material.set_shader_parameter("nivel_de_agua", nivel)
+	var suelo := _shared_material as ShaderMaterial
+	if suelo != null:
+		var hondo := AguaDelCauce.LECHO_M * _terreno.vertical_exaggeration
+		hondo /= maxf(_terreno.meters_per_unit, 0.0001)
+		suelo.set_shader_parameter("lecho_hondo",
+			hondo if encendida and not laminas.is_empty() else 0.0)
 
 
 ## Corte vertical en el límite del recuadro jugable.
@@ -688,7 +779,8 @@ func _cache_matches(cache: TerrainSurroundCache, terrain: TerrainGenerator,
 		and is_equal_approx(cache.meters_per_unit, terrain.meters_per_unit) \
 		and is_equal_approx(cache.vertical_exaggeration, terrain.vertical_exaggeration) \
 		and is_equal_approx(cache.sea_level, terrain.sea_level) \
-		and cache.tile_meshes.size() == 8
+		and cache.tile_meshes.size() == 8 \
+		and cache.lamina_meshes.size() == cache.lamina_origenes.size()
 
 
 func _load_cache(terrain: TerrainGenerator, region: HeightmapData) -> TerrainSurroundCache:
@@ -702,7 +794,8 @@ func _load_cache(terrain: TerrainGenerator, region: HeightmapData) -> TerrainSur
 
 
 func _save_cache(terrain: TerrainGenerator, region: HeightmapData,
-		tile_meshes: Array[ArrayMesh]) -> void:
+		tile_meshes: Array[ArrayMesh], aguas: Array[ArrayMesh],
+		origenes: Array[Vector3]) -> void:
 	var path := _cache_path(region)
 	if path.is_empty() or tile_meshes.size() != 8:
 		return
@@ -716,6 +809,8 @@ func _save_cache(terrain: TerrainGenerator, region: HeightmapData,
 	cache.vertical_exaggeration = terrain.vertical_exaggeration
 	cache.sea_level = terrain.sea_level
 	cache.tile_meshes = tile_meshes
+	cache.lamina_meshes = aguas
+	cache.lamina_origenes = PackedVector3Array(origenes)
 	cache.highest = _highest
 
 	var t0 := Time.get_ticks_msec()

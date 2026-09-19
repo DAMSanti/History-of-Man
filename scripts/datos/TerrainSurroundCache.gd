@@ -10,7 +10,8 @@ extends Resource
 ## vez. El contorno de un sitio no cambia entre partidas, asi que se calcula
 ## una vez y se guarda aqui. Ver [TerrainSurround], [TerrainGenerationCache].
 
-const CACHE_VERSION := 1
+## v2 (2026-09-19): además de las mallas, la lámina de agua de cada casilla.
+const CACHE_VERSION := 2
 ## **El valor por defecto es 0, no la versión, y no se toca** (2026-09-15): Godot no escribe
 ## en el fichero una propiedad que vale su valor por defecto. Con `= CACHE_VERSION`, la
 ## versión se guardaba igual al defecto de entonces —no quedaba escrita— y al leerla con
@@ -32,6 +33,14 @@ const CACHE_VERSION := 1
 ## Las ocho mallas, en el mismo orden en que build() las genera: dz de -1 a 1,
 ## dx de -1 a 1, saltando (0,0).
 @export var tile_meshes: Array[ArrayMesh] = []
+
+## LAS LÁMINAS DE AGUA de las casillas que tienen cauce, y dónde va cada una.
+##
+## Van aparte de `tile_meshes` y **no** son ocho: una casilla de monte sin ríos no tiene
+## lámina, y [MallaDelTerreno.tejer_la_lamina] devuelve `null` ahí. Los dos arrays van
+## emparejados por índice.
+@export var lamina_meshes: Array[ArrayMesh] = []
+@export var lamina_origenes: PackedVector3Array = PackedVector3Array()
 
 ## Cota mas alta de todo el contorno. La necesita `extend_height_ceiling` para
 ## normalizar el shader, y sin las mallas no se puede recalcular barato.

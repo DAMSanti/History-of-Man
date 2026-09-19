@@ -1,3 +1,4 @@
+class_name AguaCaptura
 extends SceneTree
 ## El agua del valle, en los encuadres que la enseñan. GRAFICOS §7.3.
 ##
@@ -44,7 +45,7 @@ func _init() -> void:
 		nivel = int(OS.get_environment("NIVEL"))
 		Configuracion.poner_ajuste("agua", nivel)
 	var sitio := int(OS.get_environment("SITIO")) if not OS.get_environment("SITIO").is_empty() else SITE_ID
-	if not _preparar(sitio):
+	if not preparar(sitio):
 		print("faltan los datos del sitio %d" % sitio); quit(1); return
 	if not OS.get_environment("MAR").is_empty():
 		Expedition.sea_level_m = float(OS.get_environment("MAR"))
@@ -77,7 +78,7 @@ func _init() -> void:
 	var terreno: TerrainGenerator = demo.get("terrain")
 	var casa: Vector3 = sim.get("home_position") if sim != null else Vector3(2048.0, 0.0, 2048.0)
 	# Sin la interfaz ni el panel de rendimiento: lo que se compara con la foto es el agua.
-	_ocultar_la_interfaz(demo)
+	ocultar_la_interfaz(demo)
 
 	var encuadres := encuadres_de(terreno, casa)
 	if encuadres.is_empty():
@@ -257,7 +258,7 @@ static func lado_abierto(terreno: TerrainGenerator, punto: Vector3, rumbo: float
 	return mejor
 
 
-func _ocultar_la_interfaz(demo: Node) -> void:
+static func ocultar_la_interfaz(demo: Node) -> void:
 	for nodo: Node in demo.find_children("*", "CanvasLayer", true, false):
 		(nodo as CanvasLayer).visible = false
 	for nodo: Node in demo.find_children("*", "Control", false, false):
@@ -307,7 +308,7 @@ func _gpu_medio(vp: RID) -> float:
 	return gpu / 60.0
 
 
-func _preparar(sitio: int) -> bool:
+static func preparar(sitio: int) -> bool:
 	var local: HeightmapData = load("res://data/dem/local/site_%d.res" % sitio) \
 		if ResourceLoader.exists("res://data/dem/local/site_%d.res" % sitio) else null
 	var sites: SiteSet = load("res://data/sites/cantabria_sites.res")

@@ -367,6 +367,16 @@ func _uv2_del_punto(p: Vector3) -> Vector2:
 ## Va entera y no troceada: son pocas celdas —un 2-3 % del valle—.
 var lamina: MeshInstance3D = null
 
+## A PARTIR DE QUÉ ESCALÓN de «Agua» hay lámina de río. Estaba escrito como un `2` suelto
+## aquí dentro, y el contorno —que no tenía lámina— no podía preguntarlo: por eso al subir
+## el ajuste el río del recuadro cambiaba de aspecto y el de las ocho casillas no.
+const LAMINA_DESDE := 2
+
+
+## El escalón de «Agua» que le toca a un terreno. Cero si ese terreno no los usa.
+static func nivel_del_agua(con_niveles: bool) -> int:
+	return int(Configuracion.graficos.get("agua", 1)) if con_niveles else 0
+
 
 func construir_la_lamina(ceder: Callable = Callable()) -> void:
 	if lamina != null:
@@ -377,6 +387,42 @@ func construir_la_lamina(ceder: Callable = Callable()) -> void:
 		return
 	var paso_x := float(terreno.terrain_size.x) / float(res - 1)
 	var paso_z := float(terreno.terrain_size.y) / float(res - 1)
+	# Un pelo por encima: la lámina y la superficie del relieve son la misma cota.
+	var encima := 0.03 / maxf(terreno.meters_per_unit, 0.0001) * terreno.vertical_exaggeration
+	var sube := AguaDelCauce.LAMINA_SUBE_M / maxf(terreno.meters_per_unit, 0.0001)
+	var tope := sube * terreno.vertical_exaggeration
+	var malla_de_la_lamina: ArrayMesh = await tejer_la_lamina(terreno._height_map,
+		terreno._river_map, terreno._flow_map, res, paso_x, paso_z, encima, tope, ceder)
+	if malla_de_la_lamina == null:
+		return
+	lamina = MeshInstance3D.new()
+	lamina.name = "LaminaDelRio"
+	lamina.mesh = malla_de_la_lamina
+	lamina.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	lamina.material_override = material_del_agua(
+		terreno.meters_per_unit / maxf(terreno.vertical_exaggeration, 0.0001))
+	terreno.add_child(lamina)
+	print("Lamina del rio: %d vertices" % malla_de_la_lamina.surface_get_array_len(0))
+	aplicar_la_lamina()
+
+
+## TEJE LA LÁMINA DE AGUA de una rejilla cualquiera, y por eso es estática.
+##
+## La usan el recuadro jugable y **las ocho casillas de alrededor**. Estaba pegada al
+## `TerrainGenerator` del recuadro —leía sus arrays, su resolución y su tamaño— y por eso el
+## contorno no podía tener lámina: al subir el ajuste «Agua» a Alto, el río del recuadro
+## pasaba a dibujarse con esta malla y el del contorno se quedaba con el agua pintada en el
+## suelo, mucho más apagada. Resultado, medido con un A/B de la misma vista el 2026-09-19:
+## con el agua en bajo el río cruzaba la raya y seguía; con el agua en alto **se cortaba en
+## una línea recta justo en el borde**. Ver GRAFICOS §3.
+##
+## Devuelve `null` si en esa rejilla no hay ni un cuadro con agua, que es lo normal en una
+## casilla de monte sin cauces.
+static func tejer_la_lamina(alturas: PackedFloat32Array, rios: PackedFloat32Array,
+		flujos: PackedVector2Array, res: int, paso_x: float, paso_z: float,
+		encima: float, tope: float, ceder: Callable = Callable()) -> ArrayMesh:
+	if res < 2 or alturas.size() < res * res or rios.size() < res * res:
+		return null
 	var cual := PackedInt32Array()
 	cual.resize(res * res)
 	cual.fill(-1)
@@ -384,18 +430,15 @@ func construir_la_lamina(ceder: Callable = Callable()) -> void:
 	var colores := PackedColorArray()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	# Un pelo por encima: la lámina y la superficie del relieve son la misma cota.
-	var encima := 0.03 / maxf(terreno.meters_per_unit, 0.0001) * terreno.vertical_exaggeration
-	var tope := AguaDelCauce.LAMINA_SUBE_M / maxf(terreno.meters_per_unit, 0.0001) * terreno.vertical_exaggeration
 	for z in range(res - 1):
 		if ceder.is_valid() and z % 64 == 0:
 			await ceder.call()
 		for x in range(res - 1):
 			var e0 := z * res + x
-			if terreno._river_map[e0] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA \
-					and terreno._river_map[e0 + 1] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA \
-					and terreno._river_map[e0 + res] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA \
-					and terreno._river_map[e0 + res + 1] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA:
+			if (rios[e0] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA
+					and rios[e0 + 1] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA
+					and rios[e0 + res] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA
+					and rios[e0 + res + 1] <= AguaDelCauce.LAMINA_QUE_SE_DIBUJA):
 				continue
 			var esquinas: Array[int] = [e0, e0 + 1, e0 + res, e0 + res + 1]
 			for e: int in esquinas:
@@ -403,21 +446,21 @@ func construir_la_lamina(ceder: Callable = Callable()) -> void:
 					cual[e] = vertices.size()
 					var ex := e % res
 					var ez := e / res
-					var cota := AguaDelCauce.cota_del_agua(terreno._height_map, terreno._river_map, res, ex, ez, tope)
-					var punto := Vector3(float(ex) * paso_x, cota + encima, float(ez) * paso_z)
-					vertices.append(punto)
-					colores.append(_color_del_punto(punto))
-					uvs.append(_agua_de_la_celda(ex, ez, paso_x)
-						if terreno._river_map[e] >= AguaDelCauce.LINEA_DEL_AGUA else Vector2.ZERO)
+					var cota := AguaDelCauce.cota_del_agua(alturas, rios, res, ex, ez, tope)
+					vertices.append(Vector3(float(ex) * paso_x, cota + encima,
+						float(ez) * paso_z))
+					colores.append(color_del_agua(rios, flujos, res, ex, ez))
+					uvs.append(uv_del_agua(alturas, rios, flujos, res, ex, ez, paso_x)
+						if rios[e] >= AguaDelCauce.LINEA_DEL_AGUA else Vector2.ZERO)
 			# La misma diagonal que el relieve de debajo, o se cruzarían dentro del cuadro.
-			if diagonal_principal(terreno._height_map, res, x, z):
+			if diagonal_principal(alturas, res, x, z):
 				indices.append_array([cual[esquinas[0]], cual[esquinas[1]], cual[esquinas[3]],
 					cual[esquinas[0]], cual[esquinas[3]], cual[esquinas[2]]])
 			else:
 				indices.append_array([cual[esquinas[0]], cual[esquinas[1]], cual[esquinas[2]],
 					cual[esquinas[1]], cual[esquinas[3]], cual[esquinas[2]]])
 	if indices.is_empty():
-		return
+		return null
 	var normales := PackedVector3Array()
 	normales.resize(vertices.size())
 	normales.fill(Vector3.UP)
@@ -428,12 +471,15 @@ func construir_la_lamina(ceder: Callable = Callable()) -> void:
 	arrays[Mesh.ARRAY_COLOR] = colores
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
-	var malla_de_la_lamina := ArrayMesh.new()
-	malla_de_la_lamina.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	lamina = MeshInstance3D.new()
-	lamina.name = "LaminaDelRio"
-	lamina.mesh = malla_de_la_lamina
-	lamina.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var malla := ArrayMesh.new()
+	malla.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return malla
+
+
+## El material del agua de los cauces. Estático por lo mismo que [tejer_la_lamina]: lo
+## comparten el recuadro y el contorno, y dos copias que se separen serían dos ríos
+## distintos a los dos lados de la raya.
+static func material_del_agua(metros_por_unidad: float) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = load("res://shaders/agua_rio.gdshader") as Shader
 	var texturas := ProceduralTextureGenerator.get_water_textures()
@@ -444,12 +490,30 @@ func construir_la_lamina(ceder: Callable = Callable()) -> void:
 	material.set_shader_parameter("caida_de_rapido", AguaDelCauce.CAIDA_DE_RAPIDO)
 	material.set_shader_parameter("veces_para_romper", AguaDelCauce.VECES_PARA_ROMPER_ENTERA)
 	material.set_shader_parameter("linea_del_agua", AguaDelCauce.LINEA_DEL_AGUA)
-	material.set_shader_parameter("metros_por_unidad",
-		terreno.meters_per_unit / maxf(terreno.vertical_exaggeration, 0.0001))
-	lamina.material_override = material
-	terreno.add_child(lamina)
-	print("Lamina del rio: %d vertices, %d triangulos" % [vertices.size(), indices.size() / 3])
-	aplicar_la_lamina()
+	material.set_shader_parameter("metros_por_unidad", metros_por_unidad)
+	return material
+
+
+## El color de un vértice de lámina: la corriente en rg, el agua quieta en b y la lámina
+## en a. Es lo que lee el shader del agua y también el del terreno.
+static func color_del_agua(rios: PackedFloat32Array, flujos: PackedVector2Array, res: int,
+		x: int, z: int) -> Color:
+	var idx := z * res + x
+	var flujo: Vector2 = flujos[idx] if idx < flujos.size() else Vector2.ZERO
+	var mojado: float = rios[idx] if idx < rios.size() else 0.0
+	if mojado > 0.02 and rios.size() >= res * res and flujos.size() >= res * res:
+		flujo = AguaDelCauce.corriente_suave(flujos, rios, res, x, z)
+	return Color(flujo.x * 0.5 + 0.5, flujo.y * 0.5 + 0.5,
+		1.0 if (mojado > 0.01 and flujo.length_squared() < 0.01) else 0.0, mojado)
+
+
+## La caída del rápido y la orilla de una celda, que van en el UV de la lámina.
+static func uv_del_agua(alturas: PackedFloat32Array, rios: PackedFloat32Array,
+		flujos: PackedVector2Array, res: int, x: int, z: int, paso: float) -> Vector2:
+	if rios.size() < res * res:
+		return Vector2.ZERO
+	return Vector2(AguaDelCauce.caida_suave(alturas, rios, flujos, res, x, z, paso),
+		AguaDelCauce.orilla(rios, res, x, z))
 
 
 ## Por qué diagonal se parte el cuadro de la rejilla que empieza en (`x`, `z`): `true`, de
@@ -504,26 +568,22 @@ static func _poner_el_cuadro(indices: PackedInt32Array, i: int, tl: int, tr: int
 ## Enciende la lámina según el ajuste «Agua» —desde Alto— y le da su nivel; y al terreno,
 ## cuánto hunde el lecho: nada si no hay lámina encima. En caliente.
 func aplicar_la_lamina() -> void:
-	var nivel := int(Configuracion.graficos.get("agua", 1)) if terreno.agua_con_niveles else 0
+	var nivel := nivel_del_agua(terreno.agua_con_niveles)
 	if lamina != null:
-		lamina.visible = nivel >= 2
+		lamina.visible = nivel >= LAMINA_DESDE
 		(lamina.material_override as ShaderMaterial).set_shader_parameter("nivel_de_agua", nivel)
 	var material_del_terreno: ShaderMaterial = terreno._material_manager.get_material() \
 		if terreno._material_manager != null else null
 	if material_del_terreno != null:
 		var hondo := AguaDelCauce.LECHO_M / maxf(terreno.meters_per_unit, 0.0001) * terreno.vertical_exaggeration
 		material_del_terreno.set_shader_parameter("lecho_hondo",
-			hondo if lamina != null and nivel >= 2 else 0.0)
+			hondo if lamina != null and nivel >= LAMINA_DESDE else 0.0)
 
 
 ## Dónde rompe el agua en una celda: x la caída del cauce, y la orilla. Ver [AguaDelCauce].
 func _agua_de_la_celda(x: int, z: int, paso: float) -> Vector2:
-	var res := terreno.resolution
-	if terreno._river_map.size() < res * res:
-		return Vector2.ZERO
-	return Vector2(
-		AguaDelCauce.caida_suave(terreno._height_map, terreno._river_map, terreno._flow_map, res, x, z, paso),
-		AguaDelCauce.orilla(terreno._river_map, res, x, z))
+	return uv_del_agua(terreno._height_map, terreno._river_map, terreno._flow_map,
+		terreno.resolution, x, z, paso)
 
 
 ## Lo mismo para un punto suelto, en la celda más cercana: lo usan los parches cosidos.
@@ -538,15 +598,9 @@ func _agua_del_punto(p: Vector3) -> Vector2:
 func _color_del_punto(p: Vector3) -> Color:
 	var step_x := float(terreno.terrain_size.x) / float(terreno.resolution - 1)
 	var step_z := float(terreno.terrain_size.y) / float(terreno.resolution - 1)
-	var x := clampi(int(round(p.x / step_x)), 0, terreno.resolution - 1)
-	var z := clampi(int(round(p.z / step_z)), 0, terreno.resolution - 1)
-	var idx := z * terreno.resolution + x
-	var flow: Vector2 = terreno._flow_map[idx] if idx < terreno._flow_map.size() else Vector2.ZERO
-	var wetness: float = terreno._river_map[idx] if idx < terreno._river_map.size() else 0.0
-	if wetness > 0.02 and terreno._river_map.size() >= terreno.resolution * terreno.resolution:
-		flow = AguaDelCauce.corriente_suave(terreno._flow_map, terreno._river_map, terreno.resolution, x, z)
-	return Color(flow.x * 0.5 + 0.5, flow.y * 0.5 + 0.5,
-		1.0 if (wetness > 0.01 and flow.length_squared() < 0.01) else 0.0, wetness)
+	return color_del_agua(terreno._river_map, terreno._flow_map, terreno.resolution,
+		clampi(int(round(p.x / step_x)), 0, terreno.resolution - 1),
+		clampi(int(round(p.z / step_z)), 0, terreno.resolution - 1))
 
 
 ## Las simas: donde la rejilla se ha quitado —ver [_en_el_ruedo_de_una_sima]— se

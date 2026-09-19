@@ -139,6 +139,35 @@ cuando se cierre. Lo que la tarea aprenda sobre el juego se funde en el
 documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 [ESTADO.md](ESTADO.md), la ficha de época— y de la tarea sólo queda la línea.
 
+### Depurar del 2026-09-19: los ríos, el mapa local y el mapa regional
+
+**Relato en [GRAFICOS.md](GRAFICOS.md) §3.** Viene de cuatro vueltas seguidas sobre lo
+mismo —«el río sigue sin continuar por las 8 tiles que rodean el mapa»— y de dos parches
+míos que rompieron la costura y hubo que revertir.
+
+- [x] **El agua de los ríos en las 8 casillas del contorno.**
+
+  > **HECHO (2026-09-19).** El tejedor de la lámina estaba pegado al `TerrainGenerator` del
+  > recuadro; ahora es `MallaDelTerreno.tejer_la_lamina`, estático y sobre una rejilla
+  > cualquiera, y `TerrainSurround` teje la suya por casilla y la cachea (v2). El escalón a
+  > partir del cual hay lámina y su material viven también en un solo sitio.
+  >
+  > Medido con `tests/AguaDeFueraProbe.gd` (nueva), que **pregunta hacia fuera** —a 20
+  > unidades por fuera de la raya— porque la sonda anterior muestreaba dentro del recuadro
+  > y devolvía 100 % sin mirar nada: **8 de 8 casillas con lámina** (antes 0) y **6 de 6
+  > cruces de río con lámina al otro lado** (antes 0). 106 828 triángulos de agua, sólo
+  > desde «Agua» Alto.
+  >
+  > **La sorpresa**: `tejer_la_lamina` es corrutina, y llamarla sin `await` es un error de
+  > parseo que dejó `TerrainSurround` **entero sin compilar** — y la suite pasó en verde,
+  > porque no instancia el contorno. Se vio corriendo el juego.
+
+- [ ] **El mapa regional sobre la plataforma emergida**: orografía, ríos y rías con el mar
+  de la época en una partida nueva. Hoy `RegionMap.EPOCA_ANTES_DE_FUNDAR` está en `false`
+  desde un paso de bisección; encenderlo traía una cuña marrón cuya causa sigue sin
+  encontrarse —el relleno del mar ya está descartado por medida: cambia **0 celdas** en el
+  contorno—.
+
 ### La banda: cuerpos, oficios en las manos y ropa por era
 
 **Spec y relato en [GRAFICOS.md](GRAFICOS.md) §5.1.** Se hizo **dos veces el mismo día**, y
