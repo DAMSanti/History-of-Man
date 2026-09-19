@@ -497,3 +497,42 @@ func _rotulos_de(ventana: VentanaDeConfiguracion) -> Array:
 		if nodo is Label:
 			salida.append((nodo as Label).text)
 	return salida
+
+
+## EL AVISO DE PARAJES SE GUARDA Y VUELVE, y por defecto está encendido. INTERFAZ §8.9.
+func test_el_aviso_de_parajes_va_y_vuelve() -> void:
+	Configuracion.por_defecto()
+	assert_true(Configuracion.aviso_de_parajes, "recién hecha, el aviso está encendido")
+
+	Configuracion.aviso_de_parajes = false
+	assert_eq(Configuracion.guardar(), OK, "se guarda")
+	Configuracion.aviso_de_parajes = true
+	assert_true(Configuracion.cargar(), "se lee")
+	assert_false(Configuracion.aviso_de_parajes, "apagado, vuelve apagado")
+
+	Configuracion.aviso_de_parajes = true
+	assert_eq(Configuracion.guardar(), OK, "se guarda otra vez")
+	Configuracion.aviso_de_parajes = false
+	assert_true(Configuracion.cargar(), "se lee")
+	assert_true(Configuracion.aviso_de_parajes, "encendido, vuelve encendido")
+
+
+## UN FICHERO VIEJO —escrito antes de que este ajuste existiera— abre con el aviso
+## encendido, y **no** deja la configuración en Personalizado: es la misma regla que los
+## árboles de §8.7 y el clima de §8.8.
+func test_un_fichero_sin_la_clave_abre_con_el_aviso_encendido() -> void:
+	Configuracion.por_defecto()
+	Configuracion.poner_nivel(Configuracion.Nivel.BAJO)
+	assert_eq(Configuracion.guardar(), OK, "se guarda un fichero en Bajo")
+
+	# Se le quita la clave, que es lo que tendría uno escrito antes de esta spec.
+	var fichero := ConfigFile.new()
+	assert_eq(fichero.load(Configuracion.ruta), OK, "se relee para tocarlo")
+	fichero.erase_section_key("jugabilidad", "aviso_de_parajes")
+	assert_eq(fichero.save(Configuracion.ruta), OK, "se reescribe sin la clave")
+
+	Configuracion.aviso_de_parajes = false
+	assert_true(Configuracion.cargar(), "se lee el fichero viejo")
+	assert_true(Configuracion.aviso_de_parajes, "sin la clave, el aviso queda encendido")
+	assert_eq(int(Configuracion.nivel), int(Configuracion.Nivel.BAJO),
+		"y el nivel sigue siendo el suyo, no Personalizado")

@@ -32,6 +32,7 @@ const DISTANCIAS_3D: Array[float] = [10.0, 20.0, 30.0, 40.0, 50.0, 70.0, 100.0, 
 	150.0, 200.0, 300.0, 500.0, Configuracion.RADIO_3D_MAXIMO]
 
 var _pestanas: TabContainer
+var _jugabilidad: VBoxContainer
 var _pantalla: VBoxContainer
 var _graficos: VBoxContainer
 var _controles: VBoxContainer
@@ -76,6 +77,10 @@ func _init() -> void:
 	_graficos = _pestana("Gráficos")
 	_controles = _pestana("Controles")
 	_sonido = _pestana("Sonido")
+	# LA QUINTA, y es de lo que pasa EN EL JUEGO y no en el equipo. Nace con un solo
+	# ajuste a propósito: es el sitio donde irán los que vengan, no una pestaña que haya
+	# que rellenar. INTERFAZ §8.9.
+	_jugabilidad = _pestana("Jugabilidad")
 
 	_confirmar = HBoxContainer.new()
 	_confirmar.add_theme_constant_override("separation", 8)
@@ -280,7 +285,7 @@ func _pestana(nombre: String) -> VBoxContainer:
 
 
 func _pintar() -> void:
-	for pestana: VBoxContainer in [_pantalla, _graficos, _controles, _sonido]:
+	for pestana: VBoxContainer in [_pantalla, _graficos, _controles, _sonido, _jugabilidad]:
 		for hijo: Node in pestana.get_children():
 			pestana.remove_child(hijo)
 			hijo.queue_free()
@@ -288,6 +293,7 @@ func _pintar() -> void:
 	_pintar_graficos()
 	_pintar_controles()
 	_pintar_sonido()
+	_pintar_jugabilidad()
 
 
 func _pintar_pantalla() -> void:
@@ -563,8 +569,22 @@ func _opciones(donde: VBoxContainer, texto: String, opciones: Array, elegida: in
 	return selector
 
 
+## LO QUE PASA EN EL JUEGO, no en el equipo. Hoy, un solo interruptor. INTERFAZ §8.9.
+func _pintar_jugabilidad() -> void:
+	_casilla(_jugabilidad, "Avisar de los parajes descubiertos",
+		Configuracion.aviso_de_parajes,
+		func(si: bool) -> void:
+			Configuracion.aviso_de_parajes = si
+			# En caliente: deja de sacar tarjetas desde el siguiente paraje, y las que ya
+			# estaban esperando turno se van. Lo hace [GameUI.aplicar_configuracion].
+			Configuracion.aplicar_graficos(get_tree())
+			Configuracion.guardar(),
+		"El paraje se sigue descubriendo y sigue en la Crónica y en el mapa: lo único "
+			+ "que se apaga es el cartel.", true)
+
+
 func _casilla(donde: VBoxContainer, texto: String, puesta: bool, al_cambiar: Callable,
-		ayuda: String = "") -> void:
+		ayuda: String = "", ayuda_a_la_vista: bool = false) -> void:
 	var casilla := CheckButton.new()
 	casilla.button_pressed = puesta
 	casilla.tooltip_text = ayuda
@@ -572,6 +592,19 @@ func _casilla(donde: VBoxContainer, texto: String, puesta: bool, al_cambiar: Cal
 	var fila := _fila(donde, texto)
 	fila.tooltip_text = ayuda
 	fila.add_child(casilla)
+	# LA AYUDA, DEBAJO Y SIEMPRE A LA VISTA, cuando el interruptor no se entiende solo.
+	#
+	# Un tooltip no vale para eso: hay que saber que está para ir a buscarlo, y **no sale
+	# en una captura**, así que tampoco se puede comprobar que quepa (INTERFAZ §8.9 pide
+	# justo eso). Va apagada y en letra menor para que no compita con el nombre del ajuste.
+	if not ayuda_a_la_vista or ayuda.is_empty():
+		return
+	var linea := Label.new()
+	linea.text = ayuda
+	linea.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	linea.custom_minimum_size = Vector2(ANCHO - 60, 0)
+	Pigmento.escribir(linea, UISkin.INK_SOFT, 13)
+	donde.add_child(linea)
 
 
 func _barra(donde: VBoxContainer, texto: String, valor: float, al_cambiar: Callable) -> void:

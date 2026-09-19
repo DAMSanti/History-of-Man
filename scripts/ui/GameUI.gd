@@ -127,6 +127,15 @@ var _lore_button: Button
 var barra: BarraSuperior = BarraSuperior.new(self)
 
 
+## UN CAMBIO EN LA CONFIGURACIÓN LLEGA AQUÍ, en caliente. INTERFAZ §8.9.
+##
+## Lo reparte [Configuracion.aplicar_graficos] por el grupo, que es el de «a quien le
+## cambia la configuración» aunque se llame `configuracion_grafica`. La barra no puede
+## apuntarse sola —es un `RefCounted`, no un nodo—, así que se le pasa desde aquí.
+func aplicar_configuracion() -> void:
+	barra.aplicar_configuracion()
+
+
 ## Que hay donde has pinchado. Ver [PanelSitios].
 var sitios: PanelSitios = PanelSitios.new(self)
 
@@ -237,6 +246,9 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	layer = 10
+	# Para enterarse de un cambio de configuración en caliente. Ver
+	# [aplicar_configuracion] e INTERFAZ §8.9.
+	add_to_group(Configuracion.GRUPO)
 	# El tema se cuelga de cada ventana y baja solo a todo lo que contenga.
 	# Un CanvasLayer no es Control y no tiene `theme`, así que no se puede
 	# poner una vez arriba del todo.

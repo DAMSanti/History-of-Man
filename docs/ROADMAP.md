@@ -148,6 +148,51 @@ tarjeta y media por jornada— y el hallazgo sigue en la Crónica, en el diario 
 el mapa. Encendido por defecto, en caliente, y fuera del guardado como todo §8.
 Pendiente de `/plan-tarea`.
 
+### ~~Jugabilidad: el aviso de paraje se puede apagar~~ — cerrado (2026-09-19)
+
+> **HECHO.** Las seis tareas, con la captura en las dos resoluciones. Lo construido y la
+> premisa que se cayó —la barra no es un nodo y no puede apuntarse al grupo: lo hace
+> `GameUI`— están en INTERFAZ §8.9. Suite: 1 744 pruebas, 9 451 comprobaciones.
+
+**Spec y plan en [INTERFAZ.md](INTERFAZ.md) §8.9.** Una quinta pestaña en la ventana de
+configuración, con un interruptor: «Avisar de los parajes descubiertos». Apagado, deja de
+salir la tarjeta de «Un sitio con nombre»; la Crónica, el diario y el mapa siguen igual.
+
+- [x] **1. El ajuste en `Configuracion`**, sección `[jugabilidad]`, encendido por defecto,
+  guardado y leído con la regla de §8 —un fichero viejo abre encendido y **no** deja la
+  configuración en Personalizado—. Toca `scripts/vista/Configuracion.gd`.
+  *Se comprueba* con `TestConfiguracion`: ida y vuelta por fichero en su propia carpeta,
+  por defecto encendido, y fichero sin la clave.
+
+- [x] **2. El filtro de la tarjeta** en `BarraSuperior._on_moment`: con el aviso apagado, un
+  `Moment.Kind.HALLAZGO` no entra en la cola. Toca `scripts/ui/BarraSuperior.gd`.
+  *Se comprueba* con una prueba que **construye el estado** —bautizar un paraje, no simular
+  un año—: apagado, cero momentos de paraje; encendido, exactamente uno. Y en la misma
+  prueba, **la Crónica y el diario salen idénticos en los dos casos**, que es el criterio
+  que distingue callar la tarjeta de callar el hallazgo.
+
+- [x] **3. Que no se lleve por delante a las demás.** Prueba, una por clase: cumbre,
+  percance, berrea, relato y decisión siguen levantando tarjeta con el aviso apagado; y la
+  cumbre sigue diciendo «se han descubierto N parajes». Sin código nuevo si la 2 está bien:
+  es la red que sujeta el filtro.
+
+- [x] **4. En caliente y vaciando la cola.** La barra se apunta a `Configuracion.GRUPO` y en
+  `aplicar_configuracion()` quita de la cola las tarjetas de paraje que esperan turno.
+  Toca `scripts/ui/BarraSuperior.gd`. *Se comprueba* con dos pruebas: apagar con la escena
+  montada y bautizar acto seguido no saca tarjeta; y tres de paraje encoladas con una de
+  percance detrás dejan sólo la de percance.
+
+- [x] **5. La pestaña «Jugabilidad»** con el interruptor y **la ayuda como línea visible**
+  —no un tooltip, que no sale en una captura—. Toca
+  `scripts/ui/VentanaDeConfiguracion.gd`. *Se comprueba* en la 6.
+
+- [x] **6. La captura**, con ventana, a 1920×1080 y 1280×720 (`ConfiguracionCaptura`):
+  ningún control se sale y la ayuda se lee entera en las dos.
+
+**Lo que cuesta medir: minutos.** Las tareas 1 a 4 son pruebas de la suite —segundos— porque
+todas son reglas y el estado se construye en vez de simularse. La 6 es la única que necesita
+ventana, y son dos capturas: **un par de minutos**. No hay ninguna corrida larga.
+
 ### La banda, que se mueva con sentido (depurar del 2026-09-19, noche)
 
 Seis frentes de una sesión de juego. **Lo que el usuario pidió, dicho por él**: «que los

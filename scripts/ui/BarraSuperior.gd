@@ -105,6 +105,23 @@ func _build_clock() -> void:
 	_update_clock()
 
 
+## LO QUE YA ESTABA EN COLA SE VA, al apagar el aviso. INTERFAZ §8.9.
+##
+## Apagar el aviso y aun así tragarse seis carteles sería el mismo problema con un paso
+## más. Se quitan las que **esperan turno**: la que está en pantalla ya se ha leído.
+##
+## Lo llama [GameUI.aplicar_configuracion], que es quien está en el árbol y puede apuntarse
+## al grupo de la configuración: la barra es un `RefCounted` y no tiene grupos.
+func aplicar_configuracion() -> void:
+	if Configuracion.aviso_de_parajes or ui == null:
+		return
+	var quedan: Array[Moment] = []
+	for moment: Moment in ui._moments:
+		if _sale_la_tarjeta(moment):
+			quedan.append(moment)
+	ui._moments = quedan
+
+
 ## Engancha la simulación. Lo llama [DemoMain] al montar la escena.
 func watch_moments(simulation: SettlementSim) -> void:
 	if simulation.moment_raised.is_connected(_on_moment):
@@ -122,9 +139,33 @@ func _on_moment(moment: Moment) -> void:
 			Chronicle.Kind.HALLAZGO, "%s: %s. %s" % [moment.desde.nombre_del_campamento,
 				moment.title, moment.text])
 		return
+	# EL AVISO DE PARAJE SE PUEDE APAGAR, y se apaga AQUÍ. INTERFAZ §8.9.
+	#
+	# En la vista y no en la simulación, y eso es lo que hace que el ajuste calle la
+	# tarjeta y nada más: la Crónica y el diario se escriben en
+	# `Reconocimiento._contar_los_nuevos` **antes** de levantar el momento, así que por
+	# este filtro no pasan. Callarlo allí habría dejado el corte a un paso de los otros
+	# dos canales —y además `scripts/sim/` no conoce la configuración, ni debe—.
+	if not _sale_la_tarjeta(moment):
+		return
 	ui._moments.append(moment)
 	if ui._moment_card == null:
 		_show_next_moment()
+
+
+## SI ESTA TARJETA SE ENSEÑA, según lo que el jugador haya pedido. Ver INTERFAZ §8.9.
+##
+## Sólo mira la de paraje. [Moment.Kind.HALLAZGO] **es** exactamente ésa: `Moment.found()`
+## se llama desde un único sitio —el bautizo— y los trece `Moment.new()` del juego fijan
+## todos su `kind`; la de la cumbre sale de `found()` pero se pone `CUMBRE`, así que su
+## «se han descubierto N parajes» no se toca.
+##
+## **Cuidado si se añade un momento nuevo**: `HALLAZGO` es el valor POR DEFECTO del enum,
+## así que un `Moment.new()` que olvide su `kind` se quedaría mudo aquí sin que nada falle.
+static func _sale_la_tarjeta(moment: Moment) -> bool:
+	if moment.kind != Moment.Kind.HALLAZGO:
+		return true
+	return Configuracion.aviso_de_parajes
 
 
 ## El momento que se está enseñando, si hay alguno.

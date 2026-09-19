@@ -1336,6 +1336,83 @@ del juego.
   parajes, el de marcadores, la velocidad del reloj—. La pestaña nace con uno.
 - **Que el ajuste viaje en la partida guardada.** Es del jugador, como todo §8.
 
+#### Plan técnico (2026-09-19)
+
+**Dónde se calla la tarjeta, que es la decisión que manda.** En la **vista**, no en la
+simulación: `BarraSuperior._on_moment`, que es quien recibe `moment_raised` y encola. Así el
+criterio «sólo calla la tarjeta» no depende de acordarse de nada — la Crónica y el diario se
+escriben en `Reconocimiento._contar_los_nuevos` **antes** de levantar el momento, y por ahí
+no pasa el interruptor. Callarlo en la simulación —no levantar el `Moment`— habría dejado el
+corte a un paso de los otros dos canales, y además metería `Configuracion` dentro de
+`scripts/sim/`, que no la conoce (SPECS §4).
+
+**Cómo se reconoce una tarjeta de paraje.** Por `Moment.Kind.HALLAZGO`, que **es** exactamente
+eso: comprobado, `Moment.found()` se llama desde un único sitio —el bautizo de un paraje— y
+los trece `Moment.new()` del juego fijan todos su `kind`. `summit()` sale de `found()` pero se
+pone `CUMBRE`, así que la tarjeta de la cumbre —con su «se han descubierto N parajes»— no se
+ve afectada. **Riesgo que se hereda**: `HALLAZGO` es el valor *por defecto* del enum, así que
+un `Moment.new()` futuro que olvide su `kind` quedaría mudo sin que nadie lo note. Queda
+dicho aquí y en el comentario del filtro.
+
+**Módulos afectados.**
+
+| Qué | Dónde | Contrato |
+|---|---|---|
+| El ajuste y su fichero | `scripts/vista/Configuracion.gd` | §8: es del jugador, no de la partida; **no** va en el guardado |
+| La pestaña y el interruptor | `scripts/ui/VentanaDeConfiguracion.gd` | SPECS §4, `ui/` sólo lee y manda |
+| El filtro y el vaciado de la cola | `scripts/ui/BarraSuperior.gd` | ídem |
+| Pruebas | `scripts/tests/TestConfiguracion.gd`, `TestMomentos.gd` | |
+| Captura | `scripts/tests/ConfiguracionCaptura.gd` | con ventana, 1920 y 1280 |
+
+**Decisiones que la spec obliga a tomar.**
+
+- **La ayuda es una línea visible, no un tooltip.** El criterio pide que se lea entera en una
+  captura a dos resoluciones, y un tooltip no sale en una captura. `_casilla` hoy sólo pone
+  `tooltip_text`; hace falta una variante que además escriba la frase debajo del interruptor.
+- **Una sección propia en el fichero**, `[jugabilidad]`, al lado de `pantalla`, `graficos`,
+  `teclas` y `sonido`. No entra en `AJUSTES` —esa lista es la de gráficos y la lee
+  `_nivel_que_encaja()`—: meterlo ahí dejaría la configuración en «Personalizado» por apagar
+  un aviso, que es justo lo que el criterio prohíbe.
+- **El aplicar en caliente reutiliza `Configuracion.GRUPO`.** Es el grupo de «a quien le
+  cambia la configuración», aunque se llame `configuracion_grafica`; la barra superior se
+  apunta a él y vacía la cola en `aplicar_configuracion()`. **Se corrige el comentario del
+  grupo**, no su nombre: renombrarlo es otro trabajo.
+- **De la cola se van las que esperan turno, no la que está en pantalla.** Es lo que dice la
+  spec, y además una tarjeta ya visible ya se ha leído.
+
+**Orden de dependencias.** El ajuste primero —sin él no hay qué preguntar—, luego el filtro y
+el vaciado, luego la pestaña, y la captura al final, que es lo único que necesita ventana.
+
+#### Lo construido (2026-09-19)
+
+Las seis tareas, y el plan aguantó entero salvo un detalle que se cuenta abajo.
+
+- **El ajuste** es `Configuracion.aviso_de_parajes`, sección `[jugabilidad]` del mismo
+  fichero, **encendido por defecto**. Fuera de `AJUSTES` a propósito: apagar un aviso no
+  puede dejar la configuración en Personalizado, y una prueba lo fija con un fichero en
+  Bajo al que se le quita la clave.
+- **La tarjeta se calla en la vista**, `BarraSuperior._sale_la_tarjeta`, por
+  `Moment.Kind.HALLAZGO`. La Crónica y el diario se escriben antes de levantar el momento,
+  así que el criterio «sólo calla la tarjeta» **se cumple por construcción**: la prueba
+  compara las dos corridas y la Crónica sale idéntica, con su línea y el nombre del sitio.
+- **En caliente**, por el grupo de la configuración. **Aquí se cayó una premisa del plan**:
+  el plan decía que la barra superior se apuntaría al grupo, y `BarraSuperior` es un
+  `RefCounted` — no es un nodo y no tiene grupos. Se apunta `GameUI`, que sí está en el
+  árbol, y le pasa el aviso a la barra.
+- **La cola se vacía** de las que esperan turno. La que está en pantalla se queda: ya se ha
+  leído.
+- **La pestaña** nace con un interruptor y **la ayuda como línea visible** debajo, en letra
+  menor. Decisión del usuario, y obligada por el criterio: un tooltip no sale en una
+  captura, así que no se podría comprobar que quepa.
+
+Medido con `ConfiguracionCaptura`: **«Jugabilidad: nada se sale»** a 1920×1080 y a
+1280×720, y la ayuda entra entera en una línea en las dos. Suite: 1 744 pruebas, 9 451
+comprobaciones, con cuatro nuevas en «Aviso de parajes» y dos en «Configuración».
+
+**La deuda que se hereda, dicha**: `Moment.Kind.HALLAZGO` es el valor **por defecto** del
+enum. Hoy los trece `Moment.new()` del juego fijan su `kind` —comprobado—, pero uno futuro
+que lo olvide se quedaría mudo sin que nada falle. Está avisado en el comentario del filtro.
+
 ---
 
 ## 9. La pantalla de carga (spec, 2026-09-15)

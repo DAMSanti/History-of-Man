@@ -142,6 +142,23 @@ static var volumen_general: float = 1.0
 static var volumen_musica: float = 1.0
 static var volumen_efectos: float = 1.0
 
+## SI SE AVISA CON TARJETA DE CADA PARAJE QUE SE BAUTIZA. INTERFAZ §8.9.
+##
+## Encendido, todo sigue como siempre. Apagado, deja de salir la tarjeta de «Un sitio con
+## nombre» —y **sólo eso**: el hallazgo se sigue apuntando en la Crónica y en el diario de
+## quien lo encontró, y el paraje sigue en el mapa y en su ventana. Cambia cómo se entera
+## el jugador, no lo que sabe.
+##
+## Existe porque no salen de una en una: medido, **11 parajes en ocho jornadas** con la
+## cola de reconocimiento vacía (ESTADO §5), y en una primavera de exploración van
+## seguidas. A quien juega su primera partida el aviso le enseña que explorar produce algo;
+## a quien va por el tercer año le sobra, y eso lo decide quien juega.
+##
+## **Encendido por defecto**, que es el juego de hoy: una partida nueva no cambia por esto.
+## Y va aparte de [AJUSTES], que es la lista de gráficos que lee `_nivel_que_encaja()`:
+## apagar un aviso no puede dejar la configuración en Personalizado.
+static var aviso_de_parajes: bool = true
+
 
 ## Lo de siempre: lo que hacía el juego antes de haber configuración —ventana
 ## maximizada de `project.godot`, sincronización de Godot, sin tope, Medio—.
@@ -155,6 +172,7 @@ static func por_defecto() -> void:
 	volumen_general = 1.0
 	volumen_musica = 1.0
 	volumen_efectos = 1.0
+	aviso_de_parajes = true
 
 
 ## Pone un nivel: todos los ajustes a su valor. Personalizado no se pone: se llega.
@@ -207,6 +225,9 @@ static func guardar() -> Error:
 	var teclas := Teclas.para_guardar()
 	for id: String in teclas:
 		fichero.set_value("teclas", id, int(teclas[id]))
+	# Lo que es del JUEGO y no del equipo. Nace con uno y es donde irán los que vengan:
+	# INTERFAZ §8.9.
+	fichero.set_value("jugabilidad", "aviso_de_parajes", aviso_de_parajes)
 	fichero.set_value("sonido", "general", volumen_general)
 	fichero.set_value("sonido", "musica", volumen_musica)
 	fichero.set_value("sonido", "efectos", volumen_efectos)
@@ -242,6 +263,9 @@ static func cargar() -> bool:
 			else PackedStringArray():
 		teclas[id] = fichero.get_value("teclas", id)
 	Teclas.cargar_de(teclas)
+	# Un fichero escrito antes de que esto existiera abre con el aviso ENCENDIDO, que es lo
+	# de siempre: leer algo viejo no puede dejar la configuración en un estado raro.
+	aviso_de_parajes = bool(fichero.get_value("jugabilidad", "aviso_de_parajes", true))
 	volumen_general = clampf(float(fichero.get_value("sonido", "general", 1.0)), 0.0, 1.0)
 	volumen_musica = clampf(float(fichero.get_value("sonido", "musica", 1.0)), 0.0, 1.0)
 	volumen_efectos = clampf(float(fichero.get_value("sonido", "efectos", 1.0)), 0.0, 1.0)

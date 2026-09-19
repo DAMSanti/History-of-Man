@@ -41,6 +41,7 @@ func _init() -> void:
 		TestNiebla.new(),
 		TestNieblaRegional.new(),
 		TestConfiguracion.new(),
+		TestAvisoDeParajes.new(),
 		TestTeclas.new(),
 		TestVerTrabajar.new(),
 		TestContorno.new(),
