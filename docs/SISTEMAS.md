@@ -897,6 +897,32 @@ no se pinchan ni salen en listas. La ficha y el botón del valle, en
 > descubre lo de dentro y nada de fuera» y comprobaba bien la regla de entonces.
 > Lo que estaba mal era la regla.
 
+### Y la banda se sienta en los troncos (2026-09-19)
+
+Los leños del corro del fuego están desde el 2026-09-13 —`CorroDelHogar`, cinco troncos a
+2,4 m de la hoguera, dos plazas cada uno— y la simulación **ya repartía los asientos**
+(`Destino._home_spot`). Lo que no se había enterado era la **vista**: el ocio seguía siendo
+`Idle_Talking`, de pie, así que la banda salía plantada encima del leño moviendo las manos.
+Queja del usuario: «¿podemos sentarles en los bancos del asentamiento?».
+
+Tres cosas, y las tres donde tocan:
+
+- **Quién está sentado lo contesta el corro**, que es donde se sabe dónde están los
+  asientos: `CorroDelHogar.sentado()`, comparando con el sitio de verdad y no con «estar
+  cerca del fuego» —quien pasa a atizar no está sentado—. La holgura es `EN_EL_SITIO`, un
+  metro: los asientos están a poco más de un metro unos de otros, así que el radio de
+  llegada de la simulación (seis) habría dado por sentado a quien está de pie al lado.
+- **Hacia dónde mira, también**: `CorroDelHogar.mirando_al_fuego()`. El rumbo que trae la
+  persona es el del último paso que dio, y uno sentado mira a la hoguera.
+- **El gesto es cosa del ocio y sólo del ocio.** Comer y dormir ya se hacían sentados;
+  ahora el ocio en el tronco es `Sitting_Talking`. Quien talla arrodillado junto al fuego
+  sigue tallando: el tronco decide el ocio, no lo que se hace con las manos. `TestBandaClips`.
+
+**Pendiente de verse en el juego.** Las reglas están cubiertas por pruebas, pero la captura
+que se intentó —`HumoCaptura`— encuadra el humo en la ladera y en la jornada 1 a mediodía
+nadie está ocioso junto al fuego. Hace falta una con el hogar levantado y la banda recogida
+al atardecer.
+
 ### El batidor plantado: un tramo que acababa donde empezaba (2026-09-19)
 
 Queja del jugador, leída en la ventana de Rastros: «en 109 días, 19× se quedó sin camino a

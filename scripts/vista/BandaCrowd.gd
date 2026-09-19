@@ -78,7 +78,7 @@ func add_person(sexo: int = Inhabitant.Sex.MUJER,
 ## lleva lo reparte [Vestuario.quien_va_vestido].
 func update(slot: Vector2i, position: Vector3, heading: float, state: int,
 		age: int = 1, speciality: int = Profession.Speciality.NINGUNA,
-		vestido: bool = false) -> void:
+		vestido: bool = false, sentado: bool = false) -> void:
 	if slot.y < 0 or slot.y >= _cuerpos.size():
 		return
 	var cuerpo := _cuerpos[slot.y]
@@ -88,5 +88,5 @@ func update(slot: Vector2i, position: Vector3, heading: float, state: int,
 	cuerpo.visible = true
 	cuerpo.poner(position, heading, age)
 	cuerpo.vestir(vestido)
-	cuerpo.gesto(ClipsDeLaBanda.clip(state, speciality))
+	cuerpo.gesto(ClipsDeLaBanda.clip(state, speciality, sentado))
 	cuerpo.apero(ClipsDeLaBanda.apero(state, speciality))

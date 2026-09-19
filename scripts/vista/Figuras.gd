@@ -379,9 +379,20 @@ func _pintar(person: Inhabitant, index: int, donde_va: Vector3, escondida: bool)
 	var punto := donde_va + (Vector3(0.0, -1000.0, 0.0) if escondida else Vector3.ZERO)
 	# La especialidad que está ejerciendo AHORA, no la que tiene fijada: es la que decide
 	# el gesto y el apero que se le ven (GRAFICOS §5.1).
-	crowd.update(sim._bodies[index], punto, sim._headings[index], person.state,
+	# SENTADO EN EL TRONCO, y mirando al fuego. La simulación ya reparte los asientos del
+	# corro —`Destino._home_spot`, desde el 2026-09-13— pero la vista no se enteraba: los
+	# ociosos salían de pie encima del leño. El rumbo también se sustituye, porque el que
+	# trae la persona es el del último paso que dio y uno sentado mira a la hoguera, no a
+	# donde venía andando. Ver [CorroDelHogar.sentado].
+	var rumbo: float = sim._headings[index]
+	var hay_hogar: bool = sim.camp_built.get(CampProjects.Kind.HOGAR, false)
+	var sentado := not escondida and hay_hogar \
+		and CorroDelHogar.sentado(sim.home_forecourt, index, punto)
+	if sentado:
+		rumbo = CorroDelHogar.mirando_al_fuego(sim.home_forecourt, punto)
+	crowd.update(sim._bodies[index], punto, rumbo, person.state,
 		person.age_group, person.current_speciality,
-		index < _vestidos.size() and _vestidos[index] == 1)
+		index < _vestidos.size() and _vestidos[index] == 1, sentado)
 
 
 func _poner_las_marcas(en_viaje: Array[Dictionary]) -> void:

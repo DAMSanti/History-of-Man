@@ -71,6 +71,44 @@ static func asientos(centro: Vector3) -> Array[Vector3]:
 ## y con veinte partos el corro se quedaría vacío teniendo diez sitios. Quien no
 ## coge sitio se queda por la campa, como siempre; que haya menos sitios que
 ## gente es lo que hace del corro un sitio y no una cuadrícula.
+## Cuánto puede separarse del sitio y seguir contando como sentado, en metros.
+##
+## Un palmo largo, y no el radio de llegada de la simulación: los asientos están a poco más
+## de un metro unos de otros —dos por leño a lo largo de [LARGO]—, así que con los seis
+## metros del radio de llegada alguien de pie junto al fuego contaría como sentado en un
+## tronco en el que no está. Lo que hace falta es la holgura de la FIGURA, que va a su
+## propio paso y llega con un poco de retraso (ver [Figuras]).
+const EN_EL_SITIO := 1.0
+
+
+## ¿ESTÁ ESTA PERSONA SENTADA EN SU SITIO DEL CORRO? Lo pregunta la vista para elegir el
+## gesto, y se contesta aquí porque aquí es donde se sabe dónde están los asientos.
+##
+## Hacía falta porque la simulación ya sentaba a la banda alrededor del fuego desde el
+## 2026-09-13 —`Destino._home_spot`— y **la vista no se había enterado**: seguía poniendo a
+## los ociosos de pie con el gesto de charlar, manoseándose las manos encima de un tronco.
+## Queja del usuario del 2026-09-19: «¿podemos sentarles en los bancos del asentamiento?».
+##
+## Se compara con el sitio de verdad y no con «estar cerca del fuego»: quien pasa por al
+## lado a atizar no está sentado.
+static func sentado(centro: Vector3, puesto: int, donde: Vector3,
+		holgura: float = EN_EL_SITIO) -> bool:
+	if centro == Vector3.ZERO:
+		return false
+	var asiento := asiento_de(centro, puesto)
+	if asiento == Vector3.ZERO:
+		return false
+	return Traversal.en_llano(asiento, donde) <= holgura
+
+
+## Hacia dónde mira quien está sentado: **al fuego**, que es para lo que se pone uno ahí.
+##
+## El rumbo va en la convención del andador —`atan2(x, z)`, ver [Marcha]—, porque es el
+## mismo número que la vista usa para girar a la persona.
+static func mirando_al_fuego(centro: Vector3, donde: Vector3) -> float:
+	return atan2(centro.x - donde.x, centro.z - donde.z)
+
+
 static func asiento_de(centro: Vector3, puesto: int) -> Vector3:
 	var sitios := asientos(centro)
 	if puesto < 0 or puesto >= sitios.size():

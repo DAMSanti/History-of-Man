@@ -111,9 +111,15 @@ const FUERA_DEL_CAMPAMENTO := [
 
 
 ## El gesto que toca. El oficio sólo manda TRABAJANDO: andar es andar, lo haga quien lo haga.
-static func clip(estado: int, especialidad: int) -> String:
+static func clip(estado: int, especialidad: int, sentado: bool = false) -> String:
 	if estado == Inhabitant.State.TRABAJANDO:
 		return POR_ESPECIALIDAD.get(especialidad, "Fixing_Kneeling")
+	# EN EL TRONCO, SENTADO. El corro del fuego es el sitio social del campamento —comer y
+	# dormir ya se hacían sentados—, así que el ocio de quien tiene sitio en un leño es
+	# sentarse a hablar y no quedarse de pie manoseándose las manos encima del banco. Quién
+	# está en el tronco lo contesta [CorroDelHogar.sentado]; aquí sólo se elige el gesto.
+	if sentado and estado == Inhabitant.State.OCIOSO:
+		return "Sitting_Talking"
 	return POR_ESTADO.get(estado, "Idle")
 
 

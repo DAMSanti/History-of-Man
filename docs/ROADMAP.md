@@ -172,10 +172,13 @@ pescadores, de uno en uno.
   por alfa (`CatalogoDeCuerpos.cejas_que_se_recortan`), que es la cuarta regla del pack que
   no se adivina.
 
-- [ ] **El ocio: que dejen de manosearse las manos, y que se sienten.** Hoy `OCIOSO` usa
-  `Idle_Talking`. **Bancos no hay**: en el asentamiento sólo existe `ObrasDelAbrigo
-  .asiento_llano`, que aplana suelo y no es un mueble. Sentarles pide modelar los bancos
-  primero.
+- [x] **El ocio: que se sienten en los troncos del corro del fuego.**
+
+  > **HECHO (2026-09-19).** Y los bancos SÍ existían: son los leños de `CorroDelHogar`,
+  > puestos el 2026-09-13. Me equivoqué al decir que había que modelarlos —busqué
+  > «banco» y no «tronco»—. La simulación ya repartía los asientos; quien no se había
+  > enterado era la vista. Relato en SISTEMAS §4. **Falta verlo en captura**: la que se
+  > intentó encuadra el humo en la ladera y a mediodía nadie está ocioso junto al fuego.
 
 - [ ] **Los recolectores.** El cesto va colgado del hombro y no de la mano —visto en
   captura—, y hay que darles un paseo tranquilo recogiendo por el paraje en vez del gesto

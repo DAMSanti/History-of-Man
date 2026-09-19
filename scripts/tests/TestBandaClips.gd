@@ -251,3 +251,48 @@ func test_nunca_se_reparten_mas_vestidos_de_los_que_hay() -> void:
 			llevan += b
 		assert_eq(llevan, mini(cuantos, gente.size()),
 			"con %d vestidos se reparten %d" % [cuantos, mini(cuantos, gente.size())])
+
+
+## EN EL TRONCO SE ESTÁ SENTADO, no de pie encima.
+##
+## La simulación reparte los asientos del corro del fuego desde el 2026-09-13
+## —`Destino._home_spot`— y la vista no se había enterado: el ocio seguía siendo
+## `Idle_Talking`, de pie, así que la banda salía plantada sobre los leños manoseándose las
+## manos. Queja del usuario del 2026-09-19: «¿podemos sentarles en los bancos?».
+func test_el_ocio_en_el_tronco_es_sentado() -> void:
+	var de_pie := ClipsDeLaBanda.clip(Inhabitant.State.OCIOSO,
+		Profession.Speciality.NINGUNA, false)
+	var en_el_tronco := ClipsDeLaBanda.clip(Inhabitant.State.OCIOSO,
+		Profession.Speciality.NINGUNA, true)
+	assert_true(not de_pie.begins_with("Sitting"),
+		"fuera del corro el ocio sigue siendo de pie (%s)" % de_pie)
+	assert_true(en_el_tronco.begins_with("Sitting"),
+		"en el tronco, sentado (%s)" % en_el_tronco)
+
+	# Y EL TRABAJO NO: quien talla arrodillado junto al fuego sigue arrodillado. El tronco
+	# decide el OCIO, no lo que se está haciendo con las manos.
+	assert_eq(ClipsDeLaBanda.clip(Inhabitant.State.TRABAJANDO,
+		Profession.Speciality.TALLA, true),
+		ClipsDeLaBanda.clip(Inhabitant.State.TRABAJANDO, Profession.Speciality.TALLA, false),
+		"sentado o no, tallar es tallar")
+
+
+## QUIÉN ESTÁ SENTADO lo contesta el corro, y se contesta por el sitio de verdad: pasar al
+## lado a atizar el fuego no es estar sentado.
+func test_solo_esta_sentado_quien_esta_en_su_asiento() -> void:
+	var centro := Vector3(100.0, 0.0, 100.0)
+	var asiento := CorroDelHogar.asiento_de(centro, 0)
+	assert_true(asiento != Vector3.ZERO, "el corro reparte asiento al puesto 0")
+	assert_true(CorroDelHogar.sentado(centro, 0, asiento, 6.0), "en su sitio, sentado")
+	assert_false(CorroDelHogar.sentado(centro, 0, centro, 0.5),
+		"junto al fuego pero no en el tronco: de pie")
+	assert_false(CorroDelHogar.sentado(Vector3.ZERO, 0, asiento, 6.0),
+		"sin hogar levantado no hay corro en el que sentarse")
+
+	# Y mira AL FUEGO, que es para lo que se sienta uno ahí. El rumbo va en la convención
+	# del andador, `atan2(x, z)`.
+	var rumbo := CorroDelHogar.mirando_al_fuego(centro, asiento)
+	var hacia := Vector3(sin(rumbo), 0.0, cos(rumbo))
+	var deberia := (centro - asiento).normalized()
+	assert_lt(Traversal.en_llano(hacia, deberia), 0.01,
+		"sentado, se mira a la hoguera")
