@@ -321,31 +321,28 @@ func _resolve_season() -> void:
 ## malla, y rehacerlos cuesta veinte segundos. Lo demás —el agua, las máscaras, los sitios—
 ## sí cambia en caliente con la tecla E. Por eso hay que decidir bien este mar una vez.
 ##
-## **Con partida, el suyo. En modo Debug, el de la época que Debug abre. Sin nada, el de
-## hoy**, que es el mapa que se ve al abrirlo a secas.
+## **El de la época, siempre.** Con partida el suyo, en modo Debug el que Debug abre, y sin
+## nada el del Paleolítico, que es con el que arranca [GameState].
+##
+## *(Y hasta el 2026-09-19 tenía una segunda respuesta, «el mar de hoy mientras no haya
+## campamento». Parecía inofensiva porque `_ready` funda antes de acabar —línea del
+## `GameState.begin`—, pero el relieve y los ríos SE TRAZAN ANTES DE ESA LÍNEA: la misma
+## pregunta contestaba 0 m al construir la malla y -120 m diez líneas después. Resultado
+## medido en partida nueva: 273 199 celdas de plataforma emergida y sólo **1 312 con cauce**,
+## contra las 22 414 que daba el modo Debug por el mismo valle. La plataforma salía como una
+## llanura gris sin orografía y sin ríos, con el rótulo diciendo «-120 m, costa glacial».
+## Ver GRAFICOS §3.)*
 ##
 ## *(Hasta el 2026-09-17 esto se preguntaba en tres sitios con `GameState.home != null`, y
 ## el modo Debug —que no funda nada— se quedaba fuera: montaba el relieve con el mar de hoy
 ## y luego pintaba encima la costa glacial, así que la plataforma salía pelada y **sin un
 ## solo río**. El usuario: «cuando entro en debug el mapa regional no tiene ríos, pero
 ## cargo un mapa, vuelvo y vuelve a tener ríos… ¿ya hay más de una verdad?». Había dos.)*
-## Si una partida nueva se monta ya con el mar de la época. **Puesto a `false` el 2026-09-19
-## como paso de bisección**, no porque se haya cambiado de idea: al ponerlo en `true` —que es
-## lo que pidió el usuario— una partida nueva pasa a montarse a -120, y eso **enciende el
-## relleno de la plataforma emergida**, que antes no llegaba a ejecutarse nunca sin fundar.
-## Justo entonces apareció una cuña marrón de bordes rectos metida en el valle que no se ha
-## podido reproducir con sondas. Se apaga para saber si el culpable es ese relleno; se vuelve
-## a encender en cuanto se sepa. Ver GRAFICOS §3.
-const EPOCA_ANTES_DE_FUNDAR := false
-
-
 static func mar_del_mapa() -> float:
-	# La cota de la época, siempre que [constant EPOCA_ANTES_DE_FUNDAR] lo permita.
-	# `GameState.sea_level_m` vale -120 desde que arranca el juego y sólo lo cambian cargar
-	# una partida o el modo Debug.
-	if EPOCA_ANTES_DE_FUNDAR or GameState.home != null or ModoDebug.activo:
-		return GameState.sea_level_m
-	return 0.0
+	# `GameState.sea_level_m` vale -120 desde que arranca el juego, lo pone `GameState.begin`
+	# con la era y sólo lo cambian cargar una partida o el modo Debug. O sea: **ya es la
+	# respuesta**, siempre, y no hace falta preguntar nada más.
+	return GameState.sea_level_m
 
 
 ## Cambia el territorio a la cota del mar dada: mascara del terreno, frontera

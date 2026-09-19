@@ -147,6 +147,10 @@ static func begin(sites: SiteSet) -> void:
 		return
 
 	era = Site.Era.PALEOLITICO
+	# El mar va CON la era, no aparte: [RegionMap.mar_del_mapa] lee esto para montar el
+	# relieve y los ríos, y una partida nueva empezada tras cargar otra de otra época se
+	# habría quedado con el mar de aquélla.
+	sea_level_m = -120.0
 	year = 1
 	season = Subsistence.Season.PRIMAVERA
 	population = START_POPULATION

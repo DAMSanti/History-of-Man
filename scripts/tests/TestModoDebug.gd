@@ -276,11 +276,8 @@ func test_el_mapa_se_monta_con_el_mar_de_la_epoca_de_debug() -> void:
 
 	ModoDebug.activo = false
 	GameState.sea_level_m = -120.0
-	# Mientras `EPOCA_ANTES_DE_FUNDAR` esté apagado -paso de bisección del 2026-09-19- una
-	# partida nueva sin fundar vuelve a ver el mar de hoy. Cuando se encienda, esto pasa a
-	# esperar -120 y la prueba lo dice sola.
-	assert_near(Mapa.mar_del_mapa(), 0.0 if not Mapa.EPOCA_ANTES_DE_FUNDAR else -120.0, 0.01,
-		"sin partida y sin debug, el mar que diga el interruptor")
+	assert_near(Mapa.mar_del_mapa(), -120.0, 0.01,
+		"sin partida y sin debug, el mar de la época")
 
 	ModoDebug.activo = true
 	assert_near(Mapa.mar_del_mapa(), -120.0, 0.01,

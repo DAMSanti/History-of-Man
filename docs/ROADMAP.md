@@ -162,11 +162,22 @@ míos que rompieron la costura y hubo que revertir.
   > parseo que dejó `TerrainSurround` **entero sin compilar** — y la suite pasó en verde,
   > porque no instancia el contorno. Se vio corriendo el juego.
 
-- [ ] **El mapa regional sobre la plataforma emergida**: orografía, ríos y rías con el mar
-  de la época en una partida nueva. Hoy `RegionMap.EPOCA_ANTES_DE_FUNDAR` está en `false`
-  desde un paso de bisección; encenderlo traía una cuña marrón cuya causa sigue sin
-  encontrarse —el relleno del mar ya está descartado por medida: cambia **0 celdas** en el
-  contorno—.
+- [x] **El mapa regional sobre la plataforma emergida**: orografía, ríos y rías con el mar
+  de la época en una partida nueva.
+
+  > **HECHO (2026-09-19).** No hacía falta el interruptor `EPOCA_ANTES_DE_FUNDAR` —se ha
+  > borrado—: hacía falta quitarle a `mar_del_mapa()` su segunda respuesta. El único sitio
+  > que contesta con qué mar se monta el mapa **contestaba distinto según cuándo**, porque
+  > `RegionMap._ready()` funda a media función y el relieve y los ríos se congelan veinte
+  > líneas antes. El rótulo decía «−120 m, costa glacial» sobre una llanura gris.
+  >
+  > Medido con `tests/PartidaNuevaProbe.gd` (nueva, entra **sin Debug y sin guardado**, que
+  > es como entra el jugador): celdas de plataforma emergida con cauce, **1 312 → 22 414**,
+  > que son exactamente las del modo Debug; relieve medio sobre el mar, 79,5 → 103,2 m.
+  >
+  > **Por qué se coló**: la sonda que vigilaba esto, `DebugCaptura`, entraba por el modo
+  > Debug, que era el único camino sano. Una sonda que sólo recorre el camino bueno no
+  > vigila nada.
 
 ### La banda: cuerpos, oficios en las manos y ropa por era
 

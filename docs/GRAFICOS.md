@@ -481,6 +481,53 @@ emergida y 22 414 con cauce pintado** (antes, ninguna). Lo enseña `tests/DebugC
 La moraleja, que ya estaba escrita en CLAUDE.md y volvió a pasar: **una pregunta, un sitio
 que la contesta**. Las dos quejas del usuario eran el mismo fallo visto desde dos mapas.
 
+#### Y la verdad seguía sin ser sola: un sitio, pero dos momentos (2026-09-19)
+
+`mar_del_mapa()` quedó siendo el único sitio que contesta, sí, pero **contestaba distinto
+según cuándo se le preguntara**, porque la respuesta incluía «el mar de hoy mientras no haya
+campamento» y `RegionMap._ready()` funda a media función:
+
+```
+_setup_terrain()            ← mar_del_mapa() = 0 m     (elige la caché de la malla)
+terrain.generate()          ← 0 m                       (relieve y ríos, CONGELADOS)
+GameState.begin(_site_set)  ← funda
+_apply_era(mar_del_mapa())  ← -120 m                    (agua, máscara, bandas)
+```
+
+El rótulo decía «−120 m, costa glacial» y «territorio: Cantabria + plataforma emergida»
+sobre **una llanura gris sin orografía y casi sin ríos**, porque el relieve y los cauces se
+habían trazado veinte líneas antes, a cota cero. Y el modo Debug salía bien, así que la
+sonda que vigilaba esto —`DebugCaptura`— no lo veía: entraba por el único camino sano.
+
+Medido en partida nueva con `tests/PartidaNuevaProbe.gd` (nueva, y entra **sin Debug y sin
+guardado**, que es como entra el jugador):
+
+| partida nueva, sitio 56 | antes | ahora |
+|---|---|---|
+| celdas de plataforma emergida | 273 199 | 255 287 |
+| **con cauce pintado** | **1 312** | **22 414** |
+| relieve medio sobre el mar | 79,5 m | 103,2 m |
+
+Las 22 414 son exactamente las del modo Debug: los dos caminos ven por fin el mismo mapa.
+
+El arreglo es quitar la segunda respuesta, no añadir un interruptor: `mar_del_mapa()` es hoy
+`return GameState.sea_level_m` y nada más —ese valor ya vale −120 desde que arranca el
+juego, lo pone `GameState.begin` junto con la era, y sólo lo cambian cargar una partida o el
+modo Debug—. El `EPOCA_ANTES_DE_FUNDAR` que quedó del 2026-09-19 como paso de bisección
+**se ha borrado**: no hacía falta un interruptor, hacía falta quitar el `else`.
+
+Y de paso, `GameState.begin` pone ahora el mar **junto a la era**. Estaban sueltos, y una
+partida nueva empezada después de cargar otra de otra época se habría quedado con el mar de
+aquélla.
+
+**La cuña marrón: no se reproduce.** Era el motivo de la bisección. Con el arreglo puesto,
+`PartidaNuevaProbe` funda el valle **en frío por el camino del jugador** —mapa regional a
+−120, valle sin preparar, con lo que el relleno del mar de hoy sí se ejecuta— y de las
+cuatro vistas del valle no sale en ninguna. Queda dicho para que nadie lo dé por cerrado:
+**no se ha encontrado la causa, se ha dejado de ver**; lo más probable es que se la llevara
+por delante alguno de los arreglos del contorno de esos días —la resolución del faldón del
+`Limite`, o la alineación de las ocho casillas—. Si vuelve, la sonda ya existe.
+
 ### ¿Son ríos de verdad? La auditoría del agua (2026-09-17)
 
 El usuario lo pidió con todas las letras: «comprueba que todos los ríos que hayas metido,
