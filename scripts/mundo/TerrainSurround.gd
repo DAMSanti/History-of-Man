@@ -481,8 +481,21 @@ func montar_el_mar(terrain: TerrainGenerator) -> void:
 func build_border(terrain: TerrainGenerator) -> void:
 	var size_x := float(terrain.terrain_size.x)
 	var size_z := float(terrain.terrain_size.y)
-	var steps := 256
+	# UN PASO POR MUESTRA DEL TERRENO, no 256 por lado.
+	#
+	# **El fallo que cierra** (2026-09-19, jugando): «hay un salto… placas grises metidas en
+	# el terreno». Con 256 pasos sobre un lado de 4.505 m salía un vértice cada 17,6 m, y el
+	# borde de arriba de este faldón es una RECTA entre vértice y vértice. Donde el terreno
+	# baja entre dos muestras —un desfiladero, el tajo por donde sale el río— la recta pasa
+	# por encima del suelo y el faldón asoma: una tapa gris oscura sobre el valle, del color
+	# de este material. Se veía en «Cueva los pendios», justo donde el río corta el borde.
+	#
+	# El terreno del valle va a 5 m por muestra, así que el faldón va igual: así su borde no
+	# puede saltarse un tajo.
+	var steps := maxi(int(size_x / maxf(terrain.meters_per_unit, 1.0)), 256)
 	var drop := 260.0
+	# Y un dedo por debajo del suelo, para que no asome por el redondeo de la interpolación.
+	var margen := 1.5
 
 	var vertices := PackedVector3Array()
 	var indices := PackedInt32Array()
@@ -497,8 +510,17 @@ func build_border(terrain: TerrainGenerator) -> void:
 				2: point = Vector2((1.0 - t) * size_x, size_z)
 				_: point = Vector2(0.0, (1.0 - t) * size_z)
 
-			# Arriba, justo en la cota del terreno; abajo, hundido
+			# Arriba, justo en la cota del terreno; abajo, hundido. Se toma la cota MÁS BAJA
+			# de un pequeño entorno: si el faldón se queda por debajo del suelo no se ve, y
+			# si se queda por encima se ve siempre.
+			var paso := size_x / float(steps)
 			var top := terrain.get_height_at(Vector3(point.x, 0.0, point.y))
+			for lado_x: float in [-paso, paso]:
+				top = minf(top, terrain.get_height_at(
+					Vector3(clampf(point.x + lado_x, 0.0, size_x), 0.0, point.y)))
+				top = minf(top, terrain.get_height_at(
+					Vector3(point.x, 0.0, clampf(point.y + lado_x, 0.0, size_z))))
+			top -= margen
 			vertices.append(Vector3(point.x, top, point.y))
 			vertices.append(Vector3(point.x, top - drop, point.y))
 
