@@ -54,6 +54,12 @@ func _relieve(lado: int, metros: float, con_agua: bool, sal: float = 0.0) -> Hei
 		for i in range(agua.size()):
 			agua[i] = 1.0 if i % 7 == 0 else 0.0
 		datos.river_mask = agua
+		# Y LA HIDROGRAFÍA QUE LA PINTÓ. Tener máscara no basta para dar un contorno por
+		# bueno: se midió en el valle 56 (2026-09-19) un contorno con 30.742 celdas de agua
+		# y **cero cauces de OSM guardados**, y sus ríos se acababan en la raya del recuadro
+		# porque el agua sólo estaba donde la había dejado el relleno del mar. Ver la puerta
+		# de `PreparaValle._rehacer_el_contorno`.
+		datos.agua_de_osm = {"channels": [{"points": []}], "bodies": []}
 	return datos
 
 
@@ -205,3 +211,25 @@ func _ruta_de_pruebas() -> String:
 func _en_la_carpeta_de_pruebas(preparador: PreparaValle, surround: HeightmapData) -> void:
 	preparador.carpeta_de_los_valles = CARPETA
 	_con_contorno(surround)
+
+
+## UNA MÁSCARA DE AGUA NO BASTA PARA DAR UN CONTORNO POR BUENO.
+##
+## La puerta preguntaba «¿tiene algún píxel de agua?», y eso se cumple aunque nunca se le
+## haya traído la hidrografía: el relleno del mar de hoy le toca la máscara por su cuenta.
+## Medido en el valle 56 el 2026-09-19: `pipeline_version` al día, 30.742 celdas de agua y
+## **cero cauces de OSM guardados**. Resultado, el que veía el usuario: el río llegaba a la
+## raya del recuadro y se acababa, porque el agua sólo estaba donde la había dejado el
+## relleno. De 61 ríos que tocaban el borde, continuaban 3.
+func test_un_contorno_con_mascara_pero_sin_hidrografia_se_rehace() -> void:
+	var preparador := _preparador(_relieve(8, 8.0, true, 100.0),
+		{"channels": [{"points": []}], "bodies": []})
+	# Fino y con máscara, pero sin la hidrografía que la explique: hay que traerla.
+	var cojo := _relieve(8, 8.0, true, 0.0)
+	cojo.agua_de_osm = {}
+	_en_la_carpeta_de_pruebas(preparador, cojo)
+	var toco := preparador._rehacer_el_contorno(_sitio(), _relieve(8, 8.0, true))
+	assert_true(toco, "un contorno sin hidrografía se rehace aunque tenga máscara")
+	var despues: HeightmapData = load(_ruta_de_pruebas())
+	assert_false((despues.agua_de_osm as Dictionary).is_empty(),
+		"y se le queda guardada, para no volver a bajarla cada vez")
