@@ -414,6 +414,10 @@ func test_si_el_encuadre_no_cabe_la_pared_se_centra() -> void:
 func _banda_con_algo_que_contar() -> SettlementSim:
 	var sim := SettlementSim.new()
 	sim.chronicle = Chronicle.new()
+	# EL ÁRBOL, que no viene puesto. Sin él, `sim.techs` es null y toda prueba que pregunte
+	# por una técnica revienta ANTES de su primer assert — y eso no falla: PASA. Se cazó el
+	# 2026-09-19 porque el total de comprobaciones no subía al añadir cuatro pruebas.
+	sim.techs = TechTree.new()
 	sim.game_seed = 3
 	var covalanas: Dictionary = ArteDeLosDeAntes.CUEVAS[5]
 	sim.pinturas.elementos = [{"name": String(covalanas["nombre"]),
@@ -452,8 +456,9 @@ func test_la_sala_trae_la_lista_de_lo_que_falta_por_pintar() -> void:
 ## tiene que distinguir «te falta ocre» de «aquí no se pinta». Por eso
 ## [Pinturas.por_que_no_se_pinta_en] toma la cueva.
 func test_en_otra_cueva_el_boton_dice_que_se_pinta_en_la_de_la_banda() -> void:
-	var sim := _banda_con_algo_que_contar()
-	sim.techs.unlock(TechTree.Tech.ARTE)
+	# CON TODO LO DEMÁS PUESTO, o la respuesta sería «hace falta el hogar» y no la que se
+	# quiere comprobar: la cueva se mira DESPUÉS de lo que se lleva dentro.
+	var sim := _lista_para_pintar()
 	sim.exploracion._sabido[1] = {"explorada": true, "pintable": true}
 	var aqui := sim.pinturas.por_que_no_se_pinta_en(1)
 	assert_true(aqui.contains("cueva de la banda"),
@@ -468,7 +473,7 @@ func test_en_otra_cueva_el_boton_dice_que_se_pinta_en_la_de_la_banda() -> void:
 ## Mandar pintar desde la sala encola el relato: el botón hace lo que dice.
 func test_el_boton_de_la_sala_manda_pintar() -> void:
 	var sim := _banda_con_algo_que_contar()
-	sim.techs.unlock(TechTree.Tech.ARTE)
+	sim.techs.known[TechTree.Tech.ARTE] = true
 	sim.camp_built[CampProjects.Kind.HOGAR] = true
 	sim.toolkit.craft(Tool.Kind.LAMPARA, Tool.Stuff.CUARCITA, 0.6)
 	sim.store.add(Materia.Kind.OCRE, 20.0)
@@ -483,3 +488,120 @@ func test_el_boton_de_la_sala_manda_pintar() -> void:
 	assert_true(sim.painting_queue != null, "al pulsarlo, la pared queda empezada")
 	sala.free()
 	sim.free()
+
+
+# --- ver pintar la pared ---------------------------------------------------------
+
+## Una banda que puede pintar: técnica, hogar, lámpara, ocre y grasa, y un relato pintable.
+func _lista_para_pintar() -> SettlementSim:
+	var sim := _banda_con_algo_que_contar()
+	sim.techs.known[TechTree.Tech.ARTE] = true
+	sim.camp_built[CampProjects.Kind.HOGAR] = true
+	sim.toolkit.craft(Tool.Kind.LAMPARA, Tool.Stuff.CUARCITA, 0.6)
+	sim.store.add(Materia.Kind.OCRE, 20.0)
+	sim.store.add(Materia.Kind.GRASA, 20.0)
+	return sim
+
+
+## EL SITIO SE RESERVA AL MANDAR PINTAR, no al terminar, y la figura empieza en cero.
+##
+## Es lo que permite ver cómo se llena la pared. Hasta el 2026-09-19 la figura se colocaba
+## al acabar, así que durante toda la obra no había nada que enseñar y luego aparecía de
+## golpe: «al pintar algo, que vea cómo se va pintando en la pared».
+func test_al_mandar_pintar_la_figura_ya_esta_en_la_pared_y_vacia() -> void:
+	var sim := _lista_para_pintar()
+	var pared := sim.pinturas.pared_de(0)
+	var antes := pared.figuras.size()
+
+	assert_true(sim.pinturas.queue_painting(sim.tales[0]), "se manda pintar")
+	assert_eq(pared.figuras.size(), antes + 1, "la figura ya tiene su sitio en la roca")
+	var figura: Dictionary = pared.figuras[pared.figuras.size() - 1]
+	assert_eq(float(figura["pintado"]), 0.0, "y empieza sin un trazo")
+	assert_false(bool(figura["documentada"]), "es de la banda, no de los de antes")
+	sim.free()
+
+
+## Y VA SUBIENDO CON LAS JORNADAS hasta uno, que es cuando se da por terminada.
+func test_la_figura_se_va_llenando_y_al_final_esta_entera() -> void:
+	var sim := _lista_para_pintar()
+	var pared := sim.pinturas.pared_de(0)
+	var quien := Inhabitant.create(0, Vector3.ZERO, sim._rng)
+	sim.people.append(quien)
+	assert_true(sim.pinturas.queue_painting(sim.tales[0]), "se manda pintar")
+	var figura: Dictionary = pared.figuras[pared.figuras.size() - 1]
+
+	# Una pizca de jornada: ni terminada ni en blanco.
+	sim.pinturas._paint_wall(quien, SettlementSim.PINTURA_JORNADAS * 0.4)
+	var medio: float = float(figura["pintado"])
+	assert_gt(medio, 0.0, "con parte de la jornada hecha, ya hay trazos")
+	assert_lt(medio, 1.0, "pero no está terminada (%.2f)" % medio)
+	assert_true(sim.painting_queue != null, "y la pared sigue empezada")
+
+	# Y SE INSISTE HASTA QUE SE TERMINA. Cada vuelta suma `fracción * lo que rinda la
+	# persona`, y eso rinde menos de uno: con una sola vuelta de una jornada se queda al
+	# 87 % y la prueba mentía sobre por qué.
+	for _vuelta in range(20):
+		if sim.painting_queue == null:
+			break
+		sim.pinturas._paint_wall(quien, SettlementSim.PINTURA_JORNADAS)
+	assert_eq(float(figura["pintado"]), 1.0, "al terminar, la figura está entera")
+	assert_true(sim.painting_queue == null, "y ya no hay pared empezada")
+	assert_eq(sim.paintings.size(), 1, "el relato queda pintado")
+	sim.free()
+
+
+## SIN OCRE AL FINAL, LO EMPEZADO SE BORRA. El sitio estaba reservado desde el primer día,
+## así que una pared que se queda a medias no puede dejar media figura en la roca para
+## siempre y sin relato detrás.
+func test_si_se_queda_sin_ocre_no_queda_media_figura() -> void:
+	var sim := _lista_para_pintar()
+	var pared := sim.pinturas.pared_de(0)
+	var antes := pared.figuras.size()
+	var quien := Inhabitant.create(0, Vector3.ZERO, sim._rng)
+	sim.people.append(quien)
+	assert_true(sim.pinturas.queue_painting(sim.tales[0]), "se manda pintar")
+	assert_eq(pared.figuras.size(), antes + 1, "la figura tiene su sitio")
+
+	# Se gasta el ocre a mitad de obra, que es el caso que el juego ya contemplaba.
+	sim.store.take(Materia.Kind.OCRE, sim.store.amount(Materia.Kind.OCRE))
+	sim.pinturas._paint_wall(quien, SettlementSim.PINTURA_JORNADAS * 2.0)
+
+	assert_eq(pared.figuras.size(), antes, "la figura a medias se quita de la roca")
+	assert_eq(sim.paintings.size(), 0, "y no cuenta como pintada")
+	assert_true(sim.tales[0].sitio.is_empty(), "el relato se queda sin sitio")
+	sim.free()
+
+
+## LA SALA DIBUJA HASTA DONDE VAYA, no la figura entera.
+func test_la_sala_dibuja_solo_los_trazos_hechos() -> void:
+	var sim := _lista_para_pintar()
+	assert_true(sim.pinturas.queue_painting(sim.tales[0]), "se manda pintar")
+	var pared := sim.pinturas.pared_de(0)
+	var figura: Dictionary = pared.figuras[pared.figuras.size() - 1]
+
+	var sala := SalaDeLaCueva.new()
+	sala.montar(sim, 0, "Covalanas")
+
+	# SE CUENTAN LOS PÍXELES PINTADOS, que es lo que de verdad se ve. Contar figuras no
+	# vale: una figura a medias sigue siendo una figura.
+	var en_blanco := _pigmento(sala._pintar())
+	figura["pintado"] = 0.4
+	var a_medias := _pigmento(sala._pintar())
+	figura["pintado"] = 1.0
+	var entera := _pigmento(sala._pintar())
+
+	assert_gt(a_medias, en_blanco, "con el 40 % hecho ya hay pigmento en la roca")
+	assert_gt(entera, a_medias,
+		"y entera hay más que a medias (%d contra %d píxeles)" % [entera, a_medias])
+	sala.free()
+	sim.free()
+
+
+## Cuántos píxeles de la pared llevan pigmento.
+func _pigmento(imagen: Image) -> int:
+	var cuantos := 0
+	for y in range(0, imagen.get_height(), 3):
+		for x in range(0, imagen.get_width(), 3):
+			if imagen.get_pixel(x, y).a > 0.05:
+				cuantos += 1
+	return cuantos

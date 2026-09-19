@@ -128,7 +128,7 @@ func montar(sim: SettlementSim, cueva: int, nombre: String) -> void:
 	_colocar_camara()
 
 	_levantar_rotulos(nombre, arte)
-	_pintadas = sim.paintings.size()
+	_pintadas = -1
 	_levantar_el_pintadero()
 
 
@@ -193,13 +193,27 @@ func _pintar() -> Image:
 		var motivo := String(figura["motivo"])
 		if not Motivos.FIGURAS.has(motivo):
 			continue
+		# CUÁNTO LLEVA PINTADO, de 0 a 1. Lo que está en la pared desde antes vale 1; la
+		# que se está pintando ahora va subiendo sola —ver [Pinturas.queue_painting]—, y es
+		# lo que deja ver cómo aparece trazo a trazo en vez de salir de golpe.
+		var pintado: float = float(figura.get("pintado", 1.0))
+		if pintado <= 0.0:
+			continue
 		var color: Color = COLORES.get(String(figura["color"]), COLORES["rojo"])
 		var tecnica := String((Motivos.FIGURAS[motivo] as Dictionary)["tecnica"])
 		if tecnica == "mano_negativa":
-			_soplar_mano(datos, ancho, alto, figura, color)
+			# Una mano soplada no se hace a trazos: o está o no está. Se sopla de una vez
+			# al pasar de la mitad, que es cuando quien pinta ya tiene el pigmento en la
+			# boca y la mano puesta.
+			if pintado >= 0.5:
+				_soplar_mano(datos, ancho, alto, figura, color)
 		else:
-			for forma: Array in Motivos.trazos_de(motivo):
-				_rellenar(datos, ancho, alto, _a_pixeles(forma, figura), color, 0.92)
+			# TRAZO A TRAZO Y EN ORDEN, que es como se pinta: el contorno primero y el
+			# relleno después, tal como los da [Motivos.trazos_de].
+			var trazos := Motivos.trazos_de(motivo)
+			var hasta := int(ceil(float(trazos.size()) * pintado))
+			for i in range(mini(hasta, trazos.size())):
+				_rellenar(datos, ancho, alto, _a_pixeles(trazos[i], figura), color, 0.92)
 		figuras_dibujadas += 1
 	return Image.create_from_data(ancho, alto, false, Image.FORMAT_RGBA8, datos)
 
@@ -527,7 +541,10 @@ func _ver_como_se_pinta(delta: float) -> void:
 	if _refresco < 0.5:
 		return
 	_refresco = 0.0
-	var ahora := _sim.paintings.size()
+	# CUÁNTAS FIGURAS HAY **Y CUÁNTO LLEVA LA DE AHORA**: sin lo segundo, la pared sólo se
+	# rehacía al terminar una pintura y no se vería avanzar.
+	var ahora := _sim.paintings.size() * 1000 + int(_sim.painting_progress
+		/ maxf(SettlementSim.PINTURA_JORNADAS, 0.0001) * 40.0)
 	if ahora != _pintadas:
 		_pintadas = ahora
 		if _material != null:

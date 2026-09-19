@@ -1285,11 +1285,39 @@ func _frenar_si_se_mira_de_cerca() -> void:
 	sim.freno_de_la_vista = CamaraLenta.freno(camera.orbit_distance, camera.min_distance)
 
 
+## Qué relato se estaba pintando la última vez que se miró, para no abrir la sala dos veces.
+var _lo_que_se_pintaba: Tale = null
+
+
+## AL EMPEZAR UNA PARED, SE BAJA A VERLA. Petición del usuario del 2026-09-19: «al pintar
+## algo, automáticamente me lleve a la vista 3D de la cueva, y vea cómo se va pintando».
+##
+## Vive aquí y no en la simulación por lo de siempre: `scripts/sim/` no abre ventanas. Lo
+## que hace la simulación es reservar el sitio de la figura y llenarla; esto sólo se entera
+## de que ha empezado una y lleva al jugador delante.
+##
+## **Una vez por pared.** Si el jugador cierra la sala no se le vuelve a meter dentro: se
+## le ha enseñado, y lo que quede se ve entrando cuando quiera.
+func _bajar_a_ver_como_se_pinta() -> void:
+	if sim.painting_queue == _lo_que_se_pintaba:
+		return
+	_lo_que_se_pintaba = sim.painting_queue
+	if sim.painting_queue == null or ui == null:
+		return
+	var cueva := sim.exploracion.cueva_de_la_banda
+	if not sim.pinturas.por_que_no_se_entra(cueva).is_empty():
+		return
+	var sala := SalaDeLaCueva.new()
+	ui.add_child(sala)
+	sala.montar(sim, cueva, sim.nombre_del_campamento)
+
+
 func _process(_delta: float) -> void:
 	if sim == null:
 		return
 	if _de_visita_con_reloj:
 		Campamentos.a_la_fecha(sim)
+	_bajar_a_ver_como_se_pinta()
 	Cronometro.abre_el_fotograma()
 	Cronometro.tramo_raiz("escena principal (DemoMain)")
 	_frenar_si_se_mira_de_cerca()

@@ -897,6 +897,43 @@ no se pinchan ni salen en listas. La ficha y el botón del valle, en
 > descubre lo de dentro y nada de fuera» y comprobaba bien la regla de entonces.
 > Lo que estaba mal era la regla.
 
+### Ver pintar la pared (2026-09-19)
+
+Petición del usuario: «pintar los hitos no es algo que sea un % y aparezca; quiero que al
+pintar algo, automáticamente me lleve a la vista 3D de la cueva y vea cómo se va pintando en
+la pared». Decisión suya: **desde que empieza, avanzando con las jornadas, y tardando mucho
+menos**.
+
+Lo que cambia, y es un cambio de **cuándo** más que de qué:
+
+- **El sitio de la figura se reserva al MANDAR pintar**, no al terminar. Era lo que hacía
+  imposible enseñarlo: `_paint_wall` llamaba a `colocar()` al acabar, así que durante toda
+  la obra no había nada en la roca y luego la figura aparecía de golpe. Ahora
+  `queue_painting` le busca su hueco con **cero trazos hechos**.
+- **Cada figura sabe cuánto lleva pintado**, un `pintado` de 0 a 1 en su diccionario. Quien
+  pinta lo sube cada jornada; como los diccionarios van por referencia, subirlo en la
+  simulación es subirlo en la pared.
+- **La sala dibuja los trazos hasta donde vaya**, en el orden en que los da `Motivos` —el
+  contorno primero, el relleno después—. Una mano soplada no se hace a trazos: o está o no,
+  así que se sopla entera al pasar de la mitad.
+- **Se baja a verla sola** al empezar una pared (`DemoMain._bajar_a_ver_como_se_pinta`), una
+  vez por obra: si el jugador cierra la sala no se le vuelve a meter dentro.
+- **Y si se queda sin ocre a media pared, lo empezado se borra.** El sitio estaba pedido
+  desde el primer día; sin esto quedaría media figura en la roca para siempre y sin relato
+  detrás.
+
+**El tiempo de pintado baja de dos jornadas a media**, y es una **decisión del usuario, no
+una medida**: desde que la pared se ve llenarse, el tiempo de pintado es algo que se
+**mira**, y dos días de partida viendo aparecer una figura no es una escena, es una espera.
+El coste en grasa **se queda donde estaba** y se le rehace el porqué: estaba justificado
+como «media porción por jornada» y esa cuenta lo habría dejado en un cuarto de porción, o
+sea en nada. Lo que se quiso al ponerlo es que pintar pida tener sebo guardado, y eso no
+depende de lo que se tarde en dibujar.
+
+Medido en `TestPared`: con el 40 % hecho hay pigmento en la roca y **menos píxeles que con
+la figura entera**; se cuentan píxeles y no figuras, porque una figura a medias sigue siendo
+una figura.
+
 ### Un solo botón para el fondo de la cueva (2026-09-19)
 
 Eran dos —«Pintar la pared del fondo» y «Entrar a mirar la pared»— y desde que el botón de

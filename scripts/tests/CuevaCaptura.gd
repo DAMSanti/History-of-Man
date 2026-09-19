@@ -29,11 +29,19 @@ func _init() -> void:
 		["covalanas", 5, 0, 0],
 		["el_castillo", 1, 0, 0],
 		["pintadero", -1, 1, 3],
+		# Y UNA PARED A MEDIO PINTAR, que es lo que el usuario pidió ver: la figura con
+		# parte de sus trazos hechos y el resto por hacer (2026-09-19).
+		["a_medias", -1, 2, 0],
 	]
 	var peor := 0.0
 	var gpu_peor := 0.0
 	for caso: Array in casos:
 		var sim := _sim(int(caso[1]), int(caso[2]), int(caso[3]))
+		if String(caso[0]) == "a_medias":
+			# Se coloca a mano una figura con el 40 % hecho: lo que se mira aquí es que la
+			# sala DIBUJE una figura a medias, no el camino por el que llega a estarlo
+			# —eso lo fijan las pruebas de `TestPared`—.
+			sim.pinturas.pared_de(0).colocar("uro", "rojo", false, 0.4)
 		var capa := CanvasLayer.new()
 		root.add_child(capa)
 		var sala := SalaDeLaCueva.new()

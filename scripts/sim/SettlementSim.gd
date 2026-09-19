@@ -3246,18 +3246,39 @@ var paintings: Array[Tale] = []
 var painting_queue: Tale = null
 var painting_progress: float = 0.0
 
+## LA FIGURA QUE SE ESTÁ PINTANDO, ya colocada en la pared con sus trazos a medias.
+##
+## Se reserva su sitio al mandar pintar y se va llenando —ver [Pinturas.queue_painting]—,
+## que es lo que permite ver cómo aparece en la roca en vez de que salga de golpe al
+## terminar. Es el MISMO diccionario que tiene la pared: los diccionarios van por
+## referencia, así que subirle `pintado` aquí lo sube allí.
+##
+## No se guarda con la partida: se rehace de `painting_progress` al montar la pared.
+var painting_figura: Dictionary = {}
+
 ## Lo que cuesta poner un relato en la pared.
 ##
 ## Jornadas de alguien del hogar, ocre para el pigmento y grasa para la
-## lámpara. Los tres son de balanceo y están sin calibrar, como todo lo que
-## decide cuánto duele algo; lo que está decidido es que cueste, y que lo que
-## cueste sea justo lo que hace falta de verdad para pintar dentro de una
-## cueva: color, luz y tiempo.
-const PINTURA_JORNADAS := 2.0
+## lámpara. Los tres son de balanceo, como todo lo que decide cuánto duele algo;
+## lo que está decidido es que cueste, y que lo que cueste sea justo lo que hace
+## falta de verdad para pintar dentro de una cueva: color, luz y tiempo.
+##
+## **Media jornada, y es una DECISIÓN del usuario, no una medida** (2026-09-19): «que se
+## tarde mucho menos en pintar». Eran dos jornadas, puestas sin calibrar. Lo que cambió es
+## para qué sirve el número: desde que la pared se ve llenarse trazo a trazo, el tiempo de
+## pintado es algo que el jugador **mira**, y dos días de partida mirando una figura
+## aparecer no es una escena, es una espera.
+const PINTURA_JORNADAS := 0.5
 const PINTURA_OCRE := 3.0
 
-## Y la grasa de la lámpara. Media porción por jornada de pintado: una lámpara
-## de las de Lascaux arde unas horas con muy poca.
+## Y la grasa de la lámpara: lo que arde una lámpara de sebo en una sesión al fondo de la
+## cueva.
+##
+## **No se deriva ya de las jornadas.** Lo estaba —«media porción por jornada»— y al bajar
+## [PINTURA_JORNADAS] de dos a media el 2026-09-19 esa cuenta habría dejado el coste en un
+## cuarto de porción, o sea en nada. Lo que se quiso al poner este coste es que **pintar
+## pida tener sebo guardado**, y eso no depende de lo que se tarde en dibujar: se queda
+## donde estaba, y el porqué es éste y no aquél.
 const PINTURA_GRASA := 1.5
 
 ## Cuánto sube el techo de lo que se aprende de oídas, por relato pintado de
@@ -3304,8 +3325,8 @@ func tell_tale(tale: Tale) -> void:
 			moment.options = [
 				{
 					"label": "Pintarlo en la cueva",
-					"hint": "Dos jornadas del hogar, %.0f de ocre y grasa para "
-						% PINTURA_OCRE
+					"hint": "%.1f jornadas del hogar, %.0f de ocre y grasa para "
+						% [PINTURA_JORNADAS, PINTURA_OCRE]
 						+ "la lámpara. Lo que queda en la pared se aprende "
 						+ "aunque no quede nadie que estuviera allí.",
 					"on_pick": func() -> void: pinturas.queue_painting(tale),

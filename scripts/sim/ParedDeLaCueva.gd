@@ -398,7 +398,12 @@ static func celda_de(p: Vector2, figura: Dictionary) -> int:
 ## medias —14 de 96 figuras pisaban a otra con ocho por pared—. El usuario decidió
 ## entonces que el criterio se mide contra los sitios LIBRES, y con eso el 90 % ya
 ## no hacía falta: «la pared llena» vuelve a significar llena.
-func colocar(motivo: String, color: String, documentada: bool) -> Dictionary:
+## `pintado` es cuánto lleva hecho, de 0 a 1. Uno, lo normal: una figura que ya está. Cero,
+## la que se acaba de empezar — el sitio **se reserva al mandar pintar** para poder ver cómo
+## se va llenando, y antes del 2026-09-19 se reservaba al terminar, que es justo lo que hacía
+## imposible enseñarlo (SISTEMAS §13).
+func colocar(motivo: String, color: String, documentada: bool,
+		pintado: float = 1.0) -> Dictionary:
 	var lado := float(TAMANO_M.get(motivo, 1.0))
 	var libre := _buscar(motivo, lado, false, -1)
 	var sitio := libre
@@ -426,6 +431,10 @@ func colocar(motivo: String, color: String, documentada: bool) -> Dictionary:
 		"motivo": motivo, "color": color, "centro": sitio["centro"],
 		"lado": sitio["lado"], "giro": sitio["giro"], "espejo": sitio["espejo"],
 		"documentada": documentada,
+		# Cuánto lleva pintado, de 0 a 1. Lo lee [SalaDeLaCueva], que dibuja los trazos
+		# hasta donde llegue. El diccionario se guarda por referencia, así que quien pinta
+		# sube este número y la pared se entera sola.
+		"pintado": clampf(pintado, 0.0, 1.0),
 	}
 	poner(figura)
 	return figura
@@ -456,6 +465,30 @@ func poner(figura: Dictionary) -> void:
 					if _ocupada[k] >= 0 and bool(figuras[_ocupada[k]]["documentada"]):
 						continue
 					_ocupada[k] = indice
+
+
+## QUITA DE LA ROCA UNA FIGURA QUE NO LLEGÓ A PINTARSE.
+##
+## Hace falta desde que el sitio se reserva **al mandar pintar** y no al terminar (ver
+## [colocar]): una pared que se queda sin ocre a medias tendría si no media figura en la
+## roca para siempre, y sin relato detrás.
+##
+## Sólo se puede deshacer limpiamente **la última**, porque `_ocupada` guarda el ÍNDICE de
+## cada figura y sacar una de en medio correría todos los demás. Y la última es justamente
+## la que se acaba de reservar, que es el único caso que esto tiene que atender. Si no lo
+## fuera —una pared rehecha a mitad de obra—, se deja en cero trazos: no se dibuja nada, que
+## es lo que importa, aunque su hueco quede pedido.
+func quitar(figura: Dictionary) -> void:
+	if figuras.is_empty():
+		return
+	if figuras[figuras.size() - 1] != figura:
+		figura["pintado"] = 0.0
+		return
+	var indice := figuras.size() - 1
+	for k in range(_ocupada.size()):
+		if _ocupada[k] == indice:
+			_ocupada[k] = -1
+	figuras.remove_at(indice)
 
 
 ## El mejor sitio para una figura: libre, o encima de la figura `sobre` si se da.

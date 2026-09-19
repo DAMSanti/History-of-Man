@@ -193,7 +193,17 @@ salir la tarjeta de «Un sitio con nombre»; la Crónica, el diario y el mapa si
 todas son reglas y el estado se construye en vez de simularse. La 6 es la única que necesita
 ventana, y son dos capturas: **un par de minutos**. No hay ninguna corrida larga.
 
-### Ver pintar la pared (depurar del 2026-09-19, noche)
+### ~~Ver pintar la pared~~ — cerrado (2026-09-19)
+
+> **HECHO.** Relato en SISTEMAS §13. Lo de abajo era el plan y se cumplió entero, incluida
+> la decisión sobre las jornadas. Suite: 1 750 pruebas, 9 494 comprobaciones.
+>
+> **Y destapó dos pruebas mías que pasaban sin comprobar nada**: el ayudante de `TestPared`
+> no creaba el árbol de técnicas y `TechTree.unlock()` no existe, así que reventaban antes
+> de su primer assert. Lo delató el total de comprobaciones, que no subía al añadir cuatro
+> pruebas. Arregladas: Pared pasa de 57 a 82 comprobaciones.
+
+#### El plan que se siguió
 
 **Pendiente, y es lo más grande de los tres que pidió el usuario.** «Al pintar algo,
 automáticamente me lleve a la vista 3D de la cueva, y vea cómo se va pintando en la pared».

@@ -257,6 +257,15 @@ func queue_painting(tale: Tale) -> bool:
 		return false
 	sim.painting_queue = tale
 	sim.painting_progress = 0.0
+	# EL SITIO SE RESERVA AHORA, no al terminar. Es lo que permite ver cómo se va llenando
+	# la pared: la figura ya está en su hueco, con cero trazos hechos, y quien pinta va
+	# subiendo `pintado`. Petición del usuario del 2026-09-19: «al pintar algo, que vea
+	# cómo se va pintando en la pared». Reservarlo al terminar dejaba la pared sin nada que
+	# enseñar durante toda la obra, y la figura aparecía de golpe.
+	tale.cueva = sim.exploracion.cueva_de_la_banda
+	sim.painting_figura = pared_de(tale.cueva).colocar(tale.motivo(), _color_de(tale),
+		false, 0.0)
+	tale.sitio = sim.painting_figura
 	return true
 
 
@@ -269,15 +278,28 @@ func _paint_wall(person: Inhabitant, fraction: float) -> void:
 	sim.painting_progress += fraction * person.effectiveness()
 	person.log_deed(person.current_task(),
 		"pintando %s" % sim.painting_queue.title.to_lower(), false)
+	# Y LA PARED SE ENTERA A LA VEZ: el diccionario es el mismo que tiene la pared —se
+	# guardan por referencia—, así que subirlo aquí es subirlo allí.
+	if not sim.painting_figura.is_empty():
+		sim.painting_figura["pintado"] = clampf(
+			sim.painting_progress / maxf(SettlementSim.PINTURA_JORNADAS, 0.0001), 0.0, 1.0)
 	if sim.painting_progress < SettlementSim.PINTURA_JORNADAS:
 		return
 
 	var tale := sim.painting_queue
+	var figura := sim.painting_figura
 	sim.painting_queue = null
 	sim.painting_progress = 0.0
+	sim.painting_figura = {}
 
 	if sim.store.amount(Materia.Kind.OCRE) < SettlementSim.PINTURA_OCRE \
 			or sim.store.amount(Materia.Kind.GRASA) < SettlementSim.PINTURA_GRASA:
+		# SE BORRA LO EMPEZADO. El sitio estaba reservado desde el primer día, así que una
+		# pared que se queda sin ocre tiene que quitar de la roca lo que llevara hecho: si
+		# no, quedaría media figura para siempre y sin relato detrás.
+		if not figura.is_empty():
+			pared_de(tale.cueva).quitar(figura)
+		tale.sitio = {}
 		sim._note(Chronicle.Kind.PENURIA,
 			"Se quedaron sin ocre a media pared: %s se queda sin pintar."
 				% tale.title.to_lower(), 1)
@@ -291,11 +313,11 @@ func _paint_wall(person: Inhabitant, fraction: float) -> void:
 
 	tale.painted = true
 	tale.painted_day = sim.day
-	# SU CUEVA Y SU SITIO, al terminar: la figura va donde la roca la recalca, y ahí
-	# se queda. La pared se monta antes de añadir el relato, que si no se pondría a
-	# sí mismo. Ver [pared_de] y SISTEMAS §13.
-	tale.cueva = sim.exploracion.cueva_de_la_banda
-	tale.sitio = pared_de(tale.cueva).colocar(tale.motivo(), _color_de(tale), false)
+	# SU SITIO YA ESTABA: se reservó al mandar pintar (ver [queue_painting]), y aquí sólo
+	# queda darla por terminada. Antes del 2026-09-19 se colocaba en esta línea, y por eso
+	# la figura aparecía de golpe en vez de irse llenando.
+	if not figura.is_empty():
+		figura["pintado"] = 1.0
 	sim.paintings.append(tale)
 	sim._note(Chronicle.Kind.OBRA,
 		"%s está en la pared del fondo. Ya no hace falta que quede nadie que "
