@@ -897,6 +897,52 @@ no se pinchan ni salen en listas. La ficha y el botón del valle, en
 > descubre lo de dentro y nada de fuera» y comprobaba bien la regla de entonces.
 > Lo que estaba mal era la regla.
 
+### El batidor plantado: un tramo que acababa donde empezaba (2026-09-19)
+
+Queja del jugador, leída en la ventana de Rastros: «en 109 días, 19× se quedó sin camino a
+donde iba, 5× llegó y el estado no se enteró, 1× no avanza por el camino trazado».
+
+Medido con `tests/AtascoProbe.gd` (DIAS=20, sitio 56): **6 atascos, los 6 «llegó y el estado
+no se enteró», 5 de ellos del batidor**. Y el parte lo enseñaba así: cinco veces la misma
+jornada —9,20 · 11,20 · 13,20 · 15,33 y 17,33 h, **intervalos de exactamente dos horas**,
+que es `SettlementSim.STUCK_HOURS`—, a **cero metros de su destino**, con el camino
+consumido, y **cuatro metros andados en ocho horas**.
+
+**Lo que pasaba.** La celda de la rejilla mide cuarenta metros y todo destino se amarra al
+centro de la celda abierta más próxima (`Marcha._firm_ground`). Un tramo de batida sorteado
+a quince metros acaba, después del amarre, siendo un tramo a cero: el camino sale de **un
+hito donde la persona ya está**, se consume en un paso, y el remate «la ruta se acabó sin
+llegar» la aparca ahí mismo. Media hora después se sorteaba otro igual. Cada dos horas el
+vigilante de plantados la soltaba y la rutina la devolvía a reconocer: por eso se **leía**
+como «llegó y el estado no se enteró», que es la alarma y no la avería.
+
+**El arreglo** es una sola regla, `Reconocimiento.tramo_de_verdad()`, preguntada en **las
+tres salidas** del sorteo —el bucle de candidatos, el remate al centro del sitio y el
+abanico— y preguntada por `person.target`, el destino ya amarrado, que es adónde va a andar
+el andador. El abanico sale además a metro y medio de celda: apuntando a quince metros no
+podía producir un tramo aunque quisiera. Si ninguna de las tres da un tramo real, se acaba
+la batida y se vuelve, que ya estaba escrito como la respuesta correcta y nunca se ejecutaba.
+
+| en 20 jornadas, sitio 56 | antes | ahora |
+|---|---|---|
+| atascos, total | 6 | **2** |
+| «llegó y el estado no se enteró» | 6 | **0** |
+| metros por salida del batidor (Muno) | 1 543 | **1 825** |
+
+Los dos que quedan son «se quedó sin camino a donde iba», que antes eran cero: es un
+intercambio, no una recaída. Antes se quedaban plantados en silencio; ahora, cuando de
+verdad no hay camino, se dice y el reparto les da otro sitio.
+
+**Y la lección, que costó tres arreglos revertidos.** Se cerró primero el bucle de
+candidatos: la traza del batidor salió **idéntica hasta el segundo decimal**, porque se
+colaba por el abanico. Se cerró después el abanico: idéntica otra vez, porque el bucle lo
+aceptaba antes de llegar allí. Eran tres puertas y se cerraba una cada vez. Lo que lo
+destrabó fue instrumentar el parte —`Reconocimiento.ultima_rama` y los tres puntos que
+tienen que coincidir: adónde se le mandó, adónde apunta ya amarrado, y dónde cae el primer
+hito— en vez de seguir leyendo código. Y una prueba que medía el **candidato** en vez del
+**destino amarrado** pasó en verde con el fallo vivo: una comprobación que no cae sobre lo
+que decide el andador no comprueba el andador.
+
 ## 5. El comercio, de la concha de lejos al mercado nacional
 
 > **Hecho (2026-09-13)**: `Intercambio.PRECIO` —fruto seco 1, sílex 2 y

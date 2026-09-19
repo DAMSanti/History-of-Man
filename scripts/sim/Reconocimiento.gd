@@ -143,6 +143,24 @@ func rama(person: Inhabitant, cual: String) -> void:
 	ultima_rama[person.id] = cual
 
 
+## ¿EL TRAMO RECIÉN TRAZADO LLEVA A ALGÚN SITIO? Se pregunta por el destino **ya amarrado**
+## —`person.target`, después de que [Marcha._firm_ground] lo haya movido a celda abierta—,
+## que es adónde va a andar el andador; el candidato que se sorteó no decide nada.
+##
+## La celda de la rejilla mide cuarenta metros y el destino se amarra a su centro, así que
+## un tramo sorteado a quince metros acaba siendo un tramo a cero: el camino sale de UN hito
+## donde la persona ya está, se consume en un paso, y el remate «la ruta se acabó sin
+## llegar» la aparca ahí mismo. Medio día de batida en cuatro metros.
+##
+## **Y hay que preguntarlo en LAS TRES SALIDAS del sorteo.** Medido a base de equivocarse
+## tres veces el 2026-09-19: cerrando sólo el bucle de candidatos, el remate del abanico
+## dejaba pasar el tramo corto; cerrando sólo el abanico, el bucle lo aceptaba antes de
+## llegar allí. Las tres corridas dieron la traza del batidor **idéntica hasta el segundo
+## decimal**, que es lo que delata que la puerta cerrada no era por la que se pasaba.
+func tramo_de_verdad(person: Inhabitant) -> bool:
+	return Traversal.en_llano(person.target, person.position) > sim.arrive_radius * 2.0
+
+
 ## Cuántas batidas lleva cada cual. Por persona, para que dos batidores no
 ## salgan el mismo día a lo mismo.
 var _batidas: Dictionary = {}
@@ -1258,8 +1276,9 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		# otra orilla está comunicada por un vado lejano y el tramo de
 		# doscientos metros se convierte en uno de mil contra el río. Ver
 		# [Marcha.merece_el_camino].
-		if sim.marcha.merece_el_camino(person, candidate) \
-				or candidate.distance_to(person.position) < sim.arrive_radius * 2.0:
+		# SALIDA 1 DE 3. Ver [tramo_de_verdad]: el «o está cerca» que había aquí daba por
+		# bueno un tramo de cero metros.
+		if sim.marcha.merece_el_camino(person, candidate) and tramo_de_verdad(person):
 			rama(person, "tramo nuevo")
 			return
 
@@ -1271,7 +1290,8 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.route_step = 0
 		person.forage_target = aqui.position
 		sim.marcha._send_to(person, aqui.position)
-		if sim.marcha.merece_el_camino(person, aqui.position):
+		# SALIDA 2 DE 3. Si ya se está EN el centro, volver al centro no es un tramo.
+		if sim.marcha.merece_el_camino(person, aqui.position) and tramo_de_verdad(person):
 			rama(person, "sin tramo: al centro del sitio")
 			return
 
@@ -1288,12 +1308,15 @@ func _next_survey_leg(person: Inhabitant) -> void:
 	# Ahora se prueban ocho rumbos repartidos y se coge el primero que tenga
 	# camino de verdad; si ninguno lo tiene, es que aqui no hay nada que batir
 	# y se da la vuelta a casa, que es una respuesta y no un temblor.
+	# Y SALE DE LA CELDA, o no puede ser un tramo: apuntaba a quince metros con la celda de
+	# la rejilla en cuarenta, así que el destino caía siempre en la celda en la que ya se
+	# estaba. Metro y medio de celda es lo mínimo para que el amarre no lo devuelva.
+	var lejos := maxf(Navgrid.CELL * 1.5, sim.arrive_radius * 2.5)
 	var salida := sim._rng.randf() * TAU
 	for i in range(8):
 		var angle := salida + float(i) / 8.0 * TAU
 		var near := person.position + Vector3(
-			cos(angle) * sim.arrive_radius * 2.5, 0.0,
-			sin(angle) * sim.arrive_radius * 2.5)
+			cos(angle) * lejos, 0.0, sin(angle) * lejos)
 		if sim._terrain:
 			near.y = sim._terrain.get_height_at(near)
 		person.route = PackedVector3Array()
@@ -1302,9 +1325,11 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
 			rama(person, "abanico: sin presupuesto de busqueda")
 			return
-		if not person.route.is_empty():
-			rama(person, "tramo nuevo: abanico de cerca")
-			person.forage_target = near
+		# SALIDA 3 DE 3. Que haya ruta no basta: la ruta a la celda en la que ya estás
+		# tampoco está vacía —es un hito, el centro de esa celda—.
+		if not person.route.is_empty() and tramo_de_verdad(person):
+			rama(person, "tramo nuevo: abanico")
+			person.forage_target = person.target
 			return
 
 	# Ni eso: se acaba el reconocimiento y a casa.

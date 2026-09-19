@@ -1778,3 +1778,62 @@ func test_llegar_al_destino_de_la_subida_es_intentar_coronar() -> void:
 	assert_eq(person.state, Inhabitant.State.VOLVIENDO,
 		"intenta la cumbre y emprende la vuelta")
 	assert_eq(person.cumbre_objetivo, Vector3.ZERO, "y la subida queda cerrada")
+
+
+## UN TRAMO DE BATIDA TIENE QUE LLEVAR A OTRO SITIO, SALGA POR DONDE SALGA.
+##
+## El batidor se pasaba la jornada plantado: cinco partes de atasco el mismo día, a las
+## 9,20 · 11,20 · 13,20 · 15,33 y 17,33 h —intervalos de exactamente dos horas, que es
+## [SettlementSim.STUCK_HOURS]—, a cero metros de su destino, y **cuatro metros andados en
+## ocho horas**. Medido con `AtascoProbe` el 2026-09-19.
+##
+## La causa: el sorteo daba por bueno un tramo que acaba donde empieza. La celda de la
+## rejilla mide cuarenta metros y el destino se amarra a su centro, así que un tramo
+## sorteado a quince acaba siendo un tramo a cero; el camino sale de un hito donde la
+## persona ya está y el remate «la ruta se acabó sin llegar» la aparca ahí mismo.
+##
+## **Por eso la prueba recorre las tres salidas y no una.** Se arregló tres veces cerrando
+## una sola cada vez, y las tres corridas dieron la traza del batidor idéntica hasta el
+## segundo decimal: con el bucle cerrado se colaba por el abanico, y con el abanico cerrado
+## el bucle lo aceptaba antes de llegar allí.
+##
+## Y se mira `person.target` —el destino amarrado—, no `forage_target`: una primera versión
+## miraba el candidato y pasaba con el fallo vivo.
+func test_ningun_tramo_de_batida_acaba_donde_empieza() -> void:
+	var sim := _sim_on_fake()
+	sim.knowledge = BandKnowledge.new()
+	sim.knowledge.setup(64, 64, Vector2(2048.0, 2048.0))
+
+	var centro := Vector3(700.0, 200.0, 700.0)
+	# UN PARAJE PEQUEÑO —quince metros, menos que la celda—, que es donde salía el bucle:
+	# una veta o una cinta de ribera. Con él, casi todos los candidatos caen pegados al
+	# centro y el sorteo acaba en los remates.
+	var paraje := Paraje.new()
+	paraje.position = centro
+	paraje.cell_x = 17
+	paraje.cell_z = 17
+	paraje.activity = int(Subsistence.Activity.MATERIA_PRIMA)
+	paraje.extent = 15.0
+	sim.parajes.add(paraje)
+
+	var person := Inhabitant.create(0, centro, sim._rng)
+	person.position = centro
+	person.work_centre = centro
+	person.forage_target = centro
+	person.job = Profession.Job.EXPLORACION
+	person.current_speciality = Profession.Speciality.BATIDA
+	person.paraje_batido = paraje.id()
+	person.state = Inhabitant.State.RECONOCIENDO
+
+	for tramo in range(8):
+		sim.reconocimiento._next_survey_leg(person)
+		if person.state != Inhabitant.State.RECONOCIENDO:
+			# Se ha dado la batida por terminada. Es una respuesta: aquí no hay más que
+			# batir y se vuelve, en vez de quedarse temblando en el sitio.
+			return
+		var va := Traversal.en_llano(person.target, person.position)
+		assert_gt(va, sim.arrive_radius * 2.0,
+			"tramo %d (%s): se le manda a %d m de donde ya está" % [tramo,
+				String(sim.reconocimiento.ultima_rama.get(person.id, "")), int(va)])
+		person.position = person.target
+		sim.knowledge.see_from(person.position, 60.0)

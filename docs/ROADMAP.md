@@ -172,7 +172,7 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   > Pruebas en `TestPared` (tres nuevas) y `TestRelato`, cuya prueba del botón viejo se
   > da la vuelta: ahora fija que **aquí no haya ningún botón**.
 
-- [ ] **Los fallos de caminar**: en 109 jornadas, 19× sin camino a donde iba, 5× llegó y el
+- [x] **Los fallos de caminar**: en 109 jornadas, 19× sin camino a donde iba, 5× llegó y el
   estado no se enteró, 1× no avanza por el camino trazado. Las cifras salen de la ventana
   **Rastros**, que ya los va sumando. Se ataca con pruebas baratas que construyan cada
   situación, y **una corrida larga al final como confirmación** (decisión del usuario).
@@ -199,6 +199,25 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   > de destino** (`_send_to` reinicia `lo_mas_cerca` y no el reloj), lo cual no es la causa
   > de esto pero sí un segundo fallo real: el reloj mide el avance hacia **un** destino y
   > un destino nuevo debería ser un reloj nuevo.
+  >
+  > **ARREGLADO (2026-09-19), al cuarto intento.** Relato entero en SISTEMAS §4, «El
+  > batidor plantado». Una sola regla —`Reconocimiento.tramo_de_verdad()`— preguntada en
+  > **las tres salidas** del sorteo de tramos y sobre el destino **ya amarrado**: un tramo
+  > que acaba donde empieza no es un tramo. Medido con `AtascoProbe`, DIAS=20, sitio 56:
+  >
+  > | | antes | ahora |
+  > |---|---|---|
+  > | atascos, total | 6 | **2** |
+  > | «llegó y el estado no se enteró» | 6 | **0** |
+  > | metros por salida del batidor (Muno) | 1 543 | **1 825** |
+  >
+  > Los dos que quedan son «se quedó sin camino», que antes eran cero: antes se quedaban
+  > plantados en silencio, ahora se dice y se les reparte otro sitio.
+  >
+  > **Los tres intentos fallidos de antes eran tres medias reparaciones**: cerrada una
+  > puerta, se colaba por otra, y la traza salía idéntica hasta el segundo decimal. Lo que
+  > lo destrabó fue instrumentar el parte en vez de seguir leyendo código. Queda debajo lo
+  > que se midió por el camino, que es lo que hizo falta para llegar aquí.
   >
   > `AtascoProbe` imprime ya cada parte entero —hora, oficio, estado, distancia al destino
   > y al abrigo, hito actual—, que es lo que hizo falta para ver el bucle de dos horas.
