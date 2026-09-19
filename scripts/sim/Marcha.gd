@@ -1808,6 +1808,19 @@ func _record_stuck(person: Inhabitant, why: String) -> void:
 		"lejos_casa": person.position.distance_to(sim.home_position),
 		"hitos": person.route.size(),
 		"hito_actual": person.route_step,
+		# Y QUÉ ESTABA DECIDIENDO quien lo mandó ahí. Ver [Reconocimiento.ultima_rama]:
+		# a cero metros del destino se llega por cuatro caminos distintos y desde el
+		# parte se veían todos iguales.
+		"rama": String(sim.reconocimiento.ultima_rama.get(person.id, "")) \
+			if sim.reconocimiento != null else "",
+		# LOS TRES PUNTOS QUE TIENEN QUE COINCIDIR Y NO COINCIDEN: adónde se le mandó
+		# (`forage_target`), adónde apunta el andador de verdad (`target`, ya amarrado a
+		# celda abierta por [_firm_ground]) y el único hito del camino. Un tramo de batida
+		# que no mueve a nadie se ve aquí y en ningún otro sitio.
+		"tramo_pedido": Traversal.en_llano(person.forage_target, person.position),
+		"tramo_amarrado": Traversal.en_llano(person.target, person.position),
+		"primer_hito": Traversal.en_llano(person.route[0], person.position) \
+			if not person.route.is_empty() else -1.0,
 		# EN LLANO, que el hito viene de la rejilla y trae `y = 0`.
 		#
 		# Restar una celda de un punto con cota no mide una distancia:

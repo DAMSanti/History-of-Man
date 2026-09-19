@@ -122,6 +122,26 @@ const BATIDA_RADIUS := 380.0
 ## corta. Pendiente de playtest.
 const SE_PASA_DE_LA_RAYA := 1.25
 
+## QUÉ RAMA de [_survey] decidió lo último por cada persona, por su id.
+##
+## Existe por un fallo que desde fuera no se distingue: un batidor plantado a **cero metros
+## de su destino**, con el camino consumido, suelto cada dos horas por el vigilante de
+## plantados y devuelto a reconocer —cinco veces en la misma jornada, medido con
+## `AtascoProbe` el 2026-09-19—. A cero metros se puede llegar por la correa, por el remate
+## de «la ruta se acabó antes de llegar», porque no hubo presupuesto de búsqueda, o porque
+## el sorteo de tramos dio un tramo que no mueve. **Las cuatro se ven igual en el parte**, y
+## dos arreglos seguidos al sorteo no movieron una sola cifra: era código que ni siquiera se
+## estaba ejecutando. Esto lo dice.
+##
+## Sólo escribe un texto corto por persona y lo lee [Marcha._record_stuck], que ya está
+## acotado a los primeros [SettlementSim.STUCK_REPORTS] partes.
+var ultima_rama: Dictionary = {}
+
+
+## Apunta la rama. Ver [ultima_rama].
+func rama(person: Inhabitant, cual: String) -> void:
+	ultima_rama[person.id] = cual
+
 
 ## Cuántas batidas lleva cada cual. Por persona, para que dos batidores no
 ## salgan el mismo día a lo mismo.
@@ -798,6 +818,7 @@ func _survey(person: Inhabitant, hours: float) -> void:
 			porque = "peinando monte se habia ido a %.0f m del abrigo" % 				Traversal.en_llano(sim.home_position, person.position)
 
 		if vuelvo != Vector3.ZERO:
+			rama(person, "correa: se le manda de vuelta")
 			sim.marcha._record_stuck(person, porque)
 			person.route = PackedVector3Array()
 			person.route_step = 0
@@ -852,6 +873,7 @@ func _survey(person: Inhabitant, hours: float) -> void:
 		person.forage_target = person.position
 		person.target = person.position
 		arrived = true
+		rama(person, "ruta acabada sin llegar: se mira desde aqui")
 
 	var toca := false
 	if sin_ruta:
@@ -863,6 +885,7 @@ func _survey(person: Inhabitant, hours: float) -> void:
 		toca = person.horas_en_el_tramo >= SettlementSim.ESPERA_PARA_REPENSAR
 		if not toca:
 			person.target = person.position
+			rama(person, "sin ruta: quieto hasta volver a probar")
 	else:
 		toca = arrived and person.horas_en_el_tramo >= MIRAR_EL_SITIO
 
@@ -1226,6 +1249,7 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.forage_target = candidate
 		sim.marcha._send_to(person, candidate)
 		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			rama(person, "sorteo: sin presupuesto de busqueda")
 			# No se ha mirado: se deja el tramo para el cuadro siguiente en
 			# vez de sortear otro. Ver [Marcha.Traza].
 			return
@@ -1236,6 +1260,7 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		# [Marcha.merece_el_camino].
 		if sim.marcha.merece_el_camino(person, candidate) \
 				or candidate.distance_to(person.position) < sim.arrive_radius * 2.0:
+			rama(person, "tramo nuevo")
 			return
 
 	# Si no ha salido ningun tramo bueno pero se estaba batiendo un sitio, se
@@ -1247,6 +1272,7 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.forage_target = aqui.position
 		sim.marcha._send_to(person, aqui.position)
 		if sim.marcha.merece_el_camino(person, aqui.position):
+			rama(person, "sin tramo: al centro del sitio")
 			return
 
 	# Si de verdad no hay por donde salir, se bate lo que se tenga a mano en
@@ -1274,12 +1300,16 @@ func _next_survey_leg(person: Inhabitant) -> void:
 		person.route_step = 0
 		sim.marcha._send_to(person, near)
 		if sim.marcha.ultima_traza == Marcha.Traza.SIN_PRESUPUESTO:
+			rama(person, "abanico: sin presupuesto de busqueda")
 			return
 		if not person.route.is_empty():
+			rama(person, "tramo nuevo: abanico de cerca")
 			person.forage_target = near
 			return
 
 	# Ni eso: se acaba el reconocimiento y a casa.
+	# El sitio no da para mas tramos: se acaba la batida y a casa. Es una respuesta.
+	rama(person, "sin tramo: se acaba la batida")
 	_finish_survey(person)
 
 

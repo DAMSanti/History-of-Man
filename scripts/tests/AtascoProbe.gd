@@ -143,6 +143,10 @@ func _init() -> void:
 			String(informe["oficio"]), Inhabitant.new_state_name(int(informe["estado"])),
 			float(informe["lejos_destino"]), float(informe["lejos_casa"]),
 			int(informe["hito_actual"]), int(informe["hitos"]), String(informe["motivo"])])
+		print("       rama: %s · pedido %.0f m · amarrado %.0f m · primer hito %.0f m" % [
+			String(informe.get("rama", "")), float(informe.get("tramo_pedido", -1.0)),
+			float(informe.get("tramo_amarrado", -1.0)),
+			float(informe.get("primer_hito", -1.0))])
 
 	print("")
 	print("--- QUIETO EN ESTADO DE ANDAR ---")

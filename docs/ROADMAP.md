@@ -231,6 +231,36 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   > Y la lección del método: **la prueba unitaria pasó con el fallo vivo** la primera vez
   > porque medía `forage_target` —el candidato— en vez de `person.target`. Una prueba que
   > no cae sobre lo que decide el andador no comprueba el andador.
+  >
+  > **LA CORRIDA INSTRUMENTADA (2026-09-19).** Cada parte de atasco lleva ahora la rama de
+  > `_survey` que decidió lo último por esa persona —`Reconocimiento.ultima_rama`— y los
+  > tres puntos que tienen que coincidir y no coinciden: adónde se le mandó, adónde apunta
+  > el andador ya amarrado por [Marcha._firm_ground], y dónde cae el primer hito.
+  >
+  > Los cinco partes del batidor plantado dicen lo mismo:
+  >
+  > ```
+  > rama: ruta acabada sin llegar: se mira desde aqui · pedido 0 m · amarrado 0 m · primer hito 1-5 m
+  > ```
+  >
+  > contra un batidor que anda de verdad: `pedido 125 m · amarrado 125 m · primer hito 68 m`.
+  >
+  > **Lo que queda establecido**: los tramos del plantado miden **de uno a cinco metros**
+  > —por eso anda cuatro metros en ocho horas— y quien lo aparca es el remate
+  > `if ruta_acabada and not arrived:`, que pone destino y `forage_target` en sus pies.
+  >
+  > **Y UN TERCER ARREGLO PROBADO Y REVERTIDO**: el abanico de remate apunta a
+  > `arrive_radius * 2.5` = 15 m con la celda de la rejilla en 40, así que su destino cae
+  > dentro de la celda en la que ya se está. Sacarlo a metro y medio de celda y exigir que
+  > el destino amarrado moviera: **total de 6 a 13 atascos**, y los cinco del batidor
+  > intactos. Revertido.
+  >
+  > **Van tres arreglos rechazados por la medida**, los tres en el sorteo de tramos y sus
+  > remates. Eso deja el sorteo entero descartado por experimento. Lo que no se ha mirado
+  > todavía es **por qué el camino no llega**: la ruta de un hito a 1-5 m sale de
+  > `Marcha._send_to`, y nadie ha medido aún qué devuelve el trazador cuando se le pide un
+  > tramo corto dentro de la misma celda. Ahí es donde hay que entrar la próxima vez, y el
+  > instrumento ya está puesto para verlo.
 
 ### Depurar del 2026-09-19: los ríos, el mapa local y el mapa regional
 
