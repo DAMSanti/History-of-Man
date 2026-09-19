@@ -139,6 +139,68 @@ cuando se cierre. Lo que la tarea aprenda sobre el juego se funde en el
 documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
 [ESTADO.md](ESTADO.md), la ficha de época— y de la tarea sólo queda la línea.
 
+### Jugabilidad en la configuración: apagar el aviso de paraje descubierto
+
+**Spec: [INTERFAZ.md](INTERFAZ.md) §8.9.** Una quinta pestaña, «Jugabilidad», en
+la ventana de configuración, con un interruptor: «Avisar de los parajes
+descubiertos». Apagado, no sale la tarjeta de «Un sitio con nombre» —medido, casi
+tarjeta y media por jornada— y el hallazgo sigue en la Crónica, en el diario y en
+el mapa. Encendido por defecto, en caliente, y fuera del guardado como todo §8.
+Pendiente de `/plan-tarea`.
+
+### La banda, que se mueva con sentido (depurar del 2026-09-19, noche)
+
+Seis frentes de una sesión de juego. **Lo que el usuario pidió, dicho por él**: «que los
+movimientos de los personajes sean coherentes… co-he-ren-cia». Y el orden lo puso él: los
+fallos cortos primero, después el ocio, después los recolectores, los cazadores y los
+pescadores, de uno en uno.
+
+- [x] **El agua del río se dibujaba por encima de la niebla.** Las dos son materiales
+  transparentes y las dos estaban en prioridad 0, así que el orden lo decidía la distancia
+  de la cámara —de ahí el «a medida que acerco la cámara»—. El agua baja a −1; no se sube
+  la niebla porque los rótulos de parajes, nasas y trampas ocupan 1-4 y tienen que seguir
+  leyéndose. Queda: agua (−1) → niebla (0) → rótulos (1-4).
+  `MallaDelTerreno.DEBAJO_DE_LA_NIEBLA`.
+  **Ojo: arreglo estructural, no confirmado en captura.** El A/B que se intentó no vale
+  —la niebla se anima y las dos corridas cogieron fases distintas del ruido, 35,8/255 de
+  diferencia repartida por todo el recorte—. Falta una sonda que congele la fase.
+
+- [x] **Las cejas «sin textura».** No era falta de textura: las cejas son una **carta** —un
+  cuadrilátero con la forma dibujada y el resto transparente— y el glTF del pack las trae
+  en `alphaMode` opaco, así que se dibujaba el cuadrilátero entero: **una banda oscura
+  cruzando los ojos, como un antifaz**. Visto en captura con `AperosCaptura`. Se recortan
+  por alfa (`CatalogoDeCuerpos.cejas_que_se_recortan`), que es la cuarta regla del pack que
+  no se adivina.
+
+- [ ] **El ocio: que dejen de manosearse las manos, y que se sienten.** Hoy `OCIOSO` usa
+  `Idle_Talking`. **Bancos no hay**: en el asentamiento sólo existe `ObrasDelAbrigo
+  .asiento_llano`, que aplana suelo y no es un mueble. Sentarles pide modelar los bancos
+  primero.
+
+- [ ] **Los recolectores.** El cesto va colgado del hombro y no de la mano —visto en
+  captura—, y hay que darles un paseo tranquilo recogiendo por el paraje en vez del gesto
+  suelto de ahora. `Aperos.agarre("cesto")` y `ClipsDeLaBanda`.
+
+- [ ] **Los pescadores, y es doble** (decisión del usuario: primero el sitio). Un paraje de
+  `ORILLA` acaba lejos del agua y el pescador pesca en el bosque; ya hay un apaño en
+  `Tajo._forage_drift` que reconoce que «el paraje se ha alejado del agua» y bate como si
+  nada. Y el gesto: `ORILLA` usa `Sword_Attack`, un mandoble con el arpón en la mano.
+  Deben pescar desde vado u orilla.
+
+- [ ] **Los cazadores**: que acechen la presa o pongan trampas. Hoy `CAZA_MAYOR` usa
+  `Sword_Attack` y `TRAMPAS` un `Crouch_Idle` genérico.
+
+- [ ] **Los aperos, texturizados** (decisión del usuario: texturizar las primitivas, no
+  buscar modelos). La azagaya y el arpón son un palo y una punta de color plano **a
+  propósito** —el pack de props no traía lanza—, y a la distancia de juego se leen como
+  «sin textura». Madera y sílex de verdad sobre lo que ya hay. Buscar modelos CC0 queda
+  apuntado para un repaso de props.
+
+- [ ] **Los niños, con proporciones y no escalados** (decisión del usuario). Hoy son
+  adultos encogidos. Se escalan HUESOS —cabeza mayor, extremidades y tronco más cortos—
+  sobre el mismo esqueleto, que es lo que conserva los 45 clips; un pack infantil con otro
+  esqueleto los dejaría sin animaciones.
+
 ### Depurar del 2026-09-19 (tarde): la línea amarilla, el botón de pintar y los caminos
 
 - [x] **La cinta amarilla de la frontera no se ve.**

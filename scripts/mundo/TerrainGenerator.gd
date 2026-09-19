@@ -1421,6 +1421,9 @@ func _create_water() -> void:
 			mar.set_shader_parameter("water_foam_tex", texturas["water_foam"])
 		mar.set_shader_parameter("color_de_siempre", water_color)
 		mar.set_shader_parameter("metros_por_unidad", meters_per_unit / maxf(vertical_exaggeration, 0.0001))
+		# El mar, igual que la lámina del río: antes que la niebla. Ver
+		# [MallaDelTerreno.DEBAJO_DE_LA_NIEBLA].
+		mar.render_priority = MallaDelTerreno.DEBAJO_DE_LA_NIEBLA
 		_water_mesh.material_override = mar
 	else:
 		var material := StandardMaterial3D.new()

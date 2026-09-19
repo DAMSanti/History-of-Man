@@ -372,6 +372,28 @@ var lamina: MeshInstance3D = null
 ## el ajuste el río del recuadro cambiaba de aspecto y el de las ocho casillas no.
 const LAMINA_DESDE := 2
 
+## EL AGUA SE DIBUJA ANTES QUE LA NIEBLA, y por eso va en prioridad negativa.
+##
+## Queja del usuario (2026-09-19): «cuando hay niebla, a medida que acerco la cámara, el
+## agua del río aparece por encima de la niebla». Las dos son **materiales transparentes**
+## —el agua lleva `blend_mix` y la niebla de valle se dibuja como una caja con
+## `depth_test_disabled`—, y las dos estaban en prioridad 0: el orden entre ellas lo
+## decidía la distancia, o sea el azar de dónde estuviera la cámara. Por eso «al acercarse».
+##
+## Se baja el AGUA en vez de subir la niebla porque los rótulos de parajes, nasas y trampas
+## ya ocupan las prioridades 1 a 4 y tienen que seguir leyéndose por encima de la niebla.
+## Queda: agua (-1) → niebla (0) → rótulos (1-4).
+##
+## **El arreglo es estructural y NO está confirmado en captura.** Dos materiales
+## transparentes en la misma prioridad se ordenan por distancia a la cámara, así que el
+## orden cambiaba al moverse —que es exactamente lo que se veía—; darle un orden explícito
+## quita la ambigüedad por construcción. Pero el A/B que se intentó el 2026-09-19 **no
+## sirve**: la niebla de valle se anima con un ruido 3D, las dos corridas fueron a 40 y a
+## 21 fps, y las capturas cogen el ruido en fases distintas —35,8/255 de diferencia media
+## repartida por todo el recorte, que es niebla y no agua—. Para confirmarlo hace falta una
+## sonda que **congele la fase de la niebla** en las dos pasadas.
+const DEBAJO_DE_LA_NIEBLA := -1
+
 
 ## El escalón de «Agua» que le toca a un terreno. Cero si ese terreno no los usa.
 static func nivel_del_agua(con_niveles: bool) -> int:
@@ -491,6 +513,8 @@ static func material_del_agua(metros_por_unidad: float) -> ShaderMaterial:
 	material.set_shader_parameter("veces_para_romper", AguaDelCauce.VECES_PARA_ROMPER_ENTERA)
 	material.set_shader_parameter("linea_del_agua", AguaDelCauce.LINEA_DEL_AGUA)
 	material.set_shader_parameter("metros_por_unidad", metros_por_unidad)
+	# Ver [DEBAJO_DE_LA_NIEBLA]: el agua va antes que la niebla, siempre.
+	material.render_priority = DEBAJO_DE_LA_NIEBLA
 	return material
 
 

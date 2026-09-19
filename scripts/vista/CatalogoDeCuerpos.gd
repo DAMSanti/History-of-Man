@@ -141,6 +141,39 @@ static func corto(nombre: String) -> String:
 	return nombre.get_slice("|", 1) if "|" in nombre else nombre
 
 
+## LAS CEJAS SE RECORTAN, no se pintan enteras. Cuarta regla del pack que no se adivina.
+##
+## Las cejas y las pestañas son **cartas**: un cuadrilátero con la forma dibujada en la
+## textura y el resto en transparente. El glTF del pack las trae con `alphaMode` OPACO, así
+## que Godot las importa sin recorte y lo que se ve es el cuadrilátero entero: **una banda
+## oscura cruzando los ojos, como un antifaz**. Visto en captura con `AperosCaptura` el
+## 2026-09-19, después de que el usuario dijera «algunos miembros de la banda no tienen
+## texturas en las cejas» — no era falta de textura, era el fondo de la carta.
+##
+## Se corrige con recorte por alfa y no con mezcla: una carta de pelo mezclada se ordena mal
+## contra la cara y parpadea al girar la cámara. El material corregido se cachea por
+## material de origen, así que las veinticinco personas comparten dos copias, no cincuenta.
+static func cejas_que_se_recortan(mi: MeshInstance3D) -> void:
+	if mi == null or mi.mesh == null:
+		return
+	for s in range(mi.mesh.get_surface_count()):
+		var base := mi.mesh.surface_get_material(s)
+		if base == null:
+			continue
+		var clave := "recorte_%d" % base.get_instance_id()
+		if not _escenas.has(clave):
+			var copia := base.duplicate()
+			if copia is BaseMaterial3D:
+				var m := copia as BaseMaterial3D
+				m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+				# Medio: la carta del pack tiene el borde difuminado y con un umbral alto
+				# las cejas salen deshilachadas.
+				m.alpha_scissor_threshold = 0.5
+				m.cull_mode = BaseMaterial3D.CULL_DISABLED
+			_escenas[clave] = copia
+		mi.set_surface_override_material(s, _escenas[clave])
+
+
 static func mallas(nodo: Node) -> Array[Node]:
 	var out: Array[Node] = []
 	if nodo is MeshInstance3D:

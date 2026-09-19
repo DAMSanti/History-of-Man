@@ -231,6 +231,10 @@ func _quitar_el_bulto(raiz: Node3D, sexo: int) -> void:
 	for m in CatalogoDeCuerpos.mallas(raiz):
 		var mi := m as MeshInstance3D
 		if mi.skin == null or mi.name.begins_with("Eye"):
+			# Cejas y pestañas: se quedan, pero recortadas. Ver
+			# [CatalogoDeCuerpos.cejas_que_se_recortan] — sin esto salen como un antifaz.
+			if mi.name.begins_with("Eyebrow"):
+				CatalogoDeCuerpos.cejas_que_se_recortan(mi)
 			continue
 		_bulto = mi
 		if cabeza != null:

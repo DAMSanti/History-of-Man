@@ -1208,6 +1208,134 @@ nivel y no en Personalizado (como con los árboles); la pestaña cabe a 1280×72
 > Medio, Alto y Ultra. Su ayuda dice que apagado el tiempo sigue haciendo lo que hace. Un
 > fichero de antes abre en su nivel. `TestConfiguracion`. Lo que se ve, en GRAFICOS §7.4.
 
+### 8.9. Jugabilidad: el aviso de paraje se puede apagar (spec, 2026-09-19)
+
+#### Qué problema cierra
+
+Cada vez que la banda termina de conocer un sitio y le pone nombre, sale una
+tarjeta arriba: «Un sitio con nombre». Una está bien —encontrar algo tiene que
+notarse, es la razón de ser de un `Moment` de hallazgo— pero **no salen de una
+en una**. Medido: **11 parajes en ocho jornadas** con la cola de reconocimiento
+vacía ([ESTADO.md](ESTADO.md) §5, «Cuarto: depurar»), o sea casi tarjeta y media por jornada,
+y en una primavera de exploración van seguidas. La tarjeta tapa el valle, se
+acumulan en cola y se aprende a cerrarlas sin leerlas, que es justo lo que
+`Moment` dice que no debe pasar.
+
+Ya se arregló una mitad del problema y esto es la otra. El 2026-09-14 el usuario
+pidió «un solo mensaje diciendo se han descubierto X parajes» y coronar una
+cumbre dejó de sacar una tarjeta por sitio: hoy bautiza de golpe y lo cuenta en
+la tarjeta de la cumbre. **Lo que quedó fuera de aquel arreglo fue el otro
+camino**, el de quien vuelve de batir el monte, que sigue sacando los parajes de
+la cola a razón de unos pocos por vuelta y **uno a uno, cada uno con su
+tarjeta**. La queja de ahora es sobre ése.
+
+El arreglo no es callar el hallazgo: es **darle al jugador el interruptor**. A
+quien juega su primera partida el aviso le enseña que la exploración produce
+algo; a quien va por el tercer año le sobra. Eso no lo decide el diseño, lo
+decide quien juega, y hoy la ventana de configuración no tiene dónde preguntarlo
+porque sólo habla del equipo —pantalla, gráficos, controles y sonido— y esto es
+del juego.
+
+#### Lo que se pide
+
+1. **Una quinta pestaña, «Jugabilidad»**, en la misma ventana de configuración
+   que abren el menú principal y el modal de ESC. Nace con **un solo ajuste**: es
+   el sitio donde irán los que vengan, no una pestaña que haya que rellenar.
+
+2. **«Avisar de los parajes descubiertos», un interruptor.** Encendido, todo
+   sigue como hoy. Apagado, **no sale la tarjeta de «Un sitio con nombre»** —ni
+   la de este campamento ni la de ninguno—.
+
+3. **Sólo calla la tarjeta.** El hallazgo se sigue apuntando en los otros dos
+   canales, exactamente igual que hoy:
+   - la **Crónica**, en Hallazgos, con su línea «La banda ya conoce bien un
+     sitio y le ha puesto nombre: …»;
+   - el **diario** de quien lo encontró.
+
+   Y el paraje sigue apareciendo en el mapa del valle y en la ventana de
+   Parajes, con su alfiler y su ficha. El ajuste cambia **cómo se entera** el
+   jugador, no **qué sabe**: un hallazgo que se consulta en vez de anunciarse.
+
+4. **La ayuda del control lo dice**, con esas palabras: que el paraje se sigue
+   descubriendo y sigue en la Crónica y en el mapa, y que lo único que se apaga
+   es el cartel. Sin esa frase el interruptor se lee como «no descubrir
+   parajes», que es otra cosa y da miedo tocarlo.
+
+5. **Encendido por defecto.** Se conserva el juego de hoy: el primer paraje
+   sigue siendo un momento para quien no ha jugado nunca, y quien se canse lo
+   apaga. Una partida nueva no cambia de comportamiento por esta spec.
+
+6. **Se recuerda entre sesiones**, en el mismo fichero de configuración y con la
+   misma regla que el resto de §8: es de quien juega, no de la partida, así que
+   **no va dentro del guardado**. Una configuración escrita antes de que este
+   ajuste existiera abre con el aviso **encendido**, sin quedarse en un estado
+   raro —la misma regla que los árboles y el clima en §8.7 y §8.8—.
+
+7. **Se aplica en caliente.** Apagarlo con una partida abierta deja de sacar
+   tarjetas desde el siguiente paraje que se bautice, sin recargar el mapa ni
+   salir al menú.
+
+8. **Lo que ya estaba en cola, se va.** Si al apagarlo hay tarjetas de paraje
+   esperando turno —la cola de momentos de `GameUI`—, desaparecen. Apagar el
+   aviso y aun así tragarse seis carteles sería el mismo problema con un paso
+   más.
+
+#### Criterios de aceptación
+
+- **El interruptor se guarda y vuelve.** Ponerlo en apagado, guardar, leer el
+  fichero y abrirlo da apagado; lo mismo con encendido. Prueba sobre el fichero,
+  **en su propia carpeta** —una prueba no toca nunca lo del jugador—.
+- **Por defecto, encendido.** Una configuración recién creada, y también un
+  fichero escrito sin esta clave, abren con el aviso encendido y con el nivel de
+  gráficos que tuvieran: leer un fichero viejo **no** deja la configuración en
+  Personalizado.
+- **Apagado no sale la tarjeta.** Con el aviso apagado, bautizar un paraje
+  —construido el estado, no simulado un año— no añade ningún momento de hallazgo
+  de paraje a la cola de `GameUI`. Con el aviso encendido, el mismo estado añade
+  exactamente uno por paraje. Una prueba, los dos casos.
+- **Y los otros canales no se enteran.** En esa misma prueba, con el aviso
+  apagado la Crónica gana su línea de Hallazgos y el diario de quien lo encontró
+  su apunte, **igual que con el aviso encendido**: se comparan las dos corridas y
+  la Crónica sale idéntica. Es el criterio que distingue «callar la tarjeta» de
+  «callar el hallazgo», y sin él la implementación puede cortar por donde no es.
+- **El resto de tarjetas sigue saliendo.** Con el aviso de parajes apagado, una
+  cumbre, un percance, la berrea, un relato y una decisión levantan su tarjeta
+  como siempre. Prueba, una por clase. Las decisiones **no se pueden apagar** ni
+  por accidente: paran el reloj y piden respuesta.
+- **La cumbre sigue contando los suyos.** Con el aviso apagado, la tarjeta de la
+  cumbre sigue diciendo «Se han descubierto N parajes: …». Ese aviso es de la
+  cumbre, no del paraje, y ya es uno solo. Prueba.
+- **En caliente.** Con una partida montada, apagar el interruptor y bautizar un
+  paraje acto seguido no saca tarjeta, sin recargar la escena. Prueba sobre la
+  escena montada.
+- **La cola se vacía.** Con tres tarjetas de paraje encoladas y una de percance
+  detrás, apagar el interruptor deja la cola con la de percance y ninguna de
+  paraje. Prueba.
+- **Cabe.** Captura con ventana de la pestaña Jugabilidad a 1920×1080 y a
+  1280×720 (`ConfiguracionCaptura`): ningún control se sale, y la ayuda del
+  interruptor se lee entera en las dos.
+
+#### Fuera de alcance
+
+- **Un interruptor por cada clase de aviso** —cumbre, percance, berrea, relato,
+  cueva—. Se apaga el que molesta, que es el de parajes. Si otro llega a
+  molestar, entra entonces en esta misma pestaña, con su spec.
+- **Apagar decisiones.** Una decisión para el reloj y pide una respuesta: sin
+  ella la partida no avanza. No se ofrece.
+- **Un estado intermedio**: ni «uno resumido al cierre de la jornada» ni «sólo
+  los que estén a más de X metros». Lo primero es otro aviso que hay que
+  diseñar; lo segundo pide un umbral que nadie ha medido, y aquí no se inventan
+  números.
+- **Cambiar cuántos parajes se bautizan**, o el ritmo al que salen de la cola
+  (`Reconocimiento.DE_UNA_VUELTA`). Esta spec no toca la simulación: sólo si se
+  cuenta o no.
+- **Silenciar la Crónica o los diarios**, hoy o con otro ajuste. Son el sitio
+  donde queda lo que se deja de anunciar; vaciarlos convertiría el interruptor en
+  una pérdida de información.
+- **Llevar a Jugabilidad ajustes que ya viven en otro sitio** —el filtro de
+  parajes, el de marcadores, la velocidad del reloj—. La pestaña nace con uno.
+- **Que el ajuste viaje en la partida guardada.** Es del jugador, como todo §8.
+
 ---
 
 ## 9. La pantalla de carga (spec, 2026-09-15)
