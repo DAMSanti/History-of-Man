@@ -177,6 +177,32 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   **Rastros**, que ya los va sumando. Se ataca con pruebas baratas que construyan cada
   situación, y **una corrida larga al final como confirmación** (decisión del usuario).
 
+  > **MEDIDO, SIN ARREGLAR TODAVÍA (2026-09-19).** `AtascoProbe` con `DIAS=20` en el sitio
+  > 56: **6 atascos, los 6 «llegó y el estado no se enteró»**, 5 del batidor (Exploración,
+  > reconociendo) y 1 de caza. `SIN_RUMBO` no sale ni una vez en veinte jornadas, así que
+  > los 19 del usuario piden más corrida o dependen del reparto de destinos.
+  >
+  > **Y el parte dice que el nombre del atasco engaña.** Kelo, jornada 1, cinco partes a
+  > las 9,20 · 11,20 · 13,20 · 15,33 · 17,33 h: intervalos de **exactamente 2,00 h**, que
+  > es `STUCK_HOURS`; **a 0 m del destino** y con el camino consumido («hito 1 de 1»); y de
+  > casa, 337 → 341 m en ocho horas, o sea cuatro metros en toda la jornada.
+  >
+  > Eso no es «llegó y el estado no se enteró»: es que **`Reconocimiento._next_survey_leg`
+  > le devuelve como siguiente tramo el sitio donde ya está**. Cada media hora
+  > (`MIRAR_EL_SITIO`) se sortea otro tramo y sale el mismo punto; cada dos horas el
+  > vigilante de plantados lo suelta a OCIOSO; y la rutina lo devuelve a RECONOCIENDO. El
+  > bucle se come la jornada entera del batidor.
+  >
+  > **Dónde mirar al retomarlo**: el final de `_next_survey_leg` —los ocho rumbos en
+  > abanico y la vuelta a casa cuando ninguno tiene camino— no está sacando a la persona
+  > del sitio. Y aparte, `Marcha._watch_for_stuck` **no reinicia `stuck_hours` al cambiar
+  > de destino** (`_send_to` reinicia `lo_mas_cerca` y no el reloj), lo cual no es la causa
+  > de esto pero sí un segundo fallo real: el reloj mide el avance hacia **un** destino y
+  > un destino nuevo debería ser un reloj nuevo.
+  >
+  > `AtascoProbe` imprime ya cada parte entero —hora, oficio, estado, distancia al destino
+  > y al abrigo, hito actual—, que es lo que hizo falta para ver el bucle de dos horas.
+
 ### Depurar del 2026-09-19: los ríos, el mapa local y el mapa regional
 
 **Relato en [GRAFICOS.md](GRAFICOS.md) §3.** Viene de cuatro vueltas seguidas sobre lo

@@ -119,6 +119,31 @@ func _init() -> void:
 	for causa: String in sim.stuck_tally:
 		print("   %-38s %d" % [causa, int(sim.stuck_tally[causa])])
 
+	# DE QUIEN ES CADA ATASCO. El recuento por motivo dice QUÉ pasa; esto dice A QUIÉN,
+	# haciendo qué y yendo adónde, que es lo que hace falta para saber dónde arreglarlo:
+	# «se quedó sin camino a donde iba» apunta a quien REPARTE los destinos, no al andador
+	# (ver [Marcha._sin_rumbo]), y hasta saber qué oficio lo sufre no se sabe a cuál.
+	print("")
+	print("--- DE QUIÉN ES CADA ATASCO ---")
+	var por_quien: Dictionary = {}
+	for informe: Dictionary in sim.stuck_reports:
+		var clave := "%s | %s | %s" % [String(informe["motivo"]), String(informe["oficio"]),
+			Inhabitant.new_state_name(int(informe["estado"]))]
+		por_quien[clave] = int(por_quien.get(clave, 0)) + 1
+	if por_quien.is_empty():
+		print("   (ninguno de los primeros %d)" % SettlementSim.STUCK_REPORTS)
+	for clave: String in por_quien:
+		print("   %-62s %d" % [clave, int(por_quien[clave])])
+	# Y CADA PARTE ENTERO. Son veinte como mucho, y el resumen por motivo no basta para
+	# saber dónde arreglarlo: hace falta a qué hora, a cuánto del destino y con cuántos
+	# hitos de camino por delante.
+	for informe: Dictionary in sim.stuck_reports:
+		print("   · d%d %5.2fh %-6s %-12s %-12s a %5.0f m del destino · %4.0f m de casa · hito %d de %d · %s" % [
+			int(informe["dia"]), float(informe["hora"]), String(informe["quien"]),
+			String(informe["oficio"]), Inhabitant.new_state_name(int(informe["estado"])),
+			float(informe["lejos_destino"]), float(informe["lejos_casa"]),
+			int(informe["hito_actual"]), int(informe["hitos"]), String(informe["motivo"])])
+
 	print("")
 	print("--- QUIETO EN ESTADO DE ANDAR ---")
 	print("   %d de %d frames sin dar un paso (%.1f %%); sin ruta: %d" % [
