@@ -202,6 +202,35 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   >
   > `AtascoProbe` imprime ya cada parte entero —hora, oficio, estado, distancia al destino
   > y al abrigo, hito actual—, que es lo que hizo falta para ver el bucle de dos horas.
+  >
+  > **DOS ARREGLOS PROBADOS Y REVERTIDOS (2026-09-19).** Los dos apuntaban al sorteo del
+  > siguiente tramo, `Reconocimiento._next_survey_leg`, y su remate «o el candidato está a
+  > menos de dos radios de llegada», que da por bueno un tramo de cero metros:
+  >
+  > 1. Descartar el **candidato sorteado** cuando no mueve a la persona. Prueba en verde
+  >    —fallaba sin el arreglo, con tramos de 5, 7 y 3 m— y **la partida no se movió**:
+  >    los mismos cinco partes de Kelo a las mismas horas, y el total de 6 a 9.
+  > 2. Descartar el **destino ya amarrado** (`person.target`), porque
+  >    [Marcha._firm_ground] mueve el destino al centro de la celda abierta más próxima y
+  >    la celda mide cuarenta metros. Misma prueba, mismo resultado: partes idénticos,
+  >    total de 6 a 9, y el batidor andando menos (2 777 → 2 541 m por salida).
+  >
+  > **Lo que eso descarta**: el bucle NO sale del sorteo de tramos. Dos cambios distintos
+  > ahí dejaron la traza de Kelo idéntica hasta el segundo decimal, lo que dice que ese
+  > código **ni siquiera se está ejecutando** en el bucle.
+  >
+  > **Dónde mirar ahora**, por orden de sospecha, todo dentro de `Reconocimiento._survey`:
+  > 1. El bloque de la **correa**, que hace `return` y además pone `horas_en_el_tramo = 0`:
+  >    mientras esté enganchada, `MIRAR_EL_SITIO` no se cumple nunca y el sorteo de tramos
+  >    no se llama. Encaja con los partes de «se había ido N m fuera de él» que se repiten.
+  > 2. `if ruta_acabada and not arrived:` → `person.target = person.position`, que pone el
+  >    destino a cero metros **por diseño**; es exactamente lo que enseña el parte.
+  > 3. El `return` por `Traza.SIN_PRESUPUESTO` en `_next_survey_leg`, que deja a la persona
+  >    como estaba si no hay presupuesto de búsqueda ese cuadro.
+  >
+  > Y la lección del método: **la prueba unitaria pasó con el fallo vivo** la primera vez
+  > porque medía `forage_target` —el candidato— en vez de `person.target`. Una prueba que
+  > no cae sobre lo que decide el andador no comprueba el andador.
 
 ### Depurar del 2026-09-19: los ríos, el mapa local y el mapa regional
 
