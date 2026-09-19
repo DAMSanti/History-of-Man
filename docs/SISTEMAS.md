@@ -897,6 +897,28 @@ no se pinchan ni salen en listas. La ficha y el botón del valle, en
 > descubre lo de dentro y nada de fuera» y comprobaba bien la regla de entonces.
 > Lo que estaba mal era la regla.
 
+### Un solo botón para el fondo de la cueva (2026-09-19)
+
+Eran dos —«Pintar la pared del fondo» y «Entrar a mirar la pared»— y desde que el botón de
+pintar se mudó **dentro** de la sala, esa misma mañana, los dos hacían exactamente lo mismo:
+abrir la sala. El usuario lo vio el mismo día. Ahora es **«Entrar al fondo de la cueva»**, y
+lo que se hace dentro —mirar lo que hay, o mandar pintar un relato— se elige allí.
+
+**Y pide lámpara y grasa**, decisión del usuario: al fondo no se baja a oscuras. Se **pide,
+no se gasta** —mirar lo que la banda tiene pintado no puede costarle la despensa—; la grasa
+se cobra al pintar, que es cuando la lámpara arde horas. Sigue sin pedir la técnica, que es
+la decisión del 2026-09-15: mirar no es pintar.
+
+Dos cosas que hubo que separar para que esto no rompiera nada:
+
+- **«¿Puedo bajar?» y «¿qué cuevas hay?» son dos preguntas.** `cuevas_para_entrar()`
+  filtraba por `por_que_no_se_entra()`, así que al pedir grasa las cuevas **habrían
+  desaparecido** de la ficha del mapa regional en cuanto se acabara el sebo. Ahora lista las
+  exploradas y el botón sale apagado con el motivo.
+- **«¿Tengo luz?» se contesta en un sitio**, `Pinturas._con_que_alumbrarse(grasa)`: un
+  pellizco para bajar a mirar, `PINTURA_GRASA` para pintar una pared entera. Con dos copias,
+  una diría que se puede y la otra que no.
+
 ### Y la banda se sienta en los troncos (2026-09-19)
 
 Los leños del corro del fuego están desde el 2026-09-13 —`CorroDelHogar`, cinco troncos a

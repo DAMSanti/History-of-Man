@@ -285,8 +285,32 @@ func test_la_ficha_de_la_cueva_deja_entrar_en_lo_explorado_y_dice_por_que_no() -
 	var sin_explorar := PanelSitios.por_que_no("entrar", {"cueva": 2}, sim)
 	assert_false(sin_explorar.is_empty(), "sin explorar, dice por qué no")
 	sim.exploracion._sabido[2] = {"explorada": true, "pintable": false}
+
+	# Y AL FONDO NO SE BAJA A OSCURAS (2026-09-19). Antes bastaba con haberla explorado;
+	# desde que los dos botones son uno —«Entrar al fondo de la cueva»— hace falta con qué
+	# alumbrarse, que es lo que el usuario pidió. Se PIDE y no se gasta: la grasa se cobra
+	# al pintar.
+	assert_true(PanelSitios.por_que_no("entrar", {"cueva": 2}, sim).contains("lámpara"),
+		"explorada pero sin lámpara, dice que falta la lámpara")
+	sim.toolkit.craft(Tool.Kind.LAMPARA, Tool.Stuff.CUARCITA, 0.6)
+	assert_true(PanelSitios.por_que_no("entrar", {"cueva": 2}, sim).contains("grasa"),
+		"con lámpara y sin grasa, dice que falta la grasa")
+	var antes := sim.store.amount(Materia.Kind.GRASA)
+	sim.store.add(Materia.Kind.GRASA, 2.0)
 	assert_eq(PanelSitios.por_que_no("entrar", {"cueva": 2}, sim), "",
-		"explorada, se entra, y sin saber pintar")
+		"con lámpara y grasa se baja, y sin saber pintar")
+	assert_eq(sim.store.amount(Materia.Kind.GRASA), antes + 2.0,
+		"y preguntar no gasta nada")
+
+	# LA CUEVA SIGUE EN LA LISTA aunque hoy no se pueda bajar: el botón dice qué falta, no
+	# desaparece. Si `cuevas_para_entrar` filtrara por lo mismo, quedarse sin sebo borraría
+	# las cuevas de la ficha del mapa regional.
+	sim.pinturas.elementos = [{"name": "una", "lat": 0.0, "lon": 0.0},
+		{"name": "otra", "lat": 0.0, "lon": 0.0}, {"name": "la tercera", "lat": 0.0, "lon": 0.0}]
+	sim.store.take(Materia.Kind.GRASA, 2.0)
+	var listadas := sim.pinturas.cuevas_para_entrar()
+	assert_eq(listadas.size(), 1, "la explorada sigue listada sin grasa")
+	assert_eq(int(listadas[0][0]), 2, "y es la que se exploró")
 	sim.free()
 
 

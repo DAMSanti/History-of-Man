@@ -899,14 +899,20 @@ static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false,
 			if not explorada:
 				acciones.append(["explorar", "Explorar el interior",
 					"Recorrerla a fondo: puede haber galerías, agua o restos."])
-			if explorada and pintable:
-				acciones.append(["pintar", "Pintar la pared del fondo",
-					"Entra a la pared, con lo que falta por contar y su botón."])
-			# ENTRAR A MIRAR, en toda cueva: explorada se entra, y sin explorar el
-			# botón sale apagado con el motivo —«la ficha dice por qué», SISTEMAS §13—.
-			# No pide la técnica: decisión del usuario del 2026-09-15.
-			acciones.append(["entrar", "Entrar a mirar la pared",
-				"Ver lo que hay pintado al fondo, a la luz de la lámpara."])
+			# UN SOLO BOTÓN PARA EL FONDO DE LA CUEVA (2026-09-19).
+			#
+			# Eran dos —«Pintar la pared del fondo» y «Entrar a mirar la pared»— y desde
+			# que el botón de pintar se mudó dentro de la sala hacían exactamente lo
+			# mismo: abrir la sala. El usuario lo vio el mismo día. Ahora es uno, y lo que
+			# se hace dentro —mirar lo que hay, o mandar pintar un relato— se elige allí.
+			#
+			# **Y pide lámpara y grasa**, que es lo que hace falta para bajar al fondo:
+			# decisión del usuario del 2026-09-19. Sin explorar, apagado con el motivo,
+			# como siempre. Sigue sin pedir la técnica —decisión del 2026-09-15—: mirar
+			# no es pintar.
+			acciones.append(["entrar", "Entrar al fondo de la cueva",
+				"Ver la pared del fondo a la luz de la lámpara, y pintar en ella si se "
+					+ "sabe. Hace falta lámpara y grasa."])
 			return acciones
 		Site.Feature.SURGENCIA:
 			return [["explorar", "Reconocer el manantial",

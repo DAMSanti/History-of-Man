@@ -584,3 +584,61 @@ func test_la_riada_se_lleva_tambien_la_jornada_apuntada() -> void:
 	assert_true(sim.pasarelas.llevarsela(0), "se la lleva la crecida")
 	assert_eq(sim.pasarelas.rematadas.size(), 1, "queda una jornada apuntada")
 	assert_eq(sim.pasarelas.rematadas[0], 20, "la de la que sigue en pie")
+
+
+## EL TABLÓN SE TIENDE POR DONDE EL AGUA ES MÁS ESTRECHA, y eso hay que buscarlo barriendo
+## el círculo: mirando sólo a X y a Z, un cauce que entra por una esquina en diagonal deja
+## el tablón sobre tierra.
+##
+## Queja del usuario del 2026-09-19: «en los que sólo tocan el río en una esquina, la
+## mayoría del tablón está puesto en tierra; sospecho que se debe a la orientación». Lo era.
+func test_un_cauce_en_diagonal_se_cruza_en_diagonal() -> void:
+	# Un cauce de banda ancha a 45 grados: la celda (x, z) es agua cuando |x - z| es
+	# pequeño. Cruzarlo perpendicular —o sea por la otra diagonal— es lo más corto; por X o
+	# por Z se recorre el cauce a lo largo y se mide muchísimo más.
+	var res := 64
+	var paso := 10.0
+	var rio := PackedFloat32Array()
+	rio.resize(res * res)
+	for z in range(res):
+		for x in range(res):
+			rio[z * res + x] = 1.0 if absi(x - z) <= 1 else 0.0
+	var centro := Vector3(32.0 * paso, 0.0, 32.0 * paso)
+
+	var cruce := PasarelaView.por_donde_se_cruza(rio, res, Vector2.ZERO, paso, centro)
+	assert_false(cruce.is_empty(), "sobre el cauce hay por dónde cruzar")
+
+	# El rumbo elegido tiene que ser el perpendicular al cauce, o sea 135 grados —la otra
+	# diagonal—, y no 0 (X) ni 90 (Z).
+	var grados: float = rad_to_deg(float(cruce["rumbo"]))
+	assert_lt(absf(grados - 135.0), 25.0,
+		"se cruza por la diagonal corta y no por X ni por Z (%.0f grados)" % grados)
+
+	# Y se comprueba que de verdad es lo más estrecho: por X mide muchísimo más.
+	var por_x := PasarelaView._agua_a_lo_largo(rio, res, Vector2.ZERO, paso, centro,
+		Vector3.RIGHT)
+	# Medido con esta banda: 20 m en diagonal contra 40 por X, justo la mitad. El umbral es
+	# de tres cuartos y no de la mitad exacta porque lo que se fija es la REGLA —cruzar en
+	# diagonal es más corto—, no la geometría concreta de esta trama de prueba.
+	assert_lt(float(cruce["ancho"]), por_x * 0.75,
+		"cruzar en diagonal es bastante más corto que cruzar por X (%.0f contra %.0f m)"
+			% [float(cruce["ancho"]), por_x])
+
+
+## Y un cauce RECTO se sigue cruzando como siempre: el arreglo de la diagonal no puede
+## torcer lo que ya salía bien —«en muchos sitios están puestos de puta madre»—.
+func test_un_cauce_recto_se_cruza_perpendicular() -> void:
+	var res := 64
+	var paso := 10.0
+	# Una banda vertical: el agua ocupa unas columnas, así que se cruza por X.
+	var rio := PackedFloat32Array()
+	rio.resize(res * res)
+	for z in range(res):
+		for x in range(res):
+			rio[z * res + x] = 1.0 if absi(x - 32) <= 2 else 0.0
+	var centro := Vector3(32.0 * paso, 0.0, 32.0 * paso)
+	var cruce := PasarelaView.por_donde_se_cruza(rio, res, Vector2.ZERO, paso, centro)
+	assert_false(cruce.is_empty(), "hay por dónde cruzar")
+	var grados: float = rad_to_deg(float(cruce["rumbo"]))
+	assert_lt(minf(grados, 180.0 - grados), 25.0,
+		"un cauce que corre en Z se cruza por X (%.0f grados)" % grados)

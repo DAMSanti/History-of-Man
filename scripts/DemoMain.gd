@@ -1473,14 +1473,6 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 				var sala := SalaDeLaCueva.new()
 				ui.add_child(sala)
 				sala.montar(sim, cueva, label)
-		"pintar":
-			# LLEVA A LA PARED, que es donde se pinta desde el 2026-09-19. Antes esta
-			# acción sólo escribía una línea en consola y no hacía nada: un botón que
-			# miente es peor que no tenerlo. Ahora abre la misma sala que «entrar», con
-			# su lista de lo que falta por pintar y su botón.
-			var sala_para_pintar := SalaDeLaCueva.new()
-			ui.add_child(sala_para_pintar)
-			sala_para_pintar.montar(sim, int(data.get("cueva", -1)), label)
 
 
 ## Lo que pasa en el MUNDO, y solo si la interfaz no se lo ha quedado antes.

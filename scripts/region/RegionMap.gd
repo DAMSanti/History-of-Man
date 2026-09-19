@@ -891,7 +891,13 @@ func _poner_entradas() -> void:
 		var cueva := int(entrada[0])
 		var nombre := String(entrada[1])
 		var boton := Button.new()
-		boton.text = "Entrar en %s" % nombre
+		boton.text = "Entrar al fondo de %s" % nombre
+		# APAGADO Y CON EL MOTIVO, no ausente: bajar al fondo pide lámpara y grasa desde el
+		# 2026-09-19, y una cueva explorada sin sebo tiene que seguir viéndose con su
+		# «falta grasa» en vez de esfumarse de la ficha.
+		var falta := campamento.sim.pinturas.por_que_no_se_entra(cueva)
+		boton.disabled = not falta.is_empty()
+		boton.tooltip_text = "No se puede: %s." % falta if not falta.is_empty() 			else "Ver la pared del fondo a la luz de la lámpara."
 		boton.pressed.connect(func() -> void:
 			var sala := SalaDeLaCueva.new()
 			get_node("UI").add_child(sala)

@@ -48,24 +48,41 @@ func test_explorar_dice_por_que_no_se_puede() -> void:
 		"hace falta grasa para la lámpara", "y luego la grasa")
 
 
-func test_pintar_no_se_apaga_desde_la_ventana() -> void:
+## LA ACCIÓN «pintar» YA NO EXISTE (2026-09-19): era un segundo botón que hacía lo mismo
+## que «entrar», abrir la sala, desde que el botón de pintar se mudó dentro de ella.
+func test_pintar_ya_no_es_una_accion_de_la_ficha() -> void:
 	var sim := SettlementSim.new()
 	sim.store = Storehouse.new()
 	assert_eq(PanelSitios.por_que_no("pintar", {"cueva": 2}, sim), "",
-		"pintar lo dice su propia tarjeta")
+		"una acción que no existe no tiene motivo que dar")
+	for pintable: bool in [true, false]:
+		assert_false(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, true,
+			pintable), "pintar"), "no hay acción «pintar» en la ficha")
 
 
 func _tiene(acciones: Array, id: String) -> bool:
 	return id in _ids(acciones)
 
 
-func test_pintar_solo_en_cueva_explorada_y_con_pared() -> void:
-	# Petición del usuario del 2026-09-14: «la opción de pintar la pared del
-	# fondo sólo aparece en las cuevas exploradas» —y con pared pintable, que es
-	# lo que la exploración averigua—. Salía en todas, sin mirar nada.
-	assert_false(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, false, false),
-		"pintar"), "sin explorar no se sabe si hay pared")
-	assert_false(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, false),
-		"pintar"), "explorada y sin zona pintable, tampoco")
-	assert_true(_tiene(PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, true),
-		"pintar"), "explorada y con pared, sí")
+## UN SOLO BOTÓN PARA EL FONDO, y sale en toda cueva (2026-09-19).
+##
+## Antes eran dos: «pintar la pared del fondo» —sólo en cuevas exploradas y con pared, a
+## petición del usuario del 2026-09-14— y «entrar a mirar», en todas. Desde que pintar se
+## hace **dentro** de la sala, los dos abrían la sala y el usuario lo vio: «hacen lo mismo,
+## sustitúyelos por Entrar al fondo de la cueva». Así que la condición de «con pared
+## pintable» deja de decidir si hay botón: decide si dentro se puede pintar, que es donde
+## se pregunta ahora.
+func test_el_fondo_de_la_cueva_es_un_solo_boton() -> void:
+	for explorada: bool in [true, false]:
+		for pintable: bool in [true, false]:
+			var acciones := PanelSitios._actions_for(Site.Feature.ABRIGO, false,
+				explorada, pintable)
+			assert_true(_tiene(acciones, "entrar"),
+				"el botón del fondo sale siempre (explorada %s, pintable %s)"
+					% [explorada, pintable])
+			assert_false(_tiene(acciones, "pintar"), "y no hay un segundo botón")
+	# Y se llama por lo que hace.
+	for accion: Array in PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, true):
+		if String(accion[0]) == "entrar":
+			assert_true(String(accion[1]).contains("fondo de la cueva"),
+				"el rótulo dice adónde lleva: %s" % String(accion[1]))

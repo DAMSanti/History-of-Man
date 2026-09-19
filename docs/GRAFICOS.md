@@ -481,7 +481,28 @@ emergida y 22 414 con cauce pintado** (antes, ninguna). Lo enseña `tests/DebugC
 La moraleja, que ya estaba escrita en CLAUDE.md y volvió a pasar: **una pregunta, un sitio
 que la contesta**. Las dos quejas del usuario eran el mismo fallo visto desde dos mapas.
 
-#### Y la verdad seguía sin ser sola: un sitio, pero dos momentos (2026-09-19)
+#### La pasarela se tiende por donde el agua es más estrecha (2026-09-19)
+
+Queja: «en los que sólo tocan el río en una esquina, la mayoría del tablón está puesto en
+tierra; sospecho que se debe a la orientación». **Lo era.**
+
+`PasarelaView` medía el ancho del cauce **sólo a lo largo de X y a lo largo de Z**, y con
+esas dos cifras elegía cómo tender el tablón. Si el cauce cruza la celda **en diagonal**,
+ninguna de las dos cae sobre el agua de verdad —las dos atraviesan la esquina de refilón— y
+el tablón se tiende sobre tierra firme.
+
+Ahora se barre el círculo: **dieciséis rumbos**, y se cruza por donde menos agua hay que
+salvar, que es por donde cruzaría cualquiera. Vale igual para un cauce recto que para una
+diagonal, sin una regla aparte para cada caso, y el tablero y los dos leños van girados a
+ese rumbo en vez de elegir entre X y Z.
+
+Lo fija `TestPasarela`: sobre una banda de agua a 45°, el rumbo elegido es el de la diagonal
+corta —135°, ni 0 ni 90— y mide **20 m contra los 40 de cruzar por X**. Y una segunda prueba
+sujeta lo que ya salía bien: un cauce que corre en Z se sigue cruzando por X. El control es
+estructural: el código viejo sólo sabía decir «X» o «Z», así que nunca podría haber devuelto
+135°.
+
+### Y la verdad seguía sin ser sola: un sitio, pero dos momentos (2026-09-19)
 
 `mar_del_mapa()` quedó siendo el único sitio que contesta, sí, pero **contestaba distinto
 según cuándo se le preguntara**, porque la respuesta incluía «el mar de hoy mientras no haya

@@ -193,6 +193,27 @@ salir la tarjeta de «Un sitio con nombre»; la Crónica, el diario y el mapa si
 todas son reglas y el estado se construye en vez de simularse. La 6 es la única que necesita
 ventana, y son dos capturas: **un par de minutos**. No hay ninguna corrida larga.
 
+### Ver pintar la pared (depurar del 2026-09-19, noche)
+
+**Pendiente, y es lo más grande de los tres que pidió el usuario.** «Al pintar algo,
+automáticamente me lleve a la vista 3D de la cueva, y vea cómo se va pintando en la pared».
+Decisión suya: **desde que empieza y avanzando con las jornadas, pero tardando mucho menos**.
+
+Lo que hace falta, y por qué no cabía en el mismo paso que los otros dos:
+
+- **El sitio de la figura se reserva hoy AL TERMINAR**, no al empezar: `Pinturas._paint_wall`
+  llama a `pared_de(cueva).colocar(...)` cuando la pintura se acaba. Para verla aparecer hay
+  que reservarle su hueco en la pared al mandar pintar.
+- **Cada figura necesita saber cuánto lleva pintado.** `SalaDeLaCueva._pintar` ya recorre
+  figura a figura y trazo a trazo, así que con un `pintado: 0..1` por figura se dibuja hasta
+  donde vaya; lo que no existe es ese dato.
+- **Abrir la sala sola** cuando empieza una pintura: la simulación no puede abrir ventanas,
+  así que lo tiene que notar la interfaz.
+- **`PINTURA_JORNADAS` baja**, hoy 2,0. Es una cifra **sin calibrar** —lo dice su propio
+  comentario— así que bajarla es legítimo, pero es una **decisión** y hay que escribirla
+  como tal. Y `PINTURA_GRASA` está justificada como «media porción por jornada»: si cambia
+  una, hay que rehacer el porqué de la otra o dejará de ser cierto.
+
 ### La banda, que se mueva con sentido (depurar del 2026-09-19, noche)
 
 Seis frentes de una sesión de juego. **Lo que el usuario pidió, dicho por él**: «que los

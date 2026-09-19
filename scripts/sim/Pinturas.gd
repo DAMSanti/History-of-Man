@@ -51,15 +51,39 @@ func por_que_no_se_entra(cueva: int) -> String:
 		return "no hay cueva"
 	if not sim.exploracion.explorada(cueva):
 		return "hay que explorarla antes: dentro no se sabe por dónde se va"
+	# AL FONDO NO SE BAJA A OSCURAS. Decisión del usuario del 2026-09-19, al unir los dos
+	# botones que hacían lo mismo —«pintar la pared del fondo» y «entrar a mirar»— en uno:
+	# «Entrar al fondo de la cueva, y para ello hace falta grasa y lámpara, por supuesto».
+	#
+	# Se PIDE, no se gasta: mirar lo que la banda tiene pintado no puede costarle la
+	# despensa. La grasa se cobra al pintar, que es cuando la lámpara arde horas —ver
+	# [SettlementSim.PINTURA_GRASA]—.
+	return _con_que_alumbrarse(0.01)
+
+
+## Qué falta para tener luz dentro, o "" si la hay. Un sitio y no dos: lo preguntan entrar
+## al fondo y pintar, y con dos copias una diría que se puede y la otra que no.
+##
+## `grasa` es cuánta hace falta: un pellizco para bajar a mirar, [SettlementSim.PINTURA_GRASA]
+## para pintar una pared entera.
+func _con_que_alumbrarse(grasa: float) -> String:
+	if sim.toolkit.count(Tool.Kind.LAMPARA) <= 0:
+		return "no hay lámpara: dentro no se ve nada"
+	if sim.store.amount(Materia.Kind.GRASA) < grasa:
+		return "falta grasa para la lámpara"
 	return ""
 
 
 ## Las cuevas de este campamento en las que se puede entrar: `[[cueva, nombre]]`.
 ## La pide la ficha del sitio en el mapa regional.
+## **Las EXPLORADAS, se pueda bajar hoy o no.** Se filtraba por [por_que_no_se_entra], y
+## desde que ésa pide lámpara y grasa (2026-09-19) eso habría hecho DESAPARECER los botones
+## en cuanto se acabara el sebo, en vez de decir qué falta. Una cueva explorada existe; si
+## no se puede bajar, lo dice el botón.
 func cuevas_para_entrar() -> Array:
 	var fuera: Array = []
 	for cueva in range(elementos.size()):
-		if not por_que_no_se_entra(cueva).is_empty():
+		if not sim.exploracion.explorada(cueva):
 			continue
 		fuera.append([cueva, String(elementos[cueva].get("name", "la cueva"))])
 	return fuera
@@ -184,12 +208,11 @@ func por_que_no_se_pinta_en(cueva: int) -> String:
 		return "todavía no se sabe pintar"
 	if not sim.camp_built.get(CampProjects.Kind.HOGAR, false):
 		return "hace falta el hogar"
-	if sim.toolkit.count(Tool.Kind.LAMPARA) <= 0:
-		return "no hay lámpara: dentro no se ve nada"
+	var sin_luz := _con_que_alumbrarse(SettlementSim.PINTURA_GRASA)
+	if not sin_luz.is_empty():
+		return sin_luz
 	if sim.store.amount(Materia.Kind.OCRE) < SettlementSim.PINTURA_OCRE:
 		return "falta ocre"
-	if sim.store.amount(Materia.Kind.GRASA) < SettlementSim.PINTURA_GRASA:
-		return "falta grasa para la lámpara"
 	# SÓLO SE PINTA LO EXPLORADO, Y DONDE SE PUEDE (frente 23, 2026-09-13).
 	# Antes se pintaba sin haber entrado nunca. Se pinta en la cueva de la banda,
 	# que una vez explorada tiene pared siempre: ver
