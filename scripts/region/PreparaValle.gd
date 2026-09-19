@@ -526,20 +526,7 @@ func _rehacer_el_contorno(sitio: Site, local: HeightmapData) -> bool:
 	# Con un 10% de margen: no merece la pena una descarga de minutos por una
 	# diferencia de decimales
 	var coarse := surround.meters_per_sample > surround_meters * 1.1
-	# ¿TIENE ESTE CONTORNO SU HIDROGRAFÍA? La pregunta era «¿tiene algún píxel de agua?»
-	# -`river_mask.is_empty()`- y ésa no vale: la máscara se le puede haber pintado por otro
-	# camino -el relleno del mar de hoy la toca- y entonces nunca se le trae la de OSM.
-	#
-	# Medido en el valle 56 (2026-09-19): `pipeline_version 10`, máscara con 30.742 celdas
-	# de agua... y **`agua_de_osm` con 0 cauces y 0 láminas**. Con la puerta vieja se daba
-	# por bueno y no se bajaba nada, así que el agua sólo estaba donde la había puesto el
-	# relleno: sobre el recuadro y un margen. Contado por franjas, de 600 muestras salían
-	# 104 con agua en la raya, 30 a cien metros fuera, 3 a trescientos y **0 más allá**. El
-	# río llegaba al borde y se acababa, que es justo la queja del usuario.
-	var traida: Dictionary = surround.agua_de_osm
-	var cauces: Array = traida.get("channels", [])
-	var laminas: Array = traida.get("bodies", [])
-	var dry := surround.river_mask.is_empty() or (cauces.is_empty() and laminas.is_empty())
+	var dry := surround.river_mask.is_empty()
 	if not coarse and not dry:
 		return false
 
