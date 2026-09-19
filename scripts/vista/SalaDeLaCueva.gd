@@ -53,11 +53,27 @@ var _distancia := 3.2
 ## Cómo tenía el 3D la ventana de debajo al entrar, para dejarlo igual al salir.
 var _tres_d_de_debajo := false
 
+## LO QUE HACE FALTA PARA PINTAR DESDE AQUÍ DENTRO. El botón de pintar vivía en el panel
+## de Técnicas, una ventana de gestión, y lo que se pinta es esta pared: se movió aquí el
+## 2026-09-19 por decisión del usuario, y **sólo aquí**, que dos botones para lo mismo son
+## dos verdades que se separan.
+var _sim: SettlementSim
+var _cueva: int = -1
+var _material: ShaderMaterial
+var _pintadero: VBoxContainer
+## Cuántas pinturas había la última vez que se miró la pared. Cuando cambia, la pared se
+## vuelve a dibujar sin salir de la sala: es «verlo pintado» sin cerrar y volver a entrar.
+var _pintadas := -1
+var _refresco := 0.0
+var _lo_dicho := ""
+
 
 ## Monta la sala de la cueva `cueva` del campamento de `sim`. `nombre` va arriba.
 func montar(sim: SettlementSim, cueva: int, nombre: String) -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_sim = sim
+	_cueva = cueva
 	pared = sim.pinturas.pared_de(cueva)
 	var arte := sim.pinturas.arte_de(cueva)
 	sim.pinturas.entrar_a_mirar(cueva)
@@ -94,6 +110,7 @@ func montar(sim: SettlementSim, cueva: int, nombre: String) -> void:
 	imagen_de_pinturas = _pintar()
 	material.set_shader_parameter("pinturas", ImageTexture.create_from_image(imagen_de_pinturas))
 	roca.material_override = material
+	_material = material
 	_vista.add_child(roca)
 
 	_lampara = OmniLight3D.new()
@@ -111,6 +128,8 @@ func montar(sim: SettlementSim, cueva: int, nombre: String) -> void:
 	_colocar_camara()
 
 	_levantar_rotulos(nombre, arte)
+	_pintadas = sim.paintings.size()
+	_levantar_el_pintadero()
 
 
 ## Adónde mira la cámara al entrar: al centro de lo pintado, y no al de la pared.
@@ -354,6 +373,104 @@ func _levantar_rotulos(nombre: String, arte: Dictionary) -> void:
 	add_child(abajo)
 
 
+## EL PINTADERO: lo que falta por contar en la pared, con su botón, aquí dentro.
+##
+## Viene de una petición del usuario del 2026-09-18 —«el botón de pintar, dentro de la
+## vista 3D, con la lista de hitos sin pintar»— y de que el sitio donde estaba no era el
+## sitio: el panel de Técnicas es una ventana de gestión y la pared es esto. Se **movió**,
+## no se duplicó (decisión del usuario del 2026-09-19).
+##
+## El botón sale SIEMPRE que haya algo pintable, y apagado dice por qué no se puede: sin la
+## técnica, sin lámpara, sin ocre, o porque ésta no es la cueva de la banda. La razón la da
+## [Pinturas.por_que_no_se_pinta_en] y no se repite aquí.
+func _levantar_el_pintadero() -> void:
+	if _sim == null or _sim.pinturas == null:
+		return
+	var marco := PanelContainer.new()
+	marco.name = "Pintadero"
+	marco.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	marco.offset_left = 24
+	marco.offset_top = 72
+	marco.custom_minimum_size = Vector2(420, 0)
+	var fondo := StyleBoxFlat.new()
+	# Negro casi opaco: es un rótulo sobre una cueva a oscuras, y el texto tiene que
+	# leerse sobre la roca sin iluminarla.
+	fondo.bg_color = Color(0.04, 0.035, 0.03, 0.82)
+	fondo.content_margin_left = 14
+	fondo.content_margin_right = 14
+	fondo.content_margin_top = 10
+	fondo.content_margin_bottom = 10
+	marco.add_theme_stylebox_override("panel", fondo)
+	add_child(marco)
+	_pintadero = VBoxContainer.new()
+	_pintadero.add_theme_constant_override("separation", 6)
+	marco.add_child(_pintadero)
+	_lo_dicho = _lo_que_dice_el_pintadero()
+	_repintar_el_pintadero()
+
+
+## Rehace la lista. Se llama al montar, al mandar pintar y cuando cambia lo que hay.
+func _repintar_el_pintadero() -> void:
+	if _pintadero == null:
+		return
+	for hijo: Node in _pintadero.get_children():
+		hijo.queue_free()
+	_pintadero.get_parent().visible = true
+
+	var falta := _sim.pinturas.por_que_no_se_pinta_en(_cueva)
+	var pendientes := _sim.pinturas.pintables()
+
+	if _sim.painting_queue != null:
+		_linea("Pintando: %s" % _sim.painting_queue.title, Color(0.93, 0.78, 0.42), 19)
+		_linea("va por el %.0f %%" % (100.0 * _sim.painting_progress
+			/ maxf(SettlementSim.PINTURA_JORNADAS, 0.001)), Color(0.8, 0.72, 0.6), 16)
+		if pendientes.is_empty():
+			return
+		_linea("", Color.WHITE, 8)
+
+	if pendientes.is_empty():
+		_linea("Nada nuevo que contar en la pared.", Color(0.82, 0.75, 0.62), 17)
+		return
+
+	_linea("LO QUE FALTA POR PINTAR", Color(0.93, 0.84, 0.68), 19)
+	if not falta.is_empty():
+		_linea("No se puede: %s." % falta, Color(0.86, 0.6, 0.45), 16)
+	for tale: Tale in pendientes:
+		var fila := HBoxContainer.new()
+		fila.add_theme_constant_override("separation", 8)
+		_pintadero.add_child(fila)
+		var nombre := Label.new()
+		nombre.text = tale.title
+		nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nombre.add_theme_font_size_override("font_size", 17)
+		nombre.add_theme_color_override("font_color", Color(0.88, 0.8, 0.66))
+		fila.add_child(nombre)
+		var fecha := Label.new()
+		fecha.text = tale.stamp()
+		fecha.add_theme_font_size_override("font_size", 15)
+		fecha.add_theme_color_override("font_color", Color(0.66, 0.6, 0.5))
+		fila.add_child(fecha)
+		var boton := Button.new()
+		boton.name = "Pintar_%d" % tale.day
+		boton.text = "Pintar"
+		boton.disabled = not falta.is_empty()
+		boton.tooltip_text = "No se puede: %s." % falta if not falta.is_empty() 			else "Pintarlo en esta pared."
+		boton.pressed.connect(func() -> void:
+			_sim.pinturas.queue_painting(tale)
+			_lo_dicho = _lo_que_dice_el_pintadero()
+			_repintar_el_pintadero())
+		fila.add_child(boton)
+
+
+func _linea(texto: String, color: Color, tamano: int) -> void:
+	var etiqueta := Label.new()
+	etiqueta.text = texto
+	etiqueta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	etiqueta.add_theme_font_size_override("font_size", tamano)
+	etiqueta.add_theme_color_override("font_color", color)
+	_pintadero.add_child(etiqueta)
+
+
 ## A pantalla completa **a mano** y no con anclas: colgada de un `CanvasLayer`,
 ## que es donde va la interfaz, un `Control` no tiene padre del que tomar tamaño y
 ## las anclas lo dejan en cero —la primera captura salió con la sala invisible y el
@@ -393,6 +510,44 @@ func _process(delta: float) -> void:
 	_reloj += delta
 	_lampara.light_energy = 2.4 + 0.25 * sin(_reloj * 7.3) + 0.15 * sin(_reloj * 13.1 + 1.7)
 	_colocar_camara()
+	_ver_como_se_pinta(delta)
+
+
+## VERLO PINTADO SIN SALIR. Mientras la sala está abierta la simulación sigue corriendo, y
+## una pared que se termina de pintar cambia la pared que se está mirando: se rehace la
+## textura ahí mismo. Antes había que cerrar la cueva y volver a entrar, que es justo lo
+## que la sala existe para no hacer.
+##
+## Dos veces por segundo y no cada fotograma: [_pintar] recorre todas las figuras y monta
+## una imagen de 1320 px, y nada de esto cambia sesenta veces por segundo.
+func _ver_como_se_pinta(delta: float) -> void:
+	if _sim == null or _pintadero == null:
+		return
+	_refresco += delta
+	if _refresco < 0.5:
+		return
+	_refresco = 0.0
+	var ahora := _sim.paintings.size()
+	if ahora != _pintadas:
+		_pintadas = ahora
+		if _material != null:
+			imagen_de_pinturas = _pintar()
+			_material.set_shader_parameter("pinturas",
+				ImageTexture.create_from_image(imagen_de_pinturas))
+	# La lista sólo se rehace si ha cambiado algo de lo que enseña. Rehacerla cada medio
+	# segundo pase lo que pase tira los botones que el ratón tuviera encima.
+	var ahora_dice := _lo_que_dice_el_pintadero()
+	if ahora_dice != _lo_dicho:
+		_lo_dicho = ahora_dice
+		_repintar_el_pintadero()
+
+
+## Firma de lo que el pintadero enseña ahora mismo, para no rehacerlo sin motivo.
+func _lo_que_dice_el_pintadero() -> String:
+	return "%d|%s|%d|%s" % [_sim.paintings.size(),
+		_sim.painting_queue.title if _sim.painting_queue != null else "",
+		int(_sim.painting_progress * 100.0 / maxf(SettlementSim.PINTURA_JORNADAS, 0.001)),
+		_sim.pinturas.por_que_no_se_pinta_en(_cueva)]
 
 
 ## LO QUE CABE EN PANTALLA a esta distancia de la pared, en metros: medio ancho y

@@ -1704,6 +1704,36 @@ que el **100 % de los sitios libres**. Con `CuevaCaptura` (dos corridas): entrar
 - **Mirar desde el mapa regional pide un campamento vivo en ese sitio** que haya
   explorado la cueva: lo explorado es de cada campamento.
 
+### Se pinta delante de la pared (2026-09-19)
+
+Petición del usuario: «el botón de pintar, dentro de la vista 3D, con la lista de hitos
+sin pintar». Estaba en el panel de **Técnicas** —una fila por relato con su botón—, que es
+una ventana de gestión; lo que se pinta es una pared que se puede mirar de cerca.
+
+**Se movió, no se duplicó** (decisión del usuario del 2026-09-19): el botón vive ahora
+dentro de [SalaDeLaCueva], en un rótulo a la izquierda con lo que falta por contar, su
+fecha, y el motivo cuando no se puede. Técnicas conserva la lista y el motivo —siguen
+siendo información de gestión— y dice dónde se pinta; **no tiene botón**. Dos botones para
+lo mismo son dos verdades que acaban separándose.
+
+Tres cosas que salieron al hacerlo:
+
+- **La pregunta «¿por qué no se puede pintar?» pasó a tener una cueva.** La sala se abre en
+  cualquier cueva —«entrar a mirar» está en todas— y allí el botón tiene que decir «se
+  pinta en la cueva de la banda», no «falta ocre». Lo contesta
+  `Pinturas.por_que_no_se_pinta_en(cueva)`, y `painting_blocked_by()` es exactamente eso
+  con la cueva de la banda: una pregunta, un sitio.
+- **Verlo pintado sin salir.** Mientras la sala está abierta la simulación sigue corriendo;
+  si una pared se termina, la textura se rehace ahí mismo (dos veces por segundo, y sólo
+  cuando cambia lo que enseña). Antes había que cerrar la cueva y volver a entrar, que es
+  justo lo que la sala existe para no hacer.
+- **Había un tercer camino que mentía.** La acción «Pintar la pared del fondo» de la ficha
+  de un sitio sólo escribía una línea en consola desde que existe. Ahora abre la misma
+  sala, que es donde se pinta.
+
+Coste medido con `tests/CuevaCaptura.gd`, caso `pintadero`: **7,20 ms de GPU** y 188 ms en
+montar y dar el primer cuadro (la spec pide menos de 2 000).
+
 **Queda pendiente.**
 
 - **De cerca, el trazo se ve escalonado**: la textura de pinturas es de 110 px por

@@ -170,6 +170,16 @@ func _painting_covers(tale: Tale, task: int) -> bool:
 ## momento: ofrecer «pintarlo en la cueva» sin decir que faltan tres de ocre es
 ## ofrecer un botón que no hace nada.
 func painting_blocked_by() -> String:
+	return por_que_no_se_pinta_en(sim.exploracion.cueva_de_la_banda)
+
+
+## Lo mismo, PARA UNA CUEVA CONCRETA. "" si en ésa se puede pintar.
+##
+## Existe aparte desde el 2026-09-19, cuando el botón de pintar se metió dentro de la sala
+## de la cueva: la sala se abre en **cualquier** cueva —también en una que no es la de la
+## banda—, y allí el botón tiene que decir eso y no «falta ocre». Antes la pregunta sólo
+## tenía sentido para la cueva de la banda, que es donde se pinta.
+func por_que_no_se_pinta_en(cueva: int) -> String:
 	if sim.techs == null or not sim.techs.has(TechTree.Tech.ARTE):
 		return "todavía no se sabe pintar"
 	if not sim.camp_built.get(CampProjects.Kind.HOGAR, false):
@@ -185,7 +195,8 @@ func painting_blocked_by() -> String:
 	# que una vez explorada tiene pared siempre: ver
 	# [Exploracion.cueva_de_la_banda]. Va DESPUÉS de lo que se lleva dentro —la
 	# lámpara, el ocre, la grasa—, que es lo que el jugador junta primero.
-	var cueva := sim.exploracion.cueva_de_la_banda
+	if cueva != sim.exploracion.cueva_de_la_banda:
+		return "se pinta en la pared del fondo de la cueva de la banda"
 	if not sim.exploracion.explorada(cueva):
 		return "hay que explorar la cueva antes de pintarla"
 	if not sim.exploracion.pintable(cueva):

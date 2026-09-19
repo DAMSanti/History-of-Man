@@ -1474,11 +1474,13 @@ func _on_cave_action(action: String, data: Dictionary) -> void:
 				ui.add_child(sala)
 				sala.montar(sim, cueva, label)
 		"pintar":
-			if tech and not tech.has(TechTree.Tech.ARTE):
-				print("Banda: todavia no se sabe pintar (falta %s)" %
-					TechTree.tech_name(TechTree.Tech.ARTE))
-			else:
-				print("Banda: se pinta la pared del fondo de %s" % label)
+			# LLEVA A LA PARED, que es donde se pinta desde el 2026-09-19. Antes esta
+			# acción sólo escribía una línea en consola y no hacía nada: un botón que
+			# miente es peor que no tenerlo. Ahora abre la misma sala que «entrar», con
+			# su lista de lo que falta por pintar y su botón.
+			var sala_para_pintar := SalaDeLaCueva.new()
+			ui.add_child(sala_para_pintar)
+			sala_para_pintar.montar(sim, int(data.get("cueva", -1)), label)
 
 
 ## Lo que pasa en el MUNDO, y solo si la interfaz no se lo ha quedado antes.

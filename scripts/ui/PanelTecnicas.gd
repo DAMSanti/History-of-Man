@@ -387,16 +387,13 @@ func _lo_que_se_puede_pintar(body: VBoxContainer) -> void:
 		fecha.text = tale.stamp()
 		Pigmento.escribir(fecha, UISkin.INK_SOFT, 16, Pigmento.carbon())
 		fila.add_child(fecha)
-		var boton := Button.new()
-		boton.text = "Pintar"
-		boton.disabled = not falta.is_empty()
-		boton.tooltip_text = "No se puede: %s." % falta if not falta.is_empty() \
-			else "Pintarlo en la pared del fondo."
-		Pigmento.escribir_boton(boton, UISkin.OCHRE if falta.is_empty() else UISkin.INK_SOFT, 16)
-		boton.pressed.connect(func() -> void:
-			ui.sim.pinturas.queue_painting(tale)
-			show_tech())
-		fila.add_child(boton)
+	# AQUÍ NO HAY BOTÓN: SE PINTA EN LA PARED (2026-09-19, decisión del usuario).
+	#
+	# Lo hubo —uno por relato, en esta misma lista— y era el sitio equivocado: esto es una
+	# ventana de gestión y lo que se pinta es una pared que se puede mirar de cerca. El
+	# botón vive ahora dentro de [SalaDeLaCueva], delante de la pared. Se **movió**, no se
+	# duplicó: dos botones para lo mismo son dos verdades que acaban separándose.
+	_escrito(body, "Se pinta entrando en la cueva, delante de la pared del fondo.", true)
 
 
 # -------------------------------------------------------------- caza --

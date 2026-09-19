@@ -382,3 +382,80 @@ func test_si_el_encuadre_no_cabe_la_pared_se_centra() -> void:
 	var dentro := SalaDeLaCueva.mirada_dentro(Vector2(0.0, 0.0), pared.x, pared.y, enorme)
 	assert_near(dentro.x, pared.x * 0.5, 0.001, "centrada en horizontal")
 	assert_near(dentro.y, pared.y * 0.5, 0.001, "y en vertical")
+
+
+# --- el botón de pintar, dentro de la sala ---------------------------------------
+
+## Monta una banda con una cueva explorada y pintable, y un relato sin pintar.
+func _banda_con_algo_que_contar() -> SettlementSim:
+	var sim := SettlementSim.new()
+	sim.chronicle = Chronicle.new()
+	sim.game_seed = 3
+	var covalanas: Dictionary = ArteDeLosDeAntes.CUEVAS[5]
+	sim.pinturas.elementos = [{"name": String(covalanas["nombre"]),
+		"lat": covalanas["lat"], "lon": covalanas["lon"]}]
+	sim.exploracion._sabido[0] = {"explorada": true, "pintable": true}
+	sim.exploracion.cueva_de_la_banda = 0
+	var tale := Tale.hunt("Ana", "ciervo", "el vado", 3, true, 1,
+		Profession.task_id(Profession.Job.CAZA, Profession.Speciality.CAZA_MAYOR))
+	sim.tales.append(tale)
+	return sim
+
+
+## EL BOTÓN DE PINTAR VIVE DENTRO DE LA SALA y en ningún otro sitio (2026-09-19).
+##
+## Estaba en el panel de Técnicas, que es una ventana de gestión; lo que se pinta es esta
+## pared. El usuario pidió moverlo, no duplicarlo, así que la prueba mira las dos cosas:
+## que el botón esté aquí y que sepa decir por qué no se puede.
+func test_la_sala_trae_la_lista_de_lo_que_falta_por_pintar() -> void:
+	var sim := _banda_con_algo_que_contar()
+	var sala := SalaDeLaCueva.new()
+	sala.montar(sim, 0, "Covalanas")
+	var botones := sala.find_children("Pintar_*", "Button", true, false)
+	assert_eq(botones.size(), 1, "un botón por relato sin pintar")
+	# Sin la técnica no se puede, y el botón lo dice en vez de desaparecer: la spec pide
+	# que se vea lo que se podría contar aunque todavía no se sepa pintar (SISTEMAS §13).
+	assert_true((botones[0] as Button).disabled, "sin saber pintar, apagado")
+	assert_true((botones[0] as Button).tooltip_text.contains("no se sabe pintar"),
+		"y dice por qué: %s" % (botones[0] as Button).tooltip_text)
+	sala.free()
+	sim.free()
+
+
+## Y en una cueva que NO es la de la banda lo dice, en vez de hablar de ocre.
+##
+## La sala se abre en cualquier cueva —«entrar a mirar» está en todas—, así que el botón
+## tiene que distinguir «te falta ocre» de «aquí no se pinta». Por eso
+## [Pinturas.por_que_no_se_pinta_en] toma la cueva.
+func test_en_otra_cueva_el_boton_dice_que_se_pinta_en_la_de_la_banda() -> void:
+	var sim := _banda_con_algo_que_contar()
+	sim.techs.unlock(TechTree.Tech.ARTE)
+	sim.exploracion._sabido[1] = {"explorada": true, "pintable": true}
+	var aqui := sim.pinturas.por_que_no_se_pinta_en(1)
+	assert_true(aqui.contains("cueva de la banda"),
+		"en otra cueva se dice dónde se pinta, no qué falta: %s" % aqui)
+	# Y la pregunta de siempre sigue siendo la misma para la cueva de la banda.
+	assert_eq(sim.pinturas.painting_blocked_by(),
+		sim.pinturas.por_que_no_se_pinta_en(sim.exploracion.cueva_de_la_banda),
+		"una pregunta, un sitio: la de siempre es ésta con la cueva de la banda")
+	sim.free()
+
+
+## Mandar pintar desde la sala encola el relato: el botón hace lo que dice.
+func test_el_boton_de_la_sala_manda_pintar() -> void:
+	var sim := _banda_con_algo_que_contar()
+	sim.techs.unlock(TechTree.Tech.ARTE)
+	sim.camp_built[CampProjects.Kind.HOGAR] = true
+	sim.toolkit.craft(Tool.Kind.LAMPARA, Tool.Stuff.CUARCITA, 0.6)
+	sim.store.add(Materia.Kind.OCRE, 20.0)
+	sim.store.add(Materia.Kind.GRASA, 20.0)
+	assert_eq(sim.pinturas.painting_blocked_by(), "", "con todo puesto, se puede pintar")
+	var sala := SalaDeLaCueva.new()
+	sala.montar(sim, 0, "Covalanas")
+	var botones := sala.find_children("Pintar_*", "Button", true, false)
+	assert_eq(botones.size(), 1, "el relato sin pintar trae su botón")
+	assert_false((botones[0] as Button).disabled, "y con todo puesto se pulsa")
+	(botones[0] as Button).pressed.emit()
+	assert_true(sim.painting_queue != null, "al pulsarlo, la pared queda empezada")
+	sala.free()
+	sim.free()

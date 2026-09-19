@@ -901,7 +901,7 @@ static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false,
 					"Recorrerla a fondo: puede haber galerías, agua o restos."])
 			if explorada and pintable:
 				acciones.append(["pintar", "Pintar la pared del fondo",
-					"Requiere dominar el fuego y la talla laminar."])
+					"Entra a la pared, con lo que falta por contar y su botón."])
 			# ENTRAR A MIRAR, en toda cueva: explorada se entra, y sin explorar el
 			# botón sale apagado con el motivo —«la ficha dice por qué», SISTEMAS §13—.
 			# No pide la técnica: decisión del usuario del 2026-09-15.

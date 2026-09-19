@@ -154,10 +154,23 @@ documento permanente que le toque —[SISTEMAS.md](SISTEMAS.md),
   > **Qué marca la cinta no cambia** (decisión del usuario): el territorio de la época,
   > Cantabria más la plataforma emergida, no el polígono administrativo.
 
-- [ ] **El botón de pintar, dentro de la vista 3D de la cueva.** Hoy vive en el panel de
-  Técnicas, una fila por relato. Se **mueve** —decisión del usuario, no se deja en los dos
-  sitios—: apagado mientras no haya arte parietal, con la lista de hitos sin pintar, y
-  poder verlo pintar. Técnicas pasa a decir dónde se pinta.
+- [x] **El botón de pintar, dentro de la vista 3D de la cueva.**
+
+  > **HECHO (2026-09-19).** Movido, no duplicado: el rótulo «LO QUE FALTA POR PINTAR» vive
+  > dentro de [SalaDeLaCueva], con cada hito, su fecha, su botón y el motivo cuando está
+  > apagado. Técnicas conserva la lista y el motivo y dice dónde se pinta; ya no tiene
+  > botón. Relato en SISTEMAS §13.
+  >
+  > **Tres cosas que salieron al hacerlo:** la pregunta «¿por qué no se puede pintar?»
+  > pasó a tener una cueva —la sala se abre en cualquiera, y allí la respuesta es «se
+  > pinta en la cueva de la banda», no «falta ocre»—; la pared se rehace sin salir cuando
+  > se termina una pintura; y **había un tercer camino que mentía**, la acción «Pintar la
+  > pared del fondo» de la ficha de un sitio, que desde que existe sólo escribía una línea
+  > en consola y ahora abre la sala.
+  >
+  > Medido con `CuevaCaptura` (caso `pintadero`, nuevo): 7,20 ms de GPU y 188 ms en montar.
+  > Pruebas en `TestPared` (tres nuevas) y `TestRelato`, cuya prueba del botón viejo se
+  > da la vuelta: ahora fija que **aquí no haya ningún botón**.
 
 - [ ] **Los fallos de caminar**: en 109 jornadas, 19× sin camino a donde iba, 5× llegó y el
   estado no se enteró, 1× no avanza por el camino trazado. Las cifras salen de la ventana

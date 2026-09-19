@@ -22,15 +22,18 @@ func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(SALIDA)
 	await process_frame
 
+	# El cuarto caso es el del PINTADERO: una banda con tres relatos sin pintar, para ver
+	# la lista y su botón, que desde el 2026-09-19 viven aquí dentro y no en Técnicas.
 	var casos: Array = [
-		["banda", -1, 5],
-		["covalanas", 5, 0],
-		["el_castillo", 1, 0],
+		["banda", -1, 5, 0],
+		["covalanas", 5, 0, 0],
+		["el_castillo", 1, 0, 0],
+		["pintadero", -1, 1, 3],
 	]
 	var peor := 0.0
 	var gpu_peor := 0.0
 	for caso: Array in casos:
-		var sim := _sim(int(caso[1]), int(caso[2]))
+		var sim := _sim(int(caso[1]), int(caso[2]), int(caso[3]))
 		var capa := CanvasLayer.new()
 		root.add_child(capa)
 		var sala := SalaDeLaCueva.new()
@@ -71,7 +74,7 @@ func _init() -> void:
 ## Una simulación mínima con una cueva: la de una cueva con arte del catálogo
 ## (`arte` es su índice en [ArteDeLosDeAntes.CUEVAS]) o una sin arte con
 ## `pintadas` relatos de la banda en la pared.
-func _sim(arte: int, pintadas: int) -> SettlementSim:
+func _sim(arte: int, pintadas: int, sin_pintar: int = 0) -> SettlementSim:
 	var sim := SettlementSim.new()
 	sim.chronicle = Chronicle.new()
 	sim.game_seed = 20260915
@@ -90,6 +93,10 @@ func _sim(arte: int, pintadas: int) -> SettlementSim:
 		tale.painted = true
 		tale.cueva = 0
 		sim.paintings.append(tale)
+	# Y lo que falta por contar, que es lo que enseña el pintadero.
+	for i in range(sin_pintar):
+		sim.tales.append(Tale.hunt("Ana", especies[i % especies.size()], "el vado", 3, true,
+			10 + i, Profession.task_id(Profession.Job.CAZA, Profession.Speciality.CAZA_MAYOR)))
 	var mano := Tale.new()
 	mano.kind = Tale.Kind.HITO
 	mano.task = 0

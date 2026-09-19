@@ -383,9 +383,16 @@ func test_la_lista_de_lo_pintable_va_por_fecha_y_sin_lo_pintado() -> void:
 		"del más viejo al más nuevo")
 
 
-## Sin la técnica, la ventana enseña lo que se podría pintar con el botón apagado y
-## el motivo; con ella, el botón se pulsa.
-func test_la_ventana_dice_por_que_no_se_pinta() -> void:
+## LA VENTANA ENSEÑA LO QUE SE PODRÍA PINTAR Y EL MOTIVO, PERO YA NO PINTA.
+##
+## Hasta el 2026-09-19 tenía un botón «Pintar» por relato, y era el sitio equivocado: esto
+## es una ventana de gestión y lo que se pinta es la pared del fondo. El botón se **movió**
+## a [SalaDeLaCueva] —decisión del usuario, no se duplica—, así que lo que aquí se fija es
+## lo contrario de antes: que la lista siga estando con su motivo, y que **no haya ningún
+## botón** que abra un segundo camino para lo mismo.
+##
+## El botón de la sala lo cubre `TestPared.test_la_sala_trae_la_lista_de_lo_que_falta`.
+func test_la_ventana_dice_por_que_no_se_pinta_pero_no_pinta() -> void:
 	var sim := _pintable()
 	sim.techs = _techs([])
 	sim.tales.append(_relato())
@@ -393,19 +400,32 @@ func test_la_ventana_dice_por_que_no_se_pinta() -> void:
 	ui.sim = sim
 	var body := VBoxContainer.new()
 	ui.tecnicas._paintings_block(body)
-	var botones := _botones(body)
-	assert_eq(botones.size(), 1, "un botón por relato")
-	assert_true(botones.size() == 1 and botones[0].disabled, "apagado sin la técnica")
-	assert_true(botones.size() == 1 and botones[0].tooltip_text.contains("no se sabe pintar"),
-		"y dice por qué")
+	assert_eq(_botones(body).size(), 0, "aquí ya no se pinta: ni un botón")
+	var dicho := _texto_de(body)
+	assert_true(dicho.contains("no se sabe pintar"),
+		"sigue diciendo por qué no se puede: %s" % dicho)
+	assert_true(dicho.contains("entrando en la cueva"),
+		"y dónde se pinta ahora: %s" % dicho)
+	assert_true(dicho.contains(_relato().title), "con el relato en la lista")
 	body.free()
 	sim.techs = _techs([TechTree.Tech.ARTE])
 	body = VBoxContainer.new()
 	ui.tecnicas._paintings_block(body)
-	botones = _botones(body)
-	assert_true(botones.size() == 1 and not botones[0].disabled, "con la técnica, se pulsa")
+	assert_eq(_botones(body).size(), 0, "con la técnica, tampoco")
+	assert_true(_texto_de(body).contains("entrando en la cueva"),
+		"y sigue diciendo dónde")
 	body.free()
 	ui.free()
+
+
+## Todo el texto de un trozo de ventana, junto, para preguntarle qué dice.
+func _texto_de(nodo: Node) -> String:
+	var fuera := ""
+	for hijo: Node in nodo.get_children():
+		if hijo is Label:
+			fuera += (hijo as Label).text + "\n"
+		fuera += _texto_de(hijo)
+	return fuera
 
 
 func _botones(nodo: Node) -> Array[Button]:
