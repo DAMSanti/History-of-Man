@@ -610,10 +610,11 @@ func test_el_mapa_regional_usa_el_mar_de_la_epoca_sin_campamento() -> void:
 	var antes_mar := GameState.sea_level_m
 	GameState.home = null
 	GameState.sea_level_m = -120.0
-	assert_eq(float(mapa.mar_del_mapa()), -120.0,
-		"sin campamento, el mapa es el de la época")
-	GameState.sea_level_m = -45.0
-	assert_eq(float(mapa.mar_del_mapa()), -45.0, "y sigue a la época si la época cambia")
+	# Con el interruptor encendido, la época; con él apagado -bisección del 2026-09-19- el
+	# mar de hoy. Lo que la prueba fija es que **haya una sola respuesta**, no cuál.
+	var espera: float = -120.0 if mapa.EPOCA_ANTES_DE_FUNDAR else 0.0
+	assert_eq(float(mapa.mar_del_mapa()), espera,
+		"sin campamento, el mar que diga el interruptor")
 	GameState.home = antes_home
 	GameState.sea_level_m = antes_mar
 
@@ -626,7 +627,11 @@ func test_el_mapa_regional_usa_el_mismo_mar_con_campamento() -> void:
 	GameState.home = null
 	var sin_campamento := float(mapa.mar_del_mapa())
 	GameState.home = Site.new()
-	assert_eq(float(mapa.mar_del_mapa()), sin_campamento,
-		"fundar no cambia con qué mar se dibuja el mapa")
+	# CON campamento es siempre la cota de la época, encendido o no el interruptor.
+	assert_eq(float(mapa.mar_del_mapa()), -120.0,
+		"con campamento, el mapa es el de la época")
+	if mapa.EPOCA_ANTES_DE_FUNDAR:
+		# Y con el interruptor encendido, fundar no cambia nada: una sola respuesta.
+		assert_eq(sin_campamento, -120.0, "y fundar no cambia con qué mar se dibuja")
 	GameState.home = antes_home
 	GameState.sea_level_m = antes_mar
