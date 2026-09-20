@@ -276,14 +276,21 @@ func test_la_sala_dibuja_lo_documentado_y_lo_pintado() -> void:
 func test_la_ficha_de_la_cueva_deja_entrar_en_lo_explorado_y_dice_por_que_no() -> void:
 	var sim := SettlementSim.new()
 	sim.techs = TechTree.new()
-	var acciones := PanelSitios._actions_for(Site.Feature.ABRIGO, true, false, false)
+	var a_ciegas := PanelSitios._actions_for(Site.Feature.ABRIGO, true, false, false)
 	var tiene := false
-	for accion: Array in acciones:
+	for accion: Array in a_ciegas:
 		if String(accion[0]) == "entrar":
 			tiene = true
-	assert_true(tiene, "la acción está aunque no esté explorada")
+	assert_false(tiene, "sin explorar la acción no se ofrece (2026-09-20)")
+	var explorada := PanelSitios._actions_for(Site.Feature.ABRIGO, true, true, false)
+	tiene = false
+	for accion: Array in explorada:
+		if String(accion[0]) == "entrar":
+			tiene = true
+	assert_true(tiene, "explorada, sí")
+	# Y la razón sigue existiendo para quien la pregunte —el mapa regional la usa—.
 	var sin_explorar := PanelSitios.por_que_no("entrar", {"cueva": 2}, sim)
-	assert_false(sin_explorar.is_empty(), "sin explorar, dice por qué no")
+	assert_false(sin_explorar.is_empty(), "sin explorar, el motivo sigue estando")
 	sim.exploracion._sabido[2] = {"explorada": true, "pintable": false}
 
 	# Y AL FONDO NO SE BAJA A OSCURAS (2026-09-19). Antes bastaba con haberla explorado;

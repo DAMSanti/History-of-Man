@@ -1613,8 +1613,15 @@ está vacía y las ajenas enseñan su arte y su lore.
 **La sala**
 
 - De una cueva **explorada** se puede entrar a su sala, desde el mapa de la banda
-  y desde el alfiler de un sitio visitado. De una sin explorar no, y la ficha dice
-  por qué. Prueba.
+  y desde el alfiler de un sitio visitado. **De una sin explorar el botón no sale**:
+  lo que se ofrece ahí es explorarla. Prueba.
+
+  *(Hasta el 2026-09-20 salía apagado y con el motivo —«la ficha dice por qué»,
+  decisión del 2026-09-15—, con la idea de que un botón apagado que se explica enseña
+  que la cueva se puede visitar. El usuario pidió lo contrario: «el botón entrar al
+  fondo de la cueva sólo debe aparecer después de explorar la cueva». Y de paso cierra
+  una contradicción que quedó viva el 2026-09-19: el mapa regional ya listaba sólo las
+  exploradas, así que la misma pregunta se contestaba distinto en los dos sitios.)*
 - **Todo relato pintado en esa cueva está en su pared**, y nada más: el número de
   figuras propias de la sala es el de relatos pintados allí. Prueba sobre una
   pared con cinco pintados.

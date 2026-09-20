@@ -73,14 +73,19 @@ func _tiene(acciones: Array, id: String) -> bool:
 ## pintable» deja de decidir si hay botón: decide si dentro se puede pintar, que es donde
 ## se pregunta ahora.
 func test_el_fondo_de_la_cueva_es_un_solo_boton() -> void:
-	for explorada: bool in [true, false]:
-		for pintable: bool in [true, false]:
-			var acciones := PanelSitios._actions_for(Site.Feature.ABRIGO, false,
-				explorada, pintable)
-			assert_true(_tiene(acciones, "entrar"),
-				"el botón del fondo sale siempre (explorada %s, pintable %s)"
-					% [explorada, pintable])
-			assert_false(_tiene(acciones, "pintar"), "y no hay un segundo botón")
+	for pintable: bool in [true, false]:
+		var explorada := PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, pintable)
+		assert_true(_tiene(explorada, "entrar"),
+			"explorada, el botón del fondo está (pintable %s)" % pintable)
+		assert_false(_tiene(explorada, "pintar"), "y no hay un segundo botón")
+
+		# SIN EXPLORAR NO SE OFRECE. Decisión del usuario del 2026-09-20; hasta entonces
+		# salía apagado con el motivo —«la ficha dice por qué», 2026-09-15—. Lo que se
+		# ofrece sin explorar es explorar.
+		var a_ciegas := PanelSitios._actions_for(Site.Feature.ABRIGO, false, false, pintable)
+		assert_false(_tiene(a_ciegas, "entrar"),
+			"sin explorar no se ofrece bajar al fondo (pintable %s)" % pintable)
+		assert_true(_tiene(a_ciegas, "explorar"), "lo que se ofrece es explorarla")
 	# Y se llama por lo que hace.
 	for accion: Array in PanelSitios._actions_for(Site.Feature.ABRIGO, false, true, true):
 		if String(accion[0]) == "entrar":

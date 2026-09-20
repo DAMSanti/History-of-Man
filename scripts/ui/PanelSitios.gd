@@ -907,12 +907,20 @@ static func _actions_for(feature_class: Site.Feature, de_la_banda: bool = false,
 			# se hace dentro —mirar lo que hay, o mandar pintar un relato— se elige allí.
 			#
 			# **Y pide lámpara y grasa**, que es lo que hace falta para bajar al fondo:
-			# decisión del usuario del 2026-09-19. Sin explorar, apagado con el motivo,
-			# como siempre. Sigue sin pedir la técnica —decisión del 2026-09-15—: mirar
-			# no es pintar.
-			acciones.append(["entrar", "Entrar al fondo de la cueva",
-				"Ver la pared del fondo a la luz de la lámpara, y pintar en ella si se "
-					+ "sabe. Hace falta lámpara y grasa."])
+			# decisión del usuario del 2026-09-19. Sigue sin pedir la técnica —decisión
+			# del 2026-09-15—: mirar no es pintar.
+			#
+			# **SÓLO DESPUÉS DE EXPLORARLA** (2026-09-20). Antes salía siempre, apagado y
+			# con el motivo —«la ficha dice por qué», SISTEMAS §13, decisión del
+			# 2026-09-15—, y el usuario pidió que no apareciera: de una cueva que nadie ha
+			# recorrido no se ofrece bajar al fondo, se ofrece recorrerla. Además deshace
+			# una contradicción que quedó viva el 2026-09-19: el mapa regional ya listaba
+			# **sólo las exploradas** (`Pinturas.cuevas_para_entrar`), así que la misma
+			# pregunta se contestaba distinto en la ficha del valle y en la del regional.
+			if explorada:
+				acciones.append(["entrar", "Entrar al fondo de la cueva",
+					"Ver la pared del fondo a la luz de la lámpara, y pintar en ella "
+						+ "si se sabe. Hace falta lámpara y grasa."])
 			return acciones
 		Site.Feature.SURGENCIA:
 			return [["explorar", "Reconocer el manantial",
